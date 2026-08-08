@@ -322,7 +322,7 @@ function WorkspaceIdentity({
         aria-expanded={open}
         aria-controls={open ? popoverId : undefined}
         onClick={() => setOpen((current) => !current)}
-        className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-xl p-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
+        className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
       >
         <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
           AI
@@ -570,7 +570,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
               commandOpen={commandMode !== null}
             />
           </div>
-          <div className="px-1.5">
+          <div>
             <button
               type="button"
               aria-keyshortcuts="Meta+K Control+K /"
