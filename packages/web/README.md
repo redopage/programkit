@@ -80,7 +80,8 @@ not authorization.
 
 Dense data uses desktop tables and mobile relational lists rather than shrinking a spreadsheet.
 Drawers provide focused editing, while keyboard focus management, focus restoration, progress
-semantics, and mobile navigation are built into the shared components.
+semantics, and mobile navigation are built into the shared components. The operator command center
+opens with `Command-K`; its complete shortcut guide opens with `Command-/`.
 
 ## Operation behavior
 

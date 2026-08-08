@@ -71,6 +71,29 @@ resolves it.
   lands.
 - Optimistic updates are for safe, reversible actions only.
 
+## Keyboard navigation
+
+The operator workspace has one shared command system. `Command-K` opens the command center and
+`Command-/` opens its shortcut guide (`Control` replaces `Command` on non-Mac platforms). Search
+matches page names, workflow language, and useful synonyms rather than routes alone.
+
+Press `G`, then one of these keys outside a text field:
+
+| Shortcut | Destination      |
+| -------- | ---------------- |
+| `G O`    | Overview         |
+| `G F`    | Submission forms |
+| `G I`    | Submissions      |
+| `G R`    | Review           |
+| `G S`    | Sessions         |
+| `G A`    | Agenda           |
+| `G P`    | Speakers         |
+| `G T`    | Tasks            |
+
+Keyboard commands never fire while the user is typing into an input, textarea, select, or editable
+region. Modals trap and restore focus, `Escape` closes them, and reduced-motion preferences disable
+their entrance animation.
+
 ## Reserve delight for consequential moments
 
 Distinctive motion and language are spent on: publishing the first CFP, the first proposal arriving,

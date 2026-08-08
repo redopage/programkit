@@ -20,6 +20,7 @@
   --animate-slide-from-left: slide-from-left 260ms cubic-bezier(0.32, 0.72, 0, 1);
   --animate-slide-from-bottom: slide-from-bottom 260ms cubic-bezier(0.32, 0.72, 0, 1);
   --animate-rise-in: rise-in 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-command-in: command-in 180ms cubic-bezier(0.32, 0.72, 0, 1);
 
   @keyframes fade-in {
     from {
@@ -48,6 +49,13 @@
   @keyframes rise-in {
     from {
       transform: translateY(0.5rem);
+      opacity: 0;
+    }
+  }
+
+  @keyframes command-in {
+    from {
+      transform: translateY(-0.5rem) scale(0.985);
       opacity: 0;
     }
   }

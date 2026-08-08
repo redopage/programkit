@@ -6,21 +6,24 @@ import {
   ChevronDownIcon,
   CircleStackIcon,
   ClipboardDocumentCheckIcon,
+  CommandLineIcon,
   CpuChipIcon,
   Cog6ToothIcon,
   DocumentTextIcon,
   EnvelopeIcon,
   HomeIcon,
   InboxStackIcon,
+  MagnifyingGlassIcon,
   RectangleStackIcon,
   Squares2X2Icon,
   UserGroupIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useWorkspace } from '../lib/workspace.tsx'
+import { CommandCenter, type CommandMode, type ProgramCommand } from './CommandCenter.tsx'
 import { cx, IconButton } from './ui.tsx'
 
 interface ShellProps {
@@ -86,6 +89,68 @@ const mobileNavigation = [
   { href: '/readiness', label: 'Tasks', icon: ChartBarSquareIcon },
 ]
 
+const commandDetails: Record<
+  string,
+  { description: string; keywords?: string[]; shortcut?: readonly [string, string] }
+> = {
+  '/': {
+    description: 'See the program pulse and next work.',
+    keywords: ['home', 'dashboard'],
+    shortcut: ['G', 'O'],
+  },
+  '/forms': {
+    description: 'Build public calls for proposals.',
+    keywords: ['cfp', 'questions', 'builder'],
+    shortcut: ['G', 'F'],
+  },
+  '/submissions': {
+    description: 'Triage and decide incoming proposals.',
+    keywords: ['inbox', 'abstracts', 'proposals'],
+    shortcut: ['G', 'I'],
+  },
+  '/reviews': {
+    description: 'Track committee progress and scorecards.',
+    keywords: ['reviewers', 'evaluation', 'committee'],
+    shortcut: ['G', 'R'],
+  },
+  '/sessions': {
+    description: 'Manage accepted program content.',
+    keywords: ['talks', 'workshops', 'content'],
+    shortcut: ['G', 'S'],
+  },
+  '/schedule': {
+    description: 'Arrange and publish the agenda.',
+    keywords: ['rooms', 'placements', 'studio'],
+    shortcut: ['G', 'A'],
+  },
+  '/people': {
+    description: 'Manage speakers and participation.',
+    keywords: ['people', 'profiles'],
+    shortcut: ['G', 'P'],
+  },
+  '/readiness': {
+    description: 'Follow speaker tasks and requirements.',
+    keywords: ['readiness', 'requirements', 'blockers'],
+    shortcut: ['G', 'T'],
+  },
+  '/communications': {
+    description: 'Draft confirmations and reminders.',
+    keywords: ['email', 'campaigns', 'messages'],
+  },
+  '/settings': {
+    description: 'Update event identity, dates, and status.',
+    keywords: ['event', 'timezone', 'venue'],
+  },
+  '/changes': {
+    description: 'Review proposed operational changes.',
+    keywords: ['approvals', 'agent', 'audit'],
+  },
+  '/integrations': {
+    description: 'Connect data and delivery services.',
+    keywords: ['airtable', 'api', 'cloudflare'],
+  },
+}
+
 function NavigationItems({
   pathname,
   navigate,
@@ -143,10 +208,12 @@ function NavigationItems({
 function WorkspaceIdentity({
   navigate,
   pendingChanges,
+  onOpenShortcuts,
   onNavigate,
 }: {
   navigate: (to: string) => void
   pendingChanges: number
+  onOpenShortcuts: () => void
   onNavigate?: () => void
 }) {
   const { payload } = useWorkspace()
@@ -183,6 +250,12 @@ function WorkspaceIdentity({
   const openPage = (to: string) => {
     setOpen(false)
     navigate(to)
+    onNavigate?.()
+  }
+
+  const openShortcuts = () => {
+    setOpen(false)
+    onOpenShortcuts()
     onNavigate?.()
   }
 
@@ -255,6 +328,18 @@ function WorkspaceIdentity({
                 ) : null}
               </button>
             ))}
+            <button
+              type="button"
+              className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white sm:min-h-8 sm:text-sm"
+              onClick={openShortcuts}
+            >
+              <CommandLineIcon className="size-4 h-lh shrink-0 fill-zinc-500" />
+              <div className="min-w-0 flex-1 truncate">Keyboard shortcuts</div>
+              <div className="flex shrink-0 items-center gap-1 text-zinc-500">
+                <kbd className="font-sans">⌘</kbd>
+                <kbd className="font-sans">/</kbd>
+              </div>
+            </button>
           </div>
         </div>
       ) : null}
@@ -264,6 +349,7 @@ function WorkspaceIdentity({
 
 export function Shell({ pathname, navigate, children }: ShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [commandMode, setCommandMode] = useState<CommandMode>(null)
   const mobilePanelRef = useRef<HTMLDivElement>(null)
   const mobileTitleId = useId()
   const { payload } = useWorkspace()
@@ -273,6 +359,59 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
   const pendingChanges =
     payload?.state.changeSets.filter((changeSet) => changeSet.status === 'awaiting_approval')
       .length ?? 0
+  const commands = useMemo<ProgramCommand[]>(() => {
+    const pageCommands: ProgramCommand[] = navigation.flatMap((group) =>
+      group.items.map((item) => {
+        const details = commandDetails[item.href]
+        return {
+          id: `page-${item.href === '/' ? 'overview' : item.href.slice(1)}`,
+          label: item.label,
+          description: details?.description ?? `Open ${item.label.toLocaleLowerCase()}.`,
+          href: item.href,
+          section: 'Pages' as const,
+          icon: item.icon,
+          keywords: details?.keywords,
+          shortcut: details?.shortcut,
+        }
+      }),
+    )
+    pageCommands.push({
+      id: 'page-agent',
+      label: 'Agent workspace',
+      description: 'Review agent proposals and available tools.',
+      href: '/agent',
+      section: 'Pages',
+      icon: CpuChipIcon,
+      keywords: ['mcp', 'automation', 'assistant'],
+    })
+
+    const publicCommands: ProgramCommand[] = [
+      {
+        id: 'public-program',
+        label: 'Published program',
+        description: 'Open the attendee-facing agenda.',
+        href: '/agenda',
+        section: 'Public',
+        icon: CalendarDaysIcon,
+        keywords: ['public', 'embed', 'attendees'],
+      },
+    ]
+    const openForm = payload?.state.submissionForms.find(
+      (form) => form.eventId === payload.state.activeEventId && form.status === 'open',
+    )
+    if (openForm) {
+      publicCommands.push({
+        id: 'public-cfp',
+        label: 'Public call for proposals',
+        description: 'See the form as a prospective speaker.',
+        href: `/submit/${openForm.slug}`,
+        section: 'Public',
+        icon: DocumentTextIcon,
+        keywords: ['cfp', 'submit', 'speaker', 'preview'],
+      })
+    }
+    return [...pageCommands, ...publicCommands]
+  }, [payload])
 
   useEffect(() => {
     if (!mobileOpen) return
@@ -329,7 +468,26 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
   return (
     <div className="isolate min-h-dvh antialiased max-lg:bg-white lg:flex lg:bg-canvas">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col p-2 lg:flex">
-        <WorkspaceIdentity navigate={navigate} pendingChanges={pendingChanges} />
+        <div className="flex flex-col gap-2">
+          <WorkspaceIdentity
+            navigate={navigate}
+            pendingChanges={pendingChanges}
+            onOpenShortcuts={() => setCommandMode('shortcuts')}
+          />
+          <button
+            type="button"
+            aria-keyshortcuts="Meta+K Control+K"
+            onClick={() => setCommandMode('commands')}
+            className="focus-ring flex min-h-9 w-full items-center gap-2 rounded-lg bg-white/70 px-2 text-left text-sm text-zinc-500 shadow-xs ring-1 ring-zinc-950/8 hover:text-zinc-950 hover:ring-zinc-950/12"
+          >
+            <MagnifyingGlassIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
+            <div className="min-w-0 flex-1 truncate">Search</div>
+            <div className="flex shrink-0 items-center gap-0.5 text-zinc-400">
+              <kbd className="font-sans">⌘</kbd>
+              <kbd className="font-sans">K</kbd>
+            </div>
+          </button>
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto pt-4 pb-2">
           <NavigationItems pathname={pathname} navigate={navigate} />
         </div>
@@ -350,6 +508,9 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
           </span>
           <span className="min-w-0 truncate">{activeEvent?.name ?? 'Program workspace'}</span>
         </a>
+        <IconButton label="Search ProgramKit" onClick={() => setCommandMode('commands')}>
+          <MagnifyingGlassIcon className="size-4 shrink-0 fill-current" />
+        </IconButton>
       </header>
 
       {mobileOpen
@@ -374,6 +535,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                     <WorkspaceIdentity
                       navigate={navigate}
                       pendingChanges={pendingChanges}
+                      onOpenShortcuts={() => setCommandMode('shortcuts')}
                       onNavigate={() => setMobileOpen(false)}
                     />
                   </div>
@@ -396,6 +558,14 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
             document.body,
           )
         : null}
+
+      <CommandCenter
+        mode={commandMode}
+        onModeChange={setCommandMode}
+        commands={commands}
+        pathname={pathname}
+        navigate={navigate}
+      />
 
       <nav
         aria-label="Mobile primary navigation"
