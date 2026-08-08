@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Resolve Program Schedule'
+  short_description: 'Find conflicts and propose safe schedule moves'
+  default_prompt: 'Use $resolve-program-schedule to diagnose this program schedule and propose conflict-free changes.'

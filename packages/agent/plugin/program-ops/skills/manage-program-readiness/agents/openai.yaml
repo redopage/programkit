@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Manage Program Readiness'
+  short_description: 'Find blockers and draft precise follow-ups'
+  default_prompt: 'Use $manage-program-readiness to assess participant blockers and prepare a reviewable follow-up plan.'

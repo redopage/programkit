@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Preflight Program Publish'
+  short_description: 'Check readiness before publishing a program'
+  default_prompt: 'Use $preflight-program-publish to run a publication preflight and report any blockers.'

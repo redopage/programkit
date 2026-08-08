@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@crm-library/agent": ["./packages/agent/src/index.ts"],
+      "@crm-library/core": ["./packages/core/src/index.ts"],
+      "@crm-library/core/cloudflare": ["./packages/core/src/cloudflare.ts"],
+      "@crm-library/presentation": ["./packages/presentation/src/index.ts"]
+    },
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "types": ["vite/client", "@cloudflare/workers-types"]
+  },
+  "include": [
+    "worker.ts",
+    "vite.config.ts",
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "tests/**/*.ts"
+  ]
+}
