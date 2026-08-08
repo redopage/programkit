@@ -1,5 +1,5 @@
 {
-  "name": "@crm-library/agent",
+  "name": "@programkit/agent",
   "version": "0.1.0",
   "type": "module",
   "license": "Apache-2.0",
@@ -20,7 +20,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@crm-library/core": "workspace:*"
+    "@programkit/core": "workspace:*"
   },
   "exports": {
     ".": {

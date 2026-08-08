@@ -8,10 +8,10 @@ import {
   type OperationRequest,
   type OperationResponse,
   type WorkspaceState,
-} from '@crm-library/core'
+} from '@programkit/core'
 
 const modernVersion = '2026-07-28'
-const serverInfo = { name: 'program-ops', version: '0.1.0' }
+const serverInfo = { name: 'programkit', version: '0.1.0' }
 
 export interface McpContext {
   readState: () => Promise<WorkspaceState>
@@ -27,8 +27,8 @@ interface JsonRpcRequest {
 
 const agentActor = {
   type: 'agent' as const,
-  id: 'agent_program_ops',
-  name: 'Program Ops Agent',
+  id: 'agent_programkit',
+  name: 'ProgramKit Agent',
   scopes: [
     'people:read',
     'participations:read',

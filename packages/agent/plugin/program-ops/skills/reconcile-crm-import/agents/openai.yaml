@@ -1,4 +1,0 @@
-interface:
-  display_name: 'Reconcile CRM Import'
-  short_description: 'Preview imports and explain uncertain matches'
-  default_prompt: 'Use $reconcile-crm-import to map this source file and produce a review-ready reconciliation preview without CRM mutations.'

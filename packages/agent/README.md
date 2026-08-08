@@ -1,6 +1,6 @@
-# `@crm-library/agent`
+# `@programkit/agent`
 
-The agent package exposes CRM Library through a stateless HTTP MCP server and includes the Program
+The agent package exposes ProgramKit through a stateless HTTP MCP server and includes the Program
 Ops Codex plugin. The server can read operational records, create campaign drafts, and propose
 schedule moves. Core permissions still make approval, commit, send, publish, secret management, and
 destructive operations human-only.
@@ -67,7 +67,7 @@ Every successful result includes server identity metadata:
 {
   "_meta": {
     "io.modelcontextprotocol/serverInfo": {
-      "name": "program-ops",
+      "name": "programkit",
       "version": "0.1.0"
     }
   }
@@ -93,7 +93,7 @@ Every successful result includes server identity metadata:
 an arbitrary recipient list. Each `propose_schedule_move` call is independent and creates a
 separate human-reviewable change set; there is no grouped schedule-proposal or agent commit tool.
 
-The plugin's CRM-import skill produces a row-level reconciliation preview only. The MCP server does
+The plugin's program-import skill produces a row-level reconciliation preview only. The MCP server does
 not expose import create, update, change-set, or commit tools.
 
 ## Resource inventory
@@ -114,8 +114,8 @@ read-only agenda/status projection.
 The package exports `handleMcpRequest`, `mcpTools`, and `McpContext`:
 
 ```ts
-import { handleMcpRequest } from '@crm-library/agent'
-import { executeOperation, MemoryWorkspaceRepository } from '@crm-library/core'
+import { handleMcpRequest } from '@programkit/agent'
+import { executeOperation, MemoryWorkspaceRepository } from '@programkit/core'
 
 const repository = new MemoryWorkspaceRepository()
 
@@ -136,13 +136,13 @@ own repository and command adapter.
 ## MCP client and Codex plugin setup
 
 For local development, run `pnpm dev` at the repository root. The checked-in plugin source at
-`plugin/program-ops` already points to `http://localhost:4173/mcp`. A generic MCP client can register
+`plugin/programkit` already points to `http://localhost:4173/mcp`. A generic MCP client can register
 the same endpoint directly:
 
 ```json
 {
   "mcpServers": {
-    "program-ops": {
+    "programkit": {
       "type": "http",
       "url": "http://localhost:4173/mcp"
     }
@@ -155,27 +155,27 @@ URL instead:
 
 ```bash
 # From the repository root
-CRM_MCP_URL=https://crm.example.com/mcp \
-  pnpm --filter @crm-library/agent plugin:bundle
+PROGRAMKIT_MCP_URL=https://programkit.example.com/mcp \
+  pnpm --filter @programkit/agent plugin:bundle
 
 # Or, from packages/agent (or an unpacked agent package)
-CRM_MCP_URL=https://crm.example.com/mcp pnpm plugin:bundle
+PROGRAMKIT_MCP_URL=https://programkit.example.com/mcp pnpm plugin:bundle
 ```
 
-The script validates the URL, safely replaces only the generated `<agent-package>/build/program-ops`
-directory (`packages/agent/build/program-ops` in this monorepo), and changes only the copied
-`.mcp.json`. The source plugin remains unchanged. Credentials are rejected in `CRM_MCP_URL`; use an
+The script validates the URL, safely replaces only the generated `<agent-package>/build/programkit`
+directory (`packages/agent/build/programkit` in this monorepo), and changes only the copied
+`.mcp.json`. The source plugin remains unchanged. Credentials are rejected in `PROGRAMKIT_MCP_URL`; use an
 authorization header or client OAuth flow instead of embedding a secret in the URL.
 
-Use either `packages/agent/plugin/program-ops` for localhost development or the generated directory
-as the plugin source in a Codex marketplace. Install `program-ops` from that marketplace, then start
+Use either `packages/agent/plugin/programkit` for localhost development or the generated directory
+as the plugin source in a Codex marketplace. Install `programkit` from that marketplace, then start
 a new Codex task so the four bundled skills and MCP tool catalog are loaded together. The same
 generated `.mcp.json` can be registered directly by another compatible MCP client.
 
 ## Authentication boundary
 
 The repository's reference Worker is a passwordless demo. Its `/mcp` route is not authenticated,
-the agent identity is fixed, and `x-crm-workspace-key` selects demo storage rather than authorizing
+the agent identity is fixed, and `x-programkit-workspace-key` selects demo storage rather than authorizing
 access. Same-origin validation and agent tool restrictions are defense in depth, not user
 authentication. Do not expose the reference endpoint to real customer data.
 
@@ -200,7 +200,7 @@ or manage secrets.
   implemented.
 - **Tool result has `isError: true`**: inspect the structured error for invalid input, stale entity
   versions, missing records, or a server-enforced policy denial.
-- **Plugin still calls localhost**: rebuild with `CRM_MCP_URL`, then register the generated
-  `packages/agent/build/program-ops` directory rather than the checked-in source.
+- **Plugin still calls localhost**: rebuild with `PROGRAMKIT_MCP_URL`, then register the generated
+  `packages/agent/build/programkit` directory rather than the checked-in source.
 - **Production 401 or 403**: inspect the deployment's OAuth gateway, claim-to-workspace mapping, and
   least-privilege scope mapping; those controls are deliberately outside the demo package.

@@ -10,6 +10,12 @@ export type CampaignStatus = 'draft' | 'awaiting_approval' | 'approved' | 'sent'
 export type ChangeSetStatus =
   'draft' | 'awaiting_approval' | 'approved' | 'rejected' | 'committed' | 'stale'
 
+export type SubmissionKind = 'abstract' | 'guaranteed_session'
+export type SubmissionStatus =
+  'draft' | 'submitted' | 'in_review' | 'waitlisted' | 'accepted' | 'rejected' | 'withdrawn'
+export type SubmissionAnswerValue = string | string[] | number | boolean | null
+export type SubmissionAnswers = Record<string, SubmissionAnswerValue>
+
 export interface Workspace {
   id: Id
   name: string
@@ -28,6 +34,7 @@ export interface Event {
   timezone: string
   status: 'planning' | 'active' | 'complete'
   publishedScheduleVersion: number | null
+  version: number
 }
 
 export interface Person {
@@ -81,6 +88,174 @@ export interface RequirementInstance {
   submittedAt: ISODateTime | null
   reviewedAt: ISODateTime | null
   updatedAt: ISODateTime
+  version: number
+}
+
+export type SubmissionFieldKind =
+  'short_text' | 'long_text' | 'email' | 'url' | 'select' | 'multi_select' | 'checkbox' | 'file'
+
+export type SubmissionFieldPurpose =
+  | 'first_name'
+  | 'last_name'
+  | 'email'
+  | 'company'
+  | 'job_title'
+  | 'biography'
+  | 'proposal_title'
+  | 'abstract'
+  | 'session_format'
+  | 'track'
+  | 'custom'
+
+export interface SubmissionFieldCondition {
+  fieldId: Id
+  operator: 'equals' | 'not_equals' | 'includes'
+  value: string
+}
+
+export interface SubmissionForm {
+  id: Id
+  eventId: Id
+  name: string
+  slug: string
+  title: string
+  description: string
+  status: 'draft' | 'open' | 'closed'
+  allowedKinds: SubmissionKind[]
+  opensAt: ISODateTime | null
+  closesAt: ISODateTime | null
+  confirmationMessage: string
+  updatedAt: ISODateTime
+  version: number
+}
+
+export interface SubmissionFormField {
+  id: Id
+  formId: Id
+  key: string
+  label: string
+  description: string
+  kind: SubmissionFieldKind
+  purpose: SubmissionFieldPurpose
+  required: boolean
+  options: Array<{ value: string; label: string }>
+  placeholder: string
+  sortOrder: number
+  visibleWhen: SubmissionFieldCondition | null
+}
+
+export interface Submission {
+  id: Id
+  eventId: Id
+  formId: Id
+  kind: SubmissionKind
+  status: SubmissionStatus
+  answers: SubmissionAnswers
+  assetIds: Id[]
+  submittedAt: ISODateTime | null
+  decidedAt: ISODateTime | null
+  convertedParticipationId: Id | null
+  convertedSessionId: Id | null
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
+}
+
+export interface Asset {
+  id: Id
+  eventId: Id
+  owner: { type: 'submission' | 'participation' | 'person'; id: Id }
+  kind: 'headshot' | 'slides' | 'video' | 'supporting_document' | 'other'
+  filename: string
+  contentType: string
+  sizeBytes: number
+  storageKey: string
+  createdAt: ISODateTime
+}
+
+export interface Reviewer {
+  id: Id
+  eventId: Id
+  name: string
+  email: string
+  status: 'invited' | 'active' | 'inactive'
+  createdAt: ISODateTime
+  version: number
+}
+
+export interface ReviewerTeam {
+  id: Id
+  eventId: Id
+  name: string
+  reviewerIds: Id[]
+  version: number
+}
+
+export interface EvaluationCriterion {
+  id: Id
+  label: string
+  description: string
+  minimum: number
+  maximum: number
+  weight: number
+}
+
+export interface EvaluationRound {
+  id: Id
+  name: string
+  order: number
+  reviewersPerSubmission: number
+  minimumCompletedReviews: number
+}
+
+export interface EvaluationPlan {
+  id: Id
+  eventId: Id
+  formId: Id
+  name: string
+  reviewerTeamId: Id
+  submissionKinds: SubmissionKind[]
+  blindReview: boolean
+  rounds: EvaluationRound[]
+  criteria: EvaluationCriterion[]
+  version: number
+}
+
+export interface ReviewerAssignment {
+  id: Id
+  eventId: Id
+  evaluationPlanId: Id
+  roundId: Id
+  submissionId: Id
+  reviewerId: Id
+  status: 'assigned' | 'in_progress' | 'completed'
+  dueAt: ISODateTime | null
+  updatedAt: ISODateTime
+  version: number
+}
+
+export type ReviewRecommendation =
+  'strong_accept' | 'accept' | 'borderline' | 'reject' | 'strong_reject'
+
+export interface Scorecard {
+  id: Id
+  assignmentId: Id
+  scores: Record<Id, number>
+  recommendation: ReviewRecommendation
+  comments: string
+  submittedAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
+}
+
+export interface ReviewDecision {
+  id: Id
+  eventId: Id
+  submissionId: Id
+  decision: 'accepted' | 'rejected' | 'waitlisted'
+  reason: string
+  decidedBy: Pick<Actor, 'type' | 'id' | 'name'>
+  decidedAt: ISODateTime
   version: number
 }
 
@@ -144,14 +319,14 @@ export interface Campaign {
 export interface Integration {
   id: Id
   name: string
-  kind: 'email' | 'webhook' | 'calendar' | 'storage' | 'api'
+  kind: 'email' | 'webhook' | 'calendar' | 'storage' | 'api' | 'airtable'
   status: 'connected' | 'attention' | 'not_configured'
   detail: string
   lastSeenAt: ISODateTime | null
 }
 
 export interface Actor {
-  type: 'staff' | 'participant' | 'agent' | 'service' | 'system'
+  type: 'staff' | 'participant' | 'reviewer' | 'submitter' | 'agent' | 'service' | 'system'
   id: Id
   name: string
   scopes: string[]
@@ -221,6 +396,16 @@ export interface WorkspaceState {
   participations: Participation[]
   requirementDefinitions: RequirementDefinition[]
   requirementInstances: RequirementInstance[]
+  submissionForms: SubmissionForm[]
+  submissionFormFields: SubmissionFormField[]
+  submissions: Submission[]
+  assets: Asset[]
+  reviewers: Reviewer[]
+  reviewerTeams: ReviewerTeam[]
+  evaluationPlans: EvaluationPlan[]
+  reviewerAssignments: ReviewerAssignment[]
+  scorecards: Scorecard[]
+  reviewDecisions: ReviewDecision[]
   tracks: Track[]
   rooms: Room[]
   sessions: Session[]
@@ -300,4 +485,39 @@ export interface ScheduleConflict {
     | 'cancelled_session'
   message: string
   placementIds: Id[]
+}
+
+export interface SubmissionPipelineSummary {
+  total: number
+  draft: number
+  submitted: number
+  inReview: number
+  waitlisted: number
+  accepted: number
+  rejected: number
+  withdrawn: number
+  awaitingReviews: number
+}
+
+export interface SubmissionReviewSummary {
+  submissionId: Id
+  assigned: number
+  completed: number
+  averageScore: number | null
+  criterionAverages: Record<Id, number>
+  recommendations: Partial<Record<ReviewRecommendation, number>>
+}
+
+export type NextActionTone = 'blocking' | 'attention' | 'upcoming'
+
+export interface NextActionGroup {
+  id: string
+  kind: 'speaker_requirement' | 'submission' | 'review' | 'schedule' | 'invitation'
+  label: string
+  count: number
+  detail: string
+  /** Set when the group as a whole has a deadline, so the UI can format it. */
+  dueAt: ISODateTime | null
+  tone: NextActionTone
+  href: string
 }

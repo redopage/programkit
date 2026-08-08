@@ -3,18 +3,18 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const sourceRoot = resolve(packageRoot, 'plugin/program-ops')
+const sourceRoot = resolve(packageRoot, 'plugin/programkit')
 const buildRoot = resolve(packageRoot, 'build')
-const bundleRoot = resolve(buildRoot, 'program-ops')
+const bundleRoot = resolve(buildRoot, 'programkit')
 const sourceConfigPath = resolve(sourceRoot, '.mcp.json')
 const bundleConfigPath = resolve(bundleRoot, '.mcp.json')
-const expectedBundlePath = join('build', 'program-ops')
+const expectedBundlePath = join('build', 'programkit')
 
-const configuredUrl = process.env.CRM_MCP_URL?.trim()
+const configuredUrl = process.env.PROGRAMKIT_MCP_URL?.trim()
 
 if (!configuredUrl) {
   console.error(
-    'CRM_MCP_URL is required. From the repository root, run: CRM_MCP_URL=https://crm.example.com/mcp pnpm --filter @crm-library/agent plugin:bundle',
+    'PROGRAMKIT_MCP_URL is required. From the repository root, run: PROGRAMKIT_MCP_URL=https://programkit.example.com/mcp pnpm --filter @programkit/agent plugin:bundle',
   )
   process.exit(1)
 }
@@ -23,20 +23,20 @@ let endpoint
 try {
   endpoint = new URL(configuredUrl)
 } catch {
-  console.error('CRM_MCP_URL must be an absolute HTTP or HTTPS URL.')
+  console.error('PROGRAMKIT_MCP_URL must be an absolute HTTP or HTTPS URL.')
   process.exit(1)
 }
 
 if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) {
-  console.error('CRM_MCP_URL must use HTTP or HTTPS and must not contain credentials.')
+  console.error('PROGRAMKIT_MCP_URL must use HTTP or HTTPS and must not contain credentials.')
   process.exit(1)
 }
 
 const config = JSON.parse(await readFile(sourceConfigPath, 'utf8'))
-const server = config?.mcpServers?.['program-ops']
+const server = config?.mcpServers?.['programkit']
 
 if (!server || server.type !== 'http' || typeof server.url !== 'string') {
-  console.error('The source plugin does not define the expected program-ops HTTP MCP server.')
+  console.error('The source plugin does not define the expected programkit HTTP MCP server.')
   process.exit(1)
 }
 
@@ -52,5 +52,5 @@ await cp(sourceRoot, bundleRoot, { recursive: true, force: true, preserveTimesta
 server.url = endpoint.toString()
 await writeFile(bundleConfigPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
 
-console.log(`Bundled Program Ops plugin at ${bundleRoot}`)
+console.log(`Bundled ProgramKit plugin at ${bundleRoot}`)
 console.log(`MCP endpoint: ${server.url}`)

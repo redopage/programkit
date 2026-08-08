@@ -2,7 +2,7 @@
 
 ## Current release
 
-CRM Library contains production-shaped domain controls, but the reference Worker is a passwordless,
+ProgramKit contains production-shaped domain controls, but the reference Worker is a passwordless,
 seeded demonstration. It is not a production identity, tenancy, email, or file-storage
 configuration.
 
@@ -16,14 +16,18 @@ The demo intentionally makes all workflows immediately inspectable:
 - Operator API requests run as the fixed `Demo Operator` staff actor with `*` scope.
 - `/portal/{participationId}` and its API routes derive a participant actor from the participation
   ID in the URL. Possession of that URL is not authentication.
-- `/mcp` has no OAuth gate. MCP operations use the fixed Program Ops agent identity and its curated
+- `/submit/{formSlug}` and public submission API routes derive a submitter actor from the form slug.
+  This permits a frictionless demo but is not bot protection, abuse protection, or identity proof.
+- `/reviewer/{reviewerId}` and its API routes derive a reviewer actor from the reviewer ID. Anyone
+  who knows that ID can impersonate the reviewer in the reference deployment.
+- `/mcp` has no OAuth gate. MCP operations use the fixed ProgramKit agent identity and its curated
   scopes.
-- `x-crm-workspace-key` selects a Durable Object. It is routing input, not verified organization
+- `x-programkit-workspace-key` selects a Durable Object. It is routing input, not verified organization
   membership or tenant isolation.
 
 These shortcuts are acceptable only for deterministic sample data. Production deployments must
-replace the actor and workspace resolution in `worker.ts`; hiding the routes or changing the demo
-IDs is not sufficient.
+replace the actor and workspace resolution in `apps/cloudflare/src/worker.ts`; hiding the routes or
+changing the demo IDs is not sufficient.
 
 ## Server-enforced controls present
 
@@ -33,7 +37,10 @@ The following controls remain useful after a real identity adapter is added:
 - Scope checks on every operation definition
 - A trusted HTTP actor context that overrides any actor supplied in the JSON body
 - Removal of caller-supplied internal actor headers before the reference host injects its own
-- Participant route-to-actor matching and a data-minimized portal state projection
+- Submitter, reviewer, and participant route-to-actor matching with data-minimized projections and
+  surface-specific operation allowlists
+- Blind-review identity redaction for reviewer projections
+- A public-program projection backed only by an immutable published release
 - Participant transition rules limited to self-service confirmation, withdrawal, profile updates,
   and eligible requirement submission
 - Agent policies that deny sending, publishing, approval, secret management, and destructive work
@@ -55,11 +62,11 @@ file, or establish regulatory compliance by themselves.
 
 A production host must treat `CoreRequestContext.actor` as privileged input. Construct it only
 after verifying a session or token, checking workspace membership, and loading server-owned scopes.
-Never translate public `x-crm-internal-actor-*` headers or a body `actor` object directly into this
+Never translate public `x-programkit-internal-actor-*` headers or a body `actor` object directly into this
 context.
 
 Likewise, derive the Durable Object workspace key from authenticated membership. Do not trust the
-reference `x-crm-workspace-key` header as an authorization decision.
+reference `x-programkit-workspace-key` header as an authorization decision.
 
 ## Required before real data
 

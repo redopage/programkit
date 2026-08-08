@@ -1,0 +1,126 @@
+@import '@fontsource-variable/inter';
+@import 'tailwindcss';
+@source './';
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+
+  /* The workspace chrome sits on a recessed canvas; every content panel floats
+     on top of it in white, so the app reads as one document per surface. */
+  --color-canvas: oklch(0.972 0.002 286);
+
+  /* Panels use an ease-out-expo style curve so they arrive settled, not springy. */
+  --animate-fade-in: fade-in 150ms ease-out;
+  --animate-slide-from-right: slide-from-right 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-slide-from-left: slide-from-left 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-slide-from-bottom: slide-from-bottom 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-rise-in: rise-in 200ms cubic-bezier(0.32, 0.72, 0, 1);
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes slide-from-right {
+    from {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes slide-from-left {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+
+  @keyframes slide-from-bottom {
+    from {
+      transform: translateY(100%);
+    }
+  }
+
+  @keyframes rise-in {
+    from {
+      transform: translateY(0.5rem);
+      opacity: 0;
+    }
+  }
+}
+
+@utility focus-ring {
+  @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500;
+}
+
+/* Text fields inset their focus ring: an offset ring on an input reads as a
+   second border floating off the field, and clips against neighbouring cells. */
+@utility focus-ring-control {
+  @apply focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-500;
+}
+
+@utility touch-target {
+  @apply relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 3rem);
+    height: max(100%, 3rem);
+    transform: translate(-50%, -50%);
+  }
+
+  @media (pointer: fine) {
+    &::after {
+      display: none;
+    }
+  }
+}
+
+:root {
+  color: var(--color-zinc-950);
+  background: var(--color-canvas);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01', 'ss03';
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--color-canvas);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+  background: var(--color-canvas);
+}
+
+button,
+a,
+select,
+input,
+textarea {
+  font: inherit;
+}
+
+button:not(:disabled),
+a[href],
+select:not(:disabled),
+input[type='checkbox']:not(:disabled) {
+  cursor: pointer;
+}
+
+::selection {
+  color: var(--color-blue-950);
+  background: var(--color-blue-100);
+}

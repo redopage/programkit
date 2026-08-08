@@ -1,8 +1,20 @@
+import { nowIso } from './utils.ts'
 import type {
   Campaign,
+  ISODateTime,
+  NextActionGroup,
+  NextActionTone,
   Participation,
   ReadinessRow,
+  ReviewerAssignment,
   ScheduleConflict,
+  Submission,
+  SubmissionAnswers,
+  SubmissionAnswerValue,
+  SubmissionFormField,
+  SubmissionFieldPurpose,
+  SubmissionPipelineSummary,
+  SubmissionReviewSummary,
   WorkspaceState,
 } from './types.ts'
 
@@ -17,6 +29,154 @@ export function personName(state: WorkspaceState, personId: string) {
 
 export function participationPerson(state: WorkspaceState, participation: Participation) {
   return state.people.find((person) => person.id === participation.personId)
+}
+
+function answerIncludes(answer: SubmissionAnswerValue | undefined, value: string) {
+  if (Array.isArray(answer)) return answer.includes(value)
+  return typeof answer === 'string' && answer.includes(value)
+}
+
+export function isSubmissionFieldVisible(
+  field: SubmissionFormField,
+  fields: readonly SubmissionFormField[],
+  answers: SubmissionAnswers,
+) {
+  if (!field.visibleWhen) return true
+  const source = fields.find((entry) => entry.id === field.visibleWhen?.fieldId)
+  if (!source) return false
+  const answer = answers[source.key]
+  if (field.visibleWhen.operator === 'equals') return answer === field.visibleWhen.value
+  if (field.visibleWhen.operator === 'not_equals') return answer !== field.visibleWhen.value
+  return answerIncludes(answer, field.visibleWhen.value)
+}
+
+export function visibleSubmissionFormFields(
+  state: WorkspaceState,
+  formId: string,
+  answers: SubmissionAnswers = {},
+) {
+  const fields = (state.submissionFormFields ?? [])
+    .filter((field) => field.formId === formId)
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+  return fields.filter((field) => isSubmissionFieldVisible(field, fields, answers))
+}
+
+export function submissionAnswerByPurpose(
+  state: WorkspaceState,
+  submission: Submission,
+  purpose: SubmissionFieldPurpose,
+) {
+  const field = (state.submissionFormFields ?? []).find(
+    (entry) => entry.formId === submission.formId && entry.purpose === purpose,
+  )
+  return field ? submission.answers[field.key] : undefined
+}
+
+export function submissionPipelineSummary(
+  state: WorkspaceState,
+  eventId = state.activeEventId,
+): SubmissionPipelineSummary {
+  const submissions = (state.submissions ?? []).filter((entry) => entry.eventId === eventId)
+  const count = (status: Submission['status']) =>
+    submissions.filter((entry) => entry.status === status).length
+  const awaitingReviews = submissions.filter((submission) => {
+    if (submission.status !== 'submitted' && submission.status !== 'in_review') return false
+    const assignments = (state.reviewerAssignments ?? []).filter(
+      (entry) => entry.submissionId === submission.id,
+    )
+    return assignments.some((entry) => entry.status !== 'completed')
+  }).length
+
+  return {
+    total: submissions.length,
+    draft: count('draft'),
+    submitted: count('submitted'),
+    inReview: count('in_review'),
+    waitlisted: count('waitlisted'),
+    accepted: count('accepted'),
+    rejected: count('rejected'),
+    withdrawn: count('withdrawn'),
+    awaitingReviews,
+  }
+}
+
+export function submissionReviewSummary(
+  state: WorkspaceState,
+  submissionId: string,
+): SubmissionReviewSummary {
+  const assignments = (state.reviewerAssignments ?? []).filter(
+    (entry) => entry.submissionId === submissionId,
+  )
+  const assignmentIds = new Set(assignments.map((entry) => entry.id))
+  const scorecards = (state.scorecards ?? []).filter((entry) =>
+    assignmentIds.has(entry.assignmentId),
+  )
+  const plan = (state.evaluationPlans ?? []).find(
+    (entry) => entry.id === assignments[0]?.evaluationPlanId,
+  )
+  const criterionAverages = Object.fromEntries(
+    (plan?.criteria ?? []).map((criterion) => {
+      const values = scorecards
+        .map((scorecard) => scorecard.scores[criterion.id])
+        .filter((score): score is number => typeof score === 'number')
+      return [
+        criterion.id,
+        values.length === 0
+          ? 0
+          : Math.round((values.reduce((sum, score) => sum + score, 0) / values.length) * 10) / 10,
+      ]
+    }),
+  )
+  const scorecardAverages = scorecards.map((scorecard) => {
+    const weighted = (plan?.criteria ?? []).reduce(
+      (total, criterion) => total + (scorecard.scores[criterion.id] ?? 0) * criterion.weight,
+      0,
+    )
+    const totalWeight = (plan?.criteria ?? []).reduce(
+      (total, criterion) => total + criterion.weight,
+      0,
+    )
+    return totalWeight === 0 ? 0 : weighted / totalWeight
+  })
+  const recommendations: SubmissionReviewSummary['recommendations'] = {}
+  for (const scorecard of scorecards) {
+    recommendations[scorecard.recommendation] = (recommendations[scorecard.recommendation] ?? 0) + 1
+  }
+
+  return {
+    submissionId,
+    assigned: assignments.length,
+    completed: assignments.filter((entry) => entry.status === 'completed').length,
+    averageScore:
+      scorecardAverages.length === 0
+        ? null
+        : Math.round(
+            (scorecardAverages.reduce((sum, score) => sum + score, 0) / scorecardAverages.length) *
+              10,
+          ) / 10,
+    criterionAverages,
+    recommendations,
+  }
+}
+
+export function reviewerQueue(state: WorkspaceState, reviewerId: string) {
+  return (state.reviewerAssignments ?? [])
+    .filter((assignment) => assignment.reviewerId === reviewerId)
+    .map((assignment: ReviewerAssignment) => ({
+      assignment,
+      submission: (state.submissions ?? []).find(
+        (submission) => submission.id === assignment.submissionId,
+      ),
+      scorecard: (state.scorecards ?? []).find(
+        (scorecard) => scorecard.assignmentId === assignment.id,
+      ),
+    }))
+    .sort((left, right) => {
+      if (left.assignment.status !== right.assignment.status) {
+        return left.assignment.status.localeCompare(right.assignment.status)
+      }
+      return (left.assignment.dueAt ?? '').localeCompare(right.assignment.dueAt ?? '')
+    })
 }
 
 export function readinessRows(state: WorkspaceState): ReadinessRow[] {
@@ -296,4 +456,170 @@ export function publicAgenda(state: WorkspaceState) {
         speakers: speakers.filter((speaker) => speaker !== null),
       }
     })
+}
+
+/**
+ * Turns the workspace's aggregate counts into the small number of grouped jobs
+ * an organizer can actually pick up. A dashboard that reports "36 blockers"
+ * leaves the triage work to the reader; these groups carry the verb, the size,
+ * and the destination, so the overview can be acted on rather than interpreted.
+ */
+export function nextActions(state: WorkspaceState, now: ISODateTime = nowIso()): NextActionGroup[] {
+  const nowMs = Date.parse(now)
+  const groups: NextActionGroup[] = []
+  const overdue = (dueAt: string | null) =>
+    dueAt != null && Number.isFinite(Date.parse(dueAt)) && Date.parse(dueAt) < nowMs
+
+  const activeParticipations = state.participations.filter(
+    (participation) =>
+      participation.eventId === state.activeEventId &&
+      participation.status !== 'declined' &&
+      participation.status !== 'withdrawn' &&
+      participation.status !== 'prospect',
+  )
+  const activeParticipationIds = new Set(
+    activeParticipations.map((participation) => participation.id),
+  )
+
+  // Speaker onboarding, split by what is actually missing rather than pooled
+  // into one blocker count: "5 people owe a headshot" is a job, "36 blockers"
+  // is a number.
+  for (const definition of state.requirementDefinitions) {
+    if (definition.eventId !== state.activeEventId || !definition.required) continue
+    const outstanding = state.requirementInstances.filter(
+      (instance) =>
+        instance.definitionId === definition.id &&
+        activeParticipationIds.has(instance.participationId) &&
+        (instance.status === 'not_started' || instance.status === 'revision_requested'),
+    )
+    if (outstanding.length === 0) continue
+    groups.push({
+      id: `requirement-${definition.id}`,
+      kind: 'speaker_requirement',
+      label: definition.label,
+      count: outstanding.length,
+      detail: '',
+      dueAt: definition.dueAt,
+      tone: overdue(definition.dueAt) ? 'blocking' : 'attention',
+      href: `/readiness?requirement=${definition.id}`,
+    })
+  }
+
+  const awaitingApproval = state.requirementInstances.filter(
+    (instance) =>
+      activeParticipationIds.has(instance.participationId) && instance.status === 'submitted',
+  ).length
+  if (awaitingApproval > 0) {
+    groups.push({
+      id: 'requirement-approvals',
+      kind: 'speaker_requirement',
+      label: 'Speaker uploads waiting on you',
+      count: awaitingApproval,
+      detail: 'Submitted and unreviewed',
+      dueAt: null,
+      tone: 'attention',
+      href: '/readiness',
+    })
+  }
+
+  const untriaged = (state.submissions ?? []).filter(
+    (submission) => submission.eventId === state.activeEventId && submission.status === 'submitted',
+  ).length
+  if (untriaged > 0) {
+    groups.push({
+      id: 'submissions-untriaged',
+      kind: 'submission',
+      label: 'Proposals waiting for triage',
+      count: untriaged,
+      detail: 'No review has started',
+      dueAt: null,
+      tone: 'attention',
+      href: '/submissions?status=submitted',
+    })
+  }
+
+  const completedAssignmentIds = new Set(
+    state.scorecards.map((scorecard) => scorecard.assignmentId),
+  )
+  const openAssignments = state.reviewerAssignments.filter(
+    (assignment) =>
+      assignment.eventId === state.activeEventId &&
+      assignment.status !== 'completed' &&
+      !completedAssignmentIds.has(assignment.id),
+  )
+  if (openAssignments.length > 0) {
+    const overdueCount = openAssignments.filter((assignment) => overdue(assignment.dueAt)).length
+    groups.push({
+      id: 'reviews-open',
+      kind: 'review',
+      label: 'Reviews not finished',
+      count: openAssignments.length,
+      detail: overdueCount > 0 ? `${overdueCount} past due` : 'Assigned to reviewers',
+      dueAt: null,
+      tone: overdueCount > 0 ? 'blocking' : 'attention',
+      href: '/reviews',
+    })
+  }
+
+  const placedSessionIds = new Set(
+    state.placements
+      .filter((placement) => placement.eventId === state.activeEventId)
+      .map((placement) => placement.sessionId),
+  )
+  const unplaced = state.sessions.filter(
+    (session) =>
+      session.eventId === state.activeEventId &&
+      session.status !== 'cancelled' &&
+      !placedSessionIds.has(session.id),
+  ).length
+  if (unplaced > 0) {
+    groups.push({
+      id: 'sessions-unscheduled',
+      kind: 'schedule',
+      label: 'Sessions not on the schedule',
+      count: unplaced,
+      detail: 'No room or time yet',
+      dueAt: null,
+      tone: 'attention',
+      href: '/schedule',
+    })
+  }
+
+  const conflicts = scheduleConflicts(state).filter((conflict) => conflict.severity === 'error')
+  if (conflicts.length > 0) {
+    groups.push({
+      id: 'schedule-conflicts',
+      kind: 'schedule',
+      label: 'Schedule conflicts to resolve',
+      count: conflicts.length,
+      detail: 'Blocks publishing the agenda',
+      dueAt: null,
+      tone: 'blocking',
+      href: '/schedule',
+    })
+  }
+
+  const unanswered = activeParticipations.filter(
+    (participation) => participation.status === 'invited',
+  ).length
+  if (unanswered > 0) {
+    groups.push({
+      id: 'invitations-unanswered',
+      kind: 'invitation',
+      label: 'Invitations without a reply',
+      count: unanswered,
+      detail: 'Sent, not yet confirmed',
+      dueAt: null,
+      tone: 'upcoming',
+      href: '/people?status=invited',
+    })
+  }
+
+  const toneOrder: Record<NextActionTone, number> = { blocking: 0, attention: 1, upcoming: 2 }
+  return groups.sort((left, right) => {
+    if (toneOrder[left.tone] !== toneOrder[right.tone]) {
+      return toneOrder[left.tone] - toneOrder[right.tone]
+    }
+    return right.count - left.count
+  })
 }

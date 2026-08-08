@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  toZonedDateTimeInput,
-  zonedDateTimeInputToIso,
-} from '../packages/presentation/src/lib/date.ts'
+import { toZonedDateTimeInput, zonedDateTimeInputToIso } from '../packages/web/src/lib/date.ts'
 
 describe('event timezone conversion', () => {
   it('uses the zone offset in effect on the selected date', () => {

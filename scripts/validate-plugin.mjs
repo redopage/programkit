@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-const pluginRoot = resolve('packages/agent/plugin/program-ops')
+const pluginRoot = resolve('packages/agent/plugin/programkit')
 const errors = []
 
 async function readJson(path) {
@@ -30,13 +30,13 @@ if (manifest) {
 }
 
 const mcpConfig = await readJson(resolve(pluginRoot, '.mcp.json'))
-const mcpServer = mcpConfig?.mcpServers?.['program-ops']
+const mcpServer = mcpConfig?.mcpServers?.['programkit']
 if (!mcpServer || mcpServer.type !== 'http')
-  errors.push('program-ops must define an HTTP MCP server.')
+  errors.push('programkit must define an HTTP MCP server.')
 try {
   if (mcpServer) new URL(mcpServer.url)
 } catch {
-  errors.push('program-ops MCP URL must be valid.')
+  errors.push('programkit MCP URL must be valid.')
 }
 
 const skillsRoot = resolve(pluginRoot, 'skills')

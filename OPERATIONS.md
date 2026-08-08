@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Node.js with Corepack available
-- pnpm `10.33.0` (declared in `package.json`)
+- pnpm `11.20.0` (declared in `package.json`)
 - A Cloudflare account and Wrangler login only when deploying
 
 ## Local development
@@ -35,9 +35,13 @@ Use sample data only.
 - `GET /api/v1/state`
 - `GET /api/v1/manifest`
 - `POST /api/v1/operations/{operationName}`
+- `GET /api/v1/events`
+- `GET /api/v1/events/{eventId}/sessions`
+- `GET /api/v1/events/{eventId}/speakers`
+- `GET /api/v1/events/{eventId}/submissions`
 - `GET /api/v1/portal/{participationId}/state`
 - `POST /api/v1/portal/{participationId}/operations/{operationName}`
-- `GET /api/v1/events?limit=50`
+- `GET /api/v1/domain-events?limit=50`
 - `GET /api/v1/export`
 - `GET /public/agenda.json`
 - `POST /mcp`
@@ -57,11 +61,11 @@ The host supplies the actor. An `actor` in this public JSON is ignored by the HT
 
 ### Workspace routing
 
-The reference Worker selects the Durable Object with `x-crm-workspace-key`:
+The reference Worker selects the Durable Object with `x-programkit-workspace-key`:
 
 ```bash
 curl http://localhost:4173/api/v1/health \
-  -H 'x-crm-workspace-key: demo'
+  -H 'x-programkit-workspace-key: demo'
 ```
 
 Valid keys contain lowercase letters, numbers, underscores, or hyphens, begin with a letter or
@@ -92,7 +96,7 @@ pnpm build:packages
 ```
 
 This emits ESM JavaScript and TypeScript declarations into each `packages/*/dist` directory, plus
-`packages/presentation/dist/styles.css`.
+`packages/web/dist/styles.css`.
 
 Run individual or complete checks:
 
@@ -111,7 +115,8 @@ production build, and plugin validation.
 
 ## Cloudflare deployment
 
-Authenticate Wrangler, review the account and Worker name in `wrangler.jsonc`, then run:
+Authenticate Wrangler, review the account and Worker name in `apps/cloudflare/wrangler.jsonc`, then
+run:
 
 ```bash
 pnpm deploy
@@ -119,14 +124,14 @@ pnpm deploy
 
 The configuration declares:
 
-- the `worker.ts` entry point;
+- the `apps/cloudflare/src/worker.ts` entry point;
 - static assets with SPA fallback and Worker-first routing;
-- the `CRM_WORKSPACES` Durable Object binding;
+- the `PROGRAMKIT_WORKSPACES` Durable Object binding;
 - the SQLite Durable Object migration;
 - Worker observability.
 
 The seeded demonstration needs neither a D1 database ID nor an R2 bucket. Add a custom domain with
-a `routes` entry in `wrangler.jsonc` or the Cloudflare dashboard.
+a `routes` entry in `apps/cloudflare/wrangler.jsonc` or the Cloudflare dashboard.
 
 After deployment, verify at least:
 
@@ -154,6 +159,8 @@ pointing a real domain or real data at it:
 
 `campaign.send` currently records a demo outbox event and marks the campaign sent; no external
 email is delivered. Integration rows are demonstrative status records, not provider connections.
+The Airtable row describes the planned one-way mirror and must not be shown as connected until a
+real cursor and delivery state exist.
 
 ## Backup, restore, and departure
 
@@ -162,6 +169,5 @@ idempotency response caches are omitted. A production system should schedule enc
 outside the primary Durable Object, record their workspace and schema version, and test restoration
 into a separate environment.
 
-A non-Cloudflare adapter should preserve the repository's atomic `mutate` contract and migrate
-older schema versions explicitly. File objects are not part of this demo; a future storage adapter
-must export and restore them alongside their logical record IDs.
+File objects are not part of this demo. The R2 implementation must export and restore them alongside
+their logical record IDs. D1 and Airtable projections are rebuildable and are not backup sources.

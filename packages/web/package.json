@@ -1,0 +1,41 @@
+{
+  "name": "@programkit/web",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/copy-web-assets.mjs",
+    "prepack": "pnpm build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@heroicons/react": "2.2.0",
+    "@programkit/core": "workspace:*",
+    "@tanstack/react-query": "5.101.4",
+    "@tanstack/react-router": "1.170.23"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": {
+      "development": "./src/styles.css",
+      "default": "./dist/styles.css"
+    }
+  }
+}

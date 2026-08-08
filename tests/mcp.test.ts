@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { createSeedState, executeOperation, type WorkspaceState } from '@crm-library/core'
-import { handleMcpRequest } from '@crm-library/agent'
+import { createSeedState, executeOperation, type WorkspaceState } from '@programkit/core'
+import { handleMcpRequest } from '@programkit/agent'
 
 function harness() {
   let state = createSeedState()
@@ -66,7 +66,7 @@ describe('MCP server', () => {
     const discoveryBody = (await discovery.json()) as { result: { supportedVersions: string[] } }
     expect(discoveryBody.result.supportedVersions).toContain('2026-07-28')
     expect((discoveryBody.result as Record<string, unknown>)._meta).toMatchObject({
-      'io.modelcontextprotocol/serverInfo': { name: 'program-ops' },
+      'io.modelcontextprotocol/serverInfo': { name: 'programkit' },
     })
 
     const listed = await handleMcpRequest(modernRequest('tools/list', {}), test.context)
@@ -148,7 +148,7 @@ describe('MCP server', () => {
       operations: ['schedule.move-session'],
     })
     expect(listedBody.result._meta).toMatchObject({
-      'io.modelcontextprotocol/serverInfo': { name: 'program-ops', version: '0.1.0' },
+      'io.modelcontextprotocol/serverInfo': { name: 'programkit', version: '0.1.0' },
     })
 
     const invalid = await handleMcpRequest(
@@ -270,7 +270,7 @@ describe('MCP server', () => {
       status: 'awaiting_approval',
     })
     expect(toolBody.result._meta).toMatchObject({
-      'io.modelcontextprotocol/serverInfo': { name: 'program-ops', version: '0.1.0' },
+      'io.modelcontextprotocol/serverInfo': { name: 'programkit', version: '0.1.0' },
     })
 
     const resources = await handleMcpRequest(modernRequest('resources/list', {}), test.context)
@@ -297,7 +297,7 @@ describe('MCP server', () => {
     }
     expect(resourceBody.result.resultType).toBe('complete')
     expect(resourceBody.result._meta).toMatchObject({
-      'io.modelcontextprotocol/serverInfo': { name: 'program-ops', version: '0.1.0' },
+      'io.modelcontextprotocol/serverInfo': { name: 'programkit', version: '0.1.0' },
     })
     expect(resourceBody.result.contents[0]).toMatchObject({
       uri: 'ops://events/current/preflight',
@@ -366,7 +366,7 @@ describe('MCP server', () => {
     }
     expect(body.result.isError).toBe(false)
     expect(body.result._meta).toMatchObject({
-      'io.modelcontextprotocol/serverInfo': { name: 'program-ops', version: '0.1.0' },
+      'io.modelcontextprotocol/serverInfo': { name: 'programkit', version: '0.1.0' },
     })
   })
 

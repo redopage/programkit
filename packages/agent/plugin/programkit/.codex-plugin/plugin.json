@@ -1,0 +1,26 @@
+{
+  "name": "programkit",
+  "version": "0.1.0",
+  "description": "Operate customer-owned conference submissions, people, readiness, communications, and schedules.",
+  "author": {
+    "name": "ProgramKit contributors"
+  },
+  "license": "Apache-2.0",
+  "keywords": ["crm", "conference", "speaker-management", "program-operations", "scheduling"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ProgramKit",
+    "shortDescription": "Operate speakers, readiness, and schedules safely.",
+    "longDescription": "ProgramKit connects Codex to a customer-owned conference program. It can analyze records, draft communications, and prepare reviewable changes while server-enforced permissions keep sending and publishing human-only.",
+    "developerName": "ProgramKit contributors",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Find the highest-impact readiness blockers.",
+      "Draft a reminder for incomplete speakers.",
+      "Propose fixes for schedule conflicts."
+    ],
+    "brandColor": "#047857"
+  },
+  "mcpServers": "./.mcp.json"
+}

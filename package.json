@@ -1,45 +1,40 @@
 {
-  "name": "crm-library",
+  "name": "programkit",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
-    "dev": "vite --host localhost --port 4173 --strictPort",
-    "build": "pnpm build:packages && tsc --noEmit && vite build",
+    "dev": "pnpm --filter @programkit/app-cloudflare dev",
+    "dev:cloudflare": "pnpm --filter @programkit/app-cloudflare dev",
+    "build": "pnpm build:packages && tsc --noEmit && pnpm --filter @programkit/app-cloudflare build",
     "build:packages": "pnpm --filter './packages/**' build",
-    "preview": "vite preview --host localhost --port 4173 --strictPort",
+    "preview": "pnpm --filter @programkit/app-cloudflare preview",
     "test": "vitest run",
     "lint": "oxlint . --deny-warnings",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "pnpm test && pnpm lint && pnpm format:check && pnpm build && pnpm plugin:validate",
-    "deploy": "pnpm build && wrangler deploy",
+    "deploy": "pnpm deploy:cloudflare",
+    "deploy:cloudflare": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy",
     "plugin:validate": "node scripts/validate-plugin.mjs"
   },
   "dependencies": {
-    "@crm-library/agent": "workspace:*",
-    "@crm-library/core": "workspace:*",
-    "@crm-library/presentation": "workspace:*",
-    "@cloudflare/vite-plugin": "^1.43.0",
-    "@fontsource-variable/inter": "^5.2.8",
-    "@heroicons/react": "^2.2.0",
-    "@tailwindcss/vite": "^4.3.2",
-    "@vitejs/plugin-react": "^6.0.3",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "tailwindcss": "^4.3.2",
-    "vite": "^8.1.1"
+    "@programkit/agent": "workspace:*",
+    "@programkit/core": "workspace:*",
+    "@programkit/web": "workspace:*",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260706.1",
+    "@cloudflare/workers-types": "5.20260808.1",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "oxlint": "^1.71.0",
     "prettier": "^3.9.4",
-    "typescript": "~6.0.2",
-    "vitest": "^4.0.18",
-    "wrangler": "^4.107.0"
+    "typescript": "7.0.2",
+    "vite": "8.2.1",
+    "vitest": "^4.0.18"
   }
 }

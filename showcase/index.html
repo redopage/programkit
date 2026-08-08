@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta
+      name="description"
+      content="An evidence-backed walkthrough of ProgramKit against the conference-program competition brief."
+    />
+    <title>ProgramKit — product evidence</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="ProgramKit product evidence home">
+        <span class="brand-mark" aria-hidden="true">P</span>
+        <span>ProgramKit</span>
+      </a>
+      <nav aria-label="Report navigation">
+        <a href="#verdict">Verdict</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#coverage">Coverage</a>
+        <a href="#evidence">Evidence</a>
+      </nav>
+      <span class="report-date">Product evidence · Aug 8, 2026</span>
+    </header>
+
+    <main id="top">
+      <section class="hero section-shell">
+        <div class="hero-copy">
+          <p class="eyebrow">Open-source conference program operations</p>
+          <h1>From public proposal to published program.</h1>
+          <p class="hero-summary">
+            ProgramKit now proves the complete conference-program spine in one fast Cloudflare
+            application. This report compares the working product with the supplied Sessionboard
+            brief, records what was exercised, and names the production work that remains.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="http://localhost:4173/">Open the local demo</a>
+            <a class="button button-secondary" href="#coverage">Review feature coverage</a>
+          </div>
+        </div>
+        <figure class="hero-media">
+          <div class="browser-frame">
+            <div class="browser-bar" aria-hidden="true">
+              <span></span><span></span><span></span>
+              <p>localhost:4173</p>
+            </div>
+            <img src="./screenshots/programkit/overview.jpg" alt="" />
+          </div>
+          <figcaption>
+            Responsive operator overview backed by the seeded AIE NYC workspace.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section id="verdict" class="section section-shell">
+        <div class="section-heading">
+          <p class="eyebrow">Current verdict</p>
+          <h2>The direction is right. The next phase is production depth.</h2>
+          <p>
+            The six firm workflow areas exist as connected product surfaces, not isolated mockups.
+            The system still needs real files, delivery providers, authentication, richer schedule
+            tooling, and the optional integrations before a live pilot should handle real data.
+          </p>
+        </div>
+        <dl class="verdict-grid">
+          <div>
+            <dt>Working lifecycle</dt>
+            <dd>CFP → review → decision → speaker tasks → schedule → public program</dd>
+          </div>
+          <div>
+            <dt>Recommended host</dt>
+            <dd>
+              One Cloudflare Worker, Static Assets, and one SQLite Durable Object per workspace
+            </dd>
+          </div>
+          <div>
+            <dt>Data decision</dt>
+            <dd>
+              Durable Object is authoritative; Airtable is an optional reconciled team workspace
+            </dd>
+          </div>
+          <div>
+            <dt>Honest limitation</dt>
+            <dd>
+              The demo records email and file states, but no provider or private R2 pipeline is
+              connected
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="architecture" class="section section-shell architecture-section">
+        <div class="section-heading">
+          <p class="eyebrow">One golden path</p>
+          <h2>Live by default, extensible at the edges.</h2>
+          <p>
+            Durable Object SQLite is the right primary database for this workload: each event gets
+            one transactional coordination boundary plus alarms and WebSocket support. D1 can later
+            serve cross-event search or analytics without becoming a second write authority.
+          </p>
+        </div>
+        <div class="architecture-map" aria-label="ProgramKit deployment architecture">
+          <article class="architecture-node architecture-node-dark">
+            <p class="node-label">Supported deployment</p>
+            <h3>Cloudflare Worker</h3>
+            <p>
+              Vite web build, API routing, trusted identity boundary, and delivery orchestration.
+            </p>
+          </article>
+          <div class="architecture-arrow" aria-hidden="true">→</div>
+          <article class="architecture-node">
+            <p class="node-label">Authoritative state</p>
+            <h3>SQLite Durable Object</h3>
+            <p>
+              Atomic event operations, immutable releases, audit events, alarms, and live updates.
+            </p>
+          </article>
+          <div class="architecture-fanout" aria-hidden="true">↘</div>
+          <div class="architecture-edges">
+            <article class="architecture-node architecture-node-small">
+              <p class="node-label">Private files</p>
+              <h3>R2</h3>
+              <p>Direct upload and authorized download.</p>
+            </article>
+            <article class="architecture-node architecture-node-small architecture-node-violet">
+              <p class="node-label">Optional team view</p>
+              <h3>Airtable</h3>
+              <p>Async export plus conflict-aware inbound proposals.</p>
+            </article>
+            <article class="architecture-node architecture-node-small">
+              <p class="node-label">Async work</p>
+              <h3>Queue or alarm</h3>
+              <p>Email, calendar invites, webhooks, and mirror retries.</p>
+            </article>
+          </div>
+        </div>
+
+        <article class="airtable-explainer">
+          <div>
+            <p class="eyebrow">How two-way Airtable should work</p>
+            <h3>Reconcile; never last-write-wins.</h3>
+            <p>
+              Each row carries a stable ProgramKit ID, source revision, and a saved last-synced
+              baseline. An editable Airtable-only change becomes a validated proposal. A
+              ProgramKit-only change is exported. A field changed differently on both sides becomes
+              a conflict for a human to resolve.
+            </p>
+          </div>
+          <ol class="sync-steps">
+            <li>
+              <span>1</span>
+              <p>
+                <strong>Commit locally.</strong> Save the domain operation and outbox intent
+                atomically.
+              </p>
+            </li>
+            <li>
+              <span>2</span>
+              <p>
+                <strong>Mirror later.</strong> Batch upsert outside the user request with retries.
+              </p>
+            </li>
+            <li>
+              <span>3</span>
+              <p><strong>Compare three copies.</strong> Baseline, ProgramKit, and Airtable.</p>
+            </li>
+            <li>
+              <span>4</span>
+              <p>
+                <strong>Protect risky fields.</strong> Identity, decisions, status, and publication
+                never accept silent inbound edits.
+              </p>
+            </li>
+            <li>
+              <span>5</span>
+              <p>
+                <strong>Review conflicts.</strong> Keep both candidate values and require an
+                explicit choice.
+              </p>
+            </li>
+          </ol>
+        </article>
+      </section>
+
+      <section id="coverage" class="section section-shell">
+        <div class="section-heading">
+          <p class="eyebrow">Brief coverage</p>
+          <h2>What is present, partial, and still absent.</h2>
+          <p>
+            “Working” means the local product flow was exercised through the browser. “Partial”
+            means the domain or UI spine exists but a production dependency or requested depth is
+            missing.
+          </p>
+        </div>
+        <div class="coverage-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Requested area</th>
+                <th>Status</th>
+                <th>Evidence today</th>
+                <th>Still needed</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Event setup</td>
+                <td><span class="status status-working">Working</span></td>
+                <td>
+                  Identity, venue, dates, timezone, status, version checks, schedule boundaries
+                </td>
+                <td>Admin membership, public theme controls, multi-event switching</td>
+              </tr>
+              <tr>
+                <td>Custom CFP forms</td>
+                <td><span class="status status-working">Working</span></td>
+                <td>Ordered questions, mappings, conditions, preview, public link, validation</td>
+                <td>Category routing, file policy, version comparison</td>
+              </tr>
+              <tr>
+                <td>Speaker portal</td>
+                <td><span class="status status-partial">Partial</span></td>
+                <td>Scoped profile, confirmation, due tasks, organizer review states</td>
+                <td>Real headshot/slides uploads, richer task forms, resource pages</td>
+              </tr>
+              <tr>
+                <td>Communications</td>
+                <td><span class="status status-partial">Partial</span></td>
+                <td>Audience preview, approval, frozen recipients, idempotent demo transition</td>
+                <td>Email provider, calendar files, reminders, delivery history and failures</td>
+              </tr>
+              <tr>
+                <td>Evaluation and scoring</td>
+                <td><span class="status status-working">Working</span></td>
+                <td>
+                  Teams, assignments, blind projection, scorecards, decisions, atomic conversion
+                </td>
+                <td>Assignment UI, conflicts of interest, deeper multi-round policy, AI assist</td>
+              </tr>
+              <tr>
+                <td>Scheduling</td>
+                <td><span class="status status-partial">Partial</span></td>
+                <td>
+                  Drag-and-drop, precise move form, conflict previews, room/list views, immutable
+                  publish
+                </td>
+                <td>Unscheduled tray, undo, day/track filters and fuller publish preflight</td>
+              </tr>
+              <tr>
+                <td>Readiness dashboard</td>
+                <td><span class="status status-working">Working</span></td>
+                <td>Live blockers, progress, due dates, submitted-item review, deep links</td>
+                <td>Saved filters, bulk actions, fuller explanations and history</td>
+              </tr>
+              <tr>
+                <td>Accelevents</td>
+                <td><span class="status status-missing">Not built</span></td>
+                <td>Stable export and API are suitable foundations</td>
+                <td>Native one-way adapter, mapping, cursor, retries, operator status</td>
+              </tr>
+              <tr>
+                <td>Portal resources and embeds</td>
+                <td><span class="status status-missing">Not built</span></td>
+                <td>Public agenda route and published read model exist</td>
+                <td>Wiki/resources, HTML embeds, speaker gallery, itinerary widget</td>
+              </tr>
+              <tr>
+                <td>Cloudflare deployment</td>
+                <td><span class="status status-working">Working</span></td>
+                <td>Vite, Worker, Static Assets, local workerd, SQLite Durable Object</td>
+                <td>Real auth, R2, delivery outbox, backups, observability</td>
+              </tr>
+              <tr>
+                <td>Airtable bonus</td>
+                <td><span class="status status-designed">Designed</span></td>
+                <td>Field policy, three-way reconciliation primitive, tests, UI concept</td>
+                <td>Base template, credentials, webhook/poll worker, conflict queue</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="evidence" class="section section-shell">
+        <div class="section-heading">
+          <p class="eyebrow">Side-by-side evidence</p>
+          <h2>The same jobs, with a smaller operating model.</h2>
+          <p>
+            Sessionboard images are cropped from the competition brief supplied for this review.
+            They are reference evidence, not a visual-fidelity target.
+          </p>
+        </div>
+
+        <div class="evidence-stack">
+          <article class="evidence-block">
+            <div class="evidence-copy">
+              <span class="status status-working">Working</span>
+              <h3>Build and publish the call for proposals.</h3>
+              <p>
+                ProgramKit keeps content, questions, data mappings, conditional logic, publish
+                readiness, and preview in one focused editor. The live test revealed the workshop
+                plan only after selecting the workshop format, then accepted a complete proposal.
+              </p>
+              <a href="http://localhost:4173/forms">Open ProgramKit form builder</a>
+            </div>
+            <div class="comparison-grid">
+              <figure>
+                <img src="./screenshots/sessionboard/submission-forms.jpg" alt="" />
+                <figcaption><span>Reference</span> Sessionboard submission forms</figcaption>
+              </figure>
+              <figure>
+                <img src="./screenshots/programkit/form-builder-responsive.jpg" alt="" />
+                <figcaption><span>ProgramKit</span> Container-responsive form builder</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="evidence-block">
+            <div class="evidence-copy">
+              <span class="status status-working">Working</span>
+              <h3>Collect a public proposal without account friction.</h3>
+              <p>
+                The public route renders only the open form projection. A test workshop submission
+                was validated, stored, assigned to reviewers, and shown in the operator queue.
+              </p>
+              <a href="http://localhost:4173/submit/aie-nyc-2026-cfp">Open public CFP</a>
+            </div>
+            <div class="comparison-grid">
+              <figure>
+                <img src="./screenshots/sessionboard/public-cfp.jpg" alt="" />
+                <figcaption><span>Reference</span> Sessionboard public CFP</figcaption>
+              </figure>
+              <figure>
+                <img src="./screenshots/programkit/public-cfp.jpg" alt="" />
+                <figcaption><span>ProgramKit</span> Public proposal experience</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="evidence-block">
+            <div class="evidence-copy">
+              <span class="status status-working">Working</span>
+              <h3>Review, score, and decide with context.</h3>
+              <p>
+                Two reviewer identities completed independent scorecards. The organizer saw the
+                aggregate and feedback, accepted the proposal, and ProgramKit created its person,
+                participation, requirements, and session in one operation.
+              </p>
+              <a href="http://localhost:4173/submissions">Open submission pipeline</a>
+            </div>
+            <div class="comparison-grid">
+              <figure>
+                <img src="./screenshots/sessionboard/abstracts.jpg" alt="" />
+                <figcaption><span>Reference</span> Sessionboard abstracts</figcaption>
+              </figure>
+              <figure>
+                <img src="./screenshots/programkit/submissions.jpg" alt="" />
+                <figcaption><span>ProgramKit</span> Submission queue and status</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="evidence-block">
+            <div class="evidence-copy">
+              <span class="status status-partial">Partial</span>
+              <h3>Give accepted speakers one clear workspace.</h3>
+              <p>
+                The portal is correctly scoped and supports confirmation, public profile editing,
+                requirement submission, and progress. R2-backed uploads and resource/wiki content
+                are the main missing pieces.
+              </p>
+              <a href="http://localhost:4173/portal/par_003">Open speaker portal</a>
+            </div>
+            <div class="comparison-grid">
+              <figure>
+                <img src="./screenshots/sessionboard/speaker-portal.jpg" alt="" />
+                <figcaption><span>Reference</span> Sessionboard speaker portal</figcaption>
+              </figure>
+              <figure>
+                <img src="./screenshots/programkit/speaker-portal.jpg" alt="" />
+                <figcaption><span>ProgramKit</span> Speaker profile and next steps</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="evidence-block">
+            <div class="evidence-copy">
+              <span class="status status-working">Working</span>
+              <h3>See every blocker without opening every speaker.</h3>
+              <p>
+                Organizer readiness aggregates participant requirements into progress, hard
+                blockers, review queues, and searchable status views. The participant portal writes
+                back to the same source state.
+              </p>
+              <a href="http://localhost:4173/readiness">Open readiness</a>
+            </div>
+            <div class="comparison-grid">
+              <figure>
+                <img src="./screenshots/sessionboard/portal-tasks.jpg" alt="" />
+                <figcaption><span>Reference</span> Sessionboard portal tasks</figcaption>
+              </figure>
+              <figure>
+                <img src="./screenshots/programkit/readiness.jpg" alt="" />
+                <figcaption><span>ProgramKit</span> Organizer readiness matrix</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="evidence-block">
+            <div class="evidence-copy">
+              <span class="status status-partial">Partial</span>
+              <h3>Keep the draft separate from the published program.</h3>
+              <p>
+                A conflicting room move was accepted into the draft and immediately blocked
+                publication with a plain-language explanation. After resolution, publishing created
+                a new immutable release. Drag and drop and alternate views remain to build.
+              </p>
+              <a href="http://localhost:4173/schedule">Open schedule studio</a>
+            </div>
+            <div class="comparison-grid">
+              <figure>
+                <img src="./screenshots/sessionboard/agenda.jpg" alt="" />
+                <figcaption><span>Reference</span> Sessionboard agenda</figcaption>
+              </figure>
+              <figure>
+                <img src="./screenshots/programkit/schedule.jpg" alt="" />
+                <figcaption><span>ProgramKit</span> Draft schedule and preflight</figcaption>
+              </figure>
+            </div>
+          </article>
+
+          <article class="evidence-block evidence-gap">
+            <div class="evidence-copy">
+              <span class="status status-missing">Gap</span>
+              <h3>Event settings, resources, and embeds need their own slice.</h3>
+              <p>
+                The domain seed proves event configuration and the public agenda route proves a
+                publishable read model, but the brief’s admin settings screen, portal resources,
+                HTML embeds, speaker gallery, and itinerary widget do not yet exist as product
+                flows.
+              </p>
+            </div>
+            <div class="comparison-grid comparison-grid-three">
+              <figure>
+                <img src="./screenshots/sessionboard/event-settings.jpg" alt="" />
+                <figcaption><span>Reference</span> Event settings</figcaption>
+              </figure>
+              <figure>
+                <img src="./screenshots/sessionboard/embeds.jpg" alt="" />
+                <figcaption><span>Reference</span> Embeds</figcaption>
+              </figure>
+              <figure>
+                <img src="./screenshots/programkit/public-agenda.jpg" alt="" />
+                <figcaption><span>Foundation</span> Published agenda route</figcaption>
+              </figure>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section section-shell test-record">
+        <div class="section-heading">
+          <p class="eyebrow">Real-world browser pass</p>
+          <h2>What was actually exercised.</h2>
+          <p>The deterministic demo was restored after these local tests.</p>
+        </div>
+        <dl class="test-grid">
+          <div>
+            <dt>CFP</dt>
+            <dd>
+              Triggered a conditional workshop field, submitted a full proposal, and verified it in
+              the queue
+            </dd>
+          </div>
+          <div>
+            <dt>Review</dt>
+            <dd>
+              Completed two independent scorecards and verified the aggregate decision threshold
+            </dd>
+          </div>
+          <div>
+            <dt>Decision</dt>
+            <dd>Accepted the proposal and verified the generated session and speaker records</dd>
+          </div>
+          <div>
+            <dt>Portal</dt>
+            <dd>Confirmed participation, edited the public profile, and submitted a requirement</dd>
+          </div>
+          <div>
+            <dt>Schedule</dt>
+            <dd>
+              Created a room conflict, observed publish blocking, resolved it, and published a new
+              release
+            </dd>
+          </div>
+          <div>
+            <dt>Communications</dt>
+            <dd>
+              Created, submitted, approved, and marked a campaign sent in the provider-free demo
+            </dd>
+          </div>
+          <div>
+            <dt>Agent safety</dt>
+            <dd>
+              Approved a proposed change and verified stale expected-version protection stopped its
+              commit
+            </dd>
+          </div>
+          <div>
+            <dt>Responsive UI</dt>
+            <dd>
+              Verified every principal route at the available 877px browser width with zero document
+              overflow
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="section section-shell next-section">
+        <div class="next-panel">
+          <div>
+            <p class="eyebrow">Recommended next milestone</p>
+            <h2>Make one pilot trustworthy.</h2>
+            <p>
+              Finish identity, one R2 asset pipeline, submission confirmation plus accepted-speaker
+              reminders, and the unscheduled schedule tray before broadening the product. Then add
+              Airtable reconciliation and Accelevents as explicit adapters around the stable core.
+            </p>
+          </div>
+          <ol>
+            <li>Real organizer, reviewer, and participant authentication</li>
+            <li>Private R2 uploads for headshots, slides, videos, and supporting files</li>
+            <li>
+              Transactional outbox with Cloudflare Email Service or Resend and calendar attachments
+            </li>
+            <li>Unscheduled tray, accessible drag and drop, undo, and schedule view controls</li>
+            <li>Airtable base template, webhook/poll adapter, and reconciliation queue</li>
+            <li>Accelevents export, portal resources, speaker gallery, and embed package</li>
+          </ol>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        ProgramKit product evidence · Generated from the local deterministic demo and the supplied
+        competition brief.
+      </p>
+      <a href="#top">Back to top</a>
+    </footer>
+  </body>
+</html>

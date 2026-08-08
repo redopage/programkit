@@ -3,12 +3,18 @@ import { describe, expect, it } from 'vitest'
 import {
   createSeedState,
   executeOperation,
+  nextActions,
   publicAgenda,
   readinessSummary,
+  reviewerQueue,
   scheduleConflicts,
-} from '@crm-library/core'
+  submissionPipelineSummary,
+  submissionFormPublishReadiness,
+  submissionReviewSummary,
+  visibleSubmissionFormFields,
+} from '@programkit/core'
 
-describe('CRM operation engine', () => {
+describe('ProgramKit operation engine', () => {
   it('creates a useful deterministic workspace', () => {
     const state = createSeedState()
     expect(state.people).toHaveLength(16)
@@ -16,11 +22,73 @@ describe('CRM operation engine', () => {
     expect(state.sessions).toHaveLength(10)
     expect(state.scheduleReleases).toHaveLength(1)
     expect(state.events[0].publishedScheduleVersion).toBe(3)
+    expect(state.events[0].version).toBe(1)
     expect(publicAgenda(state)).toHaveLength(10)
     expect(readinessSummary(state).blockers).toBeGreaterThan(0)
+    expect(state.submissionForms).toHaveLength(2)
+    expect(state.submissions).toHaveLength(6)
+    expect(submissionPipelineSummary(state)).toMatchObject({
+      total: 6,
+      draft: 1,
+      submitted: 2,
+      inReview: 1,
+      accepted: 1,
+      rejected: 1,
+    })
+    expect(submissionReviewSummary(state, 'sub_002')).toMatchObject({
+      assigned: 2,
+      completed: 2,
+      averageScore: 4.7,
+    })
+    expect(reviewerQueue(state, 'rev_001')).toHaveLength(3)
+    expect(
+      submissionFormPublishReadiness(
+        state.submissionFormFields.filter((field) => field.formId === 'frm_cfp_2026'),
+      ),
+    ).toMatchObject({ ready: true, completedCount: 8, requiredCount: 8 })
     expect(
       scheduleConflicts(state).filter((conflict) => conflict.severity === 'error'),
     ).toHaveLength(0)
+  })
+
+  it('updates event settings with validation and version checks', () => {
+    const state = createSeedState()
+    const event = state.events[0]
+    const updated = executeOperation(state, 'event.update', {
+      input: {
+        eventId: event.id,
+        name: 'AIE Brooklyn 2026',
+        slug: 'aie-brooklyn-2026',
+        venue: 'Building 77',
+        city: 'Brooklyn, New York',
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        timezone: 'America/New_York',
+        status: 'active',
+      },
+      expectedVersions: { [event.id]: event.version },
+    })
+    expect(updated.response.ok).toBe(true)
+    expect(updated.state.events[0]).toMatchObject({
+      name: 'AIE Brooklyn 2026',
+      slug: 'aie-brooklyn-2026',
+      venue: 'Building 77',
+      version: 2,
+    })
+    expect(updated.state.domainEvents.at(-1)?.type).toBe('event.updated')
+
+    const stale = executeOperation(updated.state, 'event.update', {
+      input: { eventId: event.id, name: 'Stale name' },
+      expectedVersions: { [event.id]: 1 },
+    })
+    expect(stale.response.error?.code).toBe('STALE_WRITE')
+
+    const invalid = executeOperation(updated.state, 'event.update', {
+      input: { eventId: event.id, timezone: 'New York-ish' },
+      expectedVersions: { [event.id]: 2 },
+    })
+    expect(invalid.response.error?.code).toBe('INVALID_INPUT')
+    expect(invalid.response.error?.fields?.timezone).toBeTruthy()
   })
 
   it('finds schedule boundary, duration, and missing-record failures deterministically', () => {
@@ -314,5 +382,308 @@ describe('CRM operation engine', () => {
     })
     expect(sent.response.ok).toBe(true)
     expect(sent.state.campaigns.find((campaign) => campaign.id === pending.id)?.status).toBe('sent')
+  })
+
+  it('evaluates conditional CFP fields from canonical answers', () => {
+    const state = createSeedState()
+    const talkFields = visibleSubmissionFormFields(state, 'frm_cfp_2026', {
+      session_format: 'talk',
+    })
+    const workshopFields = visibleSubmissionFormFields(state, 'frm_cfp_2026', {
+      session_format: 'workshop',
+    })
+    expect(talkFields.some((field) => field.key === 'workshop_outline')).toBe(false)
+    expect(workshopFields.some((field) => field.key === 'workshop_outline')).toBe(true)
+  })
+
+  it('creates, configures, and publishes a versioned submission form', () => {
+    let state = createSeedState()
+    const created = executeOperation(state, 'submission-form.create', {
+      input: {
+        name: 'Community CFP',
+        slug: 'community-cfp',
+        title: 'Propose a community session',
+        description: 'Share a practical story.',
+        confirmationMessage: 'We received your idea.',
+      },
+    })
+    expect(created.response.ok).toBe(true)
+    state = created.state
+    const form = state.submissionForms.find((entry) => entry.slug === 'community-cfp')!
+
+    const prematurePublish = executeOperation(state, 'submission-form.publish', {
+      input: { formId: form.id },
+      expectedVersions: { [form.id]: form.version },
+    })
+    expect(prematurePublish.response.error?.code).toBe('INVALID_INPUT')
+    expect(prematurePublish.state).toBe(state)
+
+    const field = (
+      key: string,
+      label: string,
+      purpose: string,
+      kind: string = 'short_text',
+      options: Array<{ value: string; label: string }> = [],
+    ) => ({ key, label, purpose, kind, required: true, options })
+    const updated = executeOperation(state, 'submission-form.update', {
+      input: {
+        formId: form.id,
+        opensAt: '2026-08-01T14:00:00.000Z',
+        closesAt: '2026-08-30T03:59:00.000Z',
+        fields: [
+          field('first_name', 'First name', 'first_name'),
+          field('last_name', 'Last name', 'last_name'),
+          field('email', 'Email', 'email', 'email'),
+          field('biography', 'Biography', 'biography', 'long_text'),
+          field('proposal_title', 'Title', 'proposal_title'),
+          field('abstract', 'Abstract', 'abstract', 'long_text'),
+          field('session_format', 'Format', 'session_format', 'select', [
+            { value: 'talk', label: 'Talk' },
+          ]),
+          field('track', 'Track', 'track', 'select', [{ value: 'trk_build', label: 'Build' }]),
+        ],
+      },
+      expectedVersions: { [form.id]: form.version },
+    })
+    expect(updated.response.ok).toBe(true)
+    state = updated.state
+    const configured = state.submissionForms.find((entry) => entry.id === form.id)!
+    expect(configured.version).toBe(2)
+    expect(state.submissionFormFields.filter((entry) => entry.formId === form.id)).toHaveLength(8)
+
+    const published = executeOperation(state, 'submission-form.publish', {
+      input: { formId: form.id },
+      expectedVersions: { [form.id]: configured.version },
+    })
+    expect(published.response.ok).toBe(true)
+    expect(published.state.submissionForms.find((entry) => entry.id === form.id)).toMatchObject({
+      status: 'open',
+      version: 3,
+    })
+  })
+
+  it('reports incomplete form mappings and rejects incompatible answer shapes', () => {
+    const state = createSeedState()
+    const fields = state.submissionFormFields.filter((field) => field.formId === 'frm_cfp_2026')
+    const track = fields.find((field) => field.purpose === 'track')!
+    track.required = false
+
+    expect(submissionFormPublishReadiness(fields)).toMatchObject({
+      ready: false,
+      completedCount: 7,
+      incompletePurposes: ['track'],
+    })
+
+    const form = state.submissionForms.find((entry) => entry.id === 'frm_cfp_2026')!
+    const incompleteUpdate = executeOperation(state, 'submission-form.update', {
+      input: { formId: form.id, fields },
+      expectedVersions: { [form.id]: form.version },
+    })
+    expect(incompleteUpdate.response).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT' },
+    })
+    expect(incompleteUpdate.response.error?.message).toContain(
+      'Publish requires these mapped fields: track',
+    )
+
+    track.required = true
+    track.kind = 'multi_select'
+    const updated = executeOperation(state, 'submission-form.update', {
+      input: { formId: form.id, fields },
+      expectedVersions: { [form.id]: form.version },
+    })
+    expect(updated.response).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT' },
+    })
+    expect(updated.response.error?.message).toContain('cannot map multi_select answers to track')
+  })
+
+  it('validates visible required answers before assigning a submission', () => {
+    let state = createSeedState()
+    const answers = {
+      first_name: 'Nia',
+      last_name: 'Rivera',
+      email: 'nia@example.com',
+      company: 'Useful Systems',
+      job_title: 'Engineering lead',
+      biography: 'Nia builds tools for small program teams.',
+      proposal_title: 'A workshop with a missing plan',
+      abstract: 'A hands-on workshop about dependable event operations.',
+      session_format: 'workshop',
+      track: 'trk_build',
+    }
+    const created = executeOperation(state, 'submission.create', {
+      input: { formId: 'frm_cfp_2026', kind: 'abstract', answers },
+    })
+    expect(created.response.ok).toBe(true)
+    state = created.state
+    const submission = state.submissions.at(-1)!
+
+    const incomplete = executeOperation(state, 'submission.submit', {
+      input: { submissionId: submission.id },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+    expect(incomplete.response.error?.fields).toMatchObject({
+      workshop_outline: 'Workshop plan is required.',
+    })
+
+    const submitted = executeOperation(state, 'submission.submit', {
+      input: {
+        submissionId: submission.id,
+        answers: {
+          workshop_outline: 'Attendees will build and test a review queue in small groups.',
+        },
+      },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+    expect(submitted.response.ok).toBe(true)
+    expect(
+      submitted.state.reviewerAssignments.filter((entry) => entry.submissionId === submission.id),
+    ).toHaveLength(2)
+  })
+
+  it('scores reviews and atomically converts an accepted abstract into the program', () => {
+    let state = createSeedState()
+    const submission = state.submissions.find((entry) => entry.id === 'sub_002')!
+    const decision = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: submission.id,
+        decision: 'accepted',
+        reason: 'Two strong reviews and a clear audience takeaway.',
+      },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+    expect(decision.response.ok).toBe(true)
+    state = decision.state
+    const accepted = state.submissions.find((entry) => entry.id === submission.id)!
+    const person = state.people.find((entry) => entry.email === 'mina@plainspoken.systems')!
+    const participation = state.participations.find(
+      (entry) => entry.id === accepted.convertedParticipationId,
+    )!
+    const session = state.sessions.find((entry) => entry.id === accepted.convertedSessionId)!
+    expect(accepted.status).toBe('accepted')
+    expect(participation).toMatchObject({ personId: person.id, status: 'invited' })
+    expect(session).toMatchObject({
+      title: 'The boring parts of trustworthy agents',
+      participantIds: [participation.id],
+      trackId: 'trk_operate',
+      status: 'ready',
+    })
+    expect(participation.sessionIds).toContain(session.id)
+    expect(
+      state.requirementInstances.filter((entry) => entry.participationId === participation.id),
+    ).toHaveLength(state.requirementDefinitions.length)
+    expect(
+      state.domainEvents
+        .filter((entry) => entry.operation === 'review.decide')
+        .map((entry) => entry.type),
+    ).toEqual(
+      expect.arrayContaining([
+        'person.created',
+        'participation.created',
+        'session.created-from-submission',
+        'review.decision-recorded',
+      ]),
+    )
+  })
+
+  it('records scorecards and allows guaranteed sessions to bypass abstract review', () => {
+    let state = createSeedState()
+    const pending = state.submissions.find((entry) => entry.id === 'sub_005')!
+    const prematureDecision = executeOperation(state, 'review.decide', {
+      input: { submissionId: pending.id, decision: 'accepted' },
+      expectedVersions: { [pending.id]: pending.version },
+    })
+    expect(prematureDecision.response.error?.code).toBe('REVIEWS_INCOMPLETE')
+    expect(prematureDecision.state).toBe(state)
+
+    const assignment = state.reviewerAssignments.find((entry) => entry.id === 'rva_007')!
+    const scored = executeOperation(state, 'review.submit-scorecard', {
+      input: {
+        assignmentId: assignment.id,
+        scores: { crt_relevance: 5, crt_specificity: 4, crt_takeaway: 5 },
+        recommendation: 'accept',
+        comments: 'Specific and immediately useful.',
+      },
+      expectedVersions: { [assignment.id]: assignment.version },
+    })
+    expect(scored.response.ok).toBe(true)
+    state = scored.state
+    expect(state.reviewerAssignments.find((entry) => entry.id === assignment.id)?.status).toBe(
+      'completed',
+    )
+    expect(state.submissions.find((entry) => entry.id === 'sub_005')?.status).toBe('in_review')
+
+    const guaranteed = state.submissions.find((entry) => entry.id === 'sub_003')!
+    const accepted = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: guaranteed.id,
+        decision: 'accepted',
+        reason: 'The partner has a guaranteed program slot.',
+      },
+      expectedVersions: { [guaranteed.id]: guaranteed.version },
+    })
+    expect(accepted.response.ok).toBe(true)
+    expect(accepted.state.submissions.find((entry) => entry.id === guaranteed.id)).toMatchObject({
+      status: 'accepted',
+      convertedParticipationId: expect.any(String),
+      convertedSessionId: expect.any(String),
+    })
+  })
+})
+
+describe('next actions', () => {
+  it('groups outstanding work into jobs an organizer can pick up', () => {
+    const state = createSeedState()
+    const groups = nextActions(state, '2026-08-07T16:00:00.000Z')
+
+    expect(groups.length).toBeGreaterThan(0)
+    // Every group has to be actionable: a destination and a non-zero size.
+    for (const group of groups) {
+      expect(group.count).toBeGreaterThan(0)
+      expect(group.href.startsWith('/')).toBe(true)
+      expect(group.label).not.toBe('')
+    }
+    // Blocking work sorts ahead of work that can wait.
+    const tones = groups.map((group) => group.tone)
+    expect(tones).toEqual(
+      [...tones].sort((left, right) => {
+        const order = { blocking: 0, attention: 1, upcoming: 2 }
+        return order[left] - order[right]
+      }),
+    )
+  })
+
+  it('accounts for every requirement blocker the readiness summary reports', () => {
+    const state = createSeedState()
+    const summary = readinessSummary(state)
+    const grouped = nextActions(state, '2026-08-07T16:00:00.000Z')
+      .filter(
+        (group) => group.id.startsWith('requirement-') && group.id !== 'requirement-approvals',
+      )
+      .reduce((total, group) => total + group.count, 0)
+
+    expect(grouped).toBe(summary.blockers)
+  })
+
+  it('drops groups that no longer have work in them', () => {
+    const state = createSeedState()
+    const emptied = {
+      ...state,
+      submissions: [],
+      requirementInstances: [],
+      reviewerAssignments: [],
+      participations: state.participations.map((participation) => ({
+        ...participation,
+        status: 'confirmed' as const,
+      })),
+    }
+    const ids = nextActions(emptied, '2026-08-07T16:00:00.000Z').map((group) => group.id)
+
+    expect(ids).not.toContain('submissions-untriaged')
+    expect(ids).not.toContain('reviews-open')
+    expect(ids).not.toContain('invitations-unanswered')
   })
 })

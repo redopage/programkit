@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  createSeedState,
   handleCoreRequest,
   MemoryWorkspaceRepository,
   type OperationResponse,
   type WorkspaceState,
-} from '@crm-library/core'
+} from '@programkit/core'
 
 describe('operation HTTP surface', () => {
   it('serves state, manifest, public agenda, and a portable export', async () => {
@@ -39,6 +40,79 @@ describe('operation HTTP surface', () => {
     expect(exportResponse?.headers.get('content-disposition')).toContain('aie-export.json')
   })
 
+  it('serves event-scoped, paginated integration resources', async () => {
+    const repository = new MemoryWorkspaceRepository()
+
+    const eventsResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/events?pageSize=1'),
+      repository,
+    )
+    expect(eventsResponse?.status).toBe(200)
+    expect(await eventsResponse?.json()).toMatchObject({
+      data: [{ id: 'evt_nyc_2026' }],
+      pagination: { currentPage: 1, pageSize: 1, totalPages: 1, totalResults: 1 },
+    })
+
+    const sessionsResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/events/evt_nyc_2026/sessions?status=ready&pageSize=3'),
+      repository,
+    )
+    expect(sessionsResponse?.status).toBe(200)
+    const sessionsBody = (await sessionsResponse?.json()) as {
+      data: Array<{ eventId: string; status: string }>
+      pagination: { pageSize: number; totalResults: number }
+    }
+    expect(sessionsBody.data).toHaveLength(3)
+    expect(sessionsBody.data.every((entry) => entry.eventId === 'evt_nyc_2026')).toBe(true)
+    expect(sessionsBody.data.every((entry) => entry.status === 'ready')).toBe(true)
+    expect(sessionsBody.pagination.pageSize).toBe(3)
+    expect(sessionsBody.pagination.totalResults).toBeGreaterThan(3)
+
+    const speakersResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/events/evt_nyc_2026/speakers?q=jordan'),
+      repository,
+    )
+    const speakersBody = (await speakersResponse?.json()) as {
+      data: Array<{ firstName: string; email: string }>
+      pagination: { totalResults: number }
+    }
+    expect(speakersBody.pagination.totalResults).toBe(1)
+    expect(speakersBody.data[0]).toMatchObject({
+      firstName: 'Jordan',
+      email: 'jordan@commonthread.org',
+    })
+
+    const submissionsResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/events/evt_nyc_2026/submissions?status=accepted'),
+      repository,
+    )
+    const submissionsBody = (await submissionsResponse?.json()) as {
+      data: Array<{ eventId: string; status: string }>
+    }
+    expect(submissionsBody.data.length).toBeGreaterThan(0)
+    expect(submissionsBody.data.every((entry) => entry.status === 'accepted')).toBe(true)
+
+    const domainEventsResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/domain-events?limit=2'),
+      repository,
+    )
+    const domainEventsBody = (await domainEventsResponse?.json()) as { events: unknown[] }
+    expect(domainEventsBody.events.length).toBeLessThanOrEqual(2)
+
+    const deniedResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/events/evt_nyc_2026/sessions'),
+      repository,
+      { actor: { type: 'service', id: 'limited', name: 'Limited integration', scopes: [] } },
+    )
+    expect(deniedResponse?.status).toBe(403)
+
+    const missingEventResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/events/missing/sessions'),
+      repository,
+    )
+    expect(missingEventResponse?.status).toBe(404)
+  })
+
   it('returns a participant-specific projection without operator-only records', async () => {
     const repository = new MemoryWorkspaceRepository()
     const actor = {
@@ -61,6 +135,168 @@ describe('operation HTTP surface', () => {
     expect(body.state.integrations).toHaveLength(0)
     expect(body.state.changeSets).toHaveLength(0)
     expect(body.state.domainEvents).toHaveLength(0)
+    expect(body.state.submissions).toHaveLength(0)
+    expect(body.state.reviewers).toHaveLength(0)
+    expect(body.state.reviewerAssignments).toHaveLength(0)
+    expect(body.state.scorecards).toHaveLength(0)
+    expect(body.state.reviewDecisions).toHaveLength(0)
+  })
+
+  it('serves distinct public and reviewer projections without operator records', async () => {
+    const repository = new MemoryWorkspaceRepository()
+
+    const formResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/submission-forms/aie-nyc-2026-cfp/state'),
+      repository,
+    )
+    expect(formResponse?.status).toBe(200)
+    const formBody = (await formResponse?.json()) as { state: WorkspaceState }
+    expect(formBody.state.submissionForms.map((entry) => entry.id)).toEqual(['frm_cfp_2026'])
+    expect(formBody.state.submissionFormFields.length).toBeGreaterThan(5)
+    expect(formBody.state.people).toHaveLength(0)
+    expect(formBody.state.submissions).toHaveLength(0)
+    expect(formBody.state.reviewerAssignments).toHaveLength(0)
+    expect(formBody.state.domainEvents).toHaveLength(0)
+
+    const programResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/program/state'),
+      repository,
+    )
+    expect(programResponse?.status).toBe(200)
+    const programBody = (await programResponse?.json()) as { state: WorkspaceState }
+    expect(programBody.state.scheduleReleases).toHaveLength(1)
+    expect(programBody.state.placements).toHaveLength(0)
+    expect(programBody.state.submissions).toHaveLength(0)
+    expect(programBody.state.campaigns).toHaveLength(0)
+    expect(programBody.state.people.every((entry) => entry.email === '')).toBe(true)
+    expect(programBody.state.participations.every((entry) => entry.internalNotes === '')).toBe(true)
+
+    const reviewerResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/reviewers/rev_001/state'),
+      repository,
+      {
+        actor: {
+          type: 'reviewer',
+          id: 'rev_001',
+          name: 'Elena Vasquez',
+          scopes: ['reviews:write'],
+        },
+      },
+    )
+    expect(reviewerResponse?.status).toBe(200)
+    const reviewerBody = (await reviewerResponse?.json()) as { state: WorkspaceState }
+    expect(reviewerBody.state.reviewers.map((entry) => entry.id)).toEqual(['rev_001'])
+    expect(
+      reviewerBody.state.reviewerAssignments.every((entry) => entry.reviewerId === 'rev_001'),
+    ).toBe(true)
+    expect(reviewerBody.state.people).toHaveLength(0)
+    expect(reviewerBody.state.participations).toHaveLength(0)
+    expect(reviewerBody.state.reviewDecisions).toHaveLength(0)
+    expect(reviewerBody.state.campaigns).toHaveLength(0)
+    expect(reviewerBody.state.domainEvents).toHaveLength(0)
+  })
+
+  it('redacts identity-purpose answers from blind reviewer projections', async () => {
+    const state = createSeedState()
+    state.evaluationPlans = state.evaluationPlans.map((plan) => ({
+      ...plan,
+      blindReview: true,
+    }))
+    const repository = new MemoryWorkspaceRepository(state)
+    const response = await handleCoreRequest(
+      new Request('http://local/api/v1/reviewers/rev_001/state'),
+      repository,
+      {
+        actor: {
+          type: 'reviewer',
+          id: 'rev_001',
+          name: 'Elena Vasquez',
+          scopes: ['reviews:write'],
+        },
+      },
+    )
+    expect(response?.status).toBe(200)
+    const body = (await response?.json()) as { state: WorkspaceState }
+    expect(body.state.submissions.length).toBeGreaterThan(0)
+    for (const submission of body.state.submissions) {
+      expect(submission.answers.first_name).toBeUndefined()
+      expect(submission.answers.last_name).toBeUndefined()
+      expect(submission.answers.email).toBeUndefined()
+      expect(submission.answers.biography).toBeUndefined()
+      expect(submission.answers.proposal_title).toBeTruthy()
+    }
+  })
+
+  it('enforces public-form and reviewer operation boundaries', async () => {
+    const repository = new MemoryWorkspaceRepository()
+    const submitter = {
+      type: 'submitter' as const,
+      id: 'aie-nyc-2026-cfp',
+      name: 'Public submitter',
+      scopes: ['submissions:write', 'submissions:submit'],
+    }
+    const crossFormResponse = await handleCoreRequest(
+      new Request(
+        'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations/submission.create',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            input: { formId: 'frm_guaranteed_2026', kind: 'guaranteed_session', answers: {} },
+          }),
+        },
+      ),
+      repository,
+      { actor: submitter },
+    )
+    expect(crossFormResponse?.status).toBe(400)
+
+    const disallowedResponse = await handleCoreRequest(
+      new Request(
+        'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations/person.create',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ input: {} }),
+        },
+      ),
+      repository,
+      { actor: submitter },
+    )
+    expect(disallowedResponse?.status).toBe(403)
+
+    const state = await repository.read()
+    const foreignAssignment = state.reviewerAssignments.find(
+      (entry) => entry.reviewerId !== 'rev_001',
+    )!
+    const plan = state.evaluationPlans.find(
+      (entry) => entry.id === foreignAssignment.evaluationPlanId,
+    )!
+    const reviewerResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/reviewers/rev_001/operations/review.submit-scorecard', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          input: {
+            assignmentId: foreignAssignment.id,
+            scores: Object.fromEntries(plan.criteria.map((entry) => [entry.id, entry.maximum])),
+            recommendation: 'accept',
+          },
+        }),
+      }),
+      repository,
+      {
+        actor: {
+          type: 'reviewer',
+          id: 'rev_001',
+          name: 'Elena Vasquez',
+          scopes: ['reviews:write'],
+        },
+      },
+    )
+    expect(reviewerResponse?.status).toBe(400)
+    const reviewerBody = (await reviewerResponse?.json()) as OperationResponse
+    expect(reviewerBody.error?.code).toBe('FORBIDDEN')
   })
 
   it('ignores caller-supplied actors and uses the trusted request context', async () => {
@@ -84,9 +320,11 @@ describe('operation HTTP surface', () => {
         },
       },
     )
-    const body = (await response?.json()) as OperationResponse
-    expect(body.ok).toBe(false)
-    expect(body.error?.code).toBe('FORBIDDEN')
+    expect(response?.status).toBe(403)
+    expect(await response?.json()).toMatchObject({
+      error: 'This actor cannot use operator operations.',
+    })
+    expect((await repository.read()).workspace.slug).toBe('aie')
   })
 
   it('serializes concurrent mutations through the repository boundary', async () => {

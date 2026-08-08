@@ -6,14 +6,24 @@ import { createSeedState } from './seed.ts'
 import type { Actor, WorkspaceState } from './types.ts'
 
 function actorFromRequest(request: Request): Actor {
-  const type = request.headers.get('x-crm-internal-actor-type')
-  const allowedTypes = ['staff', 'participant', 'agent', 'service', 'system'] as const
+  const type = request.headers.get('x-programkit-internal-actor-type')
+  const allowedTypes = [
+    'staff',
+    'participant',
+    'reviewer',
+    'submitter',
+    'agent',
+    'service',
+    'system',
+  ] as const
   const actorType = allowedTypes.find((entry) => entry === type) ?? 'service'
   return {
     type: actorType,
-    id: request.headers.get('x-crm-internal-actor-id') ?? 'anonymous',
-    name: request.headers.get('x-crm-internal-actor-name') ?? 'Anonymous',
-    scopes: (request.headers.get('x-crm-internal-actor-scopes') ?? '').split(' ').filter(Boolean),
+    id: request.headers.get('x-programkit-internal-actor-id') ?? 'anonymous',
+    name: request.headers.get('x-programkit-internal-actor-name') ?? 'Anonymous',
+    scopes: (request.headers.get('x-programkit-internal-actor-scopes') ?? '')
+      .split(' ')
+      .filter(Boolean),
   }
 }
 

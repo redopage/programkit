@@ -1,5 +1,15 @@
 import { operationDefinition } from './manifest.ts'
-import { audienceForCampaign, scheduleConflicts } from './selectors.ts'
+import {
+  requiredSubmissionFieldPurposes,
+  submissionFieldPurposeSupportsKind,
+} from './submission-forms.ts'
+import {
+  audienceForCampaign,
+  scheduleConflicts,
+  submissionAnswerByPurpose,
+  submissionReviewSummary,
+  visibleSubmissionFormFields,
+} from './selectors.ts'
 import { createSeedState } from './seed.ts'
 import type {
   Actor,
@@ -10,8 +20,15 @@ import type {
   OperationRequest,
   OperationDefinition,
   OperationResponse,
+  Participation,
   ParticipationStatus,
+  Person,
   RequirementStatus,
+  Session,
+  Submission,
+  SubmissionAnswers,
+  SubmissionForm,
+  SubmissionFormField,
   WorkspaceState,
 } from './types.ts'
 import {
@@ -36,6 +53,274 @@ interface ApplyContext {
   actor: Actor
   operation: string
   emittedEventIds: string[]
+}
+
+function initializeProgramCollections(state: WorkspaceState) {
+  for (const event of state.events) event.version ??= 1
+  state.submissionForms ??= []
+  state.submissionFormFields ??= []
+  state.submissions ??= []
+  state.assets ??= []
+  state.reviewers ??= []
+  state.reviewerTeams ??= []
+  state.evaluationPlans ??= []
+  state.reviewerAssignments ??= []
+  state.scorecards ??= []
+  state.reviewDecisions ??= []
+  state.schemaVersion = Math.max(state.schemaVersion, 4)
+}
+
+function assertRecord(value: unknown, field: string) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new OperationError('INVALID_INPUT', `${field} must be an object.`, {
+      [field]: 'Enter a valid object.',
+    })
+  }
+  return value as Record<string, unknown>
+}
+
+function assertSubmissionAnswers(value: unknown): SubmissionAnswers {
+  const record = assertRecord(value, 'answers')
+  const answers: SubmissionAnswers = {}
+  for (const [key, answer] of Object.entries(record)) {
+    if (key.trim().length === 0) {
+      throw new OperationError('INVALID_INPUT', 'Answer keys cannot be empty.')
+    }
+    if (
+      answer === null ||
+      typeof answer === 'string' ||
+      typeof answer === 'boolean' ||
+      (typeof answer === 'number' && Number.isFinite(answer)) ||
+      (Array.isArray(answer) && answer.every((entry) => typeof entry === 'string'))
+    ) {
+      answers[key] = answer as SubmissionAnswers[string]
+      continue
+    }
+    throw new OperationError('INVALID_INPUT', `Answer ${key} has an unsupported value.`)
+  }
+  return answers
+}
+
+function optionalString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function optionalDateTime(value: unknown, field: string) {
+  if (value === null || value === undefined || value === '') return null
+  const input = assertString(value, field)
+  const parsed = new Date(input)
+  if (Number.isNaN(parsed.getTime())) {
+    throw new OperationError('INVALID_INPUT', `${field} must be an ISO date and time.`, {
+      [field]: 'Enter a valid date and time.',
+    })
+  }
+  return parsed.toISOString()
+}
+
+function assertTimeZone(value: unknown, field: string) {
+  const timeZone = assertString(value, field)
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date(0))
+  } catch {
+    throw new OperationError('INVALID_INPUT', `${field} must be an IANA time zone.`, {
+      [field]: 'Choose a valid time zone such as America/New_York.',
+    })
+  }
+  return timeZone
+}
+
+function parseSubmissionFormFields(formId: string, value: unknown): SubmissionFormField[] {
+  if (!Array.isArray(value)) {
+    throw new OperationError('INVALID_INPUT', 'fields must be an array.')
+  }
+  return value.map((entry, index) => {
+    const field = assertRecord(entry, `fields.${index}`)
+    const kind = assertOneOf(field.kind, `fields.${index}.kind`, [
+      'short_text',
+      'long_text',
+      'email',
+      'url',
+      'select',
+      'multi_select',
+      'checkbox',
+      'file',
+    ] as const)
+    const purpose = assertOneOf(field.purpose, `fields.${index}.purpose`, [
+      'first_name',
+      'last_name',
+      'email',
+      'company',
+      'job_title',
+      'biography',
+      'proposal_title',
+      'abstract',
+      'session_format',
+      'track',
+      'custom',
+    ] as const)
+    const options = field.options === undefined ? [] : field.options
+    if (!Array.isArray(options)) {
+      throw new OperationError('INVALID_INPUT', `fields.${index}.options must be an array.`)
+    }
+    const visibleWhen =
+      field.visibleWhen === undefined || field.visibleWhen === null
+        ? null
+        : (() => {
+            const condition = assertRecord(field.visibleWhen, `fields.${index}.visibleWhen`)
+            return {
+              fieldId: assertString(condition.fieldId, `fields.${index}.visibleWhen.fieldId`),
+              operator: assertOneOf(condition.operator, `fields.${index}.visibleWhen.operator`, [
+                'equals',
+                'not_equals',
+                'includes',
+              ] as const),
+              value: assertString(condition.value, `fields.${index}.visibleWhen.value`, {
+                allowEmpty: true,
+              }),
+            }
+          })()
+    const sortOrder = field.sortOrder === undefined ? (index + 1) * 10 : field.sortOrder
+    if (typeof sortOrder !== 'number' || !Number.isFinite(sortOrder)) {
+      throw new OperationError('INVALID_INPUT', `fields.${index}.sortOrder must be a number.`)
+    }
+    return {
+      id: typeof field.id === 'string' && field.id.trim() ? field.id.trim() : createId('fld'),
+      formId,
+      key: assertString(field.key, `fields.${index}.key`),
+      label: assertString(field.label, `fields.${index}.label`),
+      description: optionalString(field.description),
+      kind,
+      purpose,
+      required: field.required === true,
+      options: options.map((option, optionIndex) => {
+        const parsed = assertRecord(option, `fields.${index}.options.${optionIndex}`)
+        return {
+          value: assertString(parsed.value, `fields.${index}.options.${optionIndex}.value`),
+          label: assertString(parsed.label, `fields.${index}.options.${optionIndex}.label`),
+        }
+      }),
+      placeholder: optionalString(field.placeholder),
+      sortOrder,
+      visibleWhen,
+    }
+  })
+}
+
+function validateSubmissionForm(
+  form: SubmissionForm,
+  fields: readonly SubmissionFormField[],
+  options: { forPublish: boolean },
+) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(form.slug)) {
+    throw new OperationError('INVALID_INPUT', 'The form slug must be URL-safe.', {
+      slug: 'Use lowercase letters, numbers, and hyphens.',
+    })
+  }
+  if (form.allowedKinds.length === 0) {
+    throw new OperationError('INVALID_INPUT', 'Choose at least one submission kind.')
+  }
+  if (form.opensAt && form.closesAt && Date.parse(form.opensAt) >= Date.parse(form.closesAt)) {
+    throw new OperationError('INVALID_INPUT', 'The form close date must be after its open date.')
+  }
+  const ids = new Set<string>()
+  const keys = new Set<string>()
+  const systemPurposes = new Set<string>()
+  for (const field of fields) {
+    if (ids.has(field.id))
+      throw new OperationError('INVALID_INPUT', `Field ID ${field.id} is duplicated.`)
+    if (keys.has(field.key)) {
+      throw new OperationError('INVALID_INPUT', `Field key ${field.key} is duplicated.`)
+    }
+    ids.add(field.id)
+    keys.add(field.key)
+    if (field.purpose !== 'custom') {
+      if (systemPurposes.has(field.purpose)) {
+        throw new OperationError('INVALID_INPUT', `Only one field can map to ${field.purpose}.`)
+      }
+      if (!submissionFieldPurposeSupportsKind(field.purpose, field.kind)) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          `${field.label} cannot map ${field.kind} answers to ${field.purpose}.`,
+        )
+      }
+      systemPurposes.add(field.purpose)
+    }
+    if ((field.kind === 'select' || field.kind === 'multi_select') && field.options.length === 0) {
+      throw new OperationError('INVALID_INPUT', `${field.label} needs at least one option.`)
+    }
+    if (
+      field.visibleWhen &&
+      (!ids.has(field.visibleWhen.fieldId) || field.visibleWhen.fieldId === field.id)
+    ) {
+      throw new OperationError(
+        'INVALID_INPUT',
+        `${field.label} must depend on an earlier field in the same form.`,
+      )
+    }
+  }
+  if (options.forPublish) {
+    const missing = requiredSubmissionFieldPurposes.filter(
+      (purpose) => !fields.some((field) => field.purpose === purpose && field.required),
+    )
+    if (missing.length > 0) {
+      throw new OperationError(
+        'INVALID_INPUT',
+        `Publish requires these mapped fields: ${missing.join(', ')}.`,
+      )
+    }
+  }
+}
+
+function answerIsEmpty(value: SubmissionAnswers[string] | undefined) {
+  return (
+    value === undefined ||
+    value === null ||
+    value === false ||
+    (typeof value === 'string' && value.trim().length === 0) ||
+    (Array.isArray(value) && value.length === 0)
+  )
+}
+
+function validateAnswersForSubmission(state: WorkspaceState, submission: Submission) {
+  const visibleFields = visibleSubmissionFormFields(state, submission.formId, submission.answers)
+  const errors: Record<string, string> = {}
+  for (const field of visibleFields) {
+    const value = submission.answers[field.key]
+    if (field.required && answerIsEmpty(value)) errors[field.key] = `${field.label} is required.`
+    if (answerIsEmpty(value)) continue
+    if (field.kind === 'email' && typeof value === 'string' && !/^\S+@\S+\.\S+$/u.test(value)) {
+      errors[field.key] = 'Enter a valid email address.'
+    }
+    if (field.kind === 'url' && typeof value === 'string') {
+      try {
+        new URL(value)
+      } catch {
+        errors[field.key] = 'Enter a valid URL.'
+      }
+    }
+    if (field.kind === 'select' && typeof value === 'string') {
+      if (!field.options.some((option) => option.value === value)) {
+        errors[field.key] = 'Choose one of the available options.'
+      }
+    }
+    if (field.kind === 'multi_select' && Array.isArray(value)) {
+      if (value.some((entry) => !field.options.some((option) => option.value === entry))) {
+        errors[field.key] = 'Choose only available options.'
+      }
+    }
+  }
+  if (Object.keys(errors).length > 0) {
+    throw new OperationError('INVALID_INPUT', 'Complete the required submission fields.', errors)
+  }
+}
+
+function stringAnswer(
+  state: WorkspaceState,
+  submission: Submission,
+  purpose: Parameters<typeof submissionAnswerByPurpose>[2],
+) {
+  const value = submissionAnswerByPurpose(state, submission, purpose)
+  return typeof value === 'string' ? value.trim() : ''
 }
 
 function hasScope(actor: Actor, scope: string) {
@@ -90,9 +375,18 @@ function requestFingerprint(operation: string, request: OperationRequest) {
 
 function allVersionedRecords(state: WorkspaceState) {
   return [
+    ...state.events,
     ...state.people,
     ...state.participations,
     ...state.requirementInstances,
+    ...(state.submissionForms ?? []),
+    ...(state.submissions ?? []),
+    ...(state.reviewers ?? []),
+    ...(state.reviewerTeams ?? []),
+    ...(state.evaluationPlans ?? []),
+    ...(state.reviewerAssignments ?? []),
+    ...(state.scorecards ?? []),
+    ...(state.reviewDecisions ?? []),
     ...state.sessions,
     ...state.placements,
     ...state.campaigns,
@@ -106,7 +400,10 @@ function assertExpectedVersions(state: WorkspaceState, expected?: Record<string,
   for (const [id, version] of Object.entries(expected)) {
     const record = records.find((entry) => entry.id === id)
     if (!record) throw new OperationError('STALE_WRITE', `${id} no longer exists.`)
-    if (record.version !== version) {
+    // Schema v4 added event versions. Treat a persisted pre-v4 event as version
+    // one so its first guarded update can migrate it without weakening later
+    // stale-write checks.
+    if ((record.version ?? 1) !== version) {
       throw new OperationError(
         'STALE_WRITE',
         `${id} changed after this action was prepared. Refresh and review the latest version.`,
@@ -182,6 +479,657 @@ function applyHandler(
   const timestamp = nowIso()
 
   switch (operation) {
+    case 'event.update': {
+      const event = findRequired(state.events, input.eventId, 'event')
+      if (event.id !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'Only the active event can be updated here.')
+      }
+      const previous = {
+        name: event.name,
+        slug: event.slug,
+        venue: event.venue,
+        city: event.city,
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        timezone: event.timezone,
+        status: event.status,
+      }
+      const nextName =
+        typeof input.name === 'string' ? assertString(input.name, 'name') : event.name
+      const nextSlug =
+        typeof input.slug === 'string' ? assertString(input.slug, 'slug').toLowerCase() : event.slug
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(nextSlug)) {
+        throw new OperationError('INVALID_INPUT', 'The event slug must be URL-safe.', {
+          slug: 'Use lowercase letters, numbers, and hyphens.',
+        })
+      }
+      if (state.events.some((entry) => entry.id !== event.id && entry.slug === nextSlug)) {
+        throw new OperationError('DUPLICATE', 'Another event already uses that slug.', {
+          slug: 'Choose another event slug.',
+        })
+      }
+      const nextVenue =
+        typeof input.venue === 'string' ? assertString(input.venue, 'venue') : event.venue
+      const nextCity =
+        typeof input.city === 'string' ? assertString(input.city, 'city') : event.city
+      const nextTimeZone =
+        input.timezone === undefined ? event.timezone : assertTimeZone(input.timezone, 'timezone')
+      const nextStartsAt =
+        input.startsAt === undefined ? event.startsAt : optionalDateTime(input.startsAt, 'startsAt')
+      const nextEndsAt =
+        input.endsAt === undefined ? event.endsAt : optionalDateTime(input.endsAt, 'endsAt')
+      if (!nextStartsAt || !nextEndsAt || Date.parse(nextStartsAt) >= Date.parse(nextEndsAt)) {
+        throw new OperationError('INVALID_INPUT', 'The event end must be after its start.', {
+          endsAt: 'Choose a time after the event starts.',
+        })
+      }
+      const nextStatus =
+        input.status === undefined
+          ? event.status
+          : assertOneOf(input.status, 'status', ['planning', 'active', 'complete'] as const)
+
+      event.name = nextName
+      event.slug = nextSlug
+      event.venue = nextVenue
+      event.city = nextCity
+      event.startsAt = nextStartsAt
+      event.endsAt = nextEndsAt
+      event.timezone = nextTimeZone
+      event.status = nextStatus
+
+      if (input.startsAt !== undefined || input.endsAt !== undefined) {
+        const boundaryConflict = scheduleConflicts(state).find(
+          (conflict) => conflict.severity === 'error' && conflict.type === 'event_boundary',
+        )
+        if (boundaryConflict) {
+          throw new OperationError('INVALID_INPUT', boundaryConflict.message, {
+            startsAt: 'Keep every scheduled session inside the event dates.',
+            endsAt: 'Keep every scheduled session inside the event dates.',
+          })
+        }
+      }
+
+      event.version = (event.version ?? 1) + 1
+      appendEvent(state, context, {
+        type: 'event.updated',
+        aggregate: { type: 'event', id: event.id, version: event.version },
+        summary: `Updated event “${event.name}”.`,
+        data: { previous },
+      })
+      return { event }
+    }
+
+    case 'submission-form.create': {
+      const name = assertString(input.name, 'name')
+      const slug = assertString(input.slug, 'slug').toLowerCase()
+      const title = assertString(input.title, 'title')
+      if (
+        state.submissionForms.some(
+          (entry) => entry.eventId === state.activeEventId && entry.slug === slug,
+        )
+      ) {
+        throw new OperationError('DUPLICATE', 'A submission form already uses that slug.', {
+          slug: 'Choose another public URL slug.',
+        })
+      }
+      const allowedKindsInput =
+        input.allowedKinds === undefined
+          ? ['abstract']
+          : assertStringArray(input.allowedKinds, 'allowedKinds')
+      const allowedKinds = allowedKindsInput.map((kind) =>
+        assertOneOf(kind, 'allowedKinds', ['abstract', 'guaranteed_session'] as const),
+      )
+      const form: SubmissionForm = {
+        id: createId('frm'),
+        eventId: state.activeEventId,
+        name,
+        slug,
+        title,
+        description: optionalString(input.description),
+        status: 'draft',
+        allowedKinds,
+        opensAt: optionalDateTime(input.opensAt, 'opensAt'),
+        closesAt: optionalDateTime(input.closesAt, 'closesAt'),
+        confirmationMessage:
+          optionalString(input.confirmationMessage) || 'Thanks—your submission has been received.',
+        updatedAt: timestamp,
+        version: 1,
+      }
+      const fields =
+        input.fields === undefined ? [] : parseSubmissionFormFields(form.id, input.fields)
+      validateSubmissionForm(form, fields, { forPublish: false })
+      state.submissionForms.push(form)
+      state.submissionFormFields.push(...fields)
+      appendEvent(state, context, {
+        type: 'submission-form.created',
+        aggregate: { type: 'submission-form', id: form.id, version: form.version },
+        summary: `Created submission form “${form.name}”.`,
+        data: { fieldCount: fields.length, slug: form.slug },
+      })
+      return { form, fields }
+    }
+
+    case 'submission-form.update': {
+      const form = findRequired(state.submissionForms, input.formId, 'submission form')
+      if (form.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The form does not belong to the active event.')
+      }
+      const nextSlug =
+        typeof input.slug === 'string' ? assertString(input.slug, 'slug').toLowerCase() : form.slug
+      if (
+        state.submissionForms.some(
+          (entry) =>
+            entry.id !== form.id && entry.eventId === form.eventId && entry.slug === nextSlug,
+        )
+      ) {
+        throw new OperationError('DUPLICATE', 'A submission form already uses that slug.', {
+          slug: 'Choose another public URL slug.',
+        })
+      }
+      const previous = {
+        name: form.name,
+        slug: form.slug,
+        title: form.title,
+        status: form.status,
+        fieldCount: state.submissionFormFields.filter((field) => field.formId === form.id).length,
+      }
+      if (typeof input.name === 'string') form.name = assertString(input.name, 'name')
+      form.slug = nextSlug
+      if (typeof input.title === 'string') form.title = assertString(input.title, 'title')
+      if (typeof input.description === 'string') form.description = input.description.trim()
+      if (typeof input.confirmationMessage === 'string') {
+        form.confirmationMessage = assertString(input.confirmationMessage, 'confirmationMessage')
+      }
+      if ('opensAt' in input) form.opensAt = optionalDateTime(input.opensAt, 'opensAt')
+      if ('closesAt' in input) form.closesAt = optionalDateTime(input.closesAt, 'closesAt')
+      if (input.allowedKinds !== undefined) {
+        form.allowedKinds = assertStringArray(input.allowedKinds, 'allowedKinds').map((kind) =>
+          assertOneOf(kind, 'allowedKinds', ['abstract', 'guaranteed_session'] as const),
+        )
+      }
+      if (input.status !== undefined) {
+        form.status = assertOneOf(input.status, 'status', ['draft', 'closed'] as const)
+      }
+      const fields =
+        input.fields === undefined
+          ? state.submissionFormFields.filter((field) => field.formId === form.id)
+          : parseSubmissionFormFields(form.id, input.fields)
+      validateSubmissionForm(form, fields, { forPublish: form.status === 'open' })
+      if (input.fields !== undefined) {
+        state.submissionFormFields = state.submissionFormFields.filter(
+          (field) => field.formId !== form.id,
+        )
+        state.submissionFormFields.push(...fields)
+      }
+      form.updatedAt = timestamp
+      form.version += 1
+      appendEvent(state, context, {
+        type: 'submission-form.updated',
+        aggregate: { type: 'submission-form', id: form.id, version: form.version },
+        summary: `Updated submission form “${form.name}”.`,
+        data: { previous, fieldCount: fields.length },
+      })
+      return { form, fields }
+    }
+
+    case 'submission-form.publish': {
+      const form = findRequired(state.submissionForms, input.formId, 'submission form')
+      if (form.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The form does not belong to the active event.')
+      }
+      const fields = state.submissionFormFields
+        .filter((field) => field.formId === form.id)
+        .sort((left, right) => left.sortOrder - right.sortOrder)
+      validateSubmissionForm(form, fields, { forPublish: true })
+      form.status = 'open'
+      form.updatedAt = timestamp
+      form.version += 1
+      appendEvent(state, context, {
+        type: 'submission-form.published',
+        aggregate: { type: 'submission-form', id: form.id, version: form.version },
+        summary: `Published submission form “${form.name}”.`,
+        data: { slug: form.slug, fieldCount: fields.length },
+      })
+      return { form, fields }
+    }
+
+    case 'submission.create': {
+      const form = findRequired(state.submissionForms, input.formId, 'submission form')
+      if (context.actor.type === 'submitter' && context.actor.id !== form.slug) {
+        throw new OperationError('FORBIDDEN', 'This submission link cannot write to that form.')
+      }
+      if (form.eventId !== state.activeEventId || form.status !== 'open') {
+        throw new OperationError('FORM_CLOSED', 'This submission form is not accepting responses.')
+      }
+      const kind = assertOneOf(input.kind, 'kind', ['abstract', 'guaranteed_session'] as const)
+      if (!form.allowedKinds.includes(kind)) {
+        throw new OperationError('INVALID_INPUT', 'This form does not accept that submission kind.')
+      }
+      const submission: Submission = {
+        id: createId('sub'),
+        eventId: form.eventId,
+        formId: form.id,
+        kind,
+        status: 'draft',
+        answers: assertSubmissionAnswers(input.answers),
+        assetIds: input.assetIds === undefined ? [] : assertStringArray(input.assetIds, 'assetIds'),
+        submittedAt: null,
+        decidedAt: null,
+        convertedParticipationId: null,
+        convertedSessionId: null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      state.submissions.push(submission)
+      appendEvent(state, context, {
+        type: 'submission.created',
+        aggregate: { type: 'submission', id: submission.id, version: submission.version },
+        summary: 'Created a submission draft.',
+        data: { formId: form.id, kind },
+      })
+      return { submission }
+    }
+
+    case 'submission.submit': {
+      const submission = findRequired(state.submissions, input.submissionId, 'submission')
+      if (submission.status !== 'draft') {
+        throw new OperationError('INVALID_TRANSITION', 'Only a draft submission can be submitted.')
+      }
+      const form = findRequired(state.submissionForms, submission.formId, 'submission form')
+      if (context.actor.type === 'submitter' && context.actor.id !== form.slug) {
+        throw new OperationError('FORBIDDEN', 'This submission link cannot submit that draft.')
+      }
+      if (form.status !== 'open') {
+        throw new OperationError('FORM_CLOSED', 'This submission form is not accepting responses.')
+      }
+      if (input.answers !== undefined) {
+        submission.answers = {
+          ...submission.answers,
+          ...assertSubmissionAnswers(input.answers),
+        }
+      }
+      if (input.assetIds !== undefined) {
+        submission.assetIds = assertStringArray(input.assetIds, 'assetIds')
+      }
+      validateAnswersForSubmission(state, submission)
+      submission.status = 'submitted'
+      submission.submittedAt = timestamp
+      submission.updatedAt = timestamp
+      submission.version += 1
+
+      const plan = state.evaluationPlans.find(
+        (entry) => entry.formId === form.id && entry.submissionKinds.includes(submission.kind),
+      )
+      const createdAssignments = []
+      if (plan) {
+        const round = [...plan.rounds].sort((left, right) => left.order - right.order)[0]
+        const team = state.reviewerTeams.find((entry) => entry.id === plan.reviewerTeamId)
+        const activeReviewerIds = (team?.reviewerIds ?? []).filter(
+          (reviewerId) =>
+            state.reviewers.find((reviewer) => reviewer.id === reviewerId)?.status === 'active',
+        )
+        const startIndex = Math.max(0, state.submissions.indexOf(submission))
+        const count = Math.min(round?.reviewersPerSubmission ?? 0, activeReviewerIds.length)
+        for (let index = 0; index < count; index += 1) {
+          const reviewerId = activeReviewerIds[(startIndex + index) % activeReviewerIds.length]
+          const assignment = {
+            id: createId('rva'),
+            eventId: submission.eventId,
+            evaluationPlanId: plan.id,
+            roundId: round.id,
+            submissionId: submission.id,
+            reviewerId,
+            status: 'assigned' as const,
+            dueAt: form.closesAt,
+            updatedAt: timestamp,
+            version: 1,
+          }
+          state.reviewerAssignments.push(assignment)
+          createdAssignments.push(assignment)
+        }
+      }
+      appendEvent(state, context, {
+        type: 'submission.submitted',
+        aggregate: { type: 'submission', id: submission.id, version: submission.version },
+        summary: `Submitted “${stringAnswer(state, submission, 'proposal_title')}” for review.`,
+        data: { formId: form.id, assignmentIds: createdAssignments.map((entry) => entry.id) },
+      })
+      return { submission, assignments: createdAssignments }
+    }
+
+    case 'review.submit-scorecard': {
+      const assignment = findRequired(
+        state.reviewerAssignments,
+        input.assignmentId,
+        'reviewer assignment',
+      )
+      if (context.actor.type === 'reviewer' && assignment.reviewerId !== context.actor.id) {
+        throw new OperationError('FORBIDDEN', 'This scorecard is assigned to another reviewer.')
+      }
+      const plan = findRequired(
+        state.evaluationPlans,
+        assignment.evaluationPlanId,
+        'evaluation plan',
+      )
+      const scoreInput = assertRecord(input.scores, 'scores')
+      const scores: Record<string, number> = {}
+      const fields: Record<string, string> = {}
+      for (const criterion of plan.criteria) {
+        const value = scoreInput[criterion.id]
+        if (
+          typeof value !== 'number' ||
+          !Number.isFinite(value) ||
+          value < criterion.minimum ||
+          value > criterion.maximum
+        ) {
+          fields[criterion.id] = `Enter a score from ${criterion.minimum} to ${criterion.maximum}.`
+        } else {
+          scores[criterion.id] = value
+        }
+      }
+      if (Object.keys(fields).length > 0) {
+        throw new OperationError('INVALID_INPUT', 'Complete every scorecard criterion.', fields)
+      }
+      const recommendation = assertOneOf(input.recommendation, 'recommendation', [
+        'strong_accept',
+        'accept',
+        'borderline',
+        'reject',
+        'strong_reject',
+      ] as const)
+      let scorecard = state.scorecards.find((entry) => entry.assignmentId === assignment.id)
+      if (scorecard) {
+        scorecard.scores = scores
+        scorecard.recommendation = recommendation
+        scorecard.comments = optionalString(input.comments)
+        scorecard.submittedAt = timestamp
+        scorecard.updatedAt = timestamp
+        scorecard.version += 1
+      } else {
+        scorecard = {
+          id: createId('sco'),
+          assignmentId: assignment.id,
+          scores,
+          recommendation,
+          comments: optionalString(input.comments),
+          submittedAt: timestamp,
+          updatedAt: timestamp,
+          version: 1,
+        }
+        state.scorecards.push(scorecard)
+      }
+      assignment.status = 'completed'
+      assignment.updatedAt = timestamp
+      assignment.version += 1
+      const submission = findRequired(state.submissions, assignment.submissionId, 'submission')
+      if (submission.status === 'submitted') {
+        submission.status = 'in_review'
+        submission.updatedAt = timestamp
+        submission.version += 1
+      }
+      appendEvent(state, context, {
+        type: 'review.scorecard-submitted',
+        aggregate: { type: 'scorecard', id: scorecard.id, version: scorecard.version },
+        summary: `Completed a review for “${stringAnswer(state, submission, 'proposal_title')}”.`,
+        data: { assignmentId: assignment.id, submissionId: submission.id, recommendation },
+      })
+      return {
+        assignment,
+        scorecard,
+        review: submissionReviewSummary(state, submission.id),
+      }
+    }
+
+    case 'review.decide': {
+      const submission = findRequired(state.submissions, input.submissionId, 'submission')
+      if (
+        submission.status === 'draft' ||
+        submission.status === 'withdrawn' ||
+        submission.status === 'accepted'
+      ) {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          `A ${submission.status} submission cannot receive this decision.`,
+        )
+      }
+      const decision = assertOneOf(input.decision, 'decision', [
+        'accepted',
+        'rejected',
+        'waitlisted',
+      ] as const)
+      const plan = state.evaluationPlans.find(
+        (entry) =>
+          entry.formId === submission.formId && entry.submissionKinds.includes(submission.kind),
+      )
+      if (plan && input.override !== true) {
+        const round = [...plan.rounds].sort((left, right) => left.order - right.order)[0]
+        const completed = state.reviewerAssignments.filter(
+          (entry) =>
+            entry.submissionId === submission.id &&
+            entry.roundId === round.id &&
+            entry.status === 'completed',
+        ).length
+        if (completed < round.minimumCompletedReviews) {
+          throw new OperationError(
+            'REVIEWS_INCOMPLETE',
+            `Complete ${round.minimumCompletedReviews} reviews before deciding this submission.`,
+          )
+        }
+      }
+      if (input.override === true && optionalString(input.reason).length === 0) {
+        throw new OperationError('INVALID_INPUT', 'An override decision requires a reason.', {
+          reason: 'Explain why review requirements are being overridden.',
+        })
+      }
+
+      let person: Person | null = null
+      let participation: Participation | null = null
+      let session: Session | null = null
+      if (decision === 'accepted') {
+        const email = assertString(stringAnswer(state, submission, 'email'), 'email').toLowerCase()
+        const firstName = assertString(stringAnswer(state, submission, 'first_name'), 'firstName')
+        const lastName = assertString(stringAnswer(state, submission, 'last_name'), 'lastName')
+        person = state.people.find((entry) => entry.email.toLowerCase() === email) ?? null
+        if (!person) {
+          person = {
+            id: createId('per'),
+            firstName,
+            lastName,
+            email,
+            company: stringAnswer(state, submission, 'company'),
+            title: stringAnswer(state, submission, 'job_title'),
+            city: '',
+            timezone: state.workspace.timezone,
+            bio: stringAnswer(state, submission, 'biography'),
+            avatarUrl: `https://assets.ui.sh/avatars/${(state.people.length % 12) + 1}.webp`,
+            tags: [],
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            version: 1,
+          }
+          state.people.push(person)
+          appendEvent(state, context, {
+            type: 'person.created',
+            aggregate: { type: 'person', id: person.id, version: person.version },
+            summary: `Created ${person.firstName} ${person.lastName} from an accepted submission.`,
+            data: { submissionId: submission.id },
+          })
+        }
+        participation =
+          state.participations.find(
+            (entry) => entry.eventId === submission.eventId && entry.personId === person?.id,
+          ) ?? null
+        if (!participation) {
+          participation = {
+            id: createId('par'),
+            eventId: submission.eventId,
+            personId: person.id,
+            roles: ['speaker'],
+            status: 'invited',
+            sessionIds: [],
+            internalNotes: '',
+            publicTitle: person.title,
+            publicCompany: person.company,
+            confirmedAt: null,
+            updatedAt: timestamp,
+            version: 1,
+          }
+          state.participations.push(participation)
+          appendEvent(state, context, {
+            type: 'participation.created',
+            aggregate: {
+              type: 'participation',
+              id: participation.id,
+              version: participation.version,
+            },
+            summary: `Invited ${person.firstName} ${person.lastName} to the event.`,
+            data: { personId: person.id, submissionId: submission.id },
+          })
+        } else if (
+          participation.status === 'prospect' ||
+          participation.status === 'declined' ||
+          participation.status === 'withdrawn'
+        ) {
+          participation.status = 'invited'
+          participation.updatedAt = timestamp
+          participation.version += 1
+        }
+        for (const definition of state.requirementDefinitions.filter(
+          (entry) => entry.eventId === submission.eventId,
+        )) {
+          if (
+            !state.requirementInstances.some(
+              (entry) =>
+                entry.definitionId === definition.id && entry.participationId === participation?.id,
+            )
+          ) {
+            state.requirementInstances.push({
+              id: createId('rqi'),
+              definitionId: definition.id,
+              participationId: participation.id,
+              status: 'not_started',
+              value: '',
+              submittedAt: null,
+              reviewedAt: null,
+              updatedAt: timestamp,
+              version: 1,
+            })
+          }
+        }
+        const format = assertOneOf(stringAnswer(state, submission, 'session_format'), 'format', [
+          'keynote',
+          'talk',
+          'panel',
+          'workshop',
+        ] as const)
+        const requestedTrackId = stringAnswer(state, submission, 'track')
+        const track =
+          state.tracks.find(
+            (entry) => entry.id === requestedTrackId && entry.eventId === submission.eventId,
+          ) ?? state.tracks.find((entry) => entry.eventId === submission.eventId)
+        if (!track) throw new OperationError('INVALID_INPUT', 'The event needs at least one track.')
+        const defaultDurations = { keynote: 40, talk: 30, panel: 45, workshop: 75 } as const
+        const durationMinutes =
+          typeof input.durationMinutes === 'number' &&
+          Number.isInteger(input.durationMinutes) &&
+          input.durationMinutes > 0
+            ? input.durationMinutes
+            : defaultDurations[format]
+        const expectedAttendance =
+          typeof input.expectedAttendance === 'number' &&
+          Number.isInteger(input.expectedAttendance) &&
+          input.expectedAttendance > 0
+            ? input.expectedAttendance
+            : 100
+        session = {
+          id: createId('ses'),
+          eventId: submission.eventId,
+          title: assertString(stringAnswer(state, submission, 'proposal_title'), 'proposalTitle'),
+          format,
+          summary: assertString(stringAnswer(state, submission, 'abstract'), 'abstract'),
+          trackId: track.id,
+          participantIds: [participation.id],
+          durationMinutes,
+          expectedAttendance,
+          status: 'ready',
+          updatedAt: timestamp,
+          version: 1,
+        }
+        state.sessions.push(session)
+        participation.sessionIds.push(session.id)
+        participation.updatedAt = timestamp
+        participation.version += 1
+        appendEvent(state, context, {
+          type: 'session.created-from-submission',
+          aggregate: { type: 'session', id: session.id, version: session.version },
+          summary: `Created session “${session.title}” from an accepted submission.`,
+          data: { submissionId: submission.id, participationId: participation.id },
+        })
+        submission.convertedParticipationId = participation.id
+        submission.convertedSessionId = session.id
+      }
+
+      const previous = submission.status
+      submission.status = decision
+      submission.decidedAt = timestamp
+      submission.updatedAt = timestamp
+      submission.version += 1
+      const existingDecision = state.reviewDecisions.find(
+        (entry) => entry.submissionId === submission.id,
+      )
+      const reviewDecision = existingDecision ?? {
+        id: createId('rde'),
+        eventId: submission.eventId,
+        submissionId: submission.id,
+        decision,
+        reason: optionalString(input.reason),
+        decidedBy: {
+          type: context.actor.type,
+          id: context.actor.id,
+          name: context.actor.name,
+        },
+        decidedAt: timestamp,
+        version: 1,
+      }
+      if (existingDecision) {
+        existingDecision.decision = decision
+        existingDecision.reason = optionalString(input.reason)
+        existingDecision.decidedBy = {
+          type: context.actor.type,
+          id: context.actor.id,
+          name: context.actor.name,
+        }
+        existingDecision.decidedAt = timestamp
+        existingDecision.version += 1
+      } else {
+        state.reviewDecisions.push(reviewDecision)
+      }
+      appendEvent(state, context, {
+        type: 'review.decision-recorded',
+        aggregate: {
+          type: 'submission',
+          id: submission.id,
+          version: submission.version,
+        },
+        summary: `${decision === 'accepted' ? 'Accepted' : decision === 'rejected' ? 'Rejected' : 'Waitlisted'} “${stringAnswer(state, submission, 'proposal_title')}”.`,
+        data: {
+          previous,
+          decision,
+          reviewDecisionId: reviewDecision.id,
+          participationId: participation?.id,
+          sessionId: session?.id,
+        },
+      })
+      return {
+        submission,
+        decision: reviewDecision,
+        person,
+        participation,
+        session,
+      }
+    }
+
     case 'person.create': {
       const firstName = assertString(input.firstName, 'firstName')
       const lastName = assertString(input.lastName, 'lastName')
@@ -543,6 +1491,7 @@ function applyHandler(
       state.scheduleReleases ??= []
       state.scheduleReleases.push(release)
       event.publishedScheduleVersion = version
+      event.version = (event.version ?? 1) + 1
       for (const placement of draftPlacements) {
         placement.scheduleVersion = version
         placement.published = true
@@ -890,6 +1839,7 @@ export function executeOperation(
     }
 
     const working = cloneState(currentState)
+    initializeProgramCollections(working)
     const warnings: Array<{ code: string; message: string }> = []
     let data: unknown
     let approvalRequired = false

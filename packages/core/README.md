@@ -1,6 +1,6 @@
-# `@crm-library/core`
+# `@programkit/core`
 
-The portable source of truth for CRM records and behavior. Core contains domain types, one
+The platform-independent source of truth for conference-program records and behavior. Core contains domain types, one
 operation manifest, authorization, invariants, expected-version checks, idempotency, audit events,
 change sets, selectors, repository contracts, HTTP handling, deterministic seed data, and the
 Cloudflare Durable Object adapter.
@@ -15,16 +15,17 @@ The package root exports:
 - `handleCoreRequest` for a Fetch API host;
 - `MemoryWorkspaceRepository`;
 - `createSeedState`;
-- readiness, schedule, agenda, and relationship selectors;
+- readiness, form-publish readiness, mapping compatibility, schedule, agenda, and relationship
+  selectors;
 - all public domain and operation types.
 
-`@crm-library/core/cloudflare` separately exports `WorkspaceDurableObject` so non-Cloudflare hosts
-do not load the Cloudflare runtime module.
+`@programkit/core/cloudflare` separately exports `WorkspaceDurableObject` so tests, tools, and web
+builds do not load the Cloudflare runtime module.
 
 ## Direct operation use
 
 ```ts
-import { createSeedState, executeOperation } from '@crm-library/core'
+import { createSeedState, executeOperation } from '@programkit/core'
 
 const state = createSeedState()
 const result = executeOperation(state, 'participation.set-status', {
@@ -48,7 +49,7 @@ for the seeded development experience and has wildcard scope.
 ## HTTP host use
 
 ```ts
-import { handleCoreRequest, MemoryWorkspaceRepository, type Actor } from '@crm-library/core'
+import { handleCoreRequest, MemoryWorkspaceRepository, type Actor } from '@programkit/core'
 
 const repository = new MemoryWorkspaceRepository()
 
@@ -86,21 +87,22 @@ The Cloudflare adapter stores one logical JSON workspace per SQLite-backed objec
 avoids relying on one large storage value. It also reads and migrates the original single-value
 format.
 
-## Publication and portability
+## Publication and storage boundary
 
 Schedule placements are mutable drafts. Publishing appends an immutable `ScheduleRelease` snapshot;
 the public agenda selector reads the latest release rather than draft placements.
 
-To use another database, implement `WorkspaceRepository` with equivalent atomic semantics. Keep
-authentication, email, webhook delivery, file storage, and secrets in host adapters rather than
-adding provider concerns to the domain package.
+Keep authentication, Cloudflare Email Service delivery, webhooks, R2 storage, Airtable sync, and
+secrets in `apps/cloudflare` rather than adding provider concerns to the domain package. The
+repository contract keeps tests deterministic and Durable Object persistence replaceable without
+creating another supported deployment.
 
 ## Build
 
 From the repository root:
 
 ```bash
-pnpm --filter @crm-library/core build
+pnpm --filter @programkit/core build
 ```
 
 The package emits ESM JavaScript and declarations to `dist/`. Published package exports use

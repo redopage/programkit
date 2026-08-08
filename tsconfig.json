@@ -5,10 +5,10 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "paths": {
-      "@crm-library/agent": ["./packages/agent/src/index.ts"],
-      "@crm-library/core": ["./packages/core/src/index.ts"],
-      "@crm-library/core/cloudflare": ["./packages/core/src/cloudflare.ts"],
-      "@crm-library/presentation": ["./packages/presentation/src/index.ts"]
+      "@programkit/agent": ["./packages/agent/src/index.ts"],
+      "@programkit/core": ["./packages/core/src/index.ts"],
+      "@programkit/core/cloudflare": ["./packages/core/src/cloudflare.ts"],
+      "@programkit/web": ["./packages/web/src/index.ts"]
     },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
@@ -23,8 +23,8 @@
     "types": ["vite/client", "@cloudflare/workers-types"]
   },
   "include": [
-    "worker.ts",
-    "vite.config.ts",
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
     "packages/**/*.ts",
     "packages/**/*.tsx",
     "tests/**/*.ts"
