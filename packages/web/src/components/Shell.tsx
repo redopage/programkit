@@ -22,6 +22,8 @@ import {
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
+import { submissionPipelineSummary } from '@programkit/core'
+
 import { useWorkspace } from '../lib/workspace.tsx'
 import { CommandCenter, type CommandMode, type ProgramCommand } from './CommandCenter.tsx'
 import { cx, IconButton } from './ui.tsx'
@@ -32,51 +34,46 @@ interface ShellProps {
   children: ReactNode
 }
 
-// Each workspace object keeps one hue everywhere it appears, so the sidebar can
-// be scanned by colour before the label is read.
 const navigation = [
   {
     label: '',
-    items: [{ href: '/', label: 'Overview', icon: HomeIcon, tint: 'fill-zinc-500' }],
+    items: [{ href: '/', label: 'Overview', icon: HomeIcon }],
   },
   {
     label: 'Program',
     items: [
-      { href: '/forms', label: 'Submission forms', icon: DocumentTextIcon, tint: 'fill-blue-500' },
-      { href: '/submissions', label: 'Submissions', icon: InboxStackIcon, tint: 'fill-amber-500' },
+      { href: '/forms', label: 'Submission forms', icon: DocumentTextIcon },
+      { href: '/submissions', label: 'Submissions', icon: InboxStackIcon },
       {
         href: '/reviews',
         label: 'Review',
         icon: ClipboardDocumentCheckIcon,
-        tint: 'fill-violet-500',
       },
-      { href: '/sessions', label: 'Sessions', icon: RectangleStackIcon, tint: 'fill-sky-500' },
-      { href: '/schedule', label: 'Agenda', icon: CalendarDaysIcon, tint: 'fill-emerald-500' },
+      { href: '/sessions', label: 'Sessions', icon: RectangleStackIcon },
+      { href: '/schedule', label: 'Agenda', icon: CalendarDaysIcon },
     ],
   },
   {
     label: 'People',
     items: [
-      { href: '/people', label: 'Speakers', icon: UserGroupIcon, tint: 'fill-rose-500' },
-      { href: '/readiness', label: 'Tasks', icon: ChartBarSquareIcon, tint: 'fill-teal-500' },
+      { href: '/people', label: 'Speakers', icon: UserGroupIcon },
+      { href: '/readiness', label: 'Tasks', icon: ChartBarSquareIcon },
       {
         href: '/communications',
         label: 'Communications',
         icon: EnvelopeIcon,
-        tint: 'fill-indigo-500',
       },
     ],
   },
   {
     label: 'Manage',
     items: [
-      { href: '/settings', label: 'Event settings', icon: Cog6ToothIcon, tint: 'fill-zinc-400' },
-      { href: '/changes', label: 'Change review', icon: Squares2X2Icon, tint: 'fill-zinc-400' },
+      { href: '/settings', label: 'Event settings', icon: Cog6ToothIcon },
+      { href: '/changes', label: 'Change review', icon: Squares2X2Icon },
       {
         href: '/integrations',
         label: 'Integrations',
         icon: CircleStackIcon,
-        tint: 'fill-zinc-400',
       },
     ],
   },
@@ -91,17 +88,24 @@ const mobileNavigation = [
 
 const commandDetails: Record<
   string,
-  { description: string; keywords?: string[]; shortcut?: readonly [string, string] }
+  {
+    description: string
+    keywords?: string[]
+    shortcut?: readonly [string, string]
+    section?: 'Pages' | 'Settings'
+    default?: boolean
+  }
 > = {
   '/': {
     description: 'See the program pulse and next work.',
     keywords: ['home', 'dashboard'],
-    shortcut: ['G', 'O'],
+    shortcut: ['G', 'H'],
+    default: true,
   },
   '/forms': {
     description: 'Build public calls for proposals.',
     keywords: ['cfp', 'questions', 'builder'],
-    shortcut: ['G', 'F'],
+    default: true,
   },
   '/submissions': {
     description: 'Triage and decide incoming proposals.',
@@ -111,12 +115,10 @@ const commandDetails: Record<
   '/reviews': {
     description: 'Track committee progress and scorecards.',
     keywords: ['reviewers', 'evaluation', 'committee'],
-    shortcut: ['G', 'R'],
   },
   '/sessions': {
     description: 'Manage accepted program content.',
     keywords: ['talks', 'workshops', 'content'],
-    shortcut: ['G', 'S'],
   },
   '/schedule': {
     description: 'Arrange and publish the agenda.',
@@ -126,7 +128,6 @@ const commandDetails: Record<
   '/people': {
     description: 'Manage speakers and participation.',
     keywords: ['people', 'profiles'],
-    shortcut: ['G', 'P'],
   },
   '/readiness': {
     description: 'Follow speaker tasks and requirements.',
@@ -140,14 +141,17 @@ const commandDetails: Record<
   '/settings': {
     description: 'Update event identity, dates, and status.',
     keywords: ['event', 'timezone', 'venue'],
+    section: 'Settings',
   },
   '/changes': {
     description: 'Review proposed operational changes.',
     keywords: ['approvals', 'agent', 'audit'],
+    section: 'Settings',
   },
   '/integrations': {
     description: 'Connect data and delivery services.',
     keywords: ['airtable', 'api', 'cloudflare'],
+    section: 'Settings',
   },
 }
 
@@ -186,12 +190,17 @@ function NavigationItems({
                         onNavigate?.()
                       }}
                       className={cx(
-                        'focus-ring flex min-h-11 items-center gap-2 rounded-lg px-2 text-[0.9375rem] font-medium text-zinc-600 sm:min-h-8 sm:text-sm',
+                        'group focus-ring flex min-h-11 items-center gap-2 rounded-lg px-2 text-[0.9375rem] font-medium text-zinc-600 sm:min-h-8 sm:text-sm',
                         active && 'bg-zinc-950/6 text-zinc-950',
                         !active && 'hover:bg-zinc-950/4 hover:text-zinc-950',
                       )}
                     >
-                      <Icon className={cx('size-4 h-lh shrink-0', item.tint)} />
+                      <Icon
+                        className={cx(
+                          'size-4 h-lh shrink-0',
+                          active ? 'fill-blue-600' : 'fill-zinc-400 group-hover:fill-zinc-600',
+                        )}
+                      />
                       <span className="min-w-0 truncate">{item.label}</span>
                     </a>
                   </li>
@@ -335,10 +344,7 @@ function WorkspaceIdentity({
             >
               <CommandLineIcon className="size-4 h-lh shrink-0 fill-zinc-500" />
               <div className="min-w-0 flex-1 truncate">Keyboard shortcuts</div>
-              <div className="flex shrink-0 items-center gap-1 text-zinc-500">
-                <kbd className="font-sans">⌘</kbd>
-                <kbd className="font-sans">/</kbd>
-              </div>
+              <kbd className="shrink-0 font-sans text-zinc-500">?</kbd>
             </button>
           </div>
         </div>
@@ -360,6 +366,44 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
     payload?.state.changeSets.filter((changeSet) => changeSet.status === 'awaiting_approval')
       .length ?? 0
   const commands = useMemo<ProgramCommand[]>(() => {
+    const pipeline = payload ? submissionPipelineSummary(payload.state) : null
+    const blockers = payload?.derived.readiness.blockers ?? 0
+    const conflicts = payload?.derived.scheduleConflicts.length ?? 0
+    const suggestedCommands: ProgramCommand[] = [
+      {
+        id: 'action-review-new',
+        label: 'Review new submissions',
+        description: 'Open proposals that are ready for triage.',
+        href: '/submissions?status=submitted',
+        section: 'Suggested',
+        icon: InboxStackIcon,
+        keywords: ['new', 'inbox', 'triage', 'proposals'],
+        default: true,
+        meta: pipeline?.submitted ? `${pipeline.submitted} new` : 'Inbox clear',
+      },
+      {
+        id: 'action-speaker-tasks',
+        label: 'Check speaker tasks',
+        description: 'Find missing, overdue, and review-ready speaker work.',
+        href: '/readiness',
+        section: 'Suggested',
+        icon: ChartBarSquareIcon,
+        keywords: ['readiness', 'requirements', 'blockers', 'overdue'],
+        default: true,
+        meta: blockers ? `${blockers} blocker${blockers === 1 ? '' : 's'}` : 'All clear',
+      },
+      {
+        id: 'action-schedule',
+        label: 'Open schedule studio',
+        description: 'Arrange sessions, rooms, and times on the draft agenda.',
+        href: '/schedule',
+        section: 'Suggested',
+        icon: CalendarDaysIcon,
+        keywords: ['agenda', 'schedule', 'rooms', 'conflicts'],
+        default: true,
+        meta: conflicts ? `${conflicts} conflict${conflicts === 1 ? '' : 's'}` : 'Ready',
+      },
+    ]
     const pageCommands: ProgramCommand[] = navigation.flatMap((group) =>
       group.items.map((item) => {
         const details = commandDetails[item.href]
@@ -368,10 +412,11 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
           label: item.label,
           description: details?.description ?? `Open ${item.label.toLocaleLowerCase()}.`,
           href: item.href,
-          section: 'Pages' as const,
+          section: details?.section ?? ('Pages' as const),
           icon: item.icon,
           keywords: details?.keywords,
           shortcut: details?.shortcut,
+          default: details?.default,
         }
       }),
     )
@@ -380,7 +425,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
       label: 'Agent workspace',
       description: 'Review agent proposals and available tools.',
       href: '/agent',
-      section: 'Pages',
+      section: 'Settings',
       icon: CpuChipIcon,
       keywords: ['mcp', 'automation', 'assistant'],
     })
@@ -394,6 +439,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
         section: 'Public',
         icon: CalendarDaysIcon,
         keywords: ['public', 'embed', 'attendees'],
+        default: true,
       },
     ]
     const openForm = payload?.state.submissionForms.find(
@@ -408,9 +454,10 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
         section: 'Public',
         icon: DocumentTextIcon,
         keywords: ['cfp', 'submit', 'speaker', 'preview'],
+        default: true,
       })
     }
-    return [...pageCommands, ...publicCommands]
+    return [...suggestedCommands, ...pageCommands, ...publicCommands]
   }, [payload])
 
   useEffect(() => {
@@ -468,25 +515,22 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
   return (
     <div className="isolate min-h-dvh antialiased max-lg:bg-white lg:flex lg:bg-canvas">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col p-2 lg:flex">
-        <div className="flex flex-col gap-2">
-          <WorkspaceIdentity
-            navigate={navigate}
-            pendingChanges={pendingChanges}
-            onOpenShortcuts={() => setCommandMode('shortcuts')}
-          />
-          <button
-            type="button"
-            aria-keyshortcuts="Meta+K Control+K"
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <WorkspaceIdentity
+              navigate={navigate}
+              pendingChanges={pendingChanges}
+              onOpenShortcuts={() => setCommandMode('shortcuts')}
+            />
+          </div>
+          <IconButton
+            label="Open command center"
+            aria-keyshortcuts="/"
             onClick={() => setCommandMode('commands')}
-            className="focus-ring flex min-h-9 w-full items-center gap-2 rounded-lg bg-white/70 px-2 text-left text-sm text-zinc-500 shadow-xs ring-1 ring-zinc-950/8 hover:text-zinc-950 hover:ring-zinc-950/12"
+            className="size-9"
           >
-            <MagnifyingGlassIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
-            <div className="min-w-0 flex-1 truncate">Search</div>
-            <div className="flex shrink-0 items-center gap-0.5 text-zinc-400">
-              <kbd className="font-sans">⌘</kbd>
-              <kbd className="font-sans">K</kbd>
-            </div>
-          </button>
+            <MagnifyingGlassIcon className="size-4 shrink-0 fill-current" />
+          </IconButton>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pt-4 pb-2">
           <NavigationItems pathname={pathname} navigate={navigate} />

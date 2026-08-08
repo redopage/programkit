@@ -73,22 +73,18 @@ resolves it.
 
 ## Keyboard navigation
 
-The operator workspace has one shared command system. `Command-K` opens the command center and
-`Command-/` opens its shortcut guide (`Control` replaces `Command` on non-Mac platforms). Search
-matches page names, workflow language, and useful synonyms rather than routes alone.
+The operator workspace has one shared command system. `/` opens the command center and `?` opens its
+shortcut guide. These keys only fire outside text fields. Search matches page names, workflow
+language, and useful synonyms rather than routes alone.
 
 Press `G`, then one of these keys outside a text field:
 
-| Shortcut | Destination      |
-| -------- | ---------------- |
-| `G O`    | Overview         |
-| `G F`    | Submission forms |
-| `G I`    | Submissions      |
-| `G R`    | Review           |
-| `G S`    | Sessions         |
-| `G A`    | Agenda           |
-| `G P`    | Speakers         |
-| `G T`    | Tasks            |
+| Shortcut | Destination     |
+| -------- | --------------- |
+| `G H`    | Home / overview |
+| `G I`    | Submissions     |
+| `G A`    | Agenda          |
+| `G T`    | Tasks           |
 
 Keyboard commands never fire while the user is typing into an input, textarea, select, or editable
 region. Modals trap and restore focus, `Escape` closes them, and reduced-motion preferences disable

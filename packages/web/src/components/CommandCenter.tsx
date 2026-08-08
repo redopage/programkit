@@ -25,10 +25,12 @@ export interface ProgramCommand {
   label: string
   description: string
   href: string
-  section: 'Pages' | 'Public'
+  section: 'Suggested' | 'Pages' | 'Public' | 'Settings'
   icon: ComponentType<{ className?: string }>
   keywords?: string[]
   shortcut?: readonly [string, string]
+  default?: boolean
+  meta?: string
 }
 
 interface CommandCenterProps {
@@ -38,6 +40,8 @@ interface CommandCenterProps {
   pathname: string
   navigate: (to: string) => void
 }
+
+const commandSections = ['Suggested', 'Pages', 'Public', 'Settings'] as const
 
 function ShortcutKeys({ keys, dark = false }: { keys: readonly string[]; dark?: boolean }) {
   return (
@@ -81,7 +85,6 @@ export function CommandCenter({
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   const [goMode, setGoMode] = useState(false)
-  const [modifierLabel, setModifierLabel] = useState('⌘')
   const panelRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -103,22 +106,28 @@ export function CommandCenter({
 
   const visibleCommands = useMemo(() => {
     const terms = query.trim().toLocaleLowerCase().split(/\s+/u).filter(Boolean)
-    if (terms.length === 0) return commands
-    return commands.filter((command) => {
-      const haystack = [
-        command.label,
-        command.description,
-        command.section,
-        ...(command.keywords ?? []),
-      ]
-        .join(' ')
-        .toLocaleLowerCase()
-      return terms.every((term) => haystack.includes(term))
-    })
+    const matches =
+      terms.length === 0
+        ? commands.filter((command) => command.default)
+        : commands.filter((command) => {
+            const haystack = [
+              command.label,
+              command.description,
+              command.section,
+              ...(command.keywords ?? []),
+            ]
+              .join(' ')
+              .toLocaleLowerCase()
+            return terms.every((term) => haystack.includes(term))
+          })
+    return matches.sort(
+      (left, right) =>
+        commandSections.indexOf(left.section) - commandSections.indexOf(right.section),
+    )
   }, [commands, query])
 
   const groupedCommands = useMemo(() => {
-    return (['Pages', 'Public'] as const)
+    return commandSections
       .map((section) => ({
         section,
         items: visibleCommands
@@ -139,10 +148,6 @@ export function CommandCenter({
   )
 
   useEffect(() => {
-    setModifierLabel(/Mac|iPhone|iPad/u.test(navigator.platform) ? '⌘' : 'Ctrl')
-  }, [])
-
-  useEffect(() => {
     if (mode !== 'commands') return
     setActiveIndex(0)
   }, [mode, query])
@@ -155,22 +160,21 @@ export function CommandCenter({
   useEffect(() => {
     const handleGlobalKey = (event: KeyboardEvent) => {
       const key = event.key.toLocaleLowerCase()
-      const commandModifier = event.metaKey || event.ctrlKey
+      if (mode || event.repeat || event.altKey || event.metaKey || event.ctrlKey) return
+      if (isEditableTarget(event.target)) return
 
-      if (commandModifier && key === 'k') {
+      if (event.key === '/') {
         event.preventDefault()
         clearGoMode()
         onModeChange('commands')
         return
       }
-      if (commandModifier && event.key === '/') {
+      if (event.key === '?') {
         event.preventDefault()
         clearGoMode()
         onModeChange('shortcuts')
         return
       }
-      if (mode || event.repeat || event.altKey || event.metaKey || event.ctrlKey) return
-      if (isEditableTarget(event.target)) return
 
       if (goMode) {
         const command = commands.find(
@@ -299,7 +303,7 @@ export function CommandCenter({
       {mode
         ? createPortal(
             <div
-              className="fixed inset-0 z-50 flex items-start justify-center p-3 pt-[max(--spacing(3),8dvh)] sm:p-6 sm:pt-[12dvh]"
+              className="fixed inset-0 z-50 flex items-start justify-center p-3 pt-[max(--spacing(3),7dvh)] sm:p-6 sm:pt-[11dvh]"
               role="dialog"
               aria-modal="true"
               aria-labelledby={titleId}
@@ -314,7 +318,7 @@ export function CommandCenter({
                 <div
                   ref={panelRef}
                   tabIndex={-1}
-                  className="relative flex max-h-[min(82dvh,42rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white/95 shadow-2xl ring-1 ring-black/10 backdrop-blur-xl focus:outline-none motion-safe:animate-command-in"
+                  className="relative flex max-h-[min(72dvh,32rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white/95 shadow-2xl ring-1 ring-black/10 backdrop-blur-xl focus:outline-none motion-safe:animate-command-in"
                 >
                   <h2 id={titleId} className="sr-only">
                     Command center
@@ -336,11 +340,11 @@ export function CommandCenter({
                           : undefined
                       }
                       autoComplete="off"
-                      placeholder="Search pages and actions"
+                      placeholder="Search or run a command"
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
                       onKeyDown={handleSearchKey}
-                      className="focus-ring-control col-start-1 row-start-1 min-h-14 w-full bg-transparent py-3 pr-12 pl-11 text-base text-zinc-950 outline-none placeholder:text-zinc-400 [&::-webkit-search-cancel-button]:appearance-none"
+                      className="focus-ring-control col-start-1 row-start-1 min-h-12 w-full bg-transparent py-2.5 pr-12 pl-11 text-base text-zinc-950 outline-none placeholder:text-zinc-400 [&::-webkit-search-cancel-button]:appearance-none"
                     />
                     {query ? (
                       <button
@@ -366,7 +370,7 @@ export function CommandCenter({
                               {items.map(({ command, index }) => {
                                 const Icon = command.icon
                                 const active = index === activeIndex
-                                const current = pathname === command.href
+                                const current = pathname === command.href.split('?')[0]
                                 return (
                                   <button
                                     key={command.id}
@@ -377,10 +381,13 @@ export function CommandCenter({
                                     type="button"
                                     role="option"
                                     aria-selected={active}
+                                    aria-current={current ? 'page' : undefined}
                                     onPointerMove={() => setActiveIndex(index)}
                                     onClick={() => runCommand(command)}
+                                    aria-label={`${command.label}. ${command.description}`}
+                                    title={command.description}
                                     className={cx(
-                                      'focus-ring flex min-h-14 w-full items-start gap-3 rounded-xl p-2.5 text-left',
+                                      'focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left',
                                       active ? 'bg-blue-50 text-zinc-950' : 'text-zinc-700',
                                     )}
                                   >
@@ -390,18 +397,20 @@ export function CommandCenter({
                                         active ? 'fill-blue-600' : 'fill-zinc-400',
                                       )}
                                     />
-                                    <div className="min-w-0 flex-1">
-                                      <div className="truncate text-base font-medium sm:text-sm">
-                                        {command.label}
-                                      </div>
-                                      <div className="truncate text-base text-zinc-500 sm:text-sm">
-                                        {command.description}
-                                      </div>
+                                    <div className="min-w-0 flex-1 truncate text-base font-medium sm:text-sm">
+                                      {command.label}
                                     </div>
                                     {current ? (
-                                      <div className="flex shrink-0 items-center gap-1 text-base text-blue-700 sm:text-sm">
+                                      <div
+                                        title="Current page"
+                                        className="flex shrink-0 items-center gap-1 text-base text-blue-700 sm:text-sm"
+                                      >
                                         <CheckIcon className="size-4 h-lh shrink-0 fill-blue-600" />
-                                        <div>Current</div>
+                                        <div className="hidden sm:block">Current</div>
+                                      </div>
+                                    ) : command.meta ? (
+                                      <div className="max-w-32 shrink-0 truncate text-sm text-zinc-400">
+                                        {command.meta}
                                       </div>
                                     ) : command.shortcut ? (
                                       <ShortcutKeys keys={command.shortcut} />
@@ -438,10 +447,10 @@ export function CommandCenter({
                     <button
                       type="button"
                       onClick={() => onModeChange('shortcuts')}
-                      className="focus-ring flex min-h-9 items-center gap-2 rounded-lg px-2 text-base font-medium text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-950 sm:min-h-8 sm:text-sm"
+                      className="focus-ring ml-auto flex min-h-9 items-center gap-2 rounded-lg px-2 text-base font-medium text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-950 sm:min-h-8 sm:text-sm"
                     >
-                      <div>Keyboard shortcuts</div>
-                      <ShortcutKeys keys={[modifierLabel, '/']} />
+                      <div>Shortcuts</div>
+                      <ShortcutKeys keys={['?']} />
                     </button>
                   </div>
                 </div>
@@ -449,7 +458,7 @@ export function CommandCenter({
                 <div
                   ref={panelRef}
                   tabIndex={-1}
-                  className="relative flex max-h-[min(82dvh,38rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-zinc-900 text-white shadow-2xl ring-1 ring-white/10 focus:outline-none motion-safe:animate-command-in"
+                  className="relative flex max-h-[min(78dvh,32rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-zinc-900 text-white shadow-2xl ring-1 ring-white/10 focus:outline-none motion-safe:animate-command-in"
                 >
                   <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 p-4">
                     <div>
@@ -478,8 +487,8 @@ export function CommandCenter({
                         </div>
                         <div className="divide-y divide-white/8">
                           {[
-                            { label: 'Command center', keys: [modifierLabel, 'K'] },
-                            { label: 'Keyboard shortcuts', keys: [modifierLabel, '/'] },
+                            { label: 'Command center', keys: ['/'] },
+                            { label: 'Keyboard shortcuts', keys: ['?'] },
                             { label: 'Close the current menu', keys: ['Esc'] },
                           ].map((shortcut) => (
                             <div
@@ -499,13 +508,13 @@ export function CommandCenter({
                         <div className="px-2 py-1 text-base font-medium text-zinc-400 sm:text-sm">
                           Go to
                         </div>
-                        <div className="grid gap-x-4 sm:grid-cols-2">
+                        <div className="divide-y divide-white/8">
                           {shortcutCommands.map((command) => (
                             <button
                               key={command.id}
                               type="button"
                               onClick={() => runCommand(command)}
-                              className="focus-ring flex min-h-11 items-center justify-between gap-3 rounded-lg px-2 text-left text-zinc-200 hover:bg-white/8 hover:text-white"
+                              className="focus-ring flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-zinc-200 hover:bg-white/8 hover:text-white"
                             >
                               <div className="min-w-0 truncate text-base sm:text-sm">
                                 {command.label}
@@ -516,17 +525,6 @@ export function CommandCenter({
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="flex shrink-0 justify-end border-t border-white/10 p-2">
-                    <button
-                      type="button"
-                      onClick={() => onModeChange('commands')}
-                      className="focus-ring flex min-h-9 items-center gap-2 rounded-lg px-2 text-base font-medium text-zinc-300 hover:bg-white/8 hover:text-white sm:min-h-8 sm:text-sm"
-                    >
-                      <div>Open command center</div>
-                      <ShortcutKeys keys={[modifierLabel, 'K']} dark />
-                    </button>
                   </div>
                 </div>
               )}
