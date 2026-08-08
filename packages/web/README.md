@@ -81,8 +81,8 @@ not authorization.
 Dense data uses desktop tables and mobile relational lists rather than shrinking a spreadsheet.
 Drawers provide focused editing, while keyboard focus management, focus restoration, progress
 semantics, and mobile navigation are built into the shared components. The operator command center
-opens with `/`; its intentionally small shortcut guide opens with `?`. Both keys are ignored while
-the user is typing in a form field.
+opens with `/` or the platform-appropriate `Command-K`/`Control-K`; its intentionally small shortcut
+guide opens with `?`. Printable shortcuts are ignored while the user is typing in a form field.
 
 ## Operation behavior
 

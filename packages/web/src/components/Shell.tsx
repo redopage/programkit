@@ -91,6 +91,7 @@ const commandDetails: Record<
   {
     description: string
     keywords?: string[]
+    shortcut?: readonly [string, string]
     section?: 'Pages' | 'Settings'
     default?: boolean
   }
@@ -98,6 +99,7 @@ const commandDetails: Record<
   '/': {
     description: 'See the program pulse and next work.',
     keywords: ['home', 'dashboard'],
+    shortcut: ['G', 'O'],
     default: true,
   },
   '/forms': {
@@ -108,10 +110,12 @@ const commandDetails: Record<
   '/submissions': {
     description: 'Triage and decide incoming proposals.',
     keywords: ['inbox', 'abstracts', 'proposals'],
+    shortcut: ['G', 'I'],
   },
   '/reviews': {
     description: 'Track committee progress and scorecards.',
     keywords: ['reviewers', 'evaluation', 'committee'],
+    shortcut: ['G', 'R'],
   },
   '/sessions': {
     description: 'Manage accepted program content.',
@@ -120,6 +124,7 @@ const commandDetails: Record<
   '/schedule': {
     description: 'Arrange and publish the agenda.',
     keywords: ['rooms', 'placements', 'studio'],
+    shortcut: ['G', 'A'],
   },
   '/people': {
     description: 'Manage speakers and participation.',
@@ -128,6 +133,7 @@ const commandDetails: Record<
   '/readiness': {
     description: 'Follow speaker tasks and requirements.',
     keywords: ['readiness', 'requirements', 'blockers'],
+    shortcut: ['G', 'T'],
   },
   '/communications': {
     description: 'Draft confirmations and reminders.',
@@ -410,6 +416,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
           section: details?.section ?? ('Pages' as const),
           icon: item.icon,
           keywords: details?.keywords,
+          shortcut: details?.shortcut,
           default: details?.default,
         }
       }),

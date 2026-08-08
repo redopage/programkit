@@ -28,6 +28,7 @@ export interface ProgramCommand {
   section: 'Suggested' | 'Pages' | 'Public' | 'Settings'
   icon: ComponentType<{ className?: string }>
   keywords?: string[]
+  shortcut?: readonly [string, string]
   default?: boolean
   meta?: string
 }
@@ -42,11 +43,19 @@ interface CommandCenterProps {
 
 const commandSections = ['Suggested', 'Pages', 'Public', 'Settings'] as const
 
-function ShortcutKeys({ keys, dark = false }: { keys: readonly string[]; dark?: boolean }) {
+function ShortcutKeys({
+  keys,
+  dark = false,
+  ariaLabel,
+}: {
+  keys: readonly string[]
+  dark?: boolean
+  ariaLabel?: string
+}) {
   return (
     <div
       className="flex shrink-0 items-center gap-1 text-base sm:text-sm"
-      aria-label={keys.join(' then ')}
+      aria-label={ariaLabel ?? keys.join(' then ')}
     >
       {keys.map((key, index) => (
         <kbd
@@ -63,6 +72,16 @@ function ShortcutKeys({ keys, dark = false }: { keys: readonly string[]; dark?: 
       ))}
     </div>
   )
+}
+
+function detectApplePlatform() {
+  if (typeof navigator === 'undefined') return false
+  const clientNavigator = navigator as Navigator & {
+    userAgentData?: { platform?: string }
+  }
+  const platform =
+    clientNavigator.userAgentData?.platform || navigator.platform || navigator.userAgent
+  return /mac|iphone|ipad|ipod/iu.test(platform)
 }
 
 function isEditableTarget(target: EventTarget | null) {
@@ -83,9 +102,12 @@ export function CommandCenter({
 }: CommandCenterProps) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
+  const [goMode, setGoMode] = useState(false)
+  const [applePlatform] = useState(detectApplePlatform)
   const panelRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const goTimerRef = useRef<number | null>(null)
   const titleId = useId()
   const listId = useId()
 
@@ -94,6 +116,12 @@ export function CommandCenter({
     setQuery('')
     setActiveIndex(0)
   }, [onModeChange])
+
+  const clearGoMode = useCallback(() => {
+    if (goTimerRef.current != null) window.clearTimeout(goTimerRef.current)
+    goTimerRef.current = null
+    setGoMode(false)
+  }, [])
 
   const visibleCommands = useMemo(() => {
     const terms = query.trim().toLocaleLowerCase().split(/\s+/u).filter(Boolean)
@@ -128,6 +156,8 @@ export function CommandCenter({
       .filter(({ items }) => items.length > 0)
   }, [visibleCommands])
 
+  const shortcutCommands = useMemo(() => commands.filter((command) => command.shortcut), [commands])
+
   const runCommand = useCallback(
     (command: ProgramCommand) => {
       close()
@@ -148,23 +178,53 @@ export function CommandCenter({
 
   useEffect(() => {
     const handleGlobalKey = (event: KeyboardEvent) => {
+      const key = event.key.toLocaleLowerCase()
+      const commandModifier = applePlatform ? event.metaKey : event.ctrlKey
+
+      if (commandModifier && !event.altKey && !event.shiftKey && key === 'k') {
+        event.preventDefault()
+        clearGoMode()
+        onModeChange('commands')
+        return
+      }
       if (mode || event.repeat || event.altKey || event.metaKey || event.ctrlKey) return
       if (isEditableTarget(event.target)) return
 
       if (event.key === '/') {
         event.preventDefault()
+        clearGoMode()
         onModeChange('commands')
         return
       }
       if (event.key === '?') {
         event.preventDefault()
+        clearGoMode()
         onModeChange('shortcuts')
+        return
       }
+
+      if (goMode) {
+        const command = shortcutCommands.find(
+          (candidate) => candidate.shortcut?.[1].toLocaleLowerCase() === key,
+        )
+        clearGoMode()
+        if (!command) return
+        event.preventDefault()
+        navigate(command.href)
+        return
+      }
+
+      if (key !== 'g') return
+      event.preventDefault()
+      setGoMode(true)
+      goTimerRef.current = window.setTimeout(clearGoMode, 1800)
     }
 
     document.addEventListener('keydown', handleGlobalKey)
     return () => document.removeEventListener('keydown', handleGlobalKey)
-  }, [mode, onModeChange])
+  }, [applePlatform, clearGoMode, goMode, mode, navigate, onModeChange, shortcutCommands])
+
+  useEffect(() => () => clearGoMode(), [clearGoMode])
 
   useEffect(() => {
     if (!mode) return
@@ -244,8 +304,32 @@ export function CommandCenter({
     }
   }
 
+  const modifierLabel = applePlatform ? '⌘' : 'Ctrl'
+  const modifierName = applePlatform ? 'Command' : 'Control'
+
   return (
     <>
+      {goMode && !mode
+        ? createPortal(
+            <div
+              role="status"
+              className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 mx-auto flex w-fit max-w-[calc(100vw-1.5rem)] items-center gap-1.5 overflow-x-auto rounded-xl bg-zinc-900 p-1.5 text-base text-white shadow-2xl ring-1 ring-white/10 motion-safe:animate-rise-in sm:bottom-6 sm:text-sm"
+            >
+              <div className="shrink-0 px-1.5 font-medium">Go to</div>
+              {shortcutCommands.map((command) => (
+                <div
+                  key={command.id}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white/8 py-1 pr-2 pl-1"
+                >
+                  <ShortcutKeys keys={[command.shortcut![1]]} dark />
+                  <div className="whitespace-nowrap text-zinc-300">{command.label}</div>
+                </div>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+
       {mode
         ? createPortal(
             <div
@@ -358,6 +442,8 @@ export function CommandCenter({
                                       <div className="max-w-32 shrink-0 truncate text-sm text-zinc-400">
                                         {command.meta}
                                       </div>
+                                    ) : command.shortcut ? (
+                                      <ShortcutKeys keys={command.shortcut} />
                                     ) : null}
                                   </button>
                                 )
@@ -402,17 +488,12 @@ export function CommandCenter({
                 <div
                   ref={panelRef}
                   tabIndex={-1}
-                  className="relative flex max-h-[min(78dvh,32rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-zinc-900 text-white shadow-2xl ring-1 ring-white/10 focus:outline-none motion-safe:animate-command-in"
+                  className="relative flex max-h-[min(82dvh,34rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-zinc-900 text-white shadow-2xl ring-1 ring-white/10 focus:outline-none motion-safe:animate-command-in"
                 >
-                  <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 p-4">
-                    <div>
-                      <h2 id={titleId} className="text-balance text-lg font-semibold">
-                        Keyboard shortcuts
-                      </h2>
-                      <p className="text-pretty text-base text-zinc-400 sm:text-sm">
-                        Move through ProgramKit without the mouse.
-                      </p>
-                    </div>
+                  <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 p-3">
+                    <h2 id={titleId} className="text-balance text-lg font-semibold">
+                      Keyboard shortcuts
+                    </h2>
                     <button
                       type="button"
                       aria-label="Close keyboard shortcuts"
@@ -424,7 +505,7 @@ export function CommandCenter({
                   </div>
 
                   <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                    <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-3">
                       <div>
                         <div className="px-2 py-1 text-base font-medium text-zinc-400 sm:text-sm">
                           Anywhere
@@ -432,16 +513,25 @@ export function CommandCenter({
                         <div className="divide-y divide-white/8">
                           {[
                             { label: 'Search ProgramKit', keys: ['/'] },
+                            {
+                              label: 'Open command menu',
+                              keys: [modifierLabel, 'K'],
+                              ariaLabel: `${modifierName} plus K`,
+                            },
                             { label: 'Show keyboard shortcuts', keys: ['?'] },
                           ].map((shortcut) => (
                             <div
                               key={shortcut.label}
-                              className="flex min-h-11 items-center justify-between gap-4 px-2 py-2"
+                              className="flex min-h-11 items-center justify-between gap-4 px-2 py-2 sm:min-h-10 sm:py-1.5"
                             >
                               <div className="min-w-0 text-base text-zinc-200 sm:text-sm">
                                 {shortcut.label}
                               </div>
-                              <ShortcutKeys keys={shortcut.keys} dark />
+                              <ShortcutKeys
+                                keys={shortcut.keys}
+                                ariaLabel={shortcut.ariaLabel}
+                                dark
+                              />
                             </div>
                           ))}
                         </div>
@@ -453,19 +543,48 @@ export function CommandCenter({
                         </div>
                         <div className="divide-y divide-white/8">
                           {[
-                            { label: 'Move selection', keys: ['↑', '↓'] },
+                            {
+                              label: 'Move selection',
+                              keys: ['↑', '↓'],
+                              ariaLabel: 'Up or Down Arrow',
+                            },
                             { label: 'Open selected result', keys: ['Enter'] },
                             { label: 'Close the menu', keys: ['Esc'] },
                           ].map((shortcut) => (
                             <div
                               key={shortcut.label}
-                              className="flex min-h-11 items-center justify-between gap-4 px-2 py-2"
+                              className="flex min-h-11 items-center justify-between gap-4 px-2 py-2 sm:min-h-10 sm:py-1.5"
                             >
                               <div className="min-w-0 text-base text-zinc-200 sm:text-sm">
                                 {shortcut.label}
                               </div>
-                              <ShortcutKeys keys={shortcut.keys} dark />
+                              <ShortcutKeys
+                                keys={shortcut.keys}
+                                ariaLabel={shortcut.ariaLabel}
+                                dark
+                              />
                             </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="px-2 py-1 text-base font-medium text-zinc-400 sm:text-sm">
+                          Navigate
+                        </div>
+                        <div className="grid gap-x-4 sm:grid-cols-2">
+                          {shortcutCommands.map((command) => (
+                            <button
+                              key={command.id}
+                              type="button"
+                              onClick={() => runCommand(command)}
+                              className="focus-ring flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-zinc-200 hover:bg-white/8 hover:text-white sm:min-h-10"
+                            >
+                              <div className="min-w-0 truncate text-base sm:text-sm">
+                                {command.label}
+                              </div>
+                              <ShortcutKeys keys={command.shortcut!} dark />
+                            </button>
                           ))}
                         </div>
                       </div>
