@@ -53,7 +53,7 @@ export function OverviewView({ navigate }: { navigate: (to: string) => void }) {
       <PageHeader
         title={event.name}
         actions={
-          <Button variant="primary" onClick={() => navigate('/submissions')}>
+          <Button onClick={() => navigate('/submissions')}>
             Review {pipeline.submitted} new submission{pipeline.submitted === 1 ? '' : 's'}
             <ArrowRightIcon className="size-4 h-lh shrink-0 fill-current" />
           </Button>

@@ -56,11 +56,10 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
     <div className="flex flex-col gap-7">
       <PageHeader
         title="Review"
-        description="Track assignments, scores, and final decisions."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => navigate('/reviewer/rev_001')}>Open reviewer portal</Button>
-            <Button variant="primary" onClick={() => navigate('/submissions')}>
+            <Button onClick={() => navigate('/submissions')}>
               Review submissions
               <ArrowRightIcon className="size-4 h-lh shrink-0 fill-current" />
             </Button>

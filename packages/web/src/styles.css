@@ -12,7 +12,7 @@
 
   /* The workspace chrome sits on a recessed canvas; every content panel floats
      on top of it in white, so the app reads as one document per surface. */
-  --color-canvas: oklch(0.972 0.002 286);
+  --color-canvas: oklch(0.982 0.002 286);
 
   /* Panels use an ease-out-expo style curve so they arrive settled, not springy. */
   --animate-fade-in: fade-in 150ms ease-out;

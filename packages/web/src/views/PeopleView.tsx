@@ -63,7 +63,6 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
     <div className="flex flex-col gap-6">
       <PageHeader
         title="People"
-        description="Manage speakers, roles, requirements, and activity."
         actions={
           <>
             <Button variant="secondary" onClick={() => window.open('/api/v1/export', '_blank')}>

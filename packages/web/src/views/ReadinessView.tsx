@@ -76,9 +76,8 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Readiness"
-        description="See who is ready, what is missing, and what needs review."
         actions={
-          <Button variant="primary" onClick={() => navigate('/communications')}>
+          <Button onClick={() => navigate('/communications')}>
             <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
             Draft reminder
           </Button>

@@ -34,9 +34,8 @@ export function SessionsView({ navigate }: { navigate: (to: string) => void }) {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Sessions"
-        description="Manage accepted sessions before they are placed on the agenda."
         actions={
-          <Button variant="primary" onClick={() => navigate('/schedule')}>
+          <Button onClick={() => navigate('/schedule')}>
             <CalendarDaysIcon className="size-4 h-lh shrink-0 fill-current" />
             Open schedule
           </Button>

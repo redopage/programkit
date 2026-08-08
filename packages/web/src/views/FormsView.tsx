@@ -337,7 +337,6 @@ export function FormsView({
     <div className="@container/form-builder flex min-w-0 flex-col gap-7">
       <PageHeader
         title={form.name}
-        description="Build the public form speakers use to submit proposals."
         actions={
           <>
             <label className="inline-grid grid-cols-[1fr_--spacing(8)]">
@@ -347,7 +346,7 @@ export function FormsView({
                 value={activeForm.id}
                 disabled={dirty}
                 onChange={(event) => onSelectionChange(event.target.value)}
-                className="focus-ring col-span-full row-start-1 min-h-9 appearance-none rounded-xl bg-white py-1.5 pr-8 pl-3 text-sm text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="focus-ring col-span-full row-start-1 min-h-9 appearance-none rounded-full bg-white py-1.5 pr-8 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 sm:text-[0.8125rem]"
               >
                 {forms.map((entry) => (
                   <option key={entry.id} value={entry.id}>

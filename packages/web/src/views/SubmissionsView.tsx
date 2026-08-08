@@ -87,7 +87,6 @@ export function SubmissionsView({
     <div className="flex flex-col gap-7">
       <PageHeader
         title="Submissions"
-        description="Triage proposals, read reviews, and move accepted work into the program."
         actions={
           <>
             <Button
@@ -100,10 +99,7 @@ export function SubmissionsView({
               <LinkIcon className="size-4 h-lh shrink-0 fill-current" />
               Copy public link
             </Button>
-            <Button
-              variant="primary"
-              onClick={() => navigate(`/submit/${form?.slug ?? 'call-for-speakers'}`)}
-            >
+            <Button onClick={() => navigate(`/submit/${form?.slug ?? 'call-for-speakers'}`)}>
               Open submission form
               <ArrowTopRightOnSquareIcon className="size-4 h-lh shrink-0 fill-current" />
             </Button>

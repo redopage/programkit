@@ -57,12 +57,11 @@ export function Button({
       {...props}
       type={props.type ?? 'button'}
       className={cx(
-        'focus-ring inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full font-medium shadow-xs ring-1 motion-safe:transition-[background-color,box-shadow,transform] motion-safe:enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none disabled:ring-zinc-950/5',
+        'focus-ring inline-flex shrink-0 items-center justify-center gap-2 rounded-full font-medium shadow-xs ring-1 motion-safe:transition-[background-color,box-shadow,transform] motion-safe:enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none disabled:ring-zinc-950/5',
         size === 'regular'
           ? 'min-h-11 px-3.5 text-base [&:has(>svg:first-child)]:pl-2.5 [&:has(>svg:last-child)]:pr-2.5 sm:min-h-9 sm:text-sm'
-          : 'min-h-9 px-2.5 text-base [&:has(>svg:first-child)]:pl-1.5 [&:has(>svg:last-child)]:pr-1.5 sm:min-h-8 sm:text-sm',
-        variant === 'primary' &&
-          'bg-blue-600 text-white ring-blue-700/20 hover:bg-blue-700 hover:shadow-sm',
+          : 'min-h-9 px-3 text-base [&:has(>svg:first-child)]:pl-2 [&:has(>svg:last-child)]:pr-2 sm:min-h-8 sm:text-[0.8125rem]',
+        variant === 'primary' && 'bg-blue-600 text-white ring-blue-700/20 hover:bg-blue-700',
         variant === 'secondary' &&
           'bg-white text-zinc-800 ring-zinc-950/10 hover:bg-zinc-50 hover:ring-zinc-950/15',
         variant === 'ghost' &&
@@ -557,7 +556,7 @@ export function PageHeader({
           ) : null}
         </div>
         {actions ? (
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 @3xl/page-header:w-auto @3xl/page-header:shrink-0">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 @3xl/page-header:w-auto @3xl/page-header:shrink-0 @3xl/page-header:gap-2">
             {actions}
           </div>
         ) : null}
@@ -900,7 +899,16 @@ export function Dialog({
           </p>
         ) : null}
         {children ? <div className="min-h-0 flex-1 overflow-y-auto pt-4">{children}</div> : null}
-        {footer ? <div className="flex shrink-0 justify-end gap-2 pt-5">{footer}</div> : null}
+        {footer ? (
+          <div
+            className={cx(
+              'flex shrink-0 gap-2 pt-5',
+              size === 'regular' ? 'justify-start' : 'justify-end',
+            )}
+          >
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body,

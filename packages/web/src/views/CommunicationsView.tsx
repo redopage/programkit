@@ -41,7 +41,6 @@ export function CommunicationsView() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Communications"
-        description="Draft targeted messages, verify recipients, and approve delivery."
         actions={
           <Button variant="primary" onClick={() => setComposing(true)}>
             <PlusIcon className="size-4 h-lh shrink-0 fill-current" />

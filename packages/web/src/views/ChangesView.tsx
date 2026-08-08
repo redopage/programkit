@@ -23,10 +23,7 @@ export function ChangesView() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Change review"
-        description="Review proposed changes before they affect the live program."
-      />
+      <PageHeader title="Change review" />
 
       {state.changeSets.length === 0 ? (
         <EmptyState

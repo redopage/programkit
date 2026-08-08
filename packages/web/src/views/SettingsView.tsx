@@ -127,7 +127,6 @@ export function SettingsView() {
     >
       <PageHeader
         title="Event settings"
-        description="Manage the event identity, location, dates, and operating status."
         actions={
           <Button
             variant="primary"

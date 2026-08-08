@@ -73,9 +73,13 @@ resolves it.
 
 ## Radius and elevation
 
-- Compact buttons, icon buttons, search fields, filter tabs, badges, and chips use a full pill
-  radius. Text inputs and textareas keep a generous finite radius so long values still read as
-  fields rather than capsules.
+- Compact action groups may use a full pill radius when their neighboring controls share the same
+  height and treatment. Search fields, filter tabs, badges, and chips are pills by default. Text
+  inputs and textareas keep a generous finite radius so long values still read as fields rather
+  than capsules.
+- A row of related controls must share a height, label scale, and optical icon padding. Compact
+  desktop actions use smaller labels than full-size form controls; mobile actions retain the
+  accessible type and touch-target scale.
 - Workspace panels and dialogs use the larger shared radius scale. Closely nested surfaces define
   their radius and padding as variables, then subtract the padding for an exactly concentric inner
   edge.
@@ -104,6 +108,13 @@ Keyboard commands never fire while the user is typing into an input, textarea, s
 or editable region. Rich editors can also mark a wrapper with `data-shortcuts-disabled`. Modals trap
 and restore focus, `Escape` closes them, and reduced-motion preferences disable their entrance
 animation.
+
+## Navigation hierarchy
+
+The sidebar contains the event workflow people use every day. Infrastructure, change review, agent
+tools, and public links remain available through the workspace menu and command search without
+competing with the core program path. Navigation labels and icons must stay legible at a glance;
+color can distinguish workflow families, but never carries meaning by itself.
 
 ## Reserve delight for consequential moments
 

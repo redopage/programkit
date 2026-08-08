@@ -145,7 +145,6 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Schedule studio"
-        description="Place sessions, catch conflicts, and publish when the program is ready."
         actions={
           <>
             <Button variant="secondary" onClick={() => navigate('/agenda')}>

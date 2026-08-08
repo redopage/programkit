@@ -37,43 +37,78 @@ interface ShellProps {
 const navigation = [
   {
     label: '',
-    items: [{ href: '/', label: 'Overview', icon: HomeIcon }],
+    items: [{ href: '/', label: 'Overview', icon: HomeIcon, iconClass: 'fill-blue-500' }],
   },
   {
     label: 'Program',
     items: [
-      { href: '/forms', label: 'Submission forms', icon: DocumentTextIcon },
-      { href: '/submissions', label: 'Submissions', icon: InboxStackIcon },
+      { href: '/forms', label: 'Forms', icon: DocumentTextIcon, iconClass: 'fill-blue-500' },
+      {
+        href: '/submissions',
+        label: 'Submissions',
+        icon: InboxStackIcon,
+        iconClass: 'fill-amber-500',
+      },
       {
         href: '/reviews',
         label: 'Review',
         icon: ClipboardDocumentCheckIcon,
+        iconClass: 'fill-violet-500',
       },
-      { href: '/sessions', label: 'Sessions', icon: RectangleStackIcon },
-      { href: '/schedule', label: 'Agenda', icon: CalendarDaysIcon },
+      {
+        href: '/sessions',
+        label: 'Sessions',
+        icon: RectangleStackIcon,
+        iconClass: 'fill-sky-500',
+      },
+      {
+        href: '/schedule',
+        label: 'Agenda',
+        icon: CalendarDaysIcon,
+        iconClass: 'fill-emerald-500',
+      },
     ],
   },
   {
     label: 'People',
     items: [
-      { href: '/people', label: 'Speakers', icon: UserGroupIcon },
-      { href: '/readiness', label: 'Tasks', icon: ChartBarSquareIcon },
+      { href: '/people', label: 'Speakers', icon: UserGroupIcon, iconClass: 'fill-rose-500' },
+      {
+        href: '/readiness',
+        label: 'Tasks',
+        icon: ChartBarSquareIcon,
+        iconClass: 'fill-teal-500',
+      },
       {
         href: '/communications',
         label: 'Communications',
         icon: EnvelopeIcon,
+        iconClass: 'fill-indigo-500',
       },
     ],
   },
   {
     label: 'Manage',
     items: [
-      { href: '/settings', label: 'Event settings', icon: Cog6ToothIcon },
-      { href: '/changes', label: 'Change review', icon: Squares2X2Icon },
+      {
+        href: '/settings',
+        label: 'Event settings',
+        icon: Cog6ToothIcon,
+        iconClass: 'fill-zinc-500',
+      },
+      {
+        href: '/changes',
+        label: 'Change review',
+        icon: Squares2X2Icon,
+        iconClass: 'fill-zinc-500',
+        sidebar: false,
+      },
       {
         href: '/integrations',
         label: 'Integrations',
         icon: CircleStackIcon,
+        iconClass: 'fill-zinc-500',
+        sidebar: false,
       },
     ],
   },
@@ -171,42 +206,45 @@ function NavigationItems({
         {navigation.map((group) => (
           <div key={group.label || 'primary'}>
             {group.label ? (
-              <p className="px-2 pb-1 text-sm font-medium text-zinc-400">{group.label}</p>
+              <p className="px-2 pb-1 text-sm font-medium text-zinc-500">{group.label}</p>
             ) : null}
             <ul role="list" className="flex flex-col gap-px">
-              {group.items.map((item) => {
-                const active =
-                  item.href === '/'
-                    ? pathname === '/'
-                    : pathname === item.href || pathname.startsWith(`${item.href}/`)
-                const Icon = item.icon
-                return (
-                  <li key={item.href}>
-                    <a
-                      href={item.href}
-                      aria-current={active ? 'page' : undefined}
-                      onClick={(event) => {
-                        event.preventDefault()
-                        navigate(item.href)
-                        onNavigate?.()
-                      }}
-                      className={cx(
-                        'group focus-ring flex min-h-11 items-center gap-2 rounded-lg px-2 text-[0.9375rem] font-medium text-zinc-600 sm:min-h-8 sm:text-sm',
-                        active && 'bg-zinc-950/6 text-zinc-950',
-                        !active && 'hover:bg-zinc-950/4 hover:text-zinc-950',
-                      )}
-                    >
-                      <Icon
+              {group.items
+                .filter((item) => item.sidebar !== false)
+                .map((item) => {
+                  const active =
+                    item.href === '/'
+                      ? pathname === '/'
+                      : pathname === item.href || pathname.startsWith(`${item.href}/`)
+                  const Icon = item.icon
+                  return (
+                    <li key={item.href}>
+                      <a
+                        href={item.href}
+                        aria-current={active ? 'page' : undefined}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          navigate(item.href)
+                          onNavigate?.()
+                        }}
                         className={cx(
-                          'size-4 h-lh shrink-0',
-                          active ? 'fill-blue-600' : 'fill-zinc-400 group-hover:fill-zinc-600',
+                          'group focus-ring flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-[0.9375rem] font-medium text-zinc-700 sm:min-h-8 sm:text-sm',
+                          active && 'bg-zinc-950/6 text-zinc-950',
+                          !active && 'hover:bg-zinc-950/4 hover:text-zinc-950',
                         )}
-                      />
-                      <span className="min-w-0 truncate">{item.label}</span>
-                    </a>
-                  </li>
-                )
-              })}
+                      >
+                        <Icon
+                          className={cx(
+                            'size-4 h-lh shrink-0 opacity-80 motion-safe:transition-opacity group-hover:opacity-100',
+                            item.iconClass,
+                            active && 'opacity-100',
+                          )}
+                        />
+                        <span className="min-w-0 truncate">{item.label}</span>
+                      </a>
+                    </li>
+                  )
+                })}
             </ul>
           </div>
         ))}
@@ -326,6 +364,7 @@ function WorkspaceIdentity({
             {[
               { href: '/agenda', label: 'View published program', icon: ArrowTopRightOnSquareIcon },
               { href: '/settings', label: 'Event settings', icon: Cog6ToothIcon },
+              { href: '/changes', label: 'Change review', icon: Squares2X2Icon },
               { href: '/integrations', label: 'Integrations', icon: CircleStackIcon },
               { href: '/agent', label: 'Agent workspace', icon: CpuChipIcon },
             ].map(({ href, label, icon: Icon }) => (
@@ -531,15 +570,17 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
               commandOpen={commandMode !== null}
             />
           </div>
-          <div className="flex items-center pl-1.5">
-            <IconButton
-              label="Open command center"
+          <div className="px-1.5">
+            <button
+              type="button"
               aria-keyshortcuts="Meta+K Control+K /"
               onClick={() => setCommandMode('commands')}
-              className="size-9 rounded-full bg-white shadow-xs ring-1 ring-zinc-950/10 hover:bg-zinc-50"
+              className="focus-ring group flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-950/4 hover:text-zinc-950"
             >
-              <MagnifyingGlassIcon className="size-4 shrink-0 fill-current" />
-            </IconButton>
+              <MagnifyingGlassIcon className="size-4 shrink-0 fill-zinc-500" />
+              <span className="min-w-0 flex-1 truncate">Search</span>
+              <kbd className="font-sans text-xs font-normal text-zinc-400">⌘K</kbd>
+            </button>
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pt-4 pb-2">
