@@ -84,14 +84,15 @@ highest-frequency operator destinations:
 | Shortcut | Destination |
 | -------- | ----------- |
 | `G O`    | Overview    |
-| `G I`    | Submissions |
+| `G S`    | Submissions |
 | `G R`    | Review      |
 | `G A`    | Agenda      |
 | `G T`    | Tasks       |
 
-Keyboard commands never fire while the user is typing into an input, textarea, select, or editable
-region. Modals trap and restore focus, `Escape` closes them, and reduced-motion preferences disable
-their entrance animation.
+Keyboard commands never fire while the user is typing into an input, textarea, select, ARIA textbox,
+or editable region. Rich editors can also mark a wrapper with `data-shortcuts-disabled`. Modals trap
+and restore focus, `Escape` closes them, and reduced-motion preferences disable their entrance
+animation.
 
 ## Reserve delight for consequential moments
 

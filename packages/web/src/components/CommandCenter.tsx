@@ -85,11 +85,14 @@ function detectApplePlatform() {
 }
 
 function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
   return (
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
+    target.isContentEditable ||
+    target.matches('[role="textbox"]') ||
+    Boolean(target.closest('[data-shortcuts-disabled]'))
   )
 }
 

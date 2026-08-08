@@ -110,7 +110,7 @@ const commandDetails: Record<
   '/submissions': {
     description: 'Triage and decide incoming proposals.',
     keywords: ['inbox', 'abstracts', 'proposals'],
-    shortcut: ['G', 'I'],
+    shortcut: ['G', 'S'],
   },
   '/reviews': {
     description: 'Track committee progress and scorecards.',

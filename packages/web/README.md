@@ -83,6 +83,8 @@ Drawers provide focused editing, while keyboard focus management, focus restorat
 semantics, and mobile navigation are built into the shared components. The operator command center
 opens with `/` or the platform-appropriate `Command-K`/`Control-K`; its intentionally small shortcut
 guide opens with `?`. Printable shortcuts are ignored while the user is typing in a form field.
+Contenteditable and ARIA textbox editors are covered automatically; custom editor wrappers can use
+`data-shortcuts-disabled`.
 
 ## Operation behavior
 
