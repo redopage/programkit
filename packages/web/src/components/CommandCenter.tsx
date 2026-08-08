@@ -28,7 +28,6 @@ export interface ProgramCommand {
   section: 'Suggested' | 'Pages' | 'Public' | 'Settings'
   icon: ComponentType<{ className?: string }>
   keywords?: string[]
-  shortcut?: readonly [string, string]
   default?: boolean
   meta?: string
 }
@@ -84,11 +83,9 @@ export function CommandCenter({
 }: CommandCenterProps) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
-  const [goMode, setGoMode] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const goTimerRef = useRef<number | null>(null)
   const titleId = useId()
   const listId = useId()
 
@@ -97,12 +94,6 @@ export function CommandCenter({
     setQuery('')
     setActiveIndex(0)
   }, [onModeChange])
-
-  const clearGoMode = useCallback(() => {
-    if (goTimerRef.current != null) window.clearTimeout(goTimerRef.current)
-    goTimerRef.current = null
-    setGoMode(false)
-  }, [])
 
   const visibleCommands = useMemo(() => {
     const terms = query.trim().toLocaleLowerCase().split(/\s+/u).filter(Boolean)
@@ -137,8 +128,6 @@ export function CommandCenter({
       .filter(({ items }) => items.length > 0)
   }, [visibleCommands])
 
-  const shortcutCommands = useMemo(() => commands.filter((command) => command.shortcut), [commands])
-
   const runCommand = useCallback(
     (command: ProgramCommand) => {
       close()
@@ -159,45 +148,23 @@ export function CommandCenter({
 
   useEffect(() => {
     const handleGlobalKey = (event: KeyboardEvent) => {
-      const key = event.key.toLocaleLowerCase()
       if (mode || event.repeat || event.altKey || event.metaKey || event.ctrlKey) return
       if (isEditableTarget(event.target)) return
 
       if (event.key === '/') {
         event.preventDefault()
-        clearGoMode()
         onModeChange('commands')
         return
       }
       if (event.key === '?') {
         event.preventDefault()
-        clearGoMode()
         onModeChange('shortcuts')
-        return
       }
-
-      if (goMode) {
-        const command = commands.find(
-          (candidate) => candidate.shortcut?.[1].toLocaleLowerCase() === key,
-        )
-        clearGoMode()
-        if (!command) return
-        event.preventDefault()
-        navigate(command.href)
-        return
-      }
-
-      if (key !== 'g') return
-      event.preventDefault()
-      setGoMode(true)
-      goTimerRef.current = window.setTimeout(clearGoMode, 1800)
     }
 
     document.addEventListener('keydown', handleGlobalKey)
     return () => document.removeEventListener('keydown', handleGlobalKey)
-  }, [clearGoMode, commands, goMode, mode, navigate, onModeChange])
-
-  useEffect(() => () => clearGoMode(), [clearGoMode])
+  }, [mode, onModeChange])
 
   useEffect(() => {
     if (!mode) return
@@ -279,27 +246,6 @@ export function CommandCenter({
 
   return (
     <>
-      {goMode && !mode
-        ? createPortal(
-            <div
-              role="status"
-              className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 mx-auto flex w-fit max-w-[calc(100vw-1.5rem)] items-center gap-2 overflow-x-auto rounded-xl bg-zinc-900 p-2 text-base text-white shadow-2xl ring-1 ring-white/10 motion-safe:animate-rise-in sm:bottom-6 sm:text-sm"
-            >
-              <div className="shrink-0 px-1 font-medium">Go to</div>
-              {shortcutCommands.map((command) => (
-                <div
-                  key={command.id}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white/8 py-1 pr-2 pl-1"
-                >
-                  <ShortcutKeys keys={[command.shortcut![1]]} dark />
-                  <div className="whitespace-nowrap text-zinc-300">{command.label}</div>
-                </div>
-              ))}
-            </div>,
-            document.body,
-          )
-        : null}
-
       {mode
         ? createPortal(
             <div
@@ -412,8 +358,6 @@ export function CommandCenter({
                                       <div className="max-w-32 shrink-0 truncate text-sm text-zinc-400">
                                         {command.meta}
                                       </div>
-                                    ) : command.shortcut ? (
-                                      <ShortcutKeys keys={command.shortcut} />
                                     ) : null}
                                   </button>
                                 )
@@ -483,13 +427,12 @@ export function CommandCenter({
                     <div className="flex flex-col gap-4">
                       <div>
                         <div className="px-2 py-1 text-base font-medium text-zinc-400 sm:text-sm">
-                          Open
+                          Anywhere
                         </div>
                         <div className="divide-y divide-white/8">
                           {[
-                            { label: 'Command center', keys: ['/'] },
-                            { label: 'Keyboard shortcuts', keys: ['?'] },
-                            { label: 'Close the current menu', keys: ['Esc'] },
+                            { label: 'Search ProgramKit', keys: ['/'] },
+                            { label: 'Show keyboard shortcuts', keys: ['?'] },
                           ].map((shortcut) => (
                             <div
                               key={shortcut.label}
@@ -506,21 +449,23 @@ export function CommandCenter({
 
                       <div>
                         <div className="px-2 py-1 text-base font-medium text-zinc-400 sm:text-sm">
-                          Go to
+                          Command menu
                         </div>
                         <div className="divide-y divide-white/8">
-                          {shortcutCommands.map((command) => (
-                            <button
-                              key={command.id}
-                              type="button"
-                              onClick={() => runCommand(command)}
-                              className="focus-ring flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-zinc-200 hover:bg-white/8 hover:text-white"
+                          {[
+                            { label: 'Move selection', keys: ['↑', '↓'] },
+                            { label: 'Open selected result', keys: ['Enter'] },
+                            { label: 'Close the menu', keys: ['Esc'] },
+                          ].map((shortcut) => (
+                            <div
+                              key={shortcut.label}
+                              className="flex min-h-11 items-center justify-between gap-4 px-2 py-2"
                             >
-                              <div className="min-w-0 truncate text-base sm:text-sm">
-                                {command.label}
+                              <div className="min-w-0 text-base text-zinc-200 sm:text-sm">
+                                {shortcut.label}
                               </div>
-                              <ShortcutKeys keys={command.shortcut!} dark />
-                            </button>
+                              <ShortcutKeys keys={shortcut.keys} dark />
+                            </div>
                           ))}
                         </div>
                       </div>

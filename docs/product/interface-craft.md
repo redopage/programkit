@@ -73,18 +73,10 @@ resolves it.
 
 ## Keyboard navigation
 
-The operator workspace has one shared command system. `/` opens the command center and `?` opens its
-shortcut guide. These keys only fire outside text fields. Search matches page names, workflow
-language, and useful synonyms rather than routes alone.
-
-Press `G`, then one of these keys outside a text field:
-
-| Shortcut | Destination     |
-| -------- | --------------- |
-| `G H`    | Home / overview |
-| `G I`    | Submissions     |
-| `G A`    | Agenda          |
-| `G T`    | Tasks           |
+The operator workspace has one shared command system. `/` opens global search and `?` opens its
+shortcut guide. Search matches page names, workflow language, and useful synonyms rather than routes
+alone. Inside the command menu, arrow keys move the selection, `Enter` opens it, and `Escape` closes
+the menu.
 
 Keyboard commands never fire while the user is typing into an input, textarea, select, or editable
 region. Modals trap and restore focus, `Escape` closes them, and reduced-motion preferences disable
