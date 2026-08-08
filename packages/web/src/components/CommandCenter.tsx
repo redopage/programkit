@@ -316,13 +316,13 @@ export function CommandCenter({
         ? createPortal(
             <div
               role="status"
-              className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 mx-auto flex w-fit max-w-[calc(100vw-1.5rem)] items-center gap-1.5 overflow-x-auto rounded-xl bg-zinc-900 p-1.5 text-base text-white shadow-2xl ring-1 ring-white/10 motion-safe:animate-rise-in sm:bottom-6 sm:text-sm"
+              className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 mx-auto flex w-fit max-w-[calc(100vw-1.5rem)] items-center gap-1.5 overflow-x-auto rounded-(--go-radius) bg-zinc-900/90 p-(--go-padding) text-base text-white shadow-2xl ring-1 ring-white/15 backdrop-blur-xl [--go-padding:--spacing(1.5)] [--go-radius:var(--radius-2xl)] motion-safe:animate-rise-in sm:bottom-6 sm:text-sm"
             >
               <div className="shrink-0 px-1.5 font-medium">Go to</div>
               {shortcutCommands.map((command) => (
                 <div
                   key={command.id}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white/8 py-1 pr-2 pl-1"
+                  className="flex shrink-0 items-center gap-1.5 rounded-[calc(var(--go-radius)-var(--go-padding))] bg-white/8 py-1 pr-2 pl-1"
                 >
                   <ShortcutKeys keys={[command.shortcut![1]]} dark />
                   <div className="whitespace-nowrap text-zinc-300">{command.label}</div>
@@ -351,7 +351,7 @@ export function CommandCenter({
                 <div
                   ref={panelRef}
                   tabIndex={-1}
-                  className="relative flex max-h-[min(72dvh,32rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white/95 shadow-2xl ring-1 ring-black/10 backdrop-blur-xl focus:outline-none motion-safe:animate-command-in"
+                  className="relative flex max-h-[min(72dvh,32rem)] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-white/95 shadow-2xl ring-1 ring-black/10 backdrop-blur-xl focus:outline-none motion-safe:animate-command-in"
                 >
                   <h2 id={titleId} className="sr-only">
                     Command center
@@ -384,7 +384,7 @@ export function CommandCenter({
                         type="button"
                         aria-label="Clear command search"
                         onClick={() => setQuery('')}
-                        className="focus-ring col-start-1 row-start-1 mr-3 inline-flex size-8 place-self-center justify-self-end items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-950/5 hover:text-zinc-700"
+                        className="focus-ring col-start-1 row-start-1 mr-3 inline-flex size-8 place-self-center justify-self-end items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-950/5 hover:text-zinc-700"
                       >
                         <XMarkIcon className="size-4 shrink-0 fill-current" />
                       </button>
@@ -420,7 +420,7 @@ export function CommandCenter({
                                     aria-label={`${command.label}. ${command.description}`}
                                     title={command.description}
                                     className={cx(
-                                      'focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left',
+                                      'focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left',
                                       active ? 'bg-blue-50 text-zinc-950' : 'text-zinc-700',
                                     )}
                                   >
@@ -480,7 +480,7 @@ export function CommandCenter({
                     <button
                       type="button"
                       onClick={() => onModeChange('shortcuts')}
-                      className="focus-ring ml-auto flex min-h-9 items-center gap-2 rounded-lg px-2 text-base font-medium text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-950 sm:min-h-8 sm:text-sm"
+                      className="focus-ring ml-auto flex min-h-9 items-center gap-2 rounded-full px-2 text-base font-medium text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-950 sm:min-h-8 sm:text-sm"
                     >
                       <div>Shortcuts</div>
                       <ShortcutKeys keys={['?']} />
@@ -491,7 +491,7 @@ export function CommandCenter({
                 <div
                   ref={panelRef}
                   tabIndex={-1}
-                  className="relative flex max-h-[min(82dvh,34rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-zinc-900 text-white shadow-2xl ring-1 ring-white/10 focus:outline-none motion-safe:animate-command-in"
+                  className="relative flex max-h-[min(82dvh,34rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-zinc-900/90 text-white shadow-2xl ring-1 ring-white/15 backdrop-blur-xl focus:outline-none motion-safe:animate-command-in"
                 >
                   <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 p-3">
                     <h2 id={titleId} className="text-balance text-lg font-semibold">
@@ -501,7 +501,7 @@ export function CommandCenter({
                       type="button"
                       aria-label="Close keyboard shortcuts"
                       onClick={close}
-                      className="touch-target focus-ring inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/8 hover:text-white"
+                      className="touch-target focus-ring inline-flex size-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-white/8 hover:text-white"
                     >
                       <XMarkIcon className="size-4 shrink-0 fill-current" />
                     </button>
@@ -581,7 +581,7 @@ export function CommandCenter({
                               key={command.id}
                               type="button"
                               onClick={() => runCommand(command)}
-                              className="focus-ring flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 text-left text-zinc-200 hover:bg-white/8 hover:text-white sm:min-h-10"
+                              className="focus-ring flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-2 text-left text-zinc-200 hover:bg-white/8 hover:text-white sm:min-h-10"
                             >
                               <div className="min-w-0 truncate text-base sm:text-sm">
                                 {command.label}

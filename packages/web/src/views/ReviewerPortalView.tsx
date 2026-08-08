@@ -311,7 +311,7 @@ function ReviewerWorkspace({
                               [criterion.id]: Number(event.target.value),
                             }))
                           }
-                          className="focus-ring col-span-full row-start-1 min-h-11 appearance-none rounded-lg bg-white py-2 pr-8 pl-3 text-base tabular-nums text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+                          className="focus-ring col-span-full row-start-1 min-h-11 appearance-none rounded-xl bg-white py-2 pr-8 pl-3 text-base tabular-nums text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
                         >
                           {Array.from(
                             { length: criterion.maximum - criterion.minimum + 1 },

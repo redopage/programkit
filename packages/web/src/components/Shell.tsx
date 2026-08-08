@@ -219,11 +219,13 @@ function WorkspaceIdentity({
   navigate,
   pendingChanges,
   onOpenShortcuts,
+  commandOpen,
   onNavigate,
 }: {
   navigate: (to: string) => void
   pendingChanges: number
   onOpenShortcuts: () => void
+  commandOpen: boolean
   onNavigate?: () => void
 }) {
   const { payload } = useWorkspace()
@@ -257,6 +259,10 @@ function WorkspaceIdentity({
     }
   }, [open])
 
+  useEffect(() => {
+    if (commandOpen) setOpen(false)
+  }, [commandOpen])
+
   const openPage = (to: string) => {
     setOpen(false)
     navigate(to)
@@ -278,9 +284,9 @@ function WorkspaceIdentity({
         aria-expanded={open}
         aria-controls={open ? popoverId : undefined}
         onClick={() => setOpen((current) => !current)}
-        className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-lg p-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
+        className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-xl p-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
       >
-        <span className="grid size-6 shrink-0 place-items-center rounded-md bg-blue-600 text-sm font-semibold text-white">
+        <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
           AI
         </span>
         <span className="min-w-0 flex-1">
@@ -305,7 +311,7 @@ function WorkspaceIdentity({
           id={popoverId}
           role="dialog"
           aria-label="Workspace menu"
-          className="absolute top-full left-0 z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-zinc-900 p-1.5 shadow-2xl ring-1 ring-white/10 motion-safe:animate-rise-in"
+          className="absolute top-full left-0 z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-(--popover-radius) bg-zinc-900/90 p-(--popover-padding) shadow-2xl ring-1 ring-white/15 backdrop-blur-xl [--popover-padding:--spacing(1.5)] [--popover-radius:var(--radius-2xl)] motion-safe:animate-rise-in lg:top-0 lg:left-full lg:mt-0 lg:ml-2"
         >
           <div className="px-2 py-1.5">
             <p className="truncate text-base font-medium text-white sm:text-sm">
@@ -326,13 +332,13 @@ function WorkspaceIdentity({
               <button
                 key={href}
                 type="button"
-                className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white sm:min-h-8 sm:text-sm"
+                className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white sm:min-h-8 sm:text-sm"
                 onClick={() => openPage(href)}
               >
                 <Icon className="size-4 h-lh shrink-0 fill-zinc-500" />
                 <span className="min-w-0 flex-1 truncate">{label}</span>
                 {href === '/agent' && pendingChanges > 0 ? (
-                  <span className="rounded-md bg-amber-400/15 px-1.5 py-0.5 text-sm font-medium tabular-nums text-amber-300">
+                  <span className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-sm font-medium tabular-nums text-amber-300">
                     {pendingChanges}
                   </span>
                 ) : null}
@@ -340,7 +346,7 @@ function WorkspaceIdentity({
             ))}
             <button
               type="button"
-              className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white sm:min-h-8 sm:text-sm"
+              className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white sm:min-h-8 sm:text-sm"
               onClick={openShortcuts}
             >
               <CommandLineIcon className="size-4 h-lh shrink-0 fill-zinc-500" />
@@ -516,22 +522,25 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
   return (
     <div className="isolate min-h-dvh antialiased max-lg:bg-white lg:flex lg:bg-canvas">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col p-2 lg:flex">
-        <div className="flex items-center gap-1">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-col gap-1.5">
+          <div className="min-w-0">
             <WorkspaceIdentity
               navigate={navigate}
               pendingChanges={pendingChanges}
               onOpenShortcuts={() => setCommandMode('shortcuts')}
+              commandOpen={commandMode !== null}
             />
           </div>
-          <IconButton
-            label="Open command center"
-            aria-keyshortcuts="/"
-            onClick={() => setCommandMode('commands')}
-            className="size-9"
-          >
-            <MagnifyingGlassIcon className="size-4 shrink-0 fill-current" />
-          </IconButton>
+          <div className="flex items-center pl-1.5">
+            <IconButton
+              label="Open command center"
+              aria-keyshortcuts="Meta+K Control+K /"
+              onClick={() => setCommandMode('commands')}
+              className="size-9 rounded-full bg-white shadow-xs ring-1 ring-zinc-950/10 hover:bg-zinc-50"
+            >
+              <MagnifyingGlassIcon className="size-4 shrink-0 fill-current" />
+            </IconButton>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pt-4 pb-2">
           <NavigationItems pathname={pathname} navigate={navigate} />
@@ -548,7 +557,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
             navigate('/')
           }}
         >
-          <span className="grid size-6 shrink-0 place-items-center rounded-md bg-blue-600 text-sm font-semibold text-white">
+          <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
             AI
           </span>
           <span className="min-w-0 truncate">{activeEvent?.name ?? 'Program workspace'}</span>
@@ -573,7 +582,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
               />
               <div
                 ref={mobilePanelRef}
-                className="absolute inset-y-0 left-0 flex w-[min(86vw,20rem)] flex-col bg-white p-3 pb-[max(--spacing(3),env(safe-area-inset-bottom))] pt-[max(--spacing(3),env(safe-area-inset-top))] shadow-2xl ring-1 ring-black/5 motion-safe:animate-slide-from-left"
+                className="absolute inset-y-0 left-0 flex w-[min(86vw,20rem)] flex-col rounded-r-2xl bg-white p-3 pb-[max(--spacing(3),env(safe-area-inset-bottom))] pt-[max(--spacing(3),env(safe-area-inset-top))] shadow-2xl ring-1 ring-black/5 motion-safe:animate-slide-from-left"
               >
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
@@ -581,6 +590,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                       navigate={navigate}
                       pendingChanges={pendingChanges}
                       onOpenShortcuts={() => setCommandMode('shortcuts')}
+                      commandOpen={commandMode !== null}
                       onNavigate={() => setMobileOpen(false)}
                     />
                   </div>
@@ -686,7 +696,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
         {/* The panel floats on the canvas, so the workspace reads as one document
             with the navigation living outside it. */}
         <div className="lg:py-2 lg:pr-2">
-          <div className="min-h-full bg-white p-4 sm:p-6 lg:min-h-[calc(100dvh-(--spacing(4)))] lg:rounded-xl lg:shadow-xs lg:ring-1 lg:ring-zinc-950/5">
+          <div className="min-h-full bg-white p-4 sm:p-6 lg:min-h-[calc(100dvh-(--spacing(4)))] lg:rounded-2xl lg:shadow-xs lg:ring-1 lg:ring-zinc-950/5">
             <div className="mx-auto w-full max-w-[100rem]">{children}</div>
           </div>
         </div>

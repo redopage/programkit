@@ -495,7 +495,7 @@ function MoveSessionDrawer({
               name="roomId"
               value={roomId}
               onChange={(event) => setRoomId(event.target.value)}
-              className="focus-ring min-h-11 w-full appearance-none rounded-lg bg-white py-2 pr-9 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+              className="focus-ring min-h-11 w-full appearance-none rounded-xl bg-white py-2 pr-9 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
             >
               {state.rooms.map((room) => (
                 <option key={room.id} value={room.id}>

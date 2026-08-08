@@ -333,7 +333,7 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
               onChange={(event) =>
                 setForm((current) => ({ ...current, audience: event.target.value }))
               }
-              className="focus-ring min-h-11 w-full appearance-none rounded-lg bg-white py-2 pr-9 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+              className="focus-ring min-h-11 w-full appearance-none rounded-xl bg-white py-2 pr-9 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
             >
               <option value="missing_requirements">Missing required work</option>
               <option value="unconfirmed">Awaiting confirmation</option>

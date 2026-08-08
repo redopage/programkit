@@ -57,7 +57,7 @@ export function Button({
       {...props}
       type={props.type ?? 'button'}
       className={cx(
-        'focus-ring inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg font-medium shadow-xs ring-1 motion-safe:transition-[background-color,box-shadow,transform] motion-safe:enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none disabled:ring-zinc-950/5',
+        'focus-ring inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full font-medium shadow-xs ring-1 motion-safe:transition-[background-color,box-shadow,transform] motion-safe:enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none disabled:ring-zinc-950/5',
         size === 'regular'
           ? 'min-h-11 px-3.5 text-base [&:has(>svg:first-child)]:pl-2.5 [&:has(>svg:last-child)]:pr-2.5 sm:min-h-9 sm:text-sm'
           : 'min-h-9 px-2.5 text-base [&:has(>svg:first-child)]:pl-1.5 [&:has(>svg:last-child)]:pr-1.5 sm:min-h-8 sm:text-sm',
@@ -89,7 +89,7 @@ export function IconButton({
       type={props.type ?? 'button'}
       aria-label={label}
       className={cx(
-        'touch-target focus-ring inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 motion-safe:transition-transform motion-safe:enabled:active:scale-95 hover:bg-zinc-950/5 hover:text-zinc-950',
+        'touch-target focus-ring inline-flex size-8 shrink-0 items-center justify-center rounded-full text-zinc-500 motion-safe:transition-transform motion-safe:enabled:active:scale-95 hover:bg-zinc-950/5 hover:text-zinc-950',
         className,
       )}
     >
@@ -157,7 +157,7 @@ export function StatusBadge({
       className={cx(
         // `self-center` keeps the chip at its natural height: as a flex child it
         // would otherwise stretch to the row height and render as a tall block.
-        'inline-flex shrink-0 items-center self-center whitespace-nowrap rounded-md px-2 py-1 text-sm font-medium sm:py-0.5',
+        'inline-flex shrink-0 items-center self-center whitespace-nowrap rounded-full px-2 py-1 text-sm font-medium sm:py-0.5',
         (status === 'confirmed' ||
           status === 'accepted' ||
           status === 'approved' ||
@@ -190,7 +190,7 @@ export function TrackBadge({ name, color }: { name: string; color: string }) {
   return (
     <span
       className={cx(
-        'inline-flex shrink-0 items-center self-center whitespace-nowrap rounded-md px-2 py-1 text-sm font-medium sm:py-0.5',
+        'inline-flex shrink-0 items-center self-center whitespace-nowrap rounded-full px-2 py-1 text-sm font-medium sm:py-0.5',
         color === 'emerald' && 'bg-emerald-50 text-emerald-700',
         color === 'amber' && 'bg-amber-50 text-amber-700',
         color === 'sky' && 'bg-sky-50 text-sky-700',
@@ -210,13 +210,13 @@ export function TrackBadge({ name, color }: { name: string; color: string }) {
  * they live here as one definition each rather than as copied class strings.
  */
 export const textControl =
-  'focus-ring-control min-h-11 rounded-lg bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:min-h-9 sm:text-sm'
+  'focus-ring-control min-h-11 rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:min-h-9 sm:text-sm'
 
 export const textAreaControl =
-  'focus-ring-control resize-y rounded-lg bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:text-sm'
+  'focus-ring-control resize-y rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:text-sm'
 
 export const selectControl =
-  'focus-ring-control col-span-full row-start-1 min-h-11 appearance-none rounded-lg bg-white py-2 pr-8 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm'
+  'focus-ring-control col-span-full row-start-1 min-h-11 appearance-none rounded-xl bg-white py-2 pr-8 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm'
 
 /**
  * The row above a list: view filters on the left, search on the right. Owning
@@ -276,12 +276,12 @@ export function FilterTabs<Value extends string>({
         ref={groupRef}
         role="group"
         aria-label={label}
-        className="relative inline-flex min-w-max gap-1 rounded-lg bg-zinc-950/4 p-1"
+        className="relative inline-flex min-w-max gap-1 rounded-full bg-zinc-950/4 p-1"
       >
         {indicator ? (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute top-1 bottom-1 left-0 rounded-md bg-white shadow-xs ring-1 ring-black/5 motion-safe:transition-[transform,width] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]"
+            className="pointer-events-none absolute top-1 bottom-1 left-0 rounded-full bg-white shadow-xs ring-1 ring-black/5 motion-safe:transition-[transform,width] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{
               transform: `translateX(${indicator.left}px)`,
               width: indicator.width,
@@ -298,7 +298,7 @@ export function FilterTabs<Value extends string>({
             aria-pressed={value === optionValue}
             onClick={() => onChange(optionValue)}
             className={cx(
-              'focus-ring relative z-10 min-h-9 rounded-md px-3 text-base text-zinc-600 motion-safe:transition-colors motion-safe:duration-150 sm:min-h-7 sm:text-sm',
+              'focus-ring relative z-10 min-h-9 rounded-full px-3 text-base text-zinc-600 motion-safe:transition-colors motion-safe:duration-150 sm:min-h-7 sm:text-sm',
               value === optionValue ? 'text-zinc-950' : 'hover:text-zinc-950',
             )}
           >
@@ -337,7 +337,7 @@ export function SearchInput({
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="focus-ring min-h-11 w-full rounded-lg bg-white py-2 pr-10 pl-9 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 [&::-webkit-search-cancel-button]:appearance-none sm:min-h-9 sm:text-sm"
+        className="focus-ring min-h-11 w-full rounded-full bg-white py-2 pr-10 pl-9 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 [&::-webkit-search-cancel-button]:appearance-none sm:min-h-9 sm:text-sm"
       />
       <button
         type="button"
@@ -350,7 +350,7 @@ export function SearchInput({
           inputRef.current?.focus()
         }}
         className={cx(
-          'focus-ring absolute top-1/2 right-1.5 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-950/5 hover:text-zinc-700 motion-safe:transition-[opacity,scale] motion-safe:duration-150',
+          'focus-ring absolute top-1/2 right-1.5 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-950/5 hover:text-zinc-700 motion-safe:transition-[opacity,scale] motion-safe:duration-150',
           hasValue ? 'scale-100 opacity-100' : 'pointer-events-none scale-75 opacity-0',
         )}
       >
@@ -383,7 +383,7 @@ export function Callout({
   return (
     <div
       className={cx(
-        'flex items-start gap-3 rounded-xl px-4 py-3 ring-1 ring-inset',
+        'flex items-start gap-3 rounded-2xl px-4 py-3 ring-1 ring-inset',
         tone === 'info' && 'bg-sky-50 ring-sky-950/10',
         tone === 'success' && 'bg-emerald-50 ring-emerald-950/10',
         tone === 'warning' && 'bg-amber-50 ring-amber-950/10',
@@ -544,7 +544,7 @@ export function PageHeader({
   return (
     // Only the desktop panel pins its header: on mobile the app already has a
     // fixed top bar, and a second pinned block would eat the viewport.
-    <div className="@container/page-header -mx-4 -mt-4 rounded-t-xl border-b border-zinc-950/5 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6 lg:sticky lg:top-0 lg:z-20">
+    <div className="@container/page-header -mx-4 -mt-4 rounded-t-2xl border-b border-zinc-950/5 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6 lg:sticky lg:top-0 lg:z-20">
       <div className="flex flex-col gap-3 @3xl/page-header:flex-row @3xl/page-header:items-center @3xl/page-header:justify-between">
         <div className="min-w-0">
           <h1 className="max-w-[40ch] truncate text-balance text-lg font-semibold tracking-tight text-zinc-950">
@@ -604,7 +604,7 @@ export function FieldChip({ children, icon }: { children: ReactNode; icon?: Reac
   return (
     <span
       className={cx(
-        'inline-flex shrink-0 items-center gap-1 self-center whitespace-nowrap rounded-md bg-white py-1 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/10 sm:py-0.5',
+        'inline-flex shrink-0 items-center gap-1 self-center whitespace-nowrap rounded-full bg-white py-1 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/10 sm:py-0.5',
         icon ? 'pr-2 pl-1' : 'px-2',
       )}
     >
@@ -750,7 +750,7 @@ export function Drawer({
         ref={panelRef}
         tabIndex={-1}
         className={cx(
-          'absolute inset-x-0 bottom-0 flex max-h-[min(88dvh,48rem)] w-full flex-col rounded-t-2xl bg-white shadow-2xl ring-1 ring-black/5 focus:outline-none motion-safe:animate-slide-from-bottom sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:rounded-none sm:motion-safe:animate-slide-from-right',
+          'absolute inset-x-0 bottom-0 flex max-h-[min(88dvh,48rem)] w-full flex-col rounded-t-3xl bg-white shadow-2xl ring-1 ring-black/5 focus:outline-none motion-safe:animate-slide-from-bottom sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:rounded-l-3xl sm:rounded-r-none sm:motion-safe:animate-slide-from-right',
           size === 'regular' ? 'sm:max-w-xl' : 'sm:max-w-5xl',
         )}
       >
@@ -885,7 +885,7 @@ export function Dialog({
         ref={panelRef}
         tabIndex={-1}
         className={cx(
-          'relative flex w-full flex-col overflow-hidden rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-black/10 focus:outline-none sm:p-6',
+          'relative flex w-full flex-col overflow-hidden rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-black/10 focus:outline-none sm:p-6',
           size === 'regular'
             ? 'max-h-[min(90dvh,48rem)] max-w-md'
             : 'h-[min(90dvh,48rem)] max-w-3xl',
@@ -1039,7 +1039,7 @@ export function NextActionRow({
 export function LoadingScreen() {
   return (
     <div className="min-h-dvh bg-canvas p-2" role="status" aria-label="Loading workspace">
-      <div className="min-h-[calc(100dvh-(--spacing(4)))] rounded-xl bg-white p-4 shadow-xs ring-1 ring-zinc-950/5 sm:p-6">
+      <div className="min-h-[calc(100dvh-(--spacing(4)))] rounded-2xl bg-white p-4 shadow-xs ring-1 ring-zinc-950/5 sm:p-6">
         <div className="flex items-center justify-between gap-4 border-b border-zinc-950/5 pb-3">
           <span className="h-4 w-48 animate-pulse rounded bg-zinc-950/5" />
           <span className="h-8 w-36 animate-pulse rounded-lg bg-zinc-950/5" />
@@ -1059,7 +1059,7 @@ export function ToastViewport() {
     <div className="pointer-events-none fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-60 flex justify-center sm:bottom-6">
       <div
         role="status"
-        className="pointer-events-auto flex max-w-md items-start gap-3 rounded-xl bg-zinc-950 py-3 pr-2 pl-3 text-white shadow-xl ring-1 ring-black/10 motion-safe:animate-rise-in"
+        className="pointer-events-auto flex max-w-md items-start gap-3 rounded-2xl bg-zinc-950/90 py-3 pr-2 pl-3 text-white shadow-xl ring-1 ring-white/10 backdrop-blur-xl motion-safe:animate-rise-in"
       >
         {toast.tone === 'success' ? (
           <CheckCircleIcon className="size-4 h-lh shrink-0 fill-emerald-400" />

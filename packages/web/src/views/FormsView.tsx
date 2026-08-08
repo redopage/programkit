@@ -347,7 +347,7 @@ export function FormsView({
                 value={activeForm.id}
                 disabled={dirty}
                 onChange={(event) => onSelectionChange(event.target.value)}
-                className="focus-ring col-span-full row-start-1 min-h-9 appearance-none rounded-lg bg-white py-1.5 pr-8 pl-3 text-sm text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="focus-ring col-span-full row-start-1 min-h-9 appearance-none rounded-xl bg-white py-1.5 pr-8 pl-3 text-sm text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {forms.map((entry) => (
                   <option key={entry.id} value={entry.id}>
@@ -403,7 +403,7 @@ export function FormsView({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-base font-medium text-zinc-950 sm:text-sm">Public URL</span>
-            <span className="flex min-h-11 items-center rounded-lg bg-white text-base shadow-xs ring-1 ring-zinc-950/10 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-500 sm:min-h-9 sm:text-sm">
+            <span className="flex min-h-11 items-center rounded-xl bg-white text-base shadow-xs ring-1 ring-zinc-950/10 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-500 sm:min-h-9 sm:text-sm">
               <span className="shrink-0 pl-3 text-zinc-400">/submit/</span>
               <input
                 type="text"

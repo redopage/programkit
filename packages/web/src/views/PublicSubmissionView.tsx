@@ -183,7 +183,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
                     <label
                       key={option}
                       className={cx(
-                        'flex cursor-pointer items-start gap-3 rounded-xl bg-white p-4 ring-1',
+                        'flex cursor-pointer items-start gap-3 rounded-2xl bg-white p-4 ring-1',
                         activeKind === option ? 'ring-blue-600' : 'ring-zinc-950/10',
                       )}
                     >
@@ -322,7 +322,7 @@ function FormField({
   const spanWide =
     field.kind === 'long_text' || field.kind === 'file' || field.kind === 'multi_select'
   const inputClass =
-    'focus-ring min-h-11 w-full rounded-lg bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm'
+    'focus-ring min-h-11 w-full rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm'
 
   return (
     <div className={cx('min-w-0', spanWide && 'sm:col-span-2')}>
@@ -452,7 +452,7 @@ function FormField({
           name={field.key}
           required={field.required}
           aria-invalid={Boolean(error)}
-          className="focus-ring min-h-11 w-full rounded-lg bg-white p-2 text-base text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 sm:text-sm"
+          className="focus-ring min-h-11 w-full rounded-xl bg-white p-2 text-base text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 sm:text-sm"
         />
       ) : (
         <input

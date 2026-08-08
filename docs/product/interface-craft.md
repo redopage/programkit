@@ -71,6 +71,17 @@ resolves it.
   lands.
 - Optimistic updates are for safe, reversible actions only.
 
+## Radius and elevation
+
+- Compact buttons, icon buttons, search fields, filter tabs, badges, and chips use a full pill
+  radius. Text inputs and textareas keep a generous finite radius so long values still read as
+  fields rather than capsules.
+- Workspace panels and dialogs use the larger shared radius scale. Closely nested surfaces define
+  their radius and padding as variables, then subtract the padding for an exactly concentric inner
+  edge.
+- Translucency belongs to temporary elevated surfaces only. Dark menus, shortcut guides, and toasts
+  use a nearly opaque zinc surface with background blur; persistent content panels remain solid.
+
 ## Keyboard navigation
 
 The operator workspace has one shared command system. `/` opens global search, `Command-K` on Apple

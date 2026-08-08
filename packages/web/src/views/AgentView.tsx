@@ -103,7 +103,7 @@ export function AgentView({ navigate }: { navigate: (to: string) => void }) {
               name="agent-task"
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              className="focus-visible:outline-blue-400 min-h-11 w-full rounded-lg bg-white/10 px-3 py-2 text-base text-white ring-1 ring-white/15 placeholder:text-zinc-500 focus-visible:outline-2 -outline-offset-1 sm:min-h-9 sm:text-sm"
+              className="focus-visible:outline-blue-400 min-h-11 w-full rounded-xl bg-white/10 px-3 py-2 text-base text-white ring-1 ring-white/15 placeholder:text-zinc-500 focus-visible:outline-2 -outline-offset-1 sm:min-h-9 sm:text-sm"
             />
           </label>
           <Button type="submit" variant="primary" disabled={mutating || prompt.trim().length === 0}>

@@ -60,7 +60,7 @@ export function SubmissionFormPreview({
           </p>
         </div>
         <div
-          className="inline-flex w-fit shrink-0 rounded-lg bg-zinc-100 p-1 ring-1 ring-zinc-950/5"
+          className="inline-flex w-fit shrink-0 rounded-full bg-zinc-100 p-1 ring-1 ring-zinc-950/5"
           role="group"
           aria-label="Preview size"
         >
@@ -69,7 +69,7 @@ export function SubmissionFormPreview({
             aria-pressed={viewport === 'desktop'}
             onClick={() => setViewport('desktop')}
             className={cx(
-              'focus-ring inline-flex min-h-8 items-center gap-1.5 rounded-md py-1 pr-2.5 pl-2 text-base font-medium sm:text-sm',
+              'focus-ring inline-flex min-h-8 items-center gap-1.5 rounded-full py-1 pr-2.5 pl-2 text-base font-medium sm:text-sm',
               viewport === 'desktop'
                 ? 'bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-950/5'
                 : 'text-zinc-500 hover:text-zinc-950',
@@ -83,7 +83,7 @@ export function SubmissionFormPreview({
             aria-pressed={viewport === 'mobile'}
             onClick={() => setViewport('mobile')}
             className={cx(
-              'focus-ring inline-flex min-h-8 items-center gap-1.5 rounded-md py-1 pr-2.5 pl-2 text-base font-medium sm:text-sm',
+              'focus-ring inline-flex min-h-8 items-center gap-1.5 rounded-full py-1 pr-2.5 pl-2 text-base font-medium sm:text-sm',
               viewport === 'mobile'
                 ? 'bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-950/5'
                 : 'text-zinc-500 hover:text-zinc-950',
@@ -95,10 +95,10 @@ export function SubmissionFormPreview({
         </div>
       </div>
 
-      <div className="min-w-0 overflow-x-auto rounded-2xl bg-zinc-100 p-2 ring-1 ring-zinc-950/5 sm:p-4">
+      <div className="min-w-0 overflow-x-auto rounded-(--preview-radius) bg-zinc-100 p-(--preview-padding) ring-1 ring-zinc-950/5 [--preview-padding:--spacing(2)] [--preview-radius:var(--radius-3xl)] sm:[--preview-padding:--spacing(4)]">
         <div
           className={cx(
-            'mx-auto overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/5',
+            'mx-auto overflow-hidden rounded-[max(0px,calc(var(--preview-radius)-var(--preview-padding)))] bg-white shadow-sm ring-1 ring-black/5',
             viewport === 'mobile' ? 'max-w-[24.375rem]' : 'w-full max-w-[60rem]',
           )}
         >
@@ -163,7 +163,7 @@ export function SubmissionFormPreview({
                       <label
                         key={option}
                         className={cx(
-                          'flex cursor-pointer items-start gap-2.5 rounded-xl bg-white p-3 ring-1',
+                          'flex cursor-pointer items-start gap-2.5 rounded-2xl bg-white p-3 ring-1',
                           kind === option ? 'ring-blue-600' : 'ring-zinc-950/10',
                         )}
                       >
@@ -216,7 +216,7 @@ export function SubmissionFormPreview({
                 </p>
                 <div
                   aria-hidden="true"
-                  className="flex min-h-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 px-3 text-base font-medium text-white ring-1 ring-blue-600 sm:text-sm"
+                  className="flex min-h-9 shrink-0 items-center justify-center rounded-full bg-blue-600 px-3 text-base font-medium text-white ring-1 ring-blue-600 sm:text-sm"
                 >
                   Submit proposal
                 </div>
@@ -279,7 +279,7 @@ function PreviewField({
   const spanWide =
     field.kind === 'long_text' || field.kind === 'file' || field.kind === 'multi_select'
   const inputClass =
-    'focus-ring min-h-10 w-full rounded-lg bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm'
+    'focus-ring min-h-10 w-full rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm'
 
   return (
     <div
@@ -369,7 +369,7 @@ function PreviewField({
           id={fieldId}
           type="file"
           name={field.key}
-          className="focus-ring min-h-10 w-full rounded-lg bg-white p-2 text-base text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 sm:text-sm"
+          className="focus-ring min-h-10 w-full rounded-xl bg-white p-2 text-base text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 sm:text-sm"
         />
       ) : (
         <input

@@ -146,7 +146,7 @@ export function QuestionTypeDialog({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search question types"
-          className="focus-ring min-h-11 w-full rounded-lg bg-white py-2 pr-3 pl-9 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+          className="focus-ring min-h-11 w-full rounded-full bg-white py-2 pr-3 pl-9 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
         />
       </label>
 
@@ -174,7 +174,7 @@ export function QuestionTypeDialog({
                         onSelect(questionType)
                         close()
                       }}
-                      className="focus-ring min-w-0 rounded-xl bg-white p-3 text-left ring-1 ring-zinc-950/10 hover:bg-zinc-50 hover:ring-zinc-950/20"
+                      className="focus-ring min-w-0 rounded-2xl bg-white p-3 text-left ring-1 ring-zinc-950/10 hover:bg-zinc-50 hover:ring-zinc-950/20"
                     >
                       <span className="block text-base font-medium text-zinc-950 sm:text-sm">
                         {questionType.label}
