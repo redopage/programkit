@@ -2,6 +2,7 @@ import { CheckCircleIcon, ChevronUpDownIcon, ClockIcon } from '@heroicons/react/
 import { useMemo, useState, type FormEvent } from 'react'
 
 import {
+  submissionFormAvailability,
   visibleSubmissionFormFields,
   type SubmissionAnswers,
   type SubmissionFormField,
@@ -16,6 +17,18 @@ function isSpeakerField(field: SubmissionFormField) {
   return ['first_name', 'last_name', 'email', 'company', 'job_title', 'biography'].includes(
     field.purpose,
   )
+}
+
+function formatFormDate(value: string, timeZone: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone,
+    timeZoneName: 'short',
+  }).format(new Date(value))
 }
 
 export function PublicSubmissionView({ slug }: { slug: string }) {
@@ -128,6 +141,45 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     )
   }
 
+  const availability = submissionFormAvailability(form)
+  if (availability !== 'open') {
+    const scheduled = availability === 'scheduled'
+    return (
+      <div className="min-h-dvh bg-white">
+        <PublicHeader eventName={event.name} />
+        <main className="mx-auto flex max-w-3xl flex-col items-start px-4 py-16 sm:px-6 sm:py-24">
+          <ClockIcon className="size-10 shrink-0 fill-amber-500" />
+          <h1 className="max-w-[22ch] pt-6 text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
+            {scheduled ? 'Submissions open soon' : 'Submissions are closed'}
+          </h1>
+          <p className="max-w-[58ch] pt-3 text-pretty text-base text-zinc-600">
+            {scheduled
+              ? `${form.title} opens ${form.opensAt ? formatFormDate(form.opensAt, event.timezone) : 'soon'}.`
+              : `The submission window for ${form.title} is no longer open.`}
+          </p>
+          <dl className="mt-8 grid w-full gap-5 rounded-2xl bg-zinc-50 p-5 ring-1 ring-zinc-950/5 sm:grid-cols-2 sm:p-6">
+            <div>
+              <dt className="text-sm font-medium text-zinc-950">Event</dt>
+              <dd className="pt-1 text-base text-zinc-600 sm:text-sm">{event.name}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-zinc-950">
+                {scheduled ? 'Opens' : 'Deadline'}
+              </dt>
+              <dd className="pt-1 text-base text-zinc-600 sm:text-sm">
+                {scheduled && form.opensAt
+                  ? formatFormDate(form.opensAt, event.timezone)
+                  : form.closesAt
+                    ? formatFormDate(form.closesAt, event.timezone)
+                    : 'Set by the program team'}
+              </dd>
+            </div>
+          </dl>
+        </main>
+      </div>
+    )
+  }
+
   const proposalFields = visibleFields.filter((field) => !isSpeakerField(field))
   const speakerFields = visibleFields.filter(isSpeakerField)
 
@@ -158,14 +210,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
               <dd className="flex items-center gap-2 text-zinc-500">
                 <ClockIcon className="size-4 h-lh shrink-0 fill-current" />
                 <p className="text-base sm:text-sm">
-                  {form.closesAt
-                    ? new Intl.DateTimeFormat('en-US', {
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric',
-                        timeZone: event.timezone,
-                      }).format(new Date(form.closesAt))
-                    : 'No close date'}
+                  {form.closesAt ? formatFormDate(form.closesAt, event.timezone) : 'No close date'}
                 </p>
               </dd>
             </div>

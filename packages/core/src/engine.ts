@@ -1,6 +1,7 @@
 import { operationDefinition } from './manifest.ts'
 import {
   requiredSubmissionFieldPurposes,
+  submissionFormAvailability,
   submissionFieldPurposeSupportsKind,
 } from './submission-forms.ts'
 import {
@@ -269,6 +270,18 @@ function validateSubmissionForm(
       )
     }
   }
+}
+
+function assertSubmissionFormAccepting(form: SubmissionForm, at: string) {
+  const availability = submissionFormAvailability(form, Date.parse(at))
+  if (availability === 'open') return
+  const message =
+    availability === 'scheduled'
+      ? 'This submission form is not open yet.'
+      : availability === 'closed'
+        ? 'This submission form is no longer accepting responses.'
+        : 'This submission form is not accepting responses.'
+  throw new OperationError('FORM_CLOSED', message)
 }
 
 function answerIsEmpty(value: SubmissionAnswers[string] | undefined) {
@@ -698,9 +711,10 @@ function applyHandler(
       if (context.actor.type === 'submitter' && context.actor.id !== form.slug) {
         throw new OperationError('FORBIDDEN', 'This submission link cannot write to that form.')
       }
-      if (form.eventId !== state.activeEventId || form.status !== 'open') {
+      if (form.eventId !== state.activeEventId) {
         throw new OperationError('FORM_CLOSED', 'This submission form is not accepting responses.')
       }
+      assertSubmissionFormAccepting(form, timestamp)
       const kind = assertOneOf(input.kind, 'kind', ['abstract', 'guaranteed_session'] as const)
       if (!form.allowedKinds.includes(kind)) {
         throw new OperationError('INVALID_INPUT', 'This form does not accept that submission kind.')
@@ -740,9 +754,7 @@ function applyHandler(
       if (context.actor.type === 'submitter' && context.actor.id !== form.slug) {
         throw new OperationError('FORBIDDEN', 'This submission link cannot submit that draft.')
       }
-      if (form.status !== 'open') {
-        throw new OperationError('FORM_CLOSED', 'This submission form is not accepting responses.')
-      }
+      assertSubmissionFormAccepting(form, timestamp)
       if (input.answers !== undefined) {
         submission.answers = {
           ...submission.answers,

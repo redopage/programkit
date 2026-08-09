@@ -10,6 +10,7 @@ import {
   reviewerQueue,
   scheduleConflicts,
   submissionPipelineSummary,
+  submissionFormAvailability,
   submissionFormPublishReadiness,
   submissionReviewSummary,
   visibleSubmissionFormFields,
@@ -577,6 +578,48 @@ describe('ProgramKit operation engine', () => {
     expect(
       submitted.state.reviewerAssignments.filter((entry) => entry.submissionId === submission.id),
     ).toHaveLength(2)
+  })
+
+  it('enforces submission form open and close times at the operation boundary', () => {
+    let state = createSeedState()
+    const form = state.submissionForms.find((entry) => entry.id === 'frm_cfp_2026')!
+    const now = Date.now()
+
+    form.opensAt = new Date(now + 60_000).toISOString()
+    form.closesAt = new Date(now + 120_000).toISOString()
+    expect(submissionFormAvailability(form, now)).toBe('scheduled')
+    const early = executeOperation(state, 'submission.create', {
+      input: { formId: form.id, kind: 'abstract', answers: {} },
+    })
+    expect(early.response).toMatchObject({
+      ok: false,
+      error: { code: 'FORM_CLOSED', message: 'This submission form is not open yet.' },
+    })
+
+    form.opensAt = new Date(now - 120_000).toISOString()
+    form.closesAt = new Date(now + 120_000).toISOString()
+    expect(submissionFormAvailability(form, now)).toBe('open')
+    const created = executeOperation(state, 'submission.create', {
+      input: { formId: form.id, kind: 'abstract', answers: {} },
+    })
+    expect(created.response.ok).toBe(true)
+    state = created.state
+    const submission = state.submissions.at(-1)!
+    const currentForm = state.submissionForms.find((entry) => entry.id === form.id)!
+    currentForm.closesAt = new Date(now - 60_000).toISOString()
+    expect(submissionFormAvailability(currentForm, now)).toBe('closed')
+
+    const late = executeOperation(state, 'submission.submit', {
+      input: { submissionId: submission.id },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+    expect(late.response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'FORM_CLOSED',
+        message: 'This submission form is no longer accepting responses.',
+      },
+    })
   })
 
   it('scores reviews and atomically converts an accepted abstract into the program', () => {

@@ -69,8 +69,12 @@ export {
 export { createEmptyWorkspaceState, createSeedState } from './seed.ts'
 export {
   requiredSubmissionFieldPurposes,
+  submissionFormAvailability,
   submissionFieldPurposeSupportsKind,
   submissionFormPublishReadiness,
 } from './submission-forms.ts'
-export type { SubmissionFormPublishReadiness } from './submission-forms.ts'
+export type {
+  SubmissionFormAvailability,
+  SubmissionFormPublishReadiness,
+} from './submission-forms.ts'
 export type * from './types.ts'
