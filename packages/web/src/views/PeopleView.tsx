@@ -346,6 +346,17 @@ function PersonDrawer({
     if (response.ok) setEditing(false)
   }
 
+  async function saveLogistics(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const internalNotes = String(new FormData(event.currentTarget).get('internalNotes') ?? '')
+    await execute(
+      'participation.update-logistics',
+      { participationId: participation.id, internalNotes },
+      { expectedVersions: { [participation.id]: participation.version } },
+      'Travel and logistics saved.',
+    )
+  }
+
   async function copyPortalLink() {
     if (!portalHref) return
     await navigator.clipboard.writeText(new URL(portalHref, window.location.origin).toString())
@@ -571,6 +582,32 @@ function PersonDrawer({
                     {person.bio || 'No bio yet.'}
                   </p>
                 </div>
+                <form
+                  key={`logistics-${participation.id}-${participation.version}`}
+                  className="flex flex-col gap-2"
+                  onSubmit={(event) => void saveLogistics(event)}
+                >
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-base font-medium text-zinc-950 sm:text-sm">
+                      Travel and logistics
+                    </span>
+                    <textarea
+                      name="internalNotes"
+                      rows={4}
+                      defaultValue={participation.internalNotes}
+                      placeholder="Arrival, accessibility, dietary, or lodging notes"
+                      className={textAreaControl}
+                    />
+                    <span className="text-sm text-zinc-500">
+                      Private to the event team. Speakers do not see these notes.
+                    </span>
+                  </label>
+                  <div className="flex justify-start">
+                    <Button type="submit" size="compact" disabled={mutating}>
+                      Save logistics
+                    </Button>
+                  </div>
+                </form>
                 <div>
                   <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Speaker files</h3>
                   {headshots.length > 0 ? (

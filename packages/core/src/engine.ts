@@ -2439,6 +2439,47 @@ function applyHandler(
       return { participation }
     }
 
+    case 'participation.update-logistics': {
+      const participation = findRequired(
+        state.participations,
+        input.participationId,
+        'participation',
+      )
+      if (participation.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'Logistics can only be updated in the active event.')
+      }
+      if (context.actor.type === 'participant' || context.actor.type === 'reviewer') {
+        throw new OperationError('FORBIDDEN', 'Private logistics notes are organizer-only.')
+      }
+      const internalNotes = optionalString(input.internalNotes)
+      if (internalNotes.length > 10_000) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'Logistics notes must be 10,000 characters or fewer.',
+          {
+            internalNotes: 'Shorten these notes before saving.',
+          },
+        )
+      }
+      const changed = participation.internalNotes !== internalNotes
+      if (changed) {
+        participation.internalNotes = internalNotes
+        participation.updatedAt = timestamp
+        participation.version += 1
+        appendEvent(state, context, {
+          type: 'participation.logistics-updated',
+          aggregate: {
+            type: 'participation',
+            id: participation.id,
+            version: participation.version,
+          },
+          summary: 'Updated private speaker logistics.',
+          data: { changed: true },
+        })
+      }
+      return { participation, changed }
+    }
+
     case 'requirement.create': {
       const label = assertString(input.label, 'label')
       const description = optionalString(input.description)

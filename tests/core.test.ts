@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createEmptyWorkspaceState,
   createSeedState,
+  campaignPreview,
   executeOperation,
   nextActions,
   publicAgenda,
@@ -614,6 +615,57 @@ describe('ProgramKit operation engine', () => {
     })
     expect(sent.response.ok).toBe(true)
     expect(sent.state.campaigns.find((campaign) => campaign.id === pending.id)?.status).toBe('sent')
+  })
+
+  it('renders campaign merge fields for a real event participant', () => {
+    const state = createSeedState()
+    const participation = state.participations.find(
+      (entry) => entry.eventId === state.activeEventId && entry.sessionIds.length > 0,
+    )!
+    const person = state.people.find((entry) => entry.id === participation.personId)!
+    const preview = campaignPreview(
+      state,
+      {
+        subject: 'Welcome to {{event_name}}, {{first_name}}',
+        body: 'Hi {{full_name}},\n\nYour session is {{session}}. Open {{portal_link}}.',
+      },
+      participation.id,
+    )
+
+    expect(preview).toMatchObject({
+      recipientName: `${person.firstName} ${person.lastName}`,
+      recipientEmail: person.email,
+    })
+    expect(preview?.subject).toContain(person.firstName)
+    expect(preview?.body).toContain(`/portal/${participation.id}/`)
+    expect(`${preview?.subject}${preview?.body}`).not.toContain('{{')
+  })
+
+  it('persists private speaker logistics without exposing them to participant actors', () => {
+    const state = createSeedState()
+    const participation = state.participations.find(
+      (entry) => entry.eventId === state.activeEventId,
+    )!
+    const notes = 'Arrival May 11, aisle seat; dietary: Vegetarian'
+    const updated = executeOperation(state, 'participation.update-logistics', {
+      input: { participationId: participation.id, internalNotes: notes },
+      expectedVersions: { [participation.id]: participation.version },
+    })
+
+    expect(updated.response.ok).toBe(true)
+    expect(
+      updated.state.participations.find((entry) => entry.id === participation.id)?.internalNotes,
+    ).toBe(notes)
+    const denied = executeOperation(updated.state, 'participation.update-logistics', {
+      input: { participationId: participation.id, internalNotes: 'Changed by speaker' },
+      actor: {
+        type: 'participant',
+        id: participation.id,
+        name: 'Speaker',
+        scopes: ['participations:write'],
+      },
+    })
+    expect(denied.response.error?.code).toBe('FORBIDDEN')
   })
 
   it('evaluates conditional CFP fields from canonical answers', () => {

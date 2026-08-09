@@ -462,6 +462,45 @@ export function audienceForCampaign(state: WorkspaceState, campaign: Campaign) {
   return campaign.recipientParticipationIds
 }
 
+export function campaignPreview(
+  state: WorkspaceState,
+  template: Pick<Campaign, 'subject' | 'body'>,
+  participationId: string,
+) {
+  const participation = state.participations.find(
+    (entry) => entry.id === participationId && entry.eventId === state.activeEventId,
+  )
+  if (!participation) return null
+  const person = participationPerson(state, participation)
+  const event = activeEvent(state)
+  if (!person || !event) return null
+  const sessions = participation.sessionIds
+    .map((sessionId) => state.sessions.find((entry) => entry.id === sessionId)?.title)
+    .filter((title): title is string => Boolean(title))
+  const replacements: Record<string, string> = {
+    first_name: person.firstName,
+    last_name: person.lastName,
+    full_name: `${person.firstName} ${person.lastName}`,
+    company: person.company,
+    event_name: event.name,
+    session: sessions.join(', ') || 'your session',
+    portal_link: `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}?event=${encodeURIComponent(event.id)}`,
+  }
+  const render = (value: string) =>
+    Object.entries(replacements).reduce(
+      (result, [token, replacement]) => result.replaceAll(`{{${token}}}`, replacement),
+      value,
+    )
+  return {
+    participationId,
+    personId: person.id,
+    recipientName: `${person.firstName} ${person.lastName}`,
+    recipientEmail: person.email,
+    subject: render(template.subject),
+    body: render(template.body),
+  }
+}
+
 export function publicAgenda(state: WorkspaceState) {
   const release = (state.scheduleReleases ?? [])
     .filter((entry) => entry.eventId === state.activeEventId)

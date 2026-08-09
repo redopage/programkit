@@ -21,8 +21,8 @@ than seeded screenshots.
 | SPK-11 | Verified       | Organizer records and scoped speaker portals both show linked sessions. The portal also resolves placement, room, and track when available.                                                                                          |
 | SPK-12 | Verified       | `/readiness` shows the status of every assigned requirement without opening individual records. Unassigned tasks render as not assigned and do not lower readiness.                                                                  |
 | SPK-13 | Partial manual | Communications supports filtered audiences, custom recipient sets, approval, send state, recipient count, and history. Provider delivery remains manual evidence.                                                                    |
-| SPK-14 | Partial        | Templates accept merge tokens, but the compose flow still needs a resolved per-recipient preview.                                                                                                                                    |
-| SPK-15 | Not yet        | A dedicated persisted travel/logistics field is still needed.                                                                                                                                                                        |
+| SPK-14 | Verified       | Compose offers reusable welcome and portal templates with merge tokens plus a recipient switcher that resolves subject, body, session, event, and private portal link against real speaker data.                                     |
+| SPK-15 | Verified       | Each organizer speaker record includes a private travel and logistics field. It persists on the event participation record and is stripped from participant-facing projections.                                                      |
 | SPK-16 | Not yet        | Automatic due-date reminder scheduling and provider delivery remain future work.                                                                                                                                                     |
 
 ## Speaker handoff

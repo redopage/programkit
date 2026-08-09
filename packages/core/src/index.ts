@@ -60,6 +60,7 @@ export { MemoryWorkspaceRepository } from './repository.ts'
 export {
   activeEvent,
   audienceForCampaign,
+  campaignPreview,
   isSubmissionFieldVisible,
   participationPerson,
   personName,

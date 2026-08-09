@@ -7,7 +7,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
 
-import type { Campaign } from '@programkit/core'
+import { campaignPreview, participationPerson, type Campaign } from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
@@ -24,6 +24,31 @@ import {
 } from '../components/ui.tsx'
 
 type CampaignFilter = 'all' | Campaign['status']
+
+type CampaignTemplate = {
+  id: string
+  label: string
+  name: string
+  subject: string
+  body: string
+}
+
+const campaignTemplates: CampaignTemplate[] = [
+  {
+    id: 'welcome',
+    label: 'Welcome speakers',
+    name: 'Speaker welcome',
+    subject: 'Welcome to {{event_name}}, {{first_name}}',
+    body: 'Hi {{first_name}},\n\nWe are glad you are joining us for {{event_name}}. Your session is {{session}}.\n\nOpen your private speaker portal to review the details:\n{{portal_link}}',
+  },
+  {
+    id: 'portal',
+    label: 'Portal invitation',
+    name: 'Speaker portal invitation',
+    subject: 'Your {{event_name}} speaker portal',
+    body: 'Hi {{first_name}},\n\nYour speaker portal is ready. Use it to update your profile and complete your assigned work:\n{{portal_link}}',
+  },
+]
 
 export function CommunicationsView() {
   const { payload } = useWorkspace()
@@ -261,13 +286,53 @@ function CampaignDrawer({
 }
 
 function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { execute, mutating } = useWorkspace()
-  const [form, setForm] = useState({
-    name: '',
-    subject: '',
-    body: 'Hi {{first_name}},\n\n',
-    audience: 'missing_requirements',
+  const { payload, execute, mutating } = useWorkspace()
+  const defaultTemplate = campaignTemplates[0]
+  const [templateId, setTemplateId] = useState<string>(defaultTemplate.id)
+  const [previewId, setPreviewId] = useState('')
+  const [form, setForm] = useState<{
+    name: string
+    subject: string
+    body: string
+    audience: string
+  }>({
+    name: defaultTemplate.name,
+    subject: defaultTemplate.subject,
+    body: defaultTemplate.body,
+    audience: 'all_active',
   })
+  if (!payload) return null
+  const { state } = payload
+  const previewRecipients = state.participations
+    .filter(
+      (participation) =>
+        participation.eventId === state.activeEventId &&
+        participation.status !== 'declined' &&
+        participation.status !== 'withdrawn',
+    )
+    .map((participation) => ({
+      participation,
+      person: participationPerson(state, participation),
+    }))
+    .filter((entry) => Boolean(entry.person))
+  const resolvedPreviewId = previewRecipients.some((entry) => entry.participation.id === previewId)
+    ? previewId
+    : (previewRecipients[0]?.participation.id ?? '')
+  const preview = resolvedPreviewId
+    ? campaignPreview(state, { subject: form.subject, body: form.body }, resolvedPreviewId)
+    : null
+
+  function applyTemplate(nextTemplateId: string) {
+    const template = campaignTemplates.find((entry) => entry.id === nextTemplateId)
+    if (!template) return
+    setTemplateId(template.id)
+    setForm((current) => ({
+      ...current,
+      name: template.name,
+      subject: template.subject,
+      body: template.body,
+    }))
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -279,11 +344,12 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
     )
     if (!response.ok) return
     setForm({
-      name: '',
-      subject: '',
-      body: 'Hi {{first_name}},\n\n',
-      audience: 'missing_requirements',
+      name: defaultTemplate.name,
+      subject: defaultTemplate.subject,
+      body: defaultTemplate.body,
+      audience: 'all_active',
     })
+    setTemplateId(defaultTemplate.id)
     onClose()
   }
 
@@ -312,6 +378,23 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
         <p className="text-pretty text-base text-zinc-500 sm:text-sm">
           Drafting is safe. A separate human approval is required before any message can be sent.
         </p>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-base font-medium text-zinc-950 sm:text-sm">Template</span>
+          <span className="relative">
+            <select
+              value={templateId}
+              onChange={(event) => applyTemplate(event.target.value)}
+              className="focus-ring min-h-11 w-full appearance-none rounded-xl bg-white py-2 pr-9 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+            >
+              {campaignTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+            <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 fill-zinc-400" />
+          </span>
+        </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-base font-medium text-zinc-950 sm:text-sm">Internal name</span>
           <input
@@ -365,6 +448,49 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
             className={textAreaControl}
           />
         </label>
+        <div className="rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-base font-medium text-zinc-950 sm:text-sm">Recipient preview</p>
+            {previewRecipients.length > 0 ? (
+              <label className="relative">
+                <span className="sr-only">Preview recipient</span>
+                <select
+                  value={resolvedPreviewId}
+                  onChange={(event) => setPreviewId(event.target.value)}
+                  className="focus-ring min-h-9 appearance-none rounded-full bg-white py-1.5 pr-8 pl-3 text-sm text-zinc-700 shadow-xs ring-1 ring-zinc-950/10"
+                >
+                  {previewRecipients.map(({ participation, person }) => (
+                    <option key={participation.id} value={participation.id}>
+                      {person!.firstName} {person!.lastName}
+                    </option>
+                  ))}
+                </select>
+                <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 fill-zinc-400" />
+              </label>
+            ) : null}
+          </div>
+          {preview ? (
+            <div className="mt-4 flex flex-col gap-3">
+              <div>
+                <p className="text-sm text-zinc-500">To</p>
+                <p className="text-sm font-medium text-zinc-800">
+                  {preview.recipientName} · {preview.recipientEmail}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-zinc-500">Subject</p>
+                <p className="text-pretty text-sm font-medium text-zinc-800">{preview.subject}</p>
+              </div>
+              <p className="whitespace-pre-wrap text-pretty text-sm text-zinc-700">
+                {preview.body}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-zinc-500">
+              Add a speaker to preview merge fields with real data.
+            </p>
+          )}
+        </div>
       </form>
     </Drawer>
   )
