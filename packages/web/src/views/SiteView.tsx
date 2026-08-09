@@ -98,6 +98,19 @@ function FooterProgramField() {
   )
 }
 
+function ProgramKitRhythmBand() {
+  return (
+    <div
+      aria-hidden="true"
+      className="select-none overflow-hidden border-y border-zinc-950/8 bg-zinc-50/60 py-4 sm:py-5"
+    >
+      <div className="-ml-4 w-max whitespace-nowrap bg-[repeating-linear-gradient(to_bottom,var(--color-blue-600)_0_3px,transparent_3px_8px)] bg-clip-text text-[clamp(2.75rem,6vw,5rem)] leading-[0.82] font-semibold tracking-[0.08em] text-transparent opacity-20">
+        PROGRAMKIT&nbsp;&nbsp;PROGRAMKIT&nbsp;&nbsp;PROGRAMKIT&nbsp;&nbsp;PROGRAMKIT
+      </div>
+    </div>
+  )
+}
+
 export function SiteView() {
   return (
     <main className="isolate min-h-dvh bg-white text-zinc-950">
@@ -247,7 +260,7 @@ export function SiteView() {
                       width="1440"
                       height="1010"
                       loading="lazy"
-                      className="absolute top-0 left-[-28%] h-auto w-[165%] max-w-none sm:left-[-18%] sm:w-[120%]"
+                      className="absolute inset-0 h-full w-full object-cover object-top"
                     />
                   </div>
                 </div>
@@ -265,7 +278,7 @@ export function SiteView() {
                       width="1440"
                       height="1010"
                       loading="lazy"
-                      className="absolute top-0 left-[-28%] h-auto w-[165%] max-w-none sm:left-[-18%] sm:w-[120%]"
+                      className="absolute inset-0 h-full w-full object-cover object-top"
                     />
                   </div>
                 </div>
@@ -306,7 +319,9 @@ export function SiteView() {
           </div>
         </section>
 
-        <footer className="border-t border-zinc-950/8">
+        <ProgramKitRhythmBand />
+
+        <footer>
           <div className="mx-auto flex min-h-24 max-w-7xl flex-col justify-center gap-5 px-5 py-6 text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
             <a
               href="/"
