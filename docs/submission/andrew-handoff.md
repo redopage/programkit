@@ -87,6 +87,23 @@ Partial failure must remain visible and retryable.
 Point the intended `programkit.dev` host to the deployed Worker using Andrew's DNS zone. Wait for a
 valid public certificate; do not bypass a browser TLS warning.
 
+The checked-in Worker does not guess an embedding parent and currently emits neither a
+`Content-Security-Policy` `frame-ancestors` directive nor `X-Frame-Options`. Before public release,
+configure route-aware response headers in the Worker or a Cloudflare Response Header Transform
+Rule:
+
+- `/embed/speakers` and `/embed/itinerary` must allow only the exact approved parent origin(s) in
+  `frame-ancestors` (plus `'self'` only if same-origin framing is intended);
+- all other HTML routes should reject framing with `frame-ancestors 'none'`, unless Andrew has a
+  separately documented same-origin requirement; and
+- do not apply `X-Frame-Options: DENY` or `SAMEORIGIN` to an embed route that must work from an
+  approved cross-origin parent.
+
+`frame-ancestors` cannot be supplied by an HTML `<meta>` tag. Verify the final response header from
+both an approved parent and an unapproved origin; the approved embed must render and the unapproved
+frame must be blocked. Keep the approved origin out of repository copy until Andrew confirms the
+actual public parent.
+
 Verify from outside the Cloudflare dashboard:
 
 ```bash
