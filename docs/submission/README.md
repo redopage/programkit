@@ -21,6 +21,10 @@ core operation, authorization boundary, tests, documentation, and browser proof 
 No file in this pack authorizes a deploy, repository-visibility change, provider activation, secret
 change, or external communication.
 
+The [authoritative source ledger](source-links.md) records the organizer's rules, requirements
+walkthrough, and Discord links. The organizer has not yet supplied a submission-form URL in the
+rules document; do not infer one.
+
 ## Release sequence
 
 1. Finish Claude's bounded design/copy passes on the integrated candidate and complete Codex QA.
