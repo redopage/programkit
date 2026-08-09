@@ -37,10 +37,11 @@ redirects to `/` there so the hostname and path do not repeat the same idea. Pri
 links still use `/demo/{capability}` because that segment identifies a capability exchange, not a
 normal application page.
 
-### Optional Airtable source of truth
+### Experimental Airtable-backed mode
 
-The local demo remains zero-configuration. For the recommended path, register a development OAuth
-integration with the localhost callback, copy the example, add its client ID, and start ProgramKit:
+The local demo and recommended V1 deployment use the event Durable Object as the complete store.
+To test the optional Airtable integration, register a development OAuth integration with the
+localhost callback, copy the example, add its client ID, and start ProgramKit:
 
 ```bash
 cp apps/cloudflare/.dev.vars.example .dev.vars
@@ -60,8 +61,8 @@ pnpm airtable:verify
 ```
 
 `airtable:verify` reconstructs the complete workspace from the base and reports collection counts.
-The detailed scopes, tables, request budget, and webhook boundary are in
-[Airtable source of truth](docs/integrations/airtable.md).
+The detailed scopes, tables, request budget, failure modes, and webhook boundary are in the
+[Airtable integration guide](docs/integrations/airtable.md).
 
 ### HTTP endpoints
 

@@ -12,8 +12,9 @@ Public program ─────────────┤    └── tenant ke
 REST clients ───────────────┤                                           ├── domain events
 Agent MCP + skills ─────────┘                                           └── workspace state
                                                                             │
-                                             Airtable source of truth ◄──────┤
-                                             Durable Object hot cache ◄──────┘
+                                         Durable Object SQLite store ◄───────┘
+                                                    │
+                                                    └── optional integrations
 ```
 
 ## Package responsibilities
@@ -79,9 +80,13 @@ Every command reaches `executeOperation` through one operation definition:
 5. Apply domain invariants to a cloned workspace state.
 6. Append domain events and increment the workspace revision.
 7. Return the next state and operation response from one repository `mutate` callback.
-8. If Airtable is configured, idempotently write the changed source records and acknowledge only
-   after Airtable accepts them.
-9. Update the Durable Object cache and return the accepted transition.
+8. Persist the accepted transition in the event's Durable Object transaction.
+9. Return the operation response and let post-commit integrations react to durable intent.
+
+The experimental Airtable-backed repository is a current exception to step 8. When enabled, it
+writes Airtable record deltas before advancing its local cache. This mode is documented and tested,
+but it is not the recommended V1 store because partial multi-table retry and inbound conflict
+review are incomplete.
 
 A dry run returns a preview without mutation. In propose mode, core first validates the proposed
 operation against a cloned state, then stores it in a change set. Approval and commit are separate
@@ -140,13 +145,17 @@ publication time, and a monotonically increasing version. The public agenda sele
 latest release for the active event. Moving a draft placement after publication cannot rewrite a
 previous release.
 
-## Airtable persistence and Durable Object cache
+## Event storage and optional Airtable mode
 
 Each Cloudflare event has one logical JSON workspace document in its SQLite-backed Durable Object.
-The zero-configuration demo and a new app event use that object as the complete store. When that
-event connects Airtable, Airtable becomes its durable business-record source of truth and the same
-document becomes the serialized hot cache. Account identity, sessions, and event memberships stay
-in the account object and never move to Airtable.
+The zero-configuration demo, self-hosted deployment, and every new app event use that object as the
+complete authoritative store. Account identity, sessions, and event memberships stay in the
+separate account object.
+
+When an operator explicitly enables the experimental Airtable-backed mode, Airtable becomes the
+acknowledged persistence backend and the same workspace document becomes the serialized hot cache.
+This behavior is optional, does not run on official evaluator paths, and is not the recommended V1
+production configuration.
 
 The Airtable version 1 schema stores one non-native workspace snapshot plus native events, people,
 participations, submissions, tasks, reviews, sessions, placements, tracks, and rooms. Native
@@ -159,24 +168,23 @@ storage value occur inside an object storage transaction. A durable hydration ma
 Airtable read after every isolate restart. Normal application reads use the cache and make zero
 Airtable requests.
 
-This design favors inspectable multi-record operations for the reference workload of hundreds of
-people and relatively low write concurrency. Airtable does not offer one atomic transaction across
-tables. ProgramKit therefore writes idempotent table deltas in the serialized object request,
-returns an error without advancing the cache if Airtable rejects them, and needs a durable retry
-journal before the path is production-complete.
+The optional mode favors inspectable records for a reference workload of hundreds of people and
+relatively low write concurrency. Airtable does not offer one atomic transaction across tables.
+ProgramKit therefore writes idempotent table deltas in the serialized object request, returns an
+error without advancing the cache if Airtable rejects them, and still needs a durable retry journal
+before that path is production-complete.
 
 ## Cloudflare data services
 
-The recommended business-record source of truth is one Airtable base per event. One
-SQLite-backed Durable Object per event supplies serialized coordination, cached reads, and future
+One SQLite-backed Durable Object per event owns business records, serialized operations, and future
 live-client fan-out. A separate account object owns identity and the small cross-event membership
 index. D1 is not a second primary database. If organization-wide search or analytics warrants it,
 D1 receives a rebuildable projection and may lag behind the event transaction.
 
 The current Airtable adapter creates the schema, batch-upserts changed records, rebuilds the cache,
 and verifies webhook HMACs. The experimental webhook performs a full refresh. Production work must
-add the Airtable payload cursor, narrow affected-record fetches, a durable retry journal, and
-conversion of direct edits to named operations or previewable change sets before real data is used.
+move mirroring out of the request path, add the Airtable payload cursor, fetch only affected
+records, durably retry, and convert direct edits to named operations or previewable change sets.
 
 R2 will own private file bytes. Domain `Asset` records store opaque object keys and safe metadata;
 upload and download routes recheck workspace and record ownership. Cloudflare Email Service will
@@ -204,5 +212,5 @@ storage. Identity, email, webhooks, R2, queues, Airtable credentials, and secret
 composed in `apps/cloudflare`. Hosted staff identity and magic-link email are implemented there;
 participant identity, R2, and the product-delivery outbox remain incomplete.
 
-See [Deployment](DEPLOYMENT.md) for the supported Cloudflare stack, D1 decision, Airtable adapter,
-and production binding sequence.
+See [Storage and integrations](docs/architecture/storage-and-integrations.md) for service ownership
+and [Deployment](DEPLOYMENT.md) for the supported Cloudflare stack and production binding sequence.

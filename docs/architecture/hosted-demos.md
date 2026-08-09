@@ -40,9 +40,9 @@ separate demo repository would add drift without improving isolation.
 
 ## Airtable
 
-Airtable is optional inside a hosted demo. Connecting a compatible base makes Airtable the durable
-source of truth while the Durable Object remains the hot cache and serialized write coordinator.
-This is useful for testing the real integration, but ProgramKit does not create an Airtable base
+Airtable is optional inside a hosted demo. Connecting a compatible base enables the experimental
+Airtable-backed mode while the Durable Object remains the hot cache and serialized write
+coordinator. This is useful for testing the integration, but ProgramKit does not create an Airtable base
 for every anonymous demo.
 
 Expiring a demo removes the local cache, stored authorization, and ProgramKit webhook. Leaving a

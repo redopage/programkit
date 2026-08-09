@@ -1173,10 +1173,10 @@ const integrations: Integration[] = [
   },
   {
     id: 'int_airtable',
-    name: 'Airtable source of truth',
+    name: 'Airtable (experimental)',
     kind: 'airtable',
     status: 'not_configured',
-    detail: 'Versioned schema and cached persistence adapter are ready for scoped credentials.',
+    detail: 'Optional OAuth, schema, persistence, and webhook testing with scoped credentials.',
     lastSeenAt: null,
   },
   {

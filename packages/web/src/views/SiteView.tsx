@@ -18,11 +18,11 @@ export function SiteView() {
             <span className="text-base font-semibold">ProgramKit</span>
           </a>
           <a
-            href="https://github.com/redopage/programkit"
+            href="https://forge.smol.ai/andheller/programkit"
             className="focus-ring flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-950/4 hover:text-zinc-950"
           >
             <CodeBracketIcon className="size-4" />
-            GitHub
+            Source
           </a>
         </header>
 

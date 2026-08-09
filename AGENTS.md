@@ -5,6 +5,8 @@
 - Use [`docs/README.md`](docs/README.md) to find the canonical product, architecture, deployment,
   security, and operations source for the task.
 - Read [`ROADMAP.md`](ROADMAP.md) before expanding product scope.
+- Read [`docs/architecture/storage-and-integrations.md`](docs/architecture/storage-and-integrations.md)
+  before changing Durable Object persistence, Airtable, D1, R2, mail, or background jobs.
 - Read [`docs/product/interface-craft.md`](docs/product/interface-craft.md) before changing UI; it
   carries the four quality standards, the shared state primitives, and the review checklist.
 - Use [`docs/agents/contribution-playbook.md`](docs/agents/contribution-playbook.md) for a vertical
@@ -21,6 +23,8 @@
   public views.
 - `packages/agent` owns the optional MCP surface and bundled operational skills.
 - `tests` verifies domain, HTTP, and MCP behavior.
+- Forge is the primary source host. GitHub is the synchronized mirror used by Cloudflare's deploy
+  button.
 
 ## Invariants
 

@@ -1,152 +1,152 @@
 # ProgramKit
 
-An open-source conference-program toolkit for calls for proposals, review, speaker readiness, and published agendas.
+Open-source conference program management, from the first call for proposals to the published
+agenda.
 
-**Live demo:** [Create a private seven-day workspace](https://demo.programkit.dev)
+[Website](https://programkit.dev) · [Try a seven-day demo](https://demo.programkit.dev) ·
+[Forge](https://forge.smol.ai/andheller/programkit) ·
+[GitHub mirror](https://github.com/redopage/programkit) · [Documentation](docs/README.md)
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
 
-ProgramKit separates the operational truth, the human interface, and the agent interface so they
-all use the same commands and invariants. Conference program operations is the included proving
-application: it models people, event participation, readiness, communications, sessions,
-scheduling, reviewable changes, and publication.
+ProgramKit gives organizers one focused workspace to:
 
-## Three packages
+- publish conditional call-for-speakers forms;
+- collect and evaluate proposals;
+- move accepted speakers through bios, headshots, slides, and other requirements;
+- build a conflict-aware schedule;
+- send confirmations and reminders;
+- publish a fast, embeddable public agenda.
 
-This repository contains exactly three publishable packages:
+It is intentionally smaller than a general CRM or an enterprise event suite. The goal is to make
+the conference-program job fast, understandable, and easy to own.
 
-| Package             | Responsibility                                                                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@programkit/core`  | Records, operation manifest, authorization, invariants, audit events, selectors, repository contracts, and the current Durable Object adapter           |
-| `@programkit/web`   | Responsive React application with typed TanStack routes, an injectable client, and explicit operator, submitter, reviewer, speaker, and public surfaces |
-| `@programkit/agent` | Stateless MCP server surface and the ProgramKit plugin and skills                                                                                       |
+> **Project status:** active alpha. The seeded demo is safe to explore, but the hosted app is not
+> ready for real participant data until participant and reviewer identity, private file storage,
+> production mail delivery, rate limiting, and backup policy are complete. See
+> [Security](SECURITY.md) and the [roadmap](ROADMAP.md).
 
-`apps/cloudflare` is the private reference assembly of those packages, not a fourth publishable
-layer. It is the supported deployment: one Cloudflare Worker composes the web app, API, Durable
-Object persistence, and optional agent surface.
+## Run it locally
 
-## Quick start
-
-The repository uses Node.js and pnpm.
+You need Node.js 24 or newer and Corepack. The exact pnpm version is recorded in `package.json`.
 
 ```bash
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open `http://localhost:4173`. The Cloudflare Vite runtime starts the React application, Worker, and
-a local SQLite-backed Durable Object together. The deterministic AIE NYC workspace is seeded on
-first access.
+Open `http://localhost:4173`. Vite starts the React app, Cloudflare Worker, API, and a local
+SQLite-backed Durable Object together. The deterministic AIE NYC sample is created on first use.
 
-Useful demo routes include:
+Useful routes:
 
-- `http://localhost:4173/demo` — create an isolated seven-day demo with a private capability link
-- `http://localhost:4173/` — operator overview
-- `http://localhost:4173/forms` — call-for-proposals form builder and preview
-- `http://localhost:4173/submissions` — submission pipeline and decisions
-- `http://localhost:4173/reviews` — committee progress and evaluation plan
-- `http://localhost:4173/submit/aie-nyc-2026-cfp` — public call for proposals
-- `http://localhost:4173/reviewer/rev_001` — one reviewer's focused scorecard workspace
-- `http://localhost:4173/schedule` — draft schedule and publication workflow
-- `http://localhost:4173/agenda` — public agenda backed only by the latest published release
-- `http://localhost:4173/portal/par_003` — one participant's projected portal workspace
+| Route                      | What it demonstrates                            |
+| -------------------------- | ----------------------------------------------- |
+| `/forms`                   | Call-for-proposals builder and live preview     |
+| `/submit/aie-nyc-2026-cfp` | Public proposal form                            |
+| `/submissions`             | Submission pipeline and decisions               |
+| `/reviews`                 | Reviewer assignments and evaluation progress    |
+| `/reviewer/rev_001`        | One reviewer's scorecard workspace              |
+| `/readiness`               | Outstanding speaker onboarding work             |
+| `/schedule`                | Draft schedule and publication workflow         |
+| `/portal/par_003`          | Accepted-speaker portal                         |
+| `/agenda`                  | Public agenda from the latest immutable release |
 
-The local sample and hosted demo use path-derived actors so every workflow is easy to inspect. The
-hosted app has real passwordless staff sessions and verified event selection, but participant,
-reviewer, public-link, MCP, and file identity are not complete. Do not use any reference deployment
-with real participant data yet; see [Security](SECURITY.md#deployment-security-boundaries).
+For a guided first workflow, use [Build and publish a CFP](docs/guides/build-and-publish-a-cfp.md).
+The complete setup and reset instructions are in
+[Local development](docs/guides/local-development.md).
 
-## Build and verify
+## How it is organized
 
-```bash
-pnpm build:packages
-pnpm check
+ProgramKit has three reusable packages and one supported deployment assembly:
+
+| Path              | Responsibility                                                                                                                            |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core`   | Domain records, named operations, validation, authorization, invariants, selectors, audit events, and repository contracts                |
+| `packages/web`    | React 19 interface, TanStack Router routes, TanStack Query state, and scoped organizer, submitter, reviewer, speaker, and public surfaces |
+| `packages/agent`  | Optional MCP server, plugin manifest, and operational skills                                                                              |
+| `apps/cloudflare` | Worker, static assets, API composition, identity, and Durable Object persistence                                                          |
+
+```text
+React + TanStack
+       │
+       ▼
+Cloudflare Worker ── named core operations ── one Durable Object per event
+       │                                           │
+       ├── scoped HTTP and public routes            └── SQLite state + revisions
+       ├── static Vite assets
+       └── optional services: mail, R2, Airtable, MCP
 ```
 
-`build:packages` emits ESM JavaScript and declarations into each package's `dist/` directory. The
-web package also emits `dist/styles.css`. The complete build then creates the private
-`apps/cloudflare` Worker and client bundles. `pnpm check` runs tests, linting, formatting,
-TypeScript, production builds, and plugin validation.
+Every human, API, or agent write uses the same named operation engine. Public agenda data comes
+from an immutable schedule release, not the mutable draft. Host code supplies trusted identity and
+event scope.
 
-## Cloudflare deployment
+Read [Architecture](ARCHITECTURE.md) for the full model and
+[Storage and integrations](docs/architecture/storage-and-integrations.md) for the database
+decision.
+
+## Deploy it
+
+Cloudflare is the supported runtime. One Worker serves the app and API, Workers Static Assets
+serves the Vite build, and one SQLite-backed Durable Object owns each event.
 
 ```bash
+pnpm check
 pnpm deploy
 ```
 
-The official hosted environments use the same repository and application assembly:
+The official environments use the same code with isolated runtime state:
 
-| Host                                                 | Purpose                                      | Data boundary                                                                  |
-| ---------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------ |
-| [`programkit.dev`](https://programkit.dev)           | Public project homepage                      | Separate site Worker, no workspace API                                         |
-| [`demo.programkit.dev`](https://demo.programkit.dev) | Anonymous seven-day evaluation workspaces    | Separate Worker and Durable Object namespace, no outbound mail binding         |
-| [`app.programkit.dev`](https://app.programkit.dev)   | Passwordless staff accounts and event stores | Separate Worker and Durable Object namespace, restricted outbound mail binding |
+| Host                                               | Purpose                                          |
+| -------------------------------------------------- | ------------------------------------------------ |
+| [programkit.dev](https://programkit.dev)           | Project homepage                                 |
+| [demo.programkit.dev](https://demo.programkit.dev) | Anonymous, disposable seven-day workspaces       |
+| [app.programkit.dev](https://app.programkit.dev)   | Passwordless staff accounts and event workspaces |
 
-`app.programkit.dev` sends one-time magic links, stores only token and session hashes, and derives
-one event Durable Object from verified account membership. It is not ready for real participant
-data until team, participant, reviewer, public-link, MCP, and file authorization are complete.
+The one-click Cloudflare button uses the public GitHub mirror because Cloudflare's deploy flow does
+not currently accept Forge repositories. Forge is the primary collaboration host; the two remotes
+contain the same `main` branch.
 
-The `apps/cloudflare` assembly uses one Worker, static assets, an account-sharded identity object
-for hosted users, and one SQLite-backed Durable Object per event. The seeded demo needs no external
-account. A production installation can add Airtable as an event's durable business-record source
-of truth while keeping that event object as its fast coordination and cache layer.
+Airtable is optional and experimental. The recommended V1 store is the event Durable Object. The
+current Airtable-backed mode is useful for integration testing, but it still needs a durable retry
+journal, narrow webhook processing, conflict review, and clearer ownership controls before real
+conference data. It is not required for local development or deployment.
 
-The hosted demo creates one random Durable Object workspace per private capability link. The link
-is exchanged for an HTTP-only seven-day cookie and the object deletes itself when it expires. For
-local development and self-hosting, the Worker also maps a non-demo
-`x-programkit-workspace-key` request header to a Durable Object name; a missing or invalid key uses
-`demo`. Inside the object, every operation runs through an atomic repository
-`mutate` call. The workspace JSON is chunked across Durable Object storage values, and schedule
-publication creates an immutable release snapshot so later draft edits do not change the public
-agenda.
+See [Deployment](DEPLOYMENT.md) for Cloudflare setup, environment profiles, and production
+bindings.
 
-The workspace header remains sample routing input, not tenant authentication. The hosted app does
-not trust it. It derives both event and staff actor identity from a verified session and account
-membership.
+## Verify a change
 
-### Airtable and D1
+```bash
+pnpm check
+```
 
-ProgramKit now includes a versioned Airtable schema and persistence adapter. With Airtable
-credentials configured, Airtable holds the reconstructable workspace and native event, people,
-participation, submission, task, review, session, placement, track, and room records. The Durable
-Object serializes mutations, keeps the hot cache, and makes normal page loads without Airtable API
-calls. App writes reach Airtable before the new cache revision is acknowledged.
-
-Without Airtable credentials, the Durable Object remains a complete zero-configuration local and
-demo store. D1 is reserved for later cross-workspace search or analytics rather than duplicating
-the single-workspace write model. See [Deployment](DEPLOYMENT.md#how-the-airtable-integration-works)
-and the [Airtable guide](docs/integrations/airtable.md) for setup, measured request use, current
-limits, and the webhook path.
-
-The official application Worker also has a restricted Cloudflare Email Service binding. The
-delivery infrastructure and sending domain are configured, but `campaign.send` still writes only
-to the demo outbox until the durable transactional delivery worker is implemented. See the
-[email integration guide](docs/integrations/email.md).
-
-## Data ownership
-
-`WorkspaceRepository` keeps domain behavior separate from storage mechanics, and the full logical
-export is available at `GET /api/v1/export`. Cloudflare is still the only supported deployment;
-clean package boundaries and exportability are not a promise to maintain speculative host adapters.
-
-Before real use, finish team and participant identity, OAuth for MCP, outbound product email and
-webhook delivery, private file storage, retention and backup policies, and rate limiting. The
-complete checklist is in [SECURITY.md](SECURITY.md) and [OPERATIONS.md](OPERATIONS.md).
+This runs tests, linting, formatting verification, TypeScript, package builds, the production
+Worker build, and plugin validation.
 
 ## Documentation
 
-- [Documentation map](docs/README.md) — choose a product, operator, contributor, or agent path
-- [Program lifecycle](docs/product/program-lifecycle.md) — the end-to-end conference workflow
-- [Build and publish a CFP](docs/guides/build-and-publish-a-cfp.md) — first product task
-- [Product evidence showcase](showcase/index.html) — screenshot comparison with the supplied brief
-- [HTTP API](docs/api/README.md) — event resources, named writes, and integration conventions
-- [Agent navigation](docs/agents/README.md) — help a human from the same canonical sources
+- [Documentation map](docs/README.md)
+- [Program lifecycle](docs/product/program-lifecycle.md)
 - [Product status and roadmap](ROADMAP.md)
 - [Architecture](ARCHITECTURE.md)
-- [Identity, events, and storage ownership](docs/architecture/identity-and-tenancy.md)
 - [Deployment](DEPLOYMENT.md)
+- [HTTP API](docs/api/README.md)
 - [Security](SECURITY.md)
 - [Operations](OPERATIONS.md)
+- [Agent navigation](docs/agents/README.md)
 - [Contributing](CONTRIBUTING.md)
 
-Licensed under Apache-2.0.
+The agent guides point back to the same canonical product and architecture documents humans use.
+They add navigation and execution guardrails instead of maintaining a second version of the facts.
+
+## Contributing
+
+Issues and pull requests are welcome on
+[Forge](https://forge.smol.ai/andheller/programkit). Start with
+[CONTRIBUTING.md](CONTRIBUTING.md), keep changes focused on one complete workflow, and run
+`pnpm check` before handoff.
+
+ProgramKit is licensed under the [Apache License 2.0](LICENSE).

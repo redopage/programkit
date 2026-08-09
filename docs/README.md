@@ -23,21 +23,25 @@ not maintain a second version of product or architecture facts.
 
 ### I want to run or adapt ProgramKit
 
-1. Start with the root [quick start](../README.md#quick-start).
-2. Follow [Build and publish a call for proposals](guides/build-and-publish-a-cfp.md) for the first
+1. Start with the root [quick start](../README.md#run-it-locally).
+2. Use [Local development](guides/local-development.md) for setup, the seeded walkthrough, reset,
+   and verification.
+3. Follow [Build and publish a call for proposals](guides/build-and-publish-a-cfp.md) for the first
    end-to-end product workflow.
-3. Read [Deployment](../DEPLOYMENT.md) before deploying the Cloudflare application.
-4. Use the [HTTP API](api/README.md) for integrations and data sync.
-5. Read the [Airtable integration guide](integrations/airtable.md) before enabling the optional team
-   workspace.
-6. Read the [Cloudflare email guide](integrations/email.md) before enabling confirmations or
+4. Read [Storage and integrations](architecture/storage-and-integrations.md) before changing
+   persistence, Airtable, D1, R2, or background work.
+5. Read [Deployment](../DEPLOYMENT.md) before deploying the Cloudflare application.
+6. Use the [HTTP API](api/README.md) for integrations and data sync.
+7. Read the [Airtable integration guide](integrations/airtable.md) before testing the experimental
+   Airtable-backed mode.
+8. Read the [Cloudflare email guide](integrations/email.md) before enabling confirmations or
    reminders.
-7. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
+9. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
    notifications.
-8. Read [Identity, events, and storage ownership](architecture/identity-and-tenancy.md) before
-   changing sign-in, membership, event routing, Airtable ownership, or R2 boundaries.
-9. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
-10. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
+10. Read [Identity, events, and storage ownership](architecture/identity-and-tenancy.md) before
+    changing sign-in, membership, event routing, Airtable ownership, or R2 boundaries.
+11. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
+12. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
 
 ### I want to contribute
 
@@ -53,20 +57,21 @@ Start at [Agent navigation](agents/README.md). Coding agents should also read th
 
 ## Sources of truth
 
-| Question                                           | Canonical document or code                                        |
-| -------------------------------------------------- | ----------------------------------------------------------------- |
-| What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                                     |
-| How do we compare with the full evaluator?         | [`evaluator-gap-analysis.md`](product/evaluator-gap-analysis.md)  |
-| Why are the packages and hosts separated?          | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                           |
-| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                               |
-| Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](architecture/identity-and-tenancy.md) |
-| How is the repository operated?                    | [`OPERATIONS.md`](../OPERATIONS.md)                               |
-| What must change before real data?                 | [`SECURITY.md`](../SECURITY.md)                                   |
-| Which operations exist?                            | `packages/core/src/manifest.ts`                                   |
-| Which HTTP resources exist?                        | [`docs/api/README.md`](api/README.md)                             |
-| What does the domain store?                        | `packages/core/src/types.ts`                                      |
-| Which URLs and surfaces exist?                     | `packages/web/src/routes` and `packages/web/README.md`            |
-| Which MCP tools and resources exist?               | `packages/agent/README.md`                                        |
+| Question                                           | Canonical document or code                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------- |
+| What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                                             |
+| How do we compare with the full evaluator?         | [`evaluator-gap-analysis.md`](product/evaluator-gap-analysis.md)          |
+| Why are the packages and hosts separated?          | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                                   |
+| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                                       |
+| Which service owns each kind of data?              | [`storage-and-integrations.md`](architecture/storage-and-integrations.md) |
+| Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](architecture/identity-and-tenancy.md)         |
+| How is the repository operated?                    | [`OPERATIONS.md`](../OPERATIONS.md)                                       |
+| What must change before real data?                 | [`SECURITY.md`](../SECURITY.md)                                           |
+| Which operations exist?                            | `packages/core/src/manifest.ts`                                           |
+| Which HTTP resources exist?                        | [`docs/api/README.md`](api/README.md)                                     |
+| What does the domain store?                        | `packages/core/src/types.ts`                                              |
+| Which URLs and surfaces exist?                     | `packages/web/src/routes` and `packages/web/README.md`                    |
+| Which MCP tools and resources exist?               | `packages/agent/README.md`                                                |
 
 When behavior and prose disagree, verify the executable code and tests, then update the canonical
 document in the same change. Do not solve drift by adding another summary.

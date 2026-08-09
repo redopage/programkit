@@ -1,6 +1,10 @@
-# Airtable source of truth with a Durable Object cache
+# Experimental Airtable-backed mode
 
-ProgramKit now has a working Airtable persistence adapter. The recommended production direction is:
+ProgramKit has a working Airtable persistence adapter. It is an optional integration test surface,
+not the recommended V1 database. The default and recommended path keeps each event's authoritative
+workspace in its SQLite-backed Durable Object.
+
+When an operator explicitly enables the current Airtable-backed mode, the runtime changes to:
 
 ```text
 Airtable base
@@ -16,13 +20,19 @@ SQLite-backed Durable Object
         └── agent tools
 ```
 
-Airtable is the durable source of truth after a workspace connects through OAuth or an operator
-configures the single-install token fallback. The Durable Object is not a second independent
-database. It is the low-latency coordination and cache layer that keeps ordinary reads fast and
-avoids spending Airtable API calls on page loads.
+Airtable becomes the acknowledged persistence backend after a workspace connects through OAuth or
+an operator configures the single-install token fallback. The Durable Object becomes the
+low-latency coordination and cache layer that keeps ordinary reads fast and avoids spending
+Airtable API calls on page loads.
 
-Without Airtable variables, the same repository runs in local-first demo mode and the Durable
-Object remains self-contained. This preserves the one-command contributor experience.
+Without Airtable variables, the Durable Object remains self-contained. This is the recommended V1
+configuration and preserves the one-command contributor experience.
+
+Do not enable this mode for real conference data yet. A multi-table Airtable write can partially
+complete before a later request fails, and inbound edits do not yet pass through expected-version
+checks and human conflict review. The preferred future direction is a non-blocking outbound mirror
+with reviewable inbound named operations. See
+[Storage and integrations](../architecture/storage-and-integrations.md).
 
 ## What works now
 
@@ -214,9 +224,10 @@ Airtable.
 
 ## Current boundary
 
-This is a working source-of-truth and OAuth vertical slice, not the end of the integration. The
-remaining production work is:
+This is a working Airtable-backed and OAuth vertical slice, not a production-ready team view. The
+remaining work is:
 
+- move outbound synchronization out of the user request path and persist retryable sync intent;
 - webhook payload cursors and narrow record fetches instead of a full refresh;
 - a durable retry journal or alarm for partially completed multi-table writes;
 - conversion of every inbound edit through named operations and expected versions;

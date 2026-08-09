@@ -10,8 +10,8 @@ function PrivacyPage() {
       <h2>What ProgramKit stores</h2>
       <p>
         ProgramKit stores the conference program information you enter, such as event settings,
-        submissions, speaker profiles, reviews, tasks, schedules, and communications. A connected
-        Airtable base can be the durable source of truth for this information.
+        submissions, speaker profiles, reviews, tasks, schedules, and communications. The
+        experimental Airtable-backed mode can persist this information in a base you select.
       </p>
 
       <h2>Airtable connection</h2>

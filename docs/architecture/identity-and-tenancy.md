@@ -71,9 +71,10 @@ search and analytics, not a primary database.
 
 The storage rule is deliberately singular:
 
-- Before Airtable is connected, the event object's SQLite storage is the complete local store.
-- After Airtable is connected, Airtable is the durable source of truth for that event's business
-  records.
+- Before Airtable is connected, the event object's SQLite storage is the complete authoritative
+  store and the recommended V1 configuration.
+- After the experimental Airtable-backed mode is connected, Airtable is the acknowledged
+  persistence backend for that event's business records.
 - The event object remains the serialized operation coordinator and hot read cache. It advances
   only after Airtable acknowledges the required record writes.
 - Account identity, sessions, and memberships never move into Airtable.

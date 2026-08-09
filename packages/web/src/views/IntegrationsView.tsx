@@ -108,7 +108,7 @@ export function IntegrationsView() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Infrastructure & API"
-        description="Deploy on Cloudflare, keep durable records in Airtable, and export through the API."
+        description="Cloudflare runtime, data ownership, exports, and optional connections."
         actions={
           <Button variant="primary" onClick={() => window.open('/api/v1/export', '_blank')}>
             <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
@@ -123,8 +123,8 @@ export function IntegrationsView() {
             Deployment shape
           </h2>
           <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-            Cloudflare is the supported host. Airtable can own durable records while the event
-            workspace stays fast through a local coordination cache.
+            Cloudflare is the supported host. Each event lives in its own SQLite-backed Durable
+            Object. Other services are optional.
           </p>
         </div>
 
@@ -180,13 +180,13 @@ export function IntegrationsView() {
                     </div>
                   </div>
                   <span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-violet-700 ring-1 ring-inset ring-violet-950/10">
-                    {airtableConnected ? 'Connected' : 'Not configured'}
+                    {airtableConnected ? 'Connected · experimental' : 'Experimental'}
                   </span>
                 </div>
 
                 <p className="text-pretty text-base text-zinc-600 sm:text-sm">
-                  A versioned base holds reconstructable program records. Stable IDs support exact
-                  restore, batched writes, and direct team edits.
+                  The optional Airtable-backed mode provides reconstructable program records and
+                  direct team edits. It is not the recommended V1 store yet.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-2 text-base font-semibold text-zinc-700 sm:text-sm">
@@ -259,11 +259,12 @@ export function IntegrationsView() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-sm text-zinc-600">
-                        {setup?.base?.name ?? 'Airtable base'} is the durable source of truth.
+                        {setup?.base?.name ?? 'Airtable base'} is the acknowledged persistence
+                        backend for this experimental mode.
                       </p>
                       {setup?.liveSync?.status === 'active' ? (
                         <p className="pt-0.5 text-sm text-emerald-700">
-                          Direct Airtable edits sync back automatically.
+                          Webhook refresh is active. Conflict-review hardening is still required.
                         </p>
                       ) : setup?.mode === 'oauth' ? (
                         <p className="pt-0.5 text-sm text-amber-700">
@@ -306,7 +307,7 @@ export function IntegrationsView() {
         </div>
 
         <div className="pt-4">
-          <Callout tone="success" title="Why this stays fast">
+          <Callout tone="success" title="Cached reads">
             <p>
               Page loads use the Durable Object cache and make zero Airtable calls. A simple edit
               writes only the workspace revision and changed native record.

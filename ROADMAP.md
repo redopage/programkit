@@ -40,12 +40,12 @@ The [competition evaluator gap analysis](docs/product/evaluator-gap-analysis.md)
 - Typed, split TanStack routes and TanStack Query server-state lifecycle.
 - Stable URL state for form/field selection, proposal selection and filtering, people detail, and
   reviewer assignment selection.
-- A testable repository contract, SQLite-backed Durable Object cache, and versioned Airtable
-  source-of-truth adapter for the supported Cloudflare host.
+- A testable repository contract, SQLite-backed Durable Object store, and versioned experimental
+  Airtable adapter for the supported Cloudflare host.
 - Event-scoped, paginated read APIs for sessions, speakers, and submissions, with named operations
   as the single write path.
-- An explicit storage decision: Airtable is the recommended production source of truth, Durable
-  Objects serialize operations and cache reads, and D1 is a future cross-workspace projection.
+- An explicit storage decision: one SQLite-backed Durable Object is the recommended V1 store per
+  event, Airtable is optional and experimental, and D1 is a future cross-workspace projection.
 
 The hosted app now resolves a verified passwordless staff session, event membership, and one
 workspace object per event. The anonymous demo still uses capability and path-derived actors so
@@ -97,13 +97,14 @@ provider; provider calls run after a transactional outbox commit.
 - Deep-link every work item and proposed change.
 - Add hibernating workspace WebSockets for revision invalidation and durable in-app notifications.
 
-### 7. Finish Airtable production hardening
+### 7. Make Airtable a safe optional team view
 
 - Done: versioned additive schema for the workspace plus ten native operational tables.
 - Done: stable-ID batch upserts, exact reconstruction, record-level deltas, cached reads, and
   Airtable-before-cache acknowledgement.
 - Done: OAuth webhook registration, HMAC verification, source filtering, debounce, and renewal
   alarms.
+- Move outbound synchronization out of the user request path and persist retryable sync intent.
 - Add webhook payload cursors and fetch only affected records instead of a full refresh.
 - Add a durable retry journal or alarm for partially completed multi-table writes.
 - Route allowlisted inbound edits through named operations or human-approved change sets.

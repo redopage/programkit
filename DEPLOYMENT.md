@@ -18,8 +18,8 @@ Browser
 Cloudflare Worker ── Workers Static Assets (Vite web build)
   │
   ├── account Durable Object  ── staff sessions and event membership
-  ├── Airtable                 ── durable workspace records (recommended production)
-  ├── event Durable Object     ── serialized mutations, hot cache, live clients
+  ├── event Durable Object     ── authoritative event records and serialized mutations
+  ├── Airtable                 ── optional experimental team integration
   ├── R2                      ── private uploads and generated files (next)
   ├── Queue / object alarm    ── email, webhooks, and mirrors (next)
   └── Email Service           ── sending domain and app binding (configured)
@@ -65,8 +65,8 @@ The production additions are intentionally Cloudflare-native:
 | Concern                   | Default                                              | Why                                                                                    |
 | ------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | Web and API               | Worker + Static Assets                               | One origin, one deploy, no client-side API configuration                               |
-| Durable business records  | Airtable                                             | Familiar source of truth the program team can inspect and work with                    |
-| Coordination and cache    | SQLite-backed Durable Object                         | Serialized workspace writes and fast reads with zero Airtable calls on page load       |
+| Event business records    | SQLite-backed Durable Object                         | One isolated, transactional, zero-configuration store per event                        |
+| Optional team view        | Airtable                                             | Experimental OAuth and schema integration; keep disconnected for the recommended V1    |
 | Files                     | R2                                                   | Direct uploads, private objects, lifecycle policies, and no file bytes in domain state |
 | Background delivery       | Transactional outbox + Queue or Durable Object alarm | Retryable work that does not hold open a user request                                  |
 | Email                     | Cloudflare Email Service binding                     | Native Worker delivery; Resend may remain an optional provider                         |
@@ -77,15 +77,14 @@ The production additions are intentionally Cloudflare-native:
 
 ProgramKit's important writes span several records: accept a proposal and create its speaker,
 participation, requirements, and session; publish one immutable schedule release; approve and
-commit a group of changes. Airtable is excellent durable, inspectable storage but does not provide
-one atomic multi-table application transaction. A SQLite-backed Durable Object gives each
-workspace the missing serialized coordination boundary.
+commit a group of changes. A SQLite-backed Durable Object gives each event one serialized,
+transactional boundary without another service or connection pool.
 
-When Airtable is configured, the object stores a durable hot cache and hydration marker. It
-validates one operation at a time, computes a record delta, sends idempotent Airtable upserts, and
-updates the cache only after every required Airtable write succeeds. Reads then stay inside the
-object. Without Airtable configuration, the same chunked JSON cache is the complete local demo
-store.
+The object stores the versioned workspace, idempotency responses, and revision metadata. Normal
+reads and writes stay inside that event boundary. The experimental Airtable-backed mode changes
+this behavior by acknowledging Airtable writes before advancing the object cache. That mode is
+useful for integration testing, but it is not the recommended production path until partial-write
+retry and inbound conflict review are complete.
 
 ### Where D1 fits
 
@@ -96,11 +95,12 @@ plane across many accounts and event objects.
 That future D1 database should be a rebuildable read projection. It may lag briefly and must never
 decide whether a domain transition is valid.
 
-## How the Airtable integration works
+## Experimental Airtable-backed mode
 
-Airtable is ProgramKit's recommended production source of truth because program and review teams
-already know how to filter, group, comment on, and edit a base. It is not queried on every page
-load. The Durable Object cache isolates the application from routine API latency and quota use.
+Program and review teams already know how to filter, group, comment on, and edit an Airtable base,
+so ProgramKit includes a working OAuth, schema, persistence, and webhook vertical slice. It is not
+enabled by default and is not queried on every page load. When enabled, the Durable Object cache
+isolates reads from routine API latency and quota use.
 
 ```text
 named operation
@@ -131,7 +131,9 @@ The OAuth flow registers an HMAC-signed webhook and renews it with a Durable Obj
 edits currently perform a debounced full refresh. Production work still needs payload cursors,
 narrow record fetches, durable partial-write retries, and conversion of direct edits through named
 operations or reviewable change sets. See the
-[Airtable integration guide](docs/integrations/airtable.md) for setup and the exact current boundary.
+[Airtable integration guide](docs/integrations/airtable.md) for setup, failure modes, and the exact
+current boundary. The preferred future team-view design is an asynchronous outbound mirror with
+reviewable inbound changes. That design is not implemented yet.
 
 ## Hosted demo lifecycle
 
@@ -235,22 +237,24 @@ The golden-path production work should land in this sequence:
 4. Connect the existing app-only Cloudflare Email Service binding to a transactional delivery
    outbox for submission confirmations and accepted-speaker reminders.
 5. Add webhook delivery from the same outbox, with signed payloads, retries, and delivery history.
-6. Finish Airtable webhook payload cursors, durable partial-write retry, inbound change sets, and
-   actual last-success, quota, lag, conflict, and error state in the integrations screen.
+6. Move Airtable toward a non-blocking mirror, then add webhook payload cursors, durable retry,
+   inbound change sets, and actual last-success, quota, lag, conflict, and error state.
 7. Add scheduled encrypted logical exports and test restore into a separate workspace key.
 
-Do not call email or delivery webhooks while a domain transaction is open. Airtable persistence is
-the exception because its acknowledgement defines whether a source-of-truth write succeeded. Its
-record upserts are idempotent, the local cache advances only after acknowledgement, and the next
-production step is a durable retry journal for partial multi-table failures.
+Do not call email, delivery webhooks, or optional mirrors while a domain transaction is open. The
+current experimental Airtable-backed repository still performs acknowledged writes in the request
+path. That limitation is one reason it is not the recommended V1 store.
 
 ## Repository hosting and Forge
 
-ProgramKit does not depend on a GitHub-specific runtime. Forge, GitHub, or another Git server can
-host the repository because the deploy command uses the local checkout and Wrangler. Cloudflare's
-deploy button currently accepts public GitHub and GitLab repositories only, so GitHub remains the
-canonical deployment source. A Forge mirror can earn the competition bonus without making the
-installation path worse.
+ProgramKit does not depend on a GitHub-specific runtime. Forge is the primary public repository at
+`forge.smol.ai/andheller/programkit`, and GitHub is a synchronized mirror. Cloudflare's deploy
+button currently accepts public GitHub and GitLab repositories, so the button points at the GitHub
+mirror while normal contribution and source links point at Forge.
+
+The application runtime remains on Cloudflare. Moving it to Forge Sites would replace the Worker,
+Durable Object, R2, and mail-service assumptions that the reference assembly intentionally tests.
+Forge hosts the source and collaboration surface; Wrangler deploys the same checkout to Cloudflare.
 
 ## Leaving Cloudflare
 
