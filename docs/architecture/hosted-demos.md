@@ -25,15 +25,17 @@ identifier, and its 192 random bits provide more entropy than a UUID v4. A futur
 workspace may use a UUIDv7 or another sortable internal identifier, but that identifier must remain
 separate from the secret used to join a passwordless demo.
 
-The canonical hosted entry point is `demo.programkit.dev`, and private links use
-`/demo/{capability}` on that host. The capability is exchanged for an HTTP-only cookie on the same
-origin. Local development and self-hosted installations keep the same `/demo` route and Worker
-artifact.
+The canonical hosted creation screen is `https://demo.programkit.dev/`. `/demo` redirects to `/` on
+that host so the route does not repeat the hostname. Private links use `/demo/{capability}` because
+the segment names a capability exchange rather than a product page. The capability is exchanged
+for an HTTP-only cookie on the same origin. Local development and self-hosted installations keep
+the `/demo` creation route and the same Worker artifact.
 
 The official demo is a separate `programkit-demo` Worker with its own Durable Object namespace and
 no outbound mail binding. `app.programkit.dev` is a separate `programkit-app` Worker and namespace.
 Both are built from this repository. The route and host are deployment entry points, not separate
-products, so the demo runtime, schema, migrations, and tests cannot drift from the application.
+products, so the demo runtime, schema, migrations, and tests cannot drift from the application. A
+separate demo repository would add drift without improving isolation.
 
 ## Airtable
 

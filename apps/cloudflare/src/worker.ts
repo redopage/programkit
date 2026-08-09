@@ -54,12 +54,20 @@ function deploymentProfile(env: Env) {
 
 function isStaticOrLegalPath(pathname: string) {
   return (
+    pathname === '/' ||
     pathname === '/demo' ||
     pathname === '/privacy' ||
     pathname === '/terms' ||
     pathname === '/favicon.svg' ||
     pathname === '/robots.txt' ||
     pathname.startsWith('/assets/')
+  )
+}
+
+function isDocumentNavigation(request: Request) {
+  return (
+    request.headers.get('sec-fetch-dest') === 'document' ||
+    request.headers.get('accept')?.includes('text/html') === true
   )
 }
 
@@ -370,6 +378,10 @@ export default {
     const url = new URL(request.url)
     const profile = deploymentProfile(env)
 
+    if (profile === 'hosted-demo' && url.pathname === '/demo') {
+      return redirect(url, '/')
+    }
+
     if (profile === 'hosted-app' && (url.pathname === '/demo' || demoIdFromPath(url.pathname))) {
       return redirect(url, '/')
     }
@@ -377,6 +389,7 @@ export default {
     if (
       profile === 'hosted-demo' &&
       request.method === 'GET' &&
+      isDocumentNavigation(request) &&
       !isStaticOrLegalPath(url.pathname) &&
       !demoIdFromPath(url.pathname) &&
       !url.pathname.startsWith('/api/') &&
@@ -384,7 +397,7 @@ export default {
       url.pathname !== '/mcp' &&
       !isDemoId(cookie(request, demoCookieName))
     ) {
-      return redirect(url, '/demo')
+      return redirect(url, '/')
     }
 
     if (
@@ -619,6 +632,26 @@ export default {
       return stub.fetch(withActor(request, actor))
     }
 
-    return env.ASSETS.fetch(request)
+    const assetResponse = await env.ASSETS.fetch(request)
+    if (!assetResponse.headers.get('content-type')?.includes('text/html')) return assetResponse
+
+    const renderedProfile =
+      profile === 'hosted-demo' && !isDemoId(cookie(request, demoCookieName))
+        ? 'hosted-demo-entry'
+        : profile
+    const headers = new Headers(assetResponse.headers)
+    headers.set('cache-control', 'no-store')
+    const response = new Response(assetResponse.body, assetResponse)
+    for (const [name, value] of headers) response.headers.set(name, value)
+    return new HTMLRewriter()
+      .on('head', {
+        element(element) {
+          element.append(
+            `<meta name="programkit-deployment-profile" content="${renderedProfile}">`,
+            { html: true },
+          )
+        },
+      })
+      .transform(response)
   },
 } satisfies ExportedHandler<Env>

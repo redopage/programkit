@@ -19,7 +19,7 @@ workspace.
 
 ### Demo routes
 
-- `/demo` — create an isolated workspace that expires after seven days
+- `/demo` — create an isolated workspace locally or on a self-hosted installation
 - `/` — operator overview
 - `/people`, `/readiness`, `/sessions`, `/schedule`, `/communications`, `/changes` — operator work
 - `/integrations` — integration state and demo reset
@@ -31,6 +31,11 @@ The private `/demo/{capability}` link grants edit access to its workspace. The o
 login, and the participant ID in the portal URL acts as identity in this demo. Use sample data
 only. Copy or delete the workspace from the banner. Expiry and early deletion remove local state
 and authorization but never delete records in a connected Airtable base.
+
+On the official hosted demo, `https://demo.programkit.dev/` is the creation screen. `/demo`
+redirects to `/` there so the hostname and path do not repeat the same idea. Private collaboration
+links still use `/demo/{capability}` because that segment identifies a capability exchange, not a
+normal application page.
 
 ### Optional Airtable source of truth
 

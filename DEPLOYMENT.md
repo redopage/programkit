@@ -25,8 +25,9 @@ Cloudflare Worker ── Workers Static Assets (Vite web build)
 ```
 
 The runnable application currently includes the Worker, static assets, and one SQLite-backed
-Durable Object per workspace key. `/demo` creates isolated hosted trials that expire after seven
-days. It needs no D1 database, R2 bucket, queue, or email binding to run the deterministic demo.
+Durable Object per workspace key. The official demo root creates isolated hosted trials that expire
+after seven days. Local and self-hosted installations expose the same flow at `/demo`. It needs no
+D1 database, R2 bucket, queue, or email binding to run the deterministic demo.
 
 ## Official hosted environments
 
@@ -128,8 +129,9 @@ operations or reviewable change sets. See the
 
 ## Hosted demo lifecycle
 
-`/demo` creates a random 192-bit capability and initializes a seeded Durable Object before the link
-is returned. Opening `/demo/{capability}` verifies that object, exchanges the capability for an
+The root of `demo.programkit.dev` creates a random 192-bit capability and initializes a seeded
+Durable Object before the link is returned. Opening `/demo/{capability}` verifies that object,
+exchanges the capability for an
 HTTP-only same-site cookie, and redirects to `/` so the secret is not left in the address bar.
 
 The object keeps its expiration alongside its workspace state and uses its single alarm for the

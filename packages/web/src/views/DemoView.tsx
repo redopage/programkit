@@ -1,4 +1,4 @@
-import { ArrowRightIcon, CheckIcon, ClockIcon, LinkIcon } from '@heroicons/react/16/solid'
+import { ArrowRightIcon, CheckIcon, LinkIcon } from '@heroicons/react/16/solid'
 import { useEffect, useState } from 'react'
 
 import { Button } from '../components/ui.tsx'
@@ -53,75 +53,77 @@ export function DemoView() {
   }
 
   return (
-    <main className="min-h-dvh bg-canvas px-4 py-6 sm:grid sm:place-items-center sm:p-8">
-      <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-xl ring-1 ring-zinc-950/5">
-        <div className="p-6 sm:p-10 lg:p-12">
-          <a
-            href="/"
-            aria-label="Homepage"
-            className="focus-ring flex w-fit items-center gap-3 rounded-xl"
-          >
-            <span className="grid size-9 place-items-center rounded-xl bg-blue-600 text-sm font-semibold text-white">
-              P
-            </span>
-            <span className="text-base font-semibold text-zinc-950">ProgramKit</span>
+    <main className="grid min-h-dvh place-items-center bg-white px-6 py-10 text-center">
+      <div className="w-full max-w-xs">
+        <a
+          href="/"
+          aria-label="ProgramKit homepage"
+          className="focus-ring mx-auto flex w-fit items-center gap-2.5 rounded-xl"
+        >
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-sm font-semibold text-white">
+            P
+          </span>
+          <span className="text-base font-semibold text-zinc-950">ProgramKit</span>
+        </a>
+
+        <div className="pt-14 sm:pt-16">
+          <h1 className="mx-auto max-w-[20ch] text-balance text-3xl font-semibold tracking-tight text-zinc-950">
+            {current ? 'Welcome back.' : 'Try ProgramKit.'}
+          </h1>
+          <p className="mx-auto max-w-[48ch] pt-3 text-pretty text-base/7 text-zinc-600 sm:text-sm/6">
+            {current
+              ? 'Continue your workspace or share its private link.'
+              : 'Explore a complete conference workspace. No account required.'}
+          </p>
+
+          <div className="grid gap-3 pt-7">
+            {current ? (
+              <>
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={() => window.location.assign('/')}
+                >
+                  Continue demo
+                  <ArrowRightIcon className="size-4" />
+                </Button>
+                <Button variant="secondary" className="w-full" onClick={() => void copyLink()}>
+                  {copied ? (
+                    <CheckIcon className="size-4 fill-emerald-600" />
+                  ) : (
+                    <LinkIcon className="size-4" />
+                  )}
+                  {copied ? 'Copied' : 'Copy private link'}
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="primary"
+                className="w-full"
+                onClick={() => void createDemo()}
+                disabled={creating}
+              >
+                {creating ? 'Creating demo…' : 'Start demo'}
+                {!creating ? <ArrowRightIcon className="size-4" /> : null}
+              </Button>
+            )}
+          </div>
+          {error ? <p className="pt-3 text-base text-red-600 sm:text-sm">{error}</p> : null}
+
+          <p className="pt-5 text-pretty text-base/7 text-zinc-500 sm:text-sm/6">
+            {current
+              ? 'The workspace is deleted when its seven-day demo ends.'
+              : 'Private link. Sample data only. Deleted after seven days.'}
+          </p>
+        </div>
+
+        <div className="flex justify-center gap-4 pt-14 text-base text-zinc-500 sm:pt-16 sm:text-sm">
+          <a className="focus-ring rounded-md underline-offset-4 hover:underline" href="/privacy">
+            Privacy
           </a>
-
-          <div className="pt-14 sm:pt-20">
-            <h1 className="max-w-[20ch] text-balance text-4xl font-semibold tracking-[-0.035em] text-zinc-950 sm:text-5xl">
-              {current ? 'Your demo is ready.' : 'Try the full program workflow for a week.'}
-            </h1>
-            <p className="max-w-[48ch] pt-5 text-pretty text-lg leading-8 text-zinc-600">
-              {current
-                ? 'Continue where you left off or copy the private link to invite someone.'
-                : 'Start with a realistic conference workspace. Make changes, invite a collaborator with the private link, and explore everything without creating an account.'}
-            </p>
-
-            <div className="flex flex-col gap-4 pt-8 sm:flex-row sm:items-center">
-              {current ? (
-                <>
-                  <Button variant="primary" onClick={() => window.location.assign('/')}>
-                    Continue demo
-                    <ArrowRightIcon className="size-4" />
-                  </Button>
-                  <Button variant="secondary" onClick={() => void copyLink()}>
-                    {copied ? (
-                      <CheckIcon className="size-4 fill-emerald-600" />
-                    ) : (
-                      <LinkIcon className="size-4" />
-                    )}
-                    {copied ? 'Copied' : 'Copy link'}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button variant="primary" onClick={() => void createDemo()} disabled={creating}>
-                    {creating ? 'Creating demo…' : 'Create a private demo'}
-                    {!creating ? <ArrowRightIcon className="size-4" /> : null}
-                  </Button>
-                  <p className="text-base text-zinc-500 sm:text-sm">
-                    Please do not add sensitive or production data.
-                  </p>
-                </>
-              )}
-            </div>
-            {error ? <p className="pt-3 text-sm text-red-600">{error}</p> : null}
-          </div>
-
-          <div className="mt-14 grid gap-3 border-t border-zinc-950/8 pt-6 text-base text-zinc-600 sm:mt-20 sm:grid-cols-2 sm:text-sm">
-            <div className="flex items-start gap-2.5">
-              <ClockIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
-              <p>
-                {current
-                  ? 'Automatically deleted when the seven-day demo ends.'
-                  : 'Automatically deleted after seven days.'}
-              </p>
-            </div>
-            <div className="flex items-start gap-2.5">
-              <LinkIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
-              <p>The private link is the key. Anyone who has it can edit.</p>
-            </div>
-          </div>
+          <a className="focus-ring rounded-md underline-offset-4 hover:underline" href="/terms">
+            Terms
+          </a>
         </div>
       </div>
     </main>

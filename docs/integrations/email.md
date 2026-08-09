@@ -31,6 +31,28 @@ The binding is ready, but product notifications are not yet connected to it. `ca
 currently records a `demo-outbox` result and contacts no provider. This distinction is deliberate:
 delivery should not happen inside a domain transaction or become a best-effort side effect.
 
+## Hosted app sign-in
+
+The recommended identity flow for `app.programkit.dev` is passwordless email sign-in through the
+same app-only Cloudflare Email Service binding. The demo host remains anonymous and never receives
+an outbound mail binding.
+
+The production flow must use a short-lived, single-use token, store only a hash of that token, and
+exchange it for an HTTP-only, secure, same-site session cookie. Requests should return the same
+check-your-email response whether or not an address already exists, and both requests and resends
+must be rate-limited. Callback URLs must come from configured canonical origins rather than an
+untrusted request host.
+
+Cloudflare provides official [magic-link](https://developers.cloudflare.com/email-service/examples/email-sending/magic-link/)
+and [signup](https://developers.cloudflare.com/email-service/examples/email-sending/signup-flow/)
+examples. Those examples demonstrate delivery, not the complete security boundary. Follow OWASP's
+[authentication](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
+and [session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
+guidance for token handling, enumeration resistance, session rotation, logout, and expiry.
+
+The hosted app sign-in screen and session system are not implemented yet. Until they are,
+`app.programkit.dev` remains a sample-data environment and must not accept real participant data.
+
 ## Required delivery path
 
 ```text

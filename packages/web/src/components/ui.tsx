@@ -1067,14 +1067,14 @@ export function ToastViewport() {
     <div className="pointer-events-none fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-60 flex justify-center sm:bottom-6">
       <div
         role="status"
-        className="pointer-events-auto flex max-w-md items-start gap-3 rounded-2xl bg-zinc-950/90 py-3 pr-2 pl-3 text-white shadow-xl ring-1 ring-white/10 backdrop-blur-xl motion-safe:animate-rise-in"
+        className="pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl bg-zinc-950/90 py-2 pr-2 pl-3 text-white shadow-xl ring-1 ring-white/10 backdrop-blur-xl motion-safe:animate-rise-in"
       >
         {toast.tone === 'success' ? (
-          <CheckCircleIcon className="size-4 h-lh shrink-0 fill-emerald-400" />
+          <CheckCircleIcon className="size-4 shrink-0 fill-emerald-400" />
         ) : toast.tone === 'error' ? (
-          <ExclamationTriangleIcon className="size-4 h-lh shrink-0 fill-red-400" />
+          <ExclamationTriangleIcon className="size-4 shrink-0 fill-red-400" />
         ) : (
-          <InformationCircleIcon className="size-4 h-lh shrink-0 fill-sky-400" />
+          <InformationCircleIcon className="size-4 shrink-0 fill-sky-400" />
         )}
         <p className="min-w-0 flex-1 text-base text-pretty sm:text-sm">{toast.message}</p>
         <IconButton
