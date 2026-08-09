@@ -126,97 +126,54 @@ function ProgramFeature({ feature }: { feature: (typeof programFeatures)[number]
   )
 }
 
-type ProgramKitBarTone = 'primary' | 'accent'
-type ProgramKitBar = {
-  x?: number
+type ScheduleSlot = {
+  x: number
   y: number
   width: number
-  tone?: ProgramKitBarTone
+  booked: boolean
 }
 
-const programKitLetterBars = {
-  R: [
-    { y: 0, width: 56 },
-    { y: 12, width: 20 },
-    { x: 36, y: 12, width: 20, tone: 'accent' },
-    { y: 24, width: 56 },
-    { y: 36, width: 20 },
-    { x: 28, y: 36, width: 28 },
-    { y: 48, width: 20 },
-    { x: 36, y: 48, width: 20 },
-  ],
-  O: [
-    { y: 0, width: 56 },
-    { y: 12, width: 20 },
-    { x: 36, y: 12, width: 20, tone: 'accent' },
-    { y: 24, width: 20 },
-    { x: 36, y: 24, width: 20 },
-    { y: 36, width: 20 },
-    { x: 36, y: 36, width: 20 },
-    { y: 48, width: 56 },
-  ],
-  G: [
-    { y: 0, width: 56 },
-    { y: 12, width: 20 },
-    { x: 36, y: 12, width: 20 },
-    { y: 24, width: 20 },
-    { x: 24, y: 24, width: 32, tone: 'accent' },
-    { y: 36, width: 20 },
-    { x: 36, y: 36, width: 20 },
-    { y: 48, width: 56 },
-  ],
-  A: [
-    { y: 0, width: 56 },
-    { y: 12, width: 20 },
-    { x: 36, y: 12, width: 20, tone: 'accent' },
-    { y: 24, width: 56 },
-    { y: 36, width: 20 },
-    { x: 36, y: 36, width: 20 },
-    { y: 48, width: 20 },
-    { x: 36, y: 48, width: 20 },
-  ],
-  M: [
-    { y: 0, width: 20 },
-    { x: 36, y: 0, width: 20 },
-    { y: 12, width: 56 },
-    { y: 24, width: 20 },
-    { x: 18, y: 24, width: 20, tone: 'accent' },
-    { x: 36, y: 24, width: 20 },
-    { y: 36, width: 20 },
-    { x: 36, y: 36, width: 20 },
-    { y: 48, width: 20 },
-    { x: 36, y: 48, width: 20 },
-  ],
-  K: [
-    { y: 0, width: 20 },
-    { x: 36, y: 0, width: 20 },
-    { y: 12, width: 20 },
-    { x: 28, y: 12, width: 20, tone: 'accent' },
-    { y: 24, width: 56 },
-    { y: 36, width: 20 },
-    { x: 28, y: 36, width: 20 },
-    { y: 48, width: 20 },
-    { x: 36, y: 48, width: 20 },
-  ],
-  I: [
-    { y: 0, width: 56 },
-    { x: 18, y: 12, width: 20, tone: 'accent' },
-    { x: 18, y: 24, width: 20 },
-    { x: 18, y: 36, width: 20 },
-    { y: 48, width: 56 },
-  ],
-  T: [
-    { y: 0, width: 56 },
-    { x: 18, y: 12, width: 20, tone: 'accent' },
-    { x: 18, y: 24, width: 20 },
-    { x: 18, y: 36, width: 20 },
-    { x: 18, y: 48, width: 20 },
-  ],
-} satisfies Record<string, ProgramKitBar[]>
+const scheduleTrackWidth = 2400
+const scheduleRowOffsets = [0, 12, 24, 36, 48]
+// Slots sit on a shared column grid — a 24-wide cell plus a 12 gutter — so the
+// field reads as booked time rather than as noise.
+const scheduleColumnPitch = 36
+const scheduleColumnStart = 3
 
-type ProgramKitBarLetter = 'P' | keyof typeof programKitLetterBars
+// The agenda drifts off to the right and thins as it goes, so it is generated
+// once from a fixed seed: the same rhythm on every render and every visit.
+function buildScheduleSlots(): ScheduleSlot[] {
+  let seed = 20260809
+  const next = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648
+    return seed / 2147483648
+  }
 
-const programKitBarWord: ProgramKitBarLetter[] = ['P', 'R', 'O', 'G', 'R', 'A', 'M', 'K', 'I', 'T']
+  return scheduleRowOffsets.flatMap((y, row) => {
+    const slots: ScheduleSlot[] = []
+    // Stagger each row's first column so the left edge doesn't march in step.
+    let column = scheduleColumnStart + (row % 3)
+
+    while (column * scheduleColumnPitch < scheduleTrackWidth) {
+      const span = next() < 0.55 ? 1 : next() < 0.75 ? 2 : 3
+      const x = column * scheduleColumnPitch
+      // Density falls off across the track, so the field dissolves rather than
+      // stopping at a hard edge.
+      const density = 0.66 - 0.32 * (x / scheduleTrackWidth)
+
+      if (next() < density) {
+        slots.push({ x, y, width: span * scheduleColumnPitch - 12, booked: next() < 0.14 })
+        column += span
+      }
+
+      column += 1
+    }
+
+    return slots
+  })
+}
+
+const scheduleSlots = buildScheduleSlots()
 
 function BackgroundProgramMark({ active = false }) {
   const surface = active ? 'bg-blue-500/10 ring-blue-400/20' : 'bg-transparent'
@@ -249,32 +206,26 @@ function FooterProgramField() {
   )
 }
 
-function ProgramKitBarWord() {
+function ProgramKitScheduleTrack() {
   return (
     <svg
-      viewBox="0 0 632 58"
+      viewBox="-2 -2 2404 62"
       aria-hidden="true"
       focusable="false"
       className="h-9 w-auto shrink-0 sm:h-10"
     >
-      {programKitBarWord.map((letter, index) => (
-        <g key={`${letter}-${index}`} transform={`translate(${index * 64} 0)`}>
-          {letter === 'P' ? (
-            <ProgramKitMarkBars />
-          ) : (
-            programKitLetterBars[letter].map((bar, barIndex) => (
-              <rect
-                key={`${bar.y}-${bar.x ?? 0}-${barIndex}`}
-                className={bar.tone === 'accent' ? 'fill-blue-300' : 'fill-blue-600'}
-                x={bar.x ?? 0}
-                y={bar.y}
-                width={bar.width}
-                height="10"
-                rx="3"
-              />
-            ))
-          )}
-        </g>
+      <ProgramKitMarkBars />
+      {scheduleSlots.map((slot) => (
+        <rect
+          key={`${slot.x}-${slot.y}`}
+          className={`stroke-blue-600/20 ${slot.booked ? 'fill-blue-600/8' : 'fill-none'}`}
+          strokeWidth="2.5"
+          x={slot.x}
+          y={slot.y}
+          width={slot.width}
+          height="10"
+          rx="3"
+        />
       ))}
     </svg>
   )
@@ -284,12 +235,10 @@ function ProgramKitRhythmBand() {
   return (
     <div
       aria-hidden="true"
-      className="select-none overflow-hidden border-y border-zinc-950/8 bg-blue-50/50 py-4"
+      className="select-none overflow-hidden border-y border-zinc-950/8 py-4 [mask-image:linear-gradient(to_right,black_0%,black_35%,transparent_100%)]"
     >
-      <div className="flex w-max items-center gap-12 px-5 sm:gap-16 sm:px-8">
-        {Array.from({ length: 4 }, (_, index) => (
-          <ProgramKitBarWord key={index} />
-        ))}
+      <div className="flex w-max items-center px-5 sm:px-8">
+        <ProgramKitScheduleTrack />
       </div>
     </div>
   )
