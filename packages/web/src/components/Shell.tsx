@@ -29,6 +29,7 @@ import { createPortal } from 'react-dom'
 import { submissionPipelineSummary } from '@programkit/core'
 
 import type { DemoStatus } from '../lib/demo.ts'
+import { publicProgramPath, publicSubmissionPath } from '../lib/public-links.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 import { CommandCenter, type CommandMode, type ProgramCommand } from './CommandCenter.tsx'
 import { DemoBanner } from './DemoBanner.tsx'
@@ -176,11 +177,13 @@ function SidebarUtilities({
   navigate,
   onOpenShortcuts,
   demoUrl,
+  eventId,
   onNavigate,
 }: {
   navigate: (to: string) => void
   onOpenShortcuts: () => void
   demoUrl?: string
+  eventId?: string
   onNavigate?: () => void
 }) {
   const [copied, setCopied] = useState(false)
@@ -214,7 +217,7 @@ function SidebarUtilities({
     {
       label: demoUrl ? 'View public page' : 'Preview public page',
       icon: ArrowTopRightOnSquareIcon,
-      action: () => open('/agenda'),
+      action: () => open(eventId ? publicProgramPath(eventId) : '/agenda'),
     },
     ...(demoUrl
       ? [
@@ -676,7 +679,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
         id: 'public-program',
         label: 'Published program',
         description: 'Open the attendee-facing agenda.',
-        href: '/agenda',
+        href: payload ? publicProgramPath(payload.state.activeEventId) : '/agenda',
         section: 'Public',
         icon: CalendarDaysIcon,
         keywords: ['public', 'embed', 'attendees'],
@@ -691,7 +694,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
         id: 'public-cfp',
         label: 'Public call for proposals',
         description: 'See the form as a prospective speaker.',
-        href: `/submit/${openForm.slug}`,
+        href: publicSubmissionPath(openForm.eventId, openForm.slug),
         section: 'Public',
         icon: DocumentTextIcon,
         keywords: ['cfp', 'submit', 'speaker', 'preview'],
@@ -793,6 +796,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
             navigate={navigate}
             onOpenShortcuts={() => setCommandMode('shortcuts')}
             demoUrl={demoUrl}
+            eventId={activeEvent?.id}
           />
         </aside>
 
@@ -862,6 +866,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                     navigate={navigate}
                     onOpenShortcuts={() => setCommandMode('shortcuts')}
                     demoUrl={demoUrl}
+                    eventId={activeEvent?.id}
                     onNavigate={() => setMobileOpen(false)}
                   />
                 </div>

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   createProgramKitHttpClient,
+  publicProgramPath,
+  publicSubmissionPath,
   surfaceFromPathname,
   surfaceKey,
   type WorkspacePayload,
@@ -24,6 +26,20 @@ const emptyPayload = {
 } as unknown as WorkspacePayload
 
 describe('ProgramKit web client', () => {
+  it('adds the event capability to public links only on the hosted app', () => {
+    const eventId = 'evt_1234567890abcdef12345678'
+    expect(publicProgramPath(eventId, 'hosted-app')).toBe(
+      '/agenda?event=evt_1234567890abcdef12345678',
+    )
+    expect(publicSubmissionPath(eventId, 'summer/cfp', 'hosted-app')).toBe(
+      '/submit/summer%2Fcfp?event=evt_1234567890abcdef12345678',
+    )
+    expect(publicProgramPath(eventId, 'hosted-demo')).toBe('/agenda')
+    expect(publicSubmissionPath(eventId, 'summer-cfp', 'single-workspace')).toBe(
+      '/submit/summer-cfp',
+    )
+  })
+
   it('maps deep links to explicit surfaces', () => {
     expect(surfaceFromPathname('/forms')).toEqual({ kind: 'operator' })
     expect(surfaceFromPathname('/submit/aie-nyc-2026-cfp')).toEqual({

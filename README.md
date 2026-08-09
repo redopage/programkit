@@ -131,6 +131,7 @@ Worker build, and plugin validation.
 - [Documentation map](docs/README.md)
 - [Program lifecycle](docs/product/program-lifecycle.md)
 - [Product status and roadmap](ROADMAP.md)
+- [Competition evaluator readiness](docs/product/evaluator-gap-analysis.md)
 - [Architecture](ARCHITECTURE.md)
 - [Deployment](DEPLOYMENT.md)
 - [HTTP API](docs/api/README.md)

@@ -56,7 +56,9 @@ interface Env {
 const workspaceCookieName = 'programkit_workspace'
 const eventCookieName = 'programkit_event'
 const sessionCookieName = 'programkit_session'
+const publicEventCookieName = 'programkit_public_event'
 const workspaceKeyPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u
+const hostedEventIdPattern = /^evt_[a-f0-9]{24}$/u
 const airtableCallbackPath = '/api/v1/integrations/airtable/oauth/callback'
 
 function deploymentProfile(env: Env) {
@@ -201,6 +203,19 @@ function clearAuthCookie(name: string, url: URL) {
     .join('; ')
 }
 
+function hostedPublicEventCookie(value: string, url: URL) {
+  return [
+    `${publicEventCookieName}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=2592000',
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
 function authStub(env: Env, shard: string) {
   if (!env.PROGRAMKIT_AUTH) return null
   return env.PROGRAMKIT_AUTH.get(env.PROGRAMKIT_AUTH.idFromName(`account_${shard}`))
@@ -268,8 +283,24 @@ function hostedStaffActor(principal: HostedPrincipal) {
   }
 }
 
-function isHostedPublicPage(pathname: string) {
+function isHostedAlwaysPublicPage(pathname: string) {
   return pathname === '/login' || pathname === '/privacy' || pathname === '/terms'
+}
+
+function isHostedPublicDocument(pathname: string) {
+  return pathname === '/agenda' || pathname.startsWith('/submit/')
+}
+
+function hostedPublicEventId(request: Request, url: URL) {
+  if (isDocumentNavigation(request) && isHostedPublicDocument(url.pathname)) {
+    const requested = url.searchParams.get('event')
+    return requested && hostedEventIdPattern.test(requested) ? requested : null
+  }
+  if (url.pathname.startsWith('/public/')) {
+    const selected = cookie(request, publicEventCookieName)
+    return selected && hostedEventIdPattern.test(selected) ? selected : null
+  }
+  return null
 }
 
 function escapeHtml(value: string) {
@@ -303,6 +334,29 @@ async function initializeHostedEvent(
   if (!response.ok && response.status !== 409) {
     throw new Error('The event workspace could not be initialized.')
   }
+}
+
+async function hostedEventExists(stub: DurableObjectStub<WorkspaceDurableObject>, eventId: string) {
+  const response = await stub.fetch(new Request('http://workspace.internal/internal/event/status'))
+  if (!response.ok) return false
+  const body = (await response.json()) as { ok?: boolean; event?: { id?: string } }
+  return body.ok === true && body.event?.id === eventId
+}
+
+function unavailablePublicEvent(request: Request) {
+  if (!isDocumentNavigation(request)) {
+    return Response.json(
+      { ok: false, error: 'This public event link is no longer available.' },
+      { status: 404, headers: { 'cache-control': 'no-store' } },
+    )
+  }
+  return new Response(
+    '<!doctype html><meta name="viewport" content="width=device-width"><title>Event unavailable</title><main style="font:16px system-ui;max-width:32rem;margin:20vh auto;padding:24px"><h1>This event link is not available.</h1><p>Ask the organizer for a current ProgramKit link.</p><a href="https://programkit.dev">About ProgramKit</a></main>',
+    {
+      status: 404,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+    },
+  )
 }
 
 async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
@@ -655,6 +709,12 @@ export default {
     const url = new URL(request.url)
     const profile = deploymentProfile(env)
     let hostedPrincipal: HostedPrincipal | null = null
+    const publicEventId = profile === 'hosted-app' ? hostedPublicEventId(request, url) : null
+    const hostedPublicDocument =
+      Boolean(publicEventId) &&
+      isDocumentNavigation(request) &&
+      isHostedPublicDocument(url.pathname)
+    const hostedPublicApi = Boolean(publicEventId) && url.pathname.startsWith('/public/')
 
     if (
       profile === 'hosted-app' &&
@@ -677,19 +737,21 @@ export default {
       if (
         request.method === 'GET' &&
         isDocumentNavigation(request) &&
-        !isHostedPublicPage(url.pathname) &&
+        !isHostedAlwaysPublicPage(url.pathname) &&
+        !hostedPublicDocument &&
         !hostedPrincipal
       ) {
         return redirect(url, '/login')
       }
-      if (
-        !hostedPrincipal &&
-        (url.pathname.startsWith('/api/') ||
-          url.pathname.startsWith('/public/') ||
-          url.pathname === '/mcp')
-      ) {
+      if (!hostedPrincipal && (url.pathname.startsWith('/api/') || url.pathname === '/mcp')) {
         return Response.json(
           { ok: false, error: 'Sign in to continue.' },
+          { status: 401, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+      if (!hostedPrincipal && url.pathname.startsWith('/public/') && !hostedPublicApi) {
+        return Response.json(
+          { ok: false, error: 'Open this page from an event-specific public link.' },
           { status: 401, headers: { 'cache-control': 'no-store' } },
         )
       }
@@ -939,9 +1001,11 @@ export default {
         }),
       )
     }
-    let key = hostedPrincipal
-      ? eventWorkspaceKey(hostedPrincipal.account.activeEventId)
-      : workspaceKey(env, request)
+    let key = publicEventId
+      ? eventWorkspaceKey(publicEventId)
+      : hostedPrincipal
+        ? eventWorkspaceKey(hostedPrincipal.account.activeEventId)
+        : workspaceKey(env, request)
     let newWorkspaceCookie: string | undefined
     if (
       !env.AIRTABLE_BASE_ID &&
@@ -952,6 +1016,15 @@ export default {
       newWorkspaceCookie = key
     }
     const stub = workspaceStub(env, key)
+
+    if (
+      profile === 'hosted-app' &&
+      publicEventId &&
+      (hostedPublicDocument || hostedPublicApi) &&
+      !(await hostedEventExists(stub, publicEventId))
+    ) {
+      return unavailablePublicEvent(request)
+    }
 
     const requiresDemoWorkspace =
       profile === 'hosted-demo' &&
@@ -1070,6 +1143,9 @@ export default {
             : profile
     const headers = new Headers(assetResponse.headers)
     headers.set('cache-control', 'no-store')
+    if (profile === 'hosted-app' && hostedPublicDocument && publicEventId) {
+      headers.append('set-cookie', hostedPublicEventCookie(publicEventId, url))
+    }
     const response = new Response(assetResponse.body, assetResponse)
     for (const [name, value] of headers) response.headers.set(name, value)
     return new HTMLRewriter()

@@ -16,9 +16,11 @@ not maintain a second version of product or architecture facts.
    depth that is still needed.
 4. [Evaluator gap analysis](product/evaluator-gap-analysis.md) maps the complete competition rubric
    to working evidence and missing end-to-end depth.
-5. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
+5. [Evaluator runbook](product/evaluator-runbook.md) explains how to produce repeatable browser
+   evidence without overstating a seeded screen.
+6. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
    competition brief.
-6. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
+7. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
    processor, and persistence boundary.
 
 ### I want to run or adapt ProgramKit
@@ -61,6 +63,7 @@ Start at [Agent navigation](agents/README.md). Coding agents should also read th
 | -------------------------------------------------- | ------------------------------------------------------------------------- |
 | What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                                             |
 | How do we compare with the full evaluator?         | [`evaluator-gap-analysis.md`](product/evaluator-gap-analysis.md)          |
+| How do we run and record evaluator evidence?       | [`evaluator-runbook.md`](product/evaluator-runbook.md)                    |
 | Why are the packages and hosts separated?          | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                                   |
 | How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                                       |
 | Which service owns each kind of data?              | [`storage-and-integrations.md`](architecture/storage-and-integrations.md) |

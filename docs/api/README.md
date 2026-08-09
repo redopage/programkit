@@ -140,11 +140,33 @@ ProgramKit does not return the operator workspace to every client.
 Each scoped surface has an ownership check and, where writes are allowed, a narrow operation
 allowlist. Public program data comes only from the latest immutable schedule release.
 
+On `app.programkit.dev`, organizers share the same-origin document links
+`/agenda?event={eventId}` and `/submit/{slug}?event={eventId}`. The Worker verifies that the event
+exists and sets an HTTP-only event-routing cookie for the public projection requests made by that
+page. This cookie cannot call operator endpoints or select another event. Local and disposable demo
+workspaces continue to use `/agenda` and `/submit/{slug}` because their workspace is already scoped
+by the host.
+
+## External API key contract
+
+External API keys are not implemented yet. The intended contract is deliberately small:
+
+- an organizer creates a named, event-scoped key and chooses explicit read or write scopes;
+- the secret is shown once, only a hash is stored, and a non-secret prefix identifies the key;
+- keys may expire, are independently revocable, and record their last successful use;
+- clients send `Authorization: Bearer pk_live_...` over HTTPS;
+- the host resolves the key to a server-owned event, actor, and scopes before core code runs; and
+- requests share the same rate limits, idempotency rules, named operations, and audit events as the
+  web application.
+
+The first management surface should support list, create, copy-once, and revoke. OAuth is a later
+addition for integrations that need delegated installation across many ProgramKit accounts.
+
 ## Production API milestones
 
 The next API work is intentionally practical:
 
-1. API-token and OAuth identity with event-scoped read and write scopes.
+1. Hashed API-key identity with event-scoped read and write scopes, followed by delegated OAuth.
 2. Signed webhooks with endpoint subscriptions, retry history, replay, and secret rotation.
 3. Bulk import operations capped at a documented batch size with per-item results.
 4. Direct-to-R2 upload initiation and finalize endpoints with type, size, ownership, and scanning

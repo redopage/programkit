@@ -102,6 +102,10 @@ The three official hosts are separate runtime profiles built from this repositor
   outbound email.
 - `app.programkit.dev` uses verified staff sessions and isolated event objects.
 
-The hosted app currently keeps public CFP, reviewer, and speaker routes behind the staff session
-until event-scoped public links and participant identities are implemented. The demo remains the
-safe place to evaluate those sample-data flows.
+The hosted app exposes event-specific public CFP and agenda links without a staff session. A link
+uses `?event={eventId}` on the initial document request. The Worker validates stored event metadata,
+sets an HTTP-only routing cookie, and serves only the public form or immutable published-program
+projection from that event object. The event ID is routing context, not organizer authorization.
+
+Reviewer and speaker routes remain behind the staff session until verified per-person identities
+are implemented. The demo remains the safe place to evaluate those sample-data flows.

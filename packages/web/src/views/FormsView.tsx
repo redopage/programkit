@@ -33,6 +33,7 @@ import {
   textControl,
 } from '../components/ui.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
+import { publicSubmissionPath } from '../lib/public-links.ts'
 
 function fieldKindLabel(kind: SubmissionFormField['kind']) {
   const labels: Record<SubmissionFormField['kind'], string> = {
@@ -1055,7 +1056,9 @@ export function FormsView({
                 <Button
                   variant="primary"
                   disabled={activeForm.status !== 'open' || dirty}
-                  onClick={() => navigate(`/submit/${activeForm.slug}`)}
+                  onClick={() =>
+                    navigate(publicSubmissionPath(activeForm.eventId, activeForm.slug))
+                  }
                 >
                   Open published form
                   <ArrowTopRightOnSquareIcon className="size-4 h-lh shrink-0 fill-current" />

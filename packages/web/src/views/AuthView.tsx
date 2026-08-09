@@ -59,8 +59,7 @@ export function AuthView() {
               Check your email
             </h1>
             <p className="pt-3 text-pretty text-base/7 text-zinc-600 sm:text-sm/6">
-              We sent a secure sign-in link to{' '}
-              <span className="font-medium text-zinc-950">{email}</span>.
+              We sent a sign-in link to <span className="font-medium text-zinc-950">{email}</span>.
             </p>
             <Button
               variant="secondary"
@@ -83,7 +82,7 @@ export function AuthView() {
               Sign in to ProgramKit
             </h1>
             <p className="pt-3 text-pretty text-base/7 text-zinc-600 sm:text-sm/6">
-              Enter your email and we’ll send a secure sign-in link.
+              Enter your email to continue.
             </p>
             <div className="pt-7 text-left">
               <label htmlFor="auth-email" className="text-sm font-medium text-zinc-800">
@@ -110,15 +109,6 @@ export function AuthView() {
             {error ? <p className="pt-3 text-left text-sm text-red-600">{error}</p> : null}
           </form>
         )}
-
-        <div className="flex justify-center gap-4 pt-14 text-base text-zinc-500 sm:pt-16 sm:text-sm">
-          <a className="focus-ring rounded-md underline-offset-4 hover:underline" href="/privacy">
-            Privacy
-          </a>
-          <a className="focus-ring rounded-md underline-offset-4 hover:underline" href="/terms">
-            Terms
-          </a>
-        </div>
       </div>
     </main>
   )

@@ -12,6 +12,7 @@ import { scheduleConflicts, type WorkspaceState } from '@programkit/core'
 
 import { eventDateTime, toZonedDateTimeInput, zonedDateTimeInputToIso } from '../lib/date.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
+import { publicProgramPath } from '../lib/public-links.ts'
 import {
   Button,
   Callout,
@@ -147,7 +148,10 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         title="Schedule studio"
         actions={
           <>
-            <Button variant="secondary" onClick={() => navigate('/agenda')}>
+            <Button
+              variant="secondary"
+              onClick={() => navigate(publicProgramPath(state.activeEventId))}
+            >
               <GlobeAltIcon className="size-4 h-lh shrink-0 fill-current" />
               Preview agenda
             </Button>

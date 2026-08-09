@@ -4,7 +4,7 @@
 
 ProgramKit contains production-shaped domain controls and a working passwordless staff session for
 the hosted app. It does not yet have production-complete team membership, participant and reviewer
-identity, MCP OAuth, public event links, or file storage.
+identity, MCP OAuth, or file storage.
 
 Do not place real participant data, provider credentials, private documents, or production email
 access in the reference deployment.
@@ -22,9 +22,10 @@ access in the reference deployment.
 - Caller-supplied actor headers and body actors never become the trusted staff actor.
 - Logout revokes the stored session and clears its cookies.
 
-The hosted app currently keeps participant, reviewer, CFP, public agenda, MCP, and file workflows
-behind the staff session. Do not treat that temporary restriction as their final authorization
-model.
+The hosted app keeps participant, reviewer, MCP, and file workflows behind the staff session. Public
+CFP and agenda documents may be opened through an event-specific link. The Worker validates the
+event ID before setting an HTTP-only routing cookie, and that cookie reaches only public projections
+and public submission operations. It is not staff authentication and cannot access operator APIs.
 
 The anonymous demo intentionally makes all sample workflows immediately inspectable:
 
@@ -103,8 +104,8 @@ authorization decision in another deployment.
    participation.
 3. Protect `/mcp` with OAuth. Map token audience, workspace, actor, and scopes server-side; reject
    missing, expired, replayed, or wrong-audience tokens.
-4. Extend the hosted staff cookie and same-origin boundary to the final participant, reviewer, and
-   public-link surfaces. Add explicit CSRF tokens if cookie or cross-site requirements change.
+4. Add verified participant and reviewer sessions on the same origin. Add explicit CSRF tokens if
+   cookie or cross-site requirements change.
 5. Supply a transactional outbox and idempotent workers for outbound email and webhooks. The demo's
    `campaign.send` only records a `demo-outbox` transition; it does not deliver mail.
 6. Store provider secrets in a managed secret service, never in workspace state, source control,

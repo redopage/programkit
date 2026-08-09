@@ -527,6 +527,12 @@ export class WorkspaceDurableObject extends DurableObject {
       await this.#ctx.storage.put(eventMetadataKey, input)
       return Response.json({ ok: true, event: input }, { status: 201 })
     }
+    if (request.method === 'GET' && url.pathname === '/internal/event/status') {
+      const event = await this.#ctx.storage.get<EventMetadata>(eventMetadataKey)
+      return event
+        ? Response.json({ ok: true, event })
+        : Response.json({ ok: false }, { status: 404 })
+    }
     if (request.method === 'POST' && url.pathname === '/internal/demo/initialize') {
       const input = (await request.json()) as DemoMetadata
       if (

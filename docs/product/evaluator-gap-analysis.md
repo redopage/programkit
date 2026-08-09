@@ -32,13 +32,34 @@ scenario runs and collaborator handoff. It improves test repeatability and safe 
 does not count as the real identity, role membership, or per-person authorization required by the
 scenarios.
 
+## How the V1 evaluator reaches the product
+
+The V1 evaluator is a browser-only runner with strict same-origin navigation. It does not supply
+credentials for any of the 20 scenarios. That creates three practical requirements for the
+evaluation deployment:
+
+- organizer, submitter, reviewer, speaker, and attendee surfaces must be reachable from one origin;
+- public form and agenda links must keep their event context without relying on another subdomain;
+- scenario fixtures and role transitions must be repeatable without asking the evaluator to open an
+  email inbox or leave the product.
+
+The hosted app now emits event-specific public CFP and agenda links on `app.programkit.dev`. The
+event ID is validated before the public page loads and is exchanged for an HTTP-only routing cookie.
+That cookie selects only the event's public projections and does not grant organizer access. The
+seven-day demo remains the preferred evaluator target until deterministic role sessions exist.
+
+Airtable, the Cloudflare runtime, API breadth, repository hosting, and performance are not scored by
+the V1 browser rubric. They remain useful bonus or product-quality work, but should not displace a
+required end-to-end scenario.
+
 ## Recommended implementation order
 
-1. **Real identity and evaluator fixtures.** Add staff, submitter, reviewer, and speaker sessions,
-   workspace membership, and deterministic accounts that the scenarios can use safely.
-2. **One complete file pipeline.** Use R2 for bytes and Airtable for metadata. Reuse it for CFP
+1. **Real identity and evaluator fixtures.** Keep the working staff sign-in, then add team
+   invitations plus submitter, reviewer, and speaker sessions. Provide deterministic evaluator role
+   sessions that do not require external inbox access.
+2. **One complete file pipeline.** Use R2 for bytes and event records for metadata. Reuse it for CFP
    attachments, headshots, slides, and requirement deliverables, including version history and
-   private access.
+   private access. Airtable mirroring must remain optional and outside this critical path.
 3. **Review administration.** Build reviewer pools, exact and bulk assignment, release by round,
    progress, recusal, and export. Keep the existing scoped scorecard as the reviewer surface.
 4. **Scheduling studio depth.** Add the unscheduled tray, multi-day filters, configurable rooms and
@@ -59,7 +80,8 @@ Before claiming an evaluator area, its fixtures and tests should prove:
 
 - a clean seeded workspace can reach the required starting state;
 - the action can be completed through the intended UI without direct state edits;
-- every write persists through Airtable and survives a Durable Object cache rebuild;
+- every write persists in the configured authoritative repository and survives a reload;
+- optional Airtable failures do not block the recommended Durable Object configuration;
 - role-scoped routes hide records and actions the actor must not see;
 - deadlines, locked states, conflicts, and invalid transitions fail on the server;
 - bulk operations report partial or total failure without silent data loss;
@@ -77,3 +99,10 @@ Before claiming an evaluator area, its fixtures and tests should prove:
   Durable Object cache.
 - Do not add more provider choices until the Cloudflare, Airtable, R2, and email golden path is
   complete and documented.
+
+## Buyer-brief work outside the V1 rubric
+
+The original buyer brief also calls for a one-way Accelevents integration and speaker-portal
+resource pages that can include trusted organizer HTML embeds. The V1 evaluator does not currently
+score either capability. Track them after the required CFP, review, portal, file, schedule, and
+public-program flows are dependable.
