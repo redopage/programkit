@@ -83,7 +83,23 @@ function initializeProgramCollections(state: WorkspaceState) {
     submission.speakerAccessKey ??= createId('speaker')
   }
   for (const reviewer of state.reviewers) reviewer.accessKey ??= createId('reviewer')
-  state.schemaVersion = Math.max(state.schemaVersion, 6)
+  for (const participation of state.participations) {
+    participation.portalAccessKey ??= createId('portal')
+  }
+  for (const definition of state.requirementDefinitions) {
+    definition.systemKey ??=
+      definition.id === 'req_confirm'
+        ? 'participation_confirmation'
+        : definition.id === 'req_bio'
+          ? 'profile_bio'
+          : definition.id === 'req_headshot'
+            ? 'profile_headshot'
+            : definition.id === 'req_slides'
+              ? 'final_slides'
+              : null
+    definition.selfCompletable ??= false
+  }
+  state.schemaVersion = Math.max(state.schemaVersion, 8)
 }
 
 function assertRecord(value: unknown, field: string) {
@@ -357,7 +373,7 @@ function optionalDateTime(value: unknown, field: string) {
   return parsed.toISOString()
 }
 
-function assertTimeZone(value: unknown, field: string) {
+function assertTimeZone(value: unknown, field = 'timezone') {
   const timeZone = assertString(value, field)
   try {
     new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date(0))
@@ -1817,6 +1833,7 @@ function applyHandler(
               id: createId('par'),
               eventId: submission.eventId,
               personId: participantPerson.id,
+              portalAccessKey: createId('portal'),
               roles: ['speaker'],
               status: 'invited',
               sessionIds: [],
@@ -1998,7 +2015,7 @@ function applyHandler(
     case 'person.create': {
       const firstName = assertString(input.firstName, 'firstName')
       const lastName = assertString(input.lastName, 'lastName')
-      const email = assertString(input.email, 'email').toLowerCase()
+      const email = assertEmail(input.email)
       if (state.people.some((person) => person.email.toLowerCase() === email)) {
         throw new OperationError('DUPLICATE', 'A person with that email already exists.', {
           email: 'Use the existing person or enter another email.',
@@ -2014,8 +2031,11 @@ function applyHandler(
         company: typeof input.company === 'string' ? input.company.trim() : '',
         title: typeof input.title === 'string' ? input.title.trim() : '',
         city: typeof input.city === 'string' ? input.city.trim() : '',
-        timezone: typeof input.timezone === 'string' ? input.timezone : 'America/New_York',
-        bio: '',
+        timezone:
+          typeof input.timezone === 'string' && input.timezone.trim().length > 0
+            ? assertTimeZone(input.timezone)
+            : state.workspace.timezone,
+        bio: optionalString(input.bio),
         avatarUrl: `https://assets.ui.sh/avatars/${(state.people.length % 12) + 1}.webp`,
         tags: [],
         createdAt: timestamp,
@@ -2033,6 +2053,7 @@ function applyHandler(
         id: participationId,
         eventId: state.activeEventId,
         personId,
+        portalAccessKey: createId('portal'),
         roles: roles as Array<(typeof allowedRoles)[number]>,
         status: 'prospect' as const,
         sessionIds: [],
@@ -2075,6 +2096,103 @@ function applyHandler(
       return { person, participation }
     }
 
+    case 'person.import': {
+      if (!Array.isArray(input.people) || input.people.length === 0 || input.people.length > 500) {
+        throw new OperationError('INVALID_INPUT', 'people must contain between 1 and 500 rows.', {
+          people: 'Choose a CSV with at least one speaker and no more than 500 rows.',
+        })
+      }
+      const existingEmails = new Set(state.people.map((person) => person.email.toLowerCase()))
+      const imported: Array<{ personId: string; participationId: string; email: string }> = []
+      const skipped: string[] = []
+
+      for (const [index, value] of input.people.entries()) {
+        const record = assertRecord(value, `people.${index}`)
+        const email = assertEmail(record.email, `people.${index}.email`)
+        if (existingEmails.has(email)) {
+          skipped.push(email)
+          continue
+        }
+        existingEmails.add(email)
+        const firstName = assertString(record.firstName, `people.${index}.firstName`)
+        const lastName = assertString(record.lastName, `people.${index}.lastName`)
+        const personId = createId('per')
+        const participationId = createId('par')
+        const person: Person = {
+          id: personId,
+          firstName,
+          lastName,
+          email,
+          company: optionalString(record.company),
+          title: optionalString(record.title),
+          city: optionalString(record.city),
+          timezone:
+            typeof record.timezone === 'string' && record.timezone.trim().length > 0
+              ? assertTimeZone(record.timezone, `people.${index}.timezone`)
+              : state.workspace.timezone,
+          bio: optionalString(record.bio),
+          avatarUrl: `https://assets.ui.sh/avatars/${(state.people.length % 12) + 1}.webp`,
+          tags: [],
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          version: 1,
+        }
+        const participation: Participation = {
+          id: participationId,
+          eventId: state.activeEventId,
+          personId,
+          portalAccessKey: createId('portal'),
+          roles: ['speaker'],
+          status: 'prospect',
+          sessionIds: [],
+          internalNotes: '',
+          publicTitle: person.title,
+          publicCompany: person.company,
+          confirmedAt: null,
+          updatedAt: timestamp,
+          version: 1,
+        }
+        state.people.push(person)
+        state.participations.push(participation)
+        for (const definition of state.requirementDefinitions.filter(
+          (entry) => entry.eventId === state.activeEventId,
+        )) {
+          state.requirementInstances.push({
+            id: createId('rqi'),
+            definitionId: definition.id,
+            participationId,
+            status: 'not_started',
+            value: '',
+            submittedAt: null,
+            reviewedAt: null,
+            updatedAt: timestamp,
+            version: 1,
+          })
+        }
+        appendEvent(state, context, {
+          type: 'person.created',
+          aggregate: { type: 'person', id: personId, version: 1 },
+          summary: `Imported ${firstName} ${lastName}.`,
+          data: { participationId },
+        })
+        appendEvent(state, context, {
+          type: 'participation.created',
+          aggregate: { type: 'participation', id: participationId, version: 1 },
+          summary: `Added ${firstName} ${lastName} to the active event.`,
+          data: { personId, roles: ['speaker'] },
+        })
+        imported.push({ personId, participationId, email })
+      }
+
+      appendEvent(state, context, {
+        type: 'people.imported',
+        aggregate: { type: 'workspace', id: state.workspace.id, version: state.revision + 1 },
+        summary: `Imported ${imported.length} people and skipped ${skipped.length} existing emails.`,
+        data: { imported: imported.length, skipped: skipped.length },
+      })
+      return { imported, skipped }
+    }
+
     case 'person.update': {
       const person = findRequired(state.people, input.personId, 'person')
       const editable = [
@@ -2090,7 +2208,23 @@ function applyHandler(
       const changed: string[] = []
       for (const field of editable) {
         if (typeof input[field] === 'string' && input[field] !== person[field]) {
-          person[field] = input[field].trim()
+          const next =
+            field === 'email'
+              ? assertEmail(input[field])
+              : field === 'timezone'
+                ? assertTimeZone(input[field])
+                : input[field].trim()
+          if (
+            field === 'email' &&
+            state.people.some(
+              (entry) => entry.id !== person.id && entry.email.toLowerCase() === next.toLowerCase(),
+            )
+          ) {
+            throw new OperationError('DUPLICATE', 'A person with that email already exists.', {
+              email: 'Use a different email address.',
+            })
+          }
+          person[field] = next
           changed.push(field)
         }
       }
@@ -2142,7 +2276,7 @@ function applyHandler(
         }
       }
       const allowedTransitions: Record<ParticipationStatus, ParticipationStatus[]> = {
-        prospect: ['invited', 'withdrawn'],
+        prospect: ['invited', 'confirmed', 'withdrawn'],
         invited: ['confirmed', 'declined', 'withdrawn'],
         confirmed: ['withdrawn'],
         declined: ['invited'],
@@ -2163,11 +2297,13 @@ function applyHandler(
       participation.updatedAt = timestamp
       participation.version += 1
       if (nextStatus === 'confirmed') {
-        const confirmation = state.requirementInstances.find(
-          (instance) =>
-            instance.participationId === participation.id &&
-            instance.definitionId === 'req_confirm',
-        )
+        const confirmation = state.requirementInstances.find((instance) => {
+          if (instance.participationId !== participation.id) return false
+          const definition = state.requirementDefinitions.find(
+            (entry) => entry.id === instance.definitionId,
+          )
+          return definition?.systemKey === 'participation_confirmation'
+        })
         if (confirmation) {
           confirmation.status = 'approved'
           confirmation.submittedAt = timestamp
@@ -2187,6 +2323,74 @@ function applyHandler(
         data: { previous, next: nextStatus },
       })
       return { participation }
+    }
+
+    case 'requirement.create': {
+      const label = assertString(input.label, 'label')
+      const description = optionalString(input.description)
+      const dueAt = assertString(input.dueAt, 'dueAt')
+      if (Number.isNaN(new Date(dueAt).getTime())) {
+        throw new OperationError('INVALID_INPUT', 'dueAt must be a valid date and time.', {
+          dueAt: 'Choose a valid due date.',
+        })
+      }
+      const participationIds = [
+        ...new Set(assertStringArray(input.participationIds, 'participationIds')),
+      ]
+      if (participationIds.length === 0) {
+        throw new OperationError('INVALID_INPUT', 'Choose at least one participant.', {
+          participationIds: 'Select one or more people.',
+        })
+      }
+      const participations = participationIds.map((participationId) => {
+        const participation = findRequired(state.participations, participationId, 'participation')
+        if (participation.eventId !== state.activeEventId) {
+          throw new OperationError(
+            'FORBIDDEN',
+            'Tasks can only be assigned within the active event.',
+          )
+        }
+        return participation
+      })
+      const definition = {
+        id: createId('req'),
+        eventId: state.activeEventId,
+        label,
+        description,
+        kind: 'confirmation' as const,
+        systemKey: null,
+        selfCompletable: true,
+        dueAt: new Date(dueAt).toISOString(),
+        required: input.required !== false,
+      }
+      const instances = participations.map((participation) => ({
+        id: createId('rqi'),
+        definitionId: definition.id,
+        participationId: participation.id,
+        status: 'not_started' as const,
+        value: '',
+        submittedAt: null,
+        reviewedAt: null,
+        updatedAt: timestamp,
+        version: 1,
+      }))
+      state.requirementDefinitions.push(definition)
+      state.requirementInstances.push(...instances)
+      appendEvent(state, context, {
+        type: 'requirement.created',
+        aggregate: { type: 'requirement-definition', id: definition.id, version: 1 },
+        summary: `Created task “${label}” for ${instances.length} ${instances.length === 1 ? 'person' : 'people'}.`,
+        data: { participationIds, dueAt: definition.dueAt },
+      })
+      for (const instance of instances) {
+        appendEvent(state, context, {
+          type: 'requirement.assigned',
+          aggregate: { type: 'requirement', id: instance.id, version: 1 },
+          summary: `Assigned “${label}”.`,
+          data: { participationId: instance.participationId, definitionId: definition.id },
+        })
+      }
+      return { requirementDefinition: definition, requirementInstances: instances }
     }
 
     case 'requirement.set-status': {
@@ -2209,14 +2413,21 @@ function applyHandler(
         'waived',
       ] as const)
       const previous = instance.status
+      const definition = findRequired(
+        state.requirementDefinitions,
+        instance.definitionId,
+        'requirement definition',
+      )
       if (context.actor.type === 'participant') {
-        if (
-          nextStatus !== 'submitted' ||
-          (previous !== 'not_started' && previous !== 'revision_requested')
-        ) {
+        const incomplete = previous === 'not_started' || previous === 'revision_requested'
+        const participantCanComplete =
+          definition.selfCompletable && nextStatus === 'approved' && incomplete
+        const participantCanSubmit =
+          !definition.selfCompletable && nextStatus === 'submitted' && incomplete
+        if (!participantCanComplete && !participantCanSubmit) {
           throw new OperationError(
             'FORBIDDEN',
-            'Participants can submit their own incomplete requirements; review decisions require staff.',
+            'Participants can complete action tasks or submit their own incomplete requirements; review decisions require staff.',
           )
         }
       }
@@ -2226,9 +2437,6 @@ function applyHandler(
       if (nextStatus === 'approved' || nextStatus === 'waived') instance.reviewedAt = timestamp
       instance.updatedAt = timestamp
       instance.version += 1
-      const definition = state.requirementDefinitions.find(
-        (entry) => entry.id === instance.definitionId,
-      )
       appendEvent(state, context, {
         type: 'requirement.status-changed',
         aggregate: { type: 'requirement', id: instance.id, version: instance.version },
@@ -2275,6 +2483,44 @@ function applyHandler(
       if (typeof input.bio === 'string' && input.bio.trim() !== person.bio) {
         person.bio = input.bio.trim()
         changed.push('bio')
+      }
+      if (typeof input.bio === 'string') {
+        const bioDefinition = state.requirementDefinitions.find(
+          (entry) => entry.eventId === participation.eventId && entry.systemKey === 'profile_bio',
+        )
+        const bioRequirement = bioDefinition
+          ? state.requirementInstances.find(
+              (entry) =>
+                entry.definitionId === bioDefinition.id &&
+                entry.participationId === participation.id,
+            )
+          : null
+        const nextBioStatus = input.bio.trim().length > 0 ? 'approved' : 'not_started'
+        if (bioRequirement && bioRequirement.status !== nextBioStatus) {
+          const previous = bioRequirement.status
+          bioRequirement.status = nextBioStatus
+          bioRequirement.value = input.bio.trim()
+          bioRequirement.submittedAt = nextBioStatus === 'approved' ? timestamp : null
+          bioRequirement.reviewedAt = nextBioStatus === 'approved' ? timestamp : null
+          bioRequirement.updatedAt = timestamp
+          bioRequirement.version += 1
+          appendEvent(state, context, {
+            type: 'requirement.status-changed',
+            aggregate: {
+              type: 'requirement',
+              id: bioRequirement.id,
+              version: bioRequirement.version,
+            },
+            summary: `Speaker bio changed from ${previous} to ${nextBioStatus}.`,
+            data: { participationId: participation.id, previous, next: nextBioStatus },
+          })
+          appendEvent(state, context, {
+            type: 'participation.readiness-changed',
+            aggregate: { type: 'participation', id: participation.id, version: 1 },
+            summary: 'Participant readiness was recalculated.',
+            data: { requirementInstanceId: bioRequirement.id },
+          })
+        }
       }
       if (changed.length > 0) {
         participation.updatedAt = timestamp

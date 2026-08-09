@@ -48,3 +48,16 @@ export function reviewerAccessPath(
     profile,
   )
 }
+
+export function speakerPortalPath(
+  eventId: string,
+  participationId: string,
+  portalAccessKey: string,
+  profile: DeploymentProfile = currentDeploymentProfile(),
+) {
+  return withHostedEvent(
+    `/portal/${encodeURIComponent(participationId)}/${encodeURIComponent(portalAccessKey)}`,
+    eventId,
+    profile,
+  )
+}

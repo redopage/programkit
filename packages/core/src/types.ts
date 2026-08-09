@@ -58,6 +58,7 @@ export interface Participation {
   id: Id
   eventId: Id
   personId: Id
+  portalAccessKey: string
   roles: Array<'speaker' | 'moderator' | 'panelist' | 'chair' | 'workshop_lead'>
   status: ParticipationStatus
   sessionIds: Id[]
@@ -75,6 +76,9 @@ export interface RequirementDefinition {
   label: string
   description: string
   kind: 'confirmation' | 'text' | 'file' | 'form' | 'approval'
+  systemKey:
+    'participation_confirmation' | 'profile_bio' | 'profile_headshot' | 'final_slides' | null
+  selfCompletable: boolean
   dueAt: ISODateTime
   required: boolean
 }

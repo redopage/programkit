@@ -325,7 +325,8 @@ function isHostedPublicDocument(pathname: string) {
   return (
     pathname === '/agenda' ||
     pathname.startsWith('/submit/') ||
-    /^\/reviewer\/[^/]+\/[^/]+\/?$/u.test(pathname)
+    /^\/reviewer\/[^/]+\/[^/]+\/?$/u.test(pathname) ||
+    /^\/portal\/[^/]+\/[^/]+\/?$/u.test(pathname)
   )
 }
 
@@ -1569,7 +1570,7 @@ export default {
     }
 
     if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/public/')) {
-      const portalMatch = url.pathname.match(/^\/api\/v1\/portal\/([^/]+)\//u)
+      const portalMatch = url.pathname.match(/^\/(?:api|public)\/v1\/portal\/([^/]+)\//u)
       const reviewerMatch = url.pathname.match(/^\/(?:api|public)\/v1\/reviewers\/([^/]+)\//u)
       const publicSubmissionMatch = url.pathname.match(
         /^\/public\/v1\/submission-forms\/([^/]+)\//u,

@@ -53,8 +53,10 @@ function publicState(state: WorkspaceState) {
   return clone
 }
 
-function participantState(state: WorkspaceState, participationId: string) {
-  const participation = state.participations.find((entry) => entry.id === participationId)
+function participantState(state: WorkspaceState, participationId: string, portalAccessKey: string) {
+  const participation = state.participations.find(
+    (entry) => entry.id === participationId && entry.portalAccessKey === portalAccessKey,
+  )
   if (!participation) return null
   const person = state.people.find((entry) => entry.id === participation.personId)
   if (!person) return null
@@ -90,10 +92,19 @@ function participantState(state: WorkspaceState, participationId: string) {
   clone.reviewerAssignments = []
   clone.scorecards = []
   clone.reviewDecisions = []
-  clone.tracks = []
-  clone.rooms = []
-  clone.sessions = []
-  clone.placements = []
+  const sessionIds = new Set(participation.sessionIds)
+  clone.sessions = state.sessions.filter(
+    (entry) => entry.eventId === participation.eventId && sessionIds.has(entry.id),
+  )
+  const trackIds = new Set(clone.sessions.map((entry) => entry.trackId))
+  clone.tracks = state.tracks.filter(
+    (entry) => entry.eventId === participation.eventId && trackIds.has(entry.id),
+  )
+  clone.placements = state.placements.filter((entry) => sessionIds.has(entry.sessionId))
+  const roomIds = new Set(clone.placements.map((entry) => entry.roomId))
+  clone.rooms = state.rooms.filter(
+    (entry) => entry.eventId === participation.eventId && roomIds.has(entry.id),
+  )
   clone.scheduleReleases = []
   clone.campaigns = []
   clone.changeSets = []
@@ -530,15 +541,19 @@ export async function handleCoreRequest(
     return json(projectionPayload(projected))
   }
 
-  const portalStateMatch = path.match(/^\/api\/v1\/portal\/([^/]+)\/state$/u)
+  const portalStateMatch = path.match(/^\/(?:api|public)\/v1\/portal\/([^/]+)\/state$/u)
   if (request.method === 'GET' && portalStateMatch) {
     const participationId = decodeURIComponent(portalStateMatch[1])
     if (actor.type !== 'participant' || actor.id !== participationId) {
       return json({ error: 'The participant session does not match this portal.' }, { status: 403 })
     }
     const state = await repository.read()
-    const projected = participantState(state, participationId)
-    if (!projected) return json({ error: 'Participant not found.' }, { status: 404 })
+    const projected = participantState(
+      state,
+      participationId,
+      request.headers.get('x-programkit-portal-key') ?? '',
+    )
+    if (!projected) return json({ error: 'This speaker link is unavailable.' }, { status: 403 })
     return json({
       state: projected,
       derived: {
@@ -551,7 +566,9 @@ export async function handleCoreRequest(
   const operatorOperation = path.startsWith('/api/v1/operations/')
     ? decodeURIComponent(path.slice('/api/v1/operations/'.length))
     : null
-  const portalOperationMatch = path.match(/^\/api\/v1\/portal\/([^/]+)\/operations\/(.+)$/u)
+  const portalOperationMatch = path.match(
+    /^\/(?:api|public)\/v1\/portal\/([^/]+)\/operations\/(.+)$/u,
+  )
   const reviewerOperationMatch = path.match(
     /^\/(?:api|public)\/v1\/reviewers\/([^/]+)\/operations\/(.+)$/u,
   )
@@ -570,6 +587,18 @@ export async function handleCoreRequest(
       : null
     if (participationId && (actor.type !== 'participant' || actor.id !== participationId)) {
       return json({ error: 'The participant session does not match this portal.' }, { status: 403 })
+    }
+    if (participationId) {
+      const state = await repository.read()
+      const validPortalLink = state.participations.some(
+        (participation) =>
+          participation.id === participationId &&
+          participation.eventId === state.activeEventId &&
+          participation.portalAccessKey === request.headers.get('x-programkit-portal-key'),
+      )
+      if (!validPortalLink) {
+        return json({ error: 'This speaker link is unavailable.' }, { status: 403 })
+      }
     }
     const reviewerId = reviewerOperationMatch ? decodeURIComponent(reviewerOperationMatch[1]) : null
     if (reviewerId && (actor.type !== 'reviewer' || actor.id !== reviewerId)) {

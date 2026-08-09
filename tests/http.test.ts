@@ -132,7 +132,9 @@ describe('operation HTTP surface', () => {
       scopes: ['participations:write', 'requirements:write', 'portal:write'],
     }
     const response = await handleCoreRequest(
-      new Request('http://local/api/v1/portal/par_003/state'),
+      new Request('http://local/public/v1/portal/par_003/state', {
+        headers: { 'x-programkit-portal-key': 'portal_003_per_003' },
+      }),
       repository,
       { actor },
     )
@@ -146,10 +148,23 @@ describe('operation HTTP surface', () => {
     expect(body.state.changeSets).toHaveLength(0)
     expect(body.state.domainEvents).toHaveLength(0)
     expect(body.state.submissions).toHaveLength(0)
+    expect(body.state.sessions.length).toBeGreaterThan(0)
+    expect(body.state.sessions.every((session) => session.participantIds.includes('par_003'))).toBe(
+      true,
+    )
     expect(body.state.reviewers).toHaveLength(0)
     expect(body.state.reviewerAssignments).toHaveLength(0)
     expect(body.state.scorecards).toHaveLength(0)
     expect(body.state.reviewDecisions).toHaveLength(0)
+
+    const denied = await handleCoreRequest(
+      new Request('http://local/public/v1/portal/par_003/state', {
+        headers: { 'x-programkit-portal-key': 'wrong-key' },
+      }),
+      repository,
+      { actor },
+    )
+    expect(denied?.status).toBe(403)
   })
 
   it('serves distinct public and reviewer projections without operator records', async () => {

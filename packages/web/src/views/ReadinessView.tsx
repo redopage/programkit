@@ -4,8 +4,9 @@ import {
   EnvelopeIcon,
   ExclamationTriangleIcon,
   MinusIcon,
+  PlusIcon,
 } from '@heroicons/react/16/solid'
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 
 import { readinessRows } from '@programkit/core'
 
@@ -22,6 +23,8 @@ import {
   StatusBadge,
   Toolbar,
   cx,
+  textAreaControl,
+  textControl,
 } from '../components/ui.tsx'
 
 type ReadinessFilter = 'all' | 'blockers' | 'review' | 'ready'
@@ -59,6 +62,7 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
   const [filter, setFilter] = useState<ReadinessFilter>('all')
   const [search, setSearch] = useState('')
   const [selectedParticipationId, setSelectedParticipationId] = useState<string | null>(null)
+  const [addingTask, setAddingTask] = useState(false)
   if (!payload) return null
   const { state, derived } = payload
   const query = search.trim().toLowerCase()
@@ -71,16 +75,25 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
   })
   const selected =
     state.participations.find((entry) => entry.id === selectedParticipationId) ?? null
+  const actionTasks = state.requirementDefinitions.filter(
+    (definition) => definition.eventId === state.activeEventId && definition.selfCompletable,
+  )
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Readiness"
         actions={
-          <Button onClick={() => navigate('/communications')}>
-            <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
-            Draft reminder
-          </Button>
+          <>
+            <Button variant="secondary" onClick={() => setAddingTask(true)}>
+              <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
+              Add task
+            </Button>
+            <Button onClick={() => navigate('/communications')}>
+              <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
+              Draft reminder
+            </Button>
+          </>
         }
       />
 
@@ -92,6 +105,82 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
           { label: 'Awaiting review', value: derived.readiness.awaitingReview },
         ]}
       />
+
+      {actionTasks.length > 0 ? (
+        <section aria-labelledby="speaker-tasks-heading">
+          <div className="flex items-end justify-between gap-4 border-b border-zinc-950/10 pb-3">
+            <div>
+              <h2 id="speaker-tasks-heading" className="text-lg font-semibold text-zinc-950">
+                Speaker tasks
+              </h2>
+              <p className="text-base text-zinc-500 sm:text-sm">
+                Plain action items speakers can complete in their portal.
+              </p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-2xl">
+              <thead>
+                <tr className="border-b border-zinc-950/10">
+                  {['Task', 'Due', 'Assigned to', 'Progress'].map((heading) => (
+                    <th
+                      key={heading}
+                      scope="col"
+                      className="py-2.5 pr-6 text-left text-sm font-medium text-zinc-500 last:pr-0 last:text-right"
+                    >
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-950/5">
+                {actionTasks.map((definition) => {
+                  const instances = state.requirementInstances.filter(
+                    (instance) => instance.definitionId === definition.id,
+                  )
+                  const assignees = instances
+                    .map((instance) => {
+                      const participation = state.participations.find(
+                        (entry) => entry.id === instance.participationId,
+                      )
+                      const person = participation
+                        ? state.people.find((entry) => entry.id === participation.personId)
+                        : null
+                      return person ? `${person.firstName} ${person.lastName}` : null
+                    })
+                    .filter((name): name is string => Boolean(name))
+                  const completed = instances.filter(
+                    (instance) => instance.status === 'approved' || instance.status === 'waived',
+                  ).length
+                  return (
+                    <tr key={definition.id}>
+                      <td className="py-3 pr-6">
+                        <p className="text-sm font-medium text-zinc-950">{definition.label}</p>
+                        {definition.description ? (
+                          <p className="max-w-md truncate text-sm text-zinc-500">
+                            {definition.description}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="whitespace-nowrap py-3 pr-6 text-sm text-zinc-600">
+                        {new Intl.DateTimeFormat('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        }).format(new Date(definition.dueAt))}
+                      </td>
+                      <td className="py-3 pr-6 text-sm text-zinc-600">{assignees.join(', ')}</td>
+                      <td className="whitespace-nowrap py-3 text-right text-sm font-medium tabular-nums text-zinc-950">
+                        {completed} of {instances.length}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <Toolbar>
         <FilterTabs
@@ -168,10 +257,16 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
                         </button>
                       </td>
                       {state.requirementDefinitions.map((definition) => {
-                        const status = row.requirementStatuses[definition.id] ?? 'not_started'
+                        const status = row.requirementStatuses[definition.id]
                         return (
                           <td key={definition.id} className="px-2 py-3 text-center">
-                            <ReadinessCell status={status} label={definition.label} />
+                            {status ? (
+                              <ReadinessCell status={status} label={definition.label} />
+                            ) : (
+                              <span className="text-zinc-300" title="Not assigned">
+                                —<span className="sr-only">{definition.label}: not assigned</span>
+                              </span>
+                            )}
                           </td>
                         )
                       })}
@@ -219,13 +314,16 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
                       <ProgressBar value={row.percent} />
                     </span>
                     <span className="mt-3 flex flex-wrap gap-1.5">
-                      {state.requirementDefinitions.map((definition) => (
-                        <ReadinessCell
-                          key={definition.id}
-                          status={row.requirementStatuses[definition.id] ?? 'not_started'}
-                          label={definition.label}
-                        />
-                      ))}
+                      {state.requirementDefinitions.map((definition) => {
+                        const status = row.requirementStatuses[definition.id]
+                        return status ? (
+                          <ReadinessCell
+                            key={definition.id}
+                            status={status}
+                            label={definition.label}
+                          />
+                        ) : null
+                      })}
                     </span>
                   </span>
                 </span>
@@ -240,7 +338,162 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
         open={Boolean(selected)}
         onClose={() => setSelectedParticipationId(null)}
       />
+      <AddTaskDrawer open={addingTask} onClose={() => setAddingTask(false)} />
     </div>
+  )
+}
+
+function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { payload, execute, mutating } = useWorkspace()
+  const [form, setForm] = useState({
+    label: '',
+    description: '',
+    dueDate: '',
+    participationIds: [] as string[],
+  })
+  if (!payload) return null
+  const { state } = payload
+  const people = state.participations
+    .map((participation) => ({
+      participation,
+      person: state.people.find((entry) => entry.id === participation.personId)!,
+    }))
+    .sort((left, right) => left.person.lastName.localeCompare(right.person.lastName))
+
+  function toggleParticipant(participationId: string) {
+    setForm((current) => ({
+      ...current,
+      participationIds: current.participationIds.includes(participationId)
+        ? current.participationIds.filter((id) => id !== participationId)
+        : [...current.participationIds, participationId],
+    }))
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const response = await execute(
+      'requirement.create',
+      {
+        label: form.label,
+        description: form.description,
+        dueAt: `${form.dueDate}T23:59:59.000Z`,
+        participationIds: form.participationIds,
+      },
+      undefined,
+      `${form.label} assigned to ${form.participationIds.length} ${
+        form.participationIds.length === 1 ? 'person' : 'people'
+      }.`,
+    )
+    if (!response.ok) return
+    setForm({ label: '', description: '', dueDate: '', participationIds: [] })
+    onClose()
+  }
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title="Add speaker task"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            form="add-speaker-task-form"
+            disabled={mutating || form.participationIds.length === 0}
+          >
+            Add task
+          </Button>
+        </>
+      }
+    >
+      <form
+        id="add-speaker-task-form"
+        className="flex flex-col gap-5"
+        onSubmit={(event) => void submit(event)}
+      >
+        <label className="flex flex-col gap-1.5">
+          <span className="text-base font-medium text-zinc-950 sm:text-sm">Task</span>
+          <input
+            type="text"
+            name="label"
+            required
+            placeholder="Complete bio and profile"
+            value={form.label}
+            onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))}
+            className={textControl}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-base font-medium text-zinc-950 sm:text-sm">Due date</span>
+          <input
+            type="date"
+            name="dueDate"
+            required
+            value={form.dueDate}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, dueDate: event.target.value }))
+            }
+            className={textControl}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-base font-medium text-zinc-950 sm:text-sm">
+            Instructions <span className="font-normal text-zinc-500">(optional)</span>
+          </span>
+          <textarea
+            name="description"
+            rows={4}
+            value={form.description}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, description: event.target.value }))
+            }
+            className={textAreaControl}
+          />
+        </label>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-base font-medium text-zinc-950 sm:text-sm">Assign to</legend>
+          <div className="overflow-hidden rounded-2xl ring-1 ring-zinc-950/10">
+            {people.map(({ participation, person }) => (
+              <label
+                key={participation.id}
+                className="flex min-h-12 cursor-pointer items-center gap-3 border-b border-zinc-950/5 px-4 py-2.5 last:border-b-0 hover:bg-zinc-950/2"
+              >
+                <input
+                  type="checkbox"
+                  name="participationIds"
+                  value={participation.id}
+                  checked={form.participationIds.includes(participation.id)}
+                  onChange={() => toggleParticipant(participation.id)}
+                  className="focus-ring size-4 rounded border-zinc-300 text-blue-600"
+                />
+                <Avatar
+                  src={person.avatarUrl}
+                  name={`${person.firstName} ${person.lastName}`}
+                  size="small"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base font-medium text-zinc-950 sm:text-sm">
+                    {person.firstName} {person.lastName}
+                  </span>
+                  <span className="block truncate text-base text-zinc-500 sm:text-sm">
+                    {person.email}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="text-base text-zinc-500 sm:text-sm">
+            {form.participationIds.length === 0
+              ? 'Choose one or more speakers.'
+              : `${form.participationIds.length} selected`}
+          </p>
+        </fieldset>
+      </form>
+    </Drawer>
   )
 }
 

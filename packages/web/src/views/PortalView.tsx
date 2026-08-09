@@ -1,8 +1,9 @@
 import {
-  ArrowLeftIcon,
+  CalendarDaysIcon,
   CheckCircleIcon,
   ClockIcon,
   DocumentArrowUpIcon,
+  MapPinIcon,
 } from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
 
@@ -28,9 +29,9 @@ export function PortalView() {
 function PortalWorkspace() {
   const { payload, execute, mutating } = useWorkspace()
   const state = payload!.state
-  const participation =
-    state.participations.find((entry) => entry.id === 'par_003') ?? state.participations[0]
+  const participation = state.participations[0]
   const person = state.people.find((entry) => entry.id === participation.personId)!
+  const event = state.events.find((entry) => entry.id === participation.eventId)!
   const row = readinessRows(state).find((entry) => entry.participationId === participation.id)!
   const [form, setForm] = useState({
     publicTitle: participation.publicTitle,
@@ -57,23 +58,14 @@ function PortalWorkspace() {
       <header className="border-b border-zinc-950/5 bg-white">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <a
-            href={`/portal/${participation.id}`}
+            href="#"
             aria-label="Homepage"
             className="focus-ring text-base font-semibold tracking-tight text-zinc-950"
             onClick={(event) => event.preventDefault()}
           >
-            AIE NYC
+            {event.name}
           </a>
-          <button
-            type="button"
-            className="focus-ring flex items-center gap-2 rounded-lg text-base text-zinc-500 hover:text-zinc-950 sm:text-sm"
-            onClick={() => {
-              window.location.href = '/'
-            }}
-          >
-            <ArrowLeftIcon className="size-4 h-lh shrink-0 fill-current" />
-            Operator demo
-          </button>
+          <p className="text-base text-zinc-500 sm:text-sm">Speaker portal</p>
         </div>
       </header>
 
@@ -91,7 +83,7 @@ function PortalWorkspace() {
                 Welcome, {person.firstName}
               </h1>
               <p className="truncate text-base text-zinc-500 sm:text-sm">
-                {sentenceCase(participation.roles.join(', '))} · AIE NYC 2026
+                {sentenceCase(participation.roles.join(', '))} · {event.name}
               </p>
             </div>
           </div>
@@ -114,8 +106,8 @@ function PortalWorkspace() {
               <div className="max-w-2xl">
                 <h2 className="text-xl font-semibold">Confirm your participation</h2>
                 <p className="text-pretty text-base text-zinc-300 sm:text-sm">
-                  Confirm that you plan to join us in Brooklyn on October 4–5. You can update
-                  logistics later.
+                  Confirm that you plan to join us in {event.city} for {event.name}. You can update
+                  your profile and remaining tasks afterward.
                 </p>
               </div>
               <Button
@@ -134,6 +126,52 @@ function PortalWorkspace() {
                 Confirm participation
               </Button>
             </div>
+          </section>
+        ) : null}
+
+        {state.sessions.length > 0 ? (
+          <section
+            aria-labelledby="sessions-heading"
+            className="rounded-2xl p-5 ring-1 ring-zinc-950/10 sm:p-6"
+          >
+            <div className="border-b border-zinc-950/5 pb-3">
+              <h2 id="sessions-heading" className="text-lg font-semibold text-zinc-950">
+                Your sessions
+              </h2>
+            </div>
+            <ul role="list" className="divide-y divide-zinc-950/5">
+              {state.sessions.map((session) => {
+                const placement = state.placements.find((entry) => entry.sessionId === session.id)
+                const room = state.rooms.find((entry) => entry.id === placement?.roomId)
+                const track = state.tracks.find((entry) => entry.id === session.trackId)
+                return (
+                  <li key={session.id} className="flex flex-col gap-2 py-4">
+                    <p className="text-base font-medium text-zinc-950">{session.title}</p>
+                    <div className="flex flex-wrap gap-x-5 gap-y-1 text-base text-zinc-500 sm:text-sm">
+                      {placement ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <CalendarDaysIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
+                          {new Intl.DateTimeFormat('en-US', {
+                            timeZone: event.timezone,
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          }).format(new Date(placement.startsAt))}
+                        </span>
+                      ) : null}
+                      {room ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <MapPinIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
+                          {room.name}
+                        </span>
+                      ) : null}
+                      {track ? <span>{track.name}</span> : null}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
           </section>
         ) : null}
 
@@ -176,6 +214,14 @@ function PortalWorkspace() {
                             <p className="text-pretty text-base text-zinc-500 sm:text-sm">
                               {definition.description}
                             </p>
+                            <p className="pt-1 text-base text-zinc-500 sm:text-sm">
+                              Due{' '}
+                              {new Intl.DateTimeFormat('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              }).format(new Date(definition.dueAt))}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -186,7 +232,8 @@ function PortalWorkspace() {
                         <span className="flex sm:w-24 sm:justify-end">
                           {(instance.status === 'not_started' ||
                             instance.status === 'revision_requested') &&
-                          definition.id !== 'req_confirm' ? (
+                          definition.systemKey !== 'participation_confirmation' &&
+                          definition.systemKey !== 'profile_bio' ? (
                             <Button
                               size="compact"
                               disabled={mutating}
@@ -195,16 +242,24 @@ function PortalWorkspace() {
                                   'requirement.set-status',
                                   {
                                     requirementInstanceId: instance.id,
-                                    status: 'submitted',
-                                    value: 'Submitted through participant portal.',
+                                    status: definition.selfCompletable ? 'approved' : 'submitted',
+                                    value: definition.selfCompletable
+                                      ? 'Completed through participant portal.'
+                                      : 'Submitted through participant portal.',
                                   },
                                   { expectedVersions: { [instance.id]: instance.version } },
-                                  `${definition.label} submitted for review.`,
+                                  definition.selfCompletable
+                                    ? `${definition.label} completed.`
+                                    : `${definition.label} submitted for review.`,
                                 )
                               }
                             >
-                              <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
-                              Submit
+                              {definition.selfCompletable ? (
+                                <CheckCircleIcon className="size-4 h-lh shrink-0 fill-current" />
+                              ) : (
+                                <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
+                              )}
+                              {definition.selfCompletable ? 'Mark complete' : 'Submit'}
                             </Button>
                           ) : null}
                         </span>

@@ -38,7 +38,7 @@ function stateEndpoint(surface: ProgramKitSurface) {
     case 'reviewer':
       return `/public/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/state`
     case 'speaker':
-      return `/api/v1/portal/${encodeURIComponent(surface.participationId)}/state`
+      return `/public/v1/portal/${encodeURIComponent(surface.participationId)}/state`
     case 'public-program':
       return '/public/v1/program/state'
     case 'operator':
@@ -54,7 +54,7 @@ function operationEndpoint(surface: ProgramKitSurface, operation: string) {
     case 'reviewer':
       return `/public/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/operations/${encodedOperation}`
     case 'speaker':
-      return `/api/v1/portal/${encodeURIComponent(surface.participationId)}/operations/${encodedOperation}`
+      return `/public/v1/portal/${encodeURIComponent(surface.participationId)}/operations/${encodedOperation}`
     case 'operator':
       return `/api/v1/operations/${encodedOperation}`
     case 'public-program':
@@ -77,6 +77,9 @@ export function createProgramKitHttpClient(
     const result = requestHeaders(headers)
     if (surface.kind === 'reviewer' && surface.reviewerAccessKey) {
       result.set('x-programkit-reviewer-key', surface.reviewerAccessKey)
+    }
+    if (surface.kind === 'speaker' && surface.portalAccessKey) {
+      result.set('x-programkit-portal-key', surface.portalAccessKey)
     }
     return result
   }

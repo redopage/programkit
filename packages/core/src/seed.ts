@@ -180,6 +180,7 @@ const participations: Participation[] = people.map((person, index) => ({
   id: `par_${String(index + 1).padStart(3, '0')}`,
   eventId,
   personId: person.id,
+  portalAccessKey: `portal_${String(index + 1).padStart(3, '0')}_${person.id}`,
   roles:
     index === 2 || index === 8
       ? ['moderator']
@@ -208,6 +209,8 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'Confirm participation',
     description: 'Accept the invitation and confirm attendance.',
     kind: 'confirmation',
+    systemKey: 'participation_confirmation',
+    selfCompletable: false,
     dueAt: '2026-08-21T21:00:00.000Z',
     required: true,
   },
@@ -217,6 +220,8 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'Speaker bio',
     description: 'Provide a public bio of no more than 600 characters.',
     kind: 'text',
+    systemKey: 'profile_bio',
+    selfCompletable: false,
     dueAt: '2026-09-04T21:00:00.000Z',
     required: true,
   },
@@ -226,6 +231,8 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'Headshot',
     description: 'Upload a square, high-resolution public headshot.',
     kind: 'file',
+    systemKey: 'profile_headshot',
+    selfCompletable: false,
     dueAt: '2026-09-04T21:00:00.000Z',
     required: true,
   },
@@ -235,6 +242,8 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'Recording release',
     description: 'Review and sign the event recording release.',
     kind: 'approval',
+    systemKey: null,
+    selfCompletable: false,
     dueAt: '2026-09-11T21:00:00.000Z',
     required: true,
   },
@@ -244,6 +253,8 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'AV requirements',
     description: 'Tell the production team what you need on stage.',
     kind: 'form',
+    systemKey: null,
+    selfCompletable: false,
     dueAt: '2026-09-18T21:00:00.000Z',
     required: true,
   },
@@ -253,6 +264,8 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'Final slides',
     description: 'Upload the final presentation deck.',
     kind: 'file',
+    systemKey: 'final_slides',
+    selfCompletable: false,
     dueAt: '2026-09-25T21:00:00.000Z',
     required: true,
   },
@@ -1217,7 +1230,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 6,
+    schemaVersion: 8,
     revision: 1,
     workspace: {
       id: 'wrk_aie',

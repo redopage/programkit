@@ -6,6 +6,7 @@ import {
   executeOperation,
   nextActions,
   publicAgenda,
+  readinessRows,
   readinessSummary,
   reviewerQueue,
   scheduleConflicts,
@@ -178,6 +179,75 @@ describe('ProgramKit operation engine', () => {
     )
   })
 
+  it('validates speaker profiles and preserves biographies', () => {
+    const state = createSeedState()
+    const created = executeOperation(state, 'person.create', {
+      input: {
+        firstName: 'Dana',
+        lastName: 'Kowalski',
+        email: 'DANA@EXAMPLE.COM',
+        timezone: 'America/Los_Angeles',
+        bio: 'Runs the developer-experience organization.',
+      },
+    })
+    expect(created.response.ok).toBe(true)
+    expect(created.state.people.at(-1)).toMatchObject({
+      email: 'dana@example.com',
+      timezone: 'America/Los_Angeles',
+      bio: 'Runs the developer-experience organization.',
+    })
+    expect(created.state.participations.at(-1)?.portalAccessKey).toMatch(/^portal_/u)
+
+    const invalid = executeOperation(created.state, 'person.create', {
+      input: {
+        firstName: 'Bad',
+        lastName: 'Zone',
+        email: 'bad@example.com',
+        timezone: 'Central-ish',
+      },
+    })
+    expect(invalid.response.error).toMatchObject({ code: 'INVALID_INPUT' })
+    expect(invalid.response.error?.fields?.timezone).toBeTruthy()
+  })
+
+  it('imports speaker rows atomically and skips existing email addresses', () => {
+    const state = createSeedState()
+    const imported = executeOperation(state, 'person.import', {
+      input: {
+        people: [
+          {
+            firstName: 'Dana',
+            lastName: 'Kowalski',
+            email: 'dana@example.com',
+            company: 'Substrate',
+            bio: 'Runs developer experience.',
+          },
+          {
+            firstName: 'Jordan',
+            lastName: 'Bell',
+            email: 'jordan@commonthread.org',
+          },
+        ],
+      },
+    })
+    expect(imported.response.ok).toBe(true)
+    expect(imported.response.data).toMatchObject({
+      imported: [expect.objectContaining({ email: 'dana@example.com' })],
+      skipped: ['jordan@commonthread.org'],
+    })
+    expect(imported.state.people).toContainEqual(
+      expect.objectContaining({
+        firstName: 'Dana',
+        company: 'Substrate',
+        bio: 'Runs developer experience.',
+      }),
+    )
+    const dana = imported.state.people.find((person) => person.email === 'dana@example.com')!
+    expect(imported.state.participations.find((entry) => entry.personId === dana.id)).toMatchObject(
+      { roles: ['speaker'], status: 'prospect' },
+    )
+  })
+
   it('keeps participant portal access scoped to the matching participation', () => {
     const state = createSeedState()
     const target = state.requirementInstances.find((entry) => entry.participationId === 'par_004')!
@@ -222,6 +292,71 @@ describe('ProgramKit operation engine', () => {
     expect(selfReactivation.response.error?.code).toBe('FORBIDDEN')
   })
 
+  it('creates one reusable task and lets each assigned speaker complete their own instance', () => {
+    const state = createSeedState()
+    const unassignedBefore = readinessRows(state).find(
+      (entry) => entry.participationId === 'par_005',
+    )!
+    const created = executeOperation(state, 'requirement.create', {
+      input: {
+        label: 'Confirm travel plans',
+        description: 'Add your arrival and departure details.',
+        dueAt: '2026-09-15T23:59:59.000Z',
+        participationIds: ['par_003', 'par_004'],
+      },
+    })
+    expect(created.response.ok).toBe(true)
+    expect(created.response.data).toMatchObject({
+      requirementDefinition: {
+        label: 'Confirm travel plans',
+        selfCompletable: true,
+        systemKey: null,
+      },
+      requirementInstances: [
+        expect.objectContaining({ participationId: 'par_003', status: 'not_started' }),
+        expect.objectContaining({ participationId: 'par_004', status: 'not_started' }),
+      ],
+    })
+    expect(
+      readinessRows(created.state).find((entry) => entry.participationId === 'par_005'),
+    ).toMatchObject({
+      total: unassignedBefore.total,
+      percent: unassignedBefore.percent,
+      blockers: unassignedBefore.blockers,
+    })
+    const ownTask = created.state.requirementInstances.find(
+      (entry) =>
+        entry.participationId === 'par_003' &&
+        created.state.requirementDefinitions.find(
+          (definition) => definition.id === entry.definitionId,
+        )?.label === 'Confirm travel plans',
+    )!
+    const completed = executeOperation(created.state, 'requirement.set-status', {
+      input: {
+        requirementInstanceId: ownTask.id,
+        status: 'approved',
+        value: 'Completed through participant portal.',
+      },
+      expectedVersions: { [ownTask.id]: ownTask.version },
+      actor: {
+        type: 'participant',
+        id: 'par_003',
+        name: 'Jordan Bell',
+        scopes: ['requirements:write'],
+      },
+    })
+    expect(completed.response.ok).toBe(true)
+    expect(
+      completed.state.requirementInstances.find((entry) => entry.id === ownTask.id),
+    ).toMatchObject({ status: 'approved', reviewedAt: expect.any(String) })
+    expect(
+      completed.state.requirementInstances.find(
+        (entry) =>
+          entry.definitionId === ownTask.definitionId && entry.participationId === 'par_004',
+      ),
+    ).toMatchObject({ status: 'not_started' })
+  })
+
   it('keeps event-specific public identity separate from the global person record', () => {
     const state = createSeedState()
     const participation = state.participations.find((entry) => entry.id === 'par_003')!
@@ -231,6 +366,7 @@ describe('ProgramKit operation engine', () => {
         participationId: participation.id,
         publicTitle: 'Event title',
         publicCompany: 'Event company',
+        bio: 'A public biography updated through the speaker portal.',
       },
       actor: {
         type: 'participant',
@@ -246,7 +382,17 @@ describe('ProgramKit operation engine', () => {
     expect(updated.state.people.find((entry) => entry.id === person.id)).toMatchObject({
       title: person.title,
       company: person.company,
+      bio: 'A public biography updated through the speaker portal.',
     })
+    const bioDefinition = updated.state.requirementDefinitions.find(
+      (entry) => entry.systemKey === 'profile_bio',
+    )!
+    expect(
+      updated.state.requirementInstances.find(
+        (entry) =>
+          entry.definitionId === bioDefinition.id && entry.participationId === participation.id,
+      ),
+    ).toMatchObject({ status: 'approved', submittedAt: expect.any(String) })
   })
 
   it('enforces nested permissions when proposals are created', () => {

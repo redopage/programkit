@@ -230,7 +230,10 @@ export function readinessRows(state: WorkspaceState): ReadinessRow[] {
         instances.map((instance) => [instance.definitionId, instance.status]),
       )
       const relevant = state.requirementDefinitions.filter(
-        (definition) => definition.eventId === participation.eventId && definition.required,
+        (definition) =>
+          definition.eventId === participation.eventId &&
+          definition.required &&
+          Object.hasOwn(requirementStatuses, definition.id),
       )
       const completed = relevant.filter((definition) => {
         const status = requirementStatuses[definition.id]

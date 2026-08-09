@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   createProgramKitHttpClient,
+  parseSpeakerCsv,
   publicProgramPath,
   publicSubmissionPath,
   reviewerAccessPath,
+  speakerPortalPath,
   surfaceFromPathname,
   surfaceKey,
   type WorkspacePayload,
@@ -42,6 +44,9 @@ describe('ProgramKit web client', () => {
     expect(reviewerAccessPath(eventId, 'rev/1', 'key/1', 'hosted-app')).toBe(
       '/reviewer/rev%2F1/key%2F1?event=evt_1234567890abcdef12345678',
     )
+    expect(speakerPortalPath(eventId, 'par/1', 'portal/1', 'hosted-app')).toBe(
+      '/portal/par%2F1/portal%2F1?event=evt_1234567890abcdef12345678',
+    )
   })
 
   it('maps deep links to explicit surfaces', () => {
@@ -55,11 +60,29 @@ describe('ProgramKit web client', () => {
       reviewerId: 'rev_001',
       reviewerAccessKey: 'reviewer_elena',
     })
-    expect(surfaceFromPathname('/portal/par_003')).toEqual({
+    expect(surfaceFromPathname('/portal/par_003/portal_123')).toEqual({
       kind: 'speaker',
       participationId: 'par_003',
+      portalAccessKey: 'portal_123',
     })
     expect(surfaceKey(surfaceFromPathname('/agenda'))).toBe('public-program')
+  })
+
+  it('parses the speaker fixture shape including quoted biographies', () => {
+    expect(
+      parseSpeakerCsv(
+        'name,email,title,company,bio\nDana Kowalski,dana@example.com,Manager,Substrate,"Runs DX; ex-CI lead."',
+      ),
+    ).toEqual([
+      {
+        firstName: 'Dana',
+        lastName: 'Kowalski',
+        email: 'dana@example.com',
+        title: 'Manager',
+        company: 'Substrate',
+        bio: 'Runs DX; ex-CI lead.',
+      },
+    ])
   })
 
   it('uses the scoped endpoint selected by the surface', async () => {
@@ -84,6 +107,13 @@ describe('ProgramKit web client', () => {
     expect(new Headers(receivedInit?.headers).get('x-programkit-reviewer-key')).toBe(
       'reviewer_elena',
     )
+
+    await client.readSurface(
+      { kind: 'speaker', participationId: 'par_003', portalAccessKey: 'portal_123' },
+      signal,
+    )
+    expect(receivedInput).toBe('/public/v1/portal/par_003/state')
+    expect(new Headers(receivedInit?.headers).get('x-programkit-portal-key')).toBe('portal_123')
   })
 
   it('rejects operations that do not belong to a surface before fetching', async () => {

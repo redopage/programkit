@@ -1,9 +1,19 @@
-import { ArrowDownTrayIcon, EnvelopeIcon, PlusIcon } from '@heroicons/react/16/solid'
+import {
+  ArrowDownTrayIcon,
+  ArrowUpTrayIcon,
+  ArrowTopRightOnSquareIcon,
+  ClipboardDocumentIcon,
+  EnvelopeIcon,
+  PencilSquareIcon,
+  PlusIcon,
+} from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
 
 import { participationPerson, readinessRows, type Person } from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
+import { speakerPortalPath } from '../lib/public-links.ts'
+import { parseSpeakerCsv, type SpeakerCsvRow } from '../lib/speaker-csv.ts'
 import {
   Avatar,
   Button,
@@ -18,6 +28,7 @@ import {
   cx,
   sentenceCase,
   textControl,
+  textAreaControl,
 } from '../components/ui.tsx'
 
 type PeopleFilter = 'all' | 'confirmed' | 'unconfirmed' | 'incomplete'
@@ -28,6 +39,7 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
   const [filter, setFilter] = useState<PeopleFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(initialPersonId ?? null)
   const [adding, setAdding] = useState(false)
+  const [importing, setImporting] = useState(false)
   if (!payload) return null
   const { state } = payload
   const rows = readinessRows(state)
@@ -69,6 +81,10 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
               <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
               Export
             </Button>
+            <Button variant="secondary" onClick={() => setImporting(true)}>
+              <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
+              Import CSV
+            </Button>
             <Button variant="primary" onClick={() => setAdding(true)}>
               <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
               Add person
@@ -99,8 +115,8 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
       </Toolbar>
 
       <p className="text-base text-zinc-500 sm:text-sm">
-        <span className="font-medium tabular-nums text-zinc-950">{records.length}</span> people in
-        this view
+        <span className="font-medium tabular-nums text-zinc-950">{records.length}</span>{' '}
+        {records.length === 1 ? 'person' : 'people'} in this view
       </p>
 
       {records.length === 0 ? (
@@ -234,6 +250,12 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
         execute={execute}
         mutating={mutating}
       />
+      <ImportSpeakersDrawer
+        open={importing}
+        onClose={() => setImporting(false)}
+        execute={execute}
+        mutating={mutating}
+      />
     </div>
   )
 }
@@ -249,7 +271,21 @@ function PersonDrawer({
 }) {
   const { payload, execute, mutating } = useWorkspace()
   const [tab, setTab] = useState<'details' | 'requirements' | 'activity'>('details')
+  const [editing, setEditing] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [inviteDrafted, setInviteDrafted] = useState(false)
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    company: '',
+    title: '',
+    city: '',
+    timezone: '',
+    bio: '',
+  })
   if (!payload || !person) return null
+  const currentPerson = person
   const { state } = payload
   const participation = state.participations.find((entry) => entry.personId === person.id)!
   const instances = state.requirementInstances.filter(
@@ -268,6 +304,69 @@ function PersonDrawer({
     ['requirements', 'Requirements'],
     ['activity', 'Activity'],
   ] as const
+  const portalHref = participation.portalAccessKey
+    ? speakerPortalPath(state.activeEventId, participation.id, participation.portalAccessKey)
+    : null
+  const statusOptions = {
+    prospect: ['prospect', 'invited', 'confirmed', 'withdrawn'],
+    invited: ['invited', 'confirmed', 'declined', 'withdrawn'],
+    confirmed: ['confirmed', 'withdrawn'],
+    declined: ['declined', 'invited'],
+    withdrawn: ['withdrawn', 'invited'],
+  }[participation.status]
+
+  function startEditing() {
+    setEditForm({
+      firstName: currentPerson.firstName,
+      lastName: currentPerson.lastName,
+      email: currentPerson.email,
+      company: currentPerson.company,
+      title: currentPerson.title,
+      city: currentPerson.city,
+      timezone: currentPerson.timezone,
+      bio: currentPerson.bio,
+    })
+    setEditing(true)
+  }
+
+  async function saveDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const response = await execute(
+      'person.update',
+      { personId: currentPerson.id, ...editForm },
+      { expectedVersions: { [currentPerson.id]: currentPerson.version } },
+      `${editForm.firstName} ${editForm.lastName} updated.`,
+    )
+    if (response.ok) setEditing(false)
+  }
+
+  async function copyPortalLink() {
+    if (!portalHref) return
+    await navigator.clipboard.writeText(new URL(portalHref, window.location.origin).toString())
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1800)
+  }
+
+  async function draftPortalInvite() {
+    if (!portalHref) return
+    const event = state.events.find((entry) => entry.id === state.activeEventId)
+    const portalUrl = new URL(portalHref, window.location.origin).toString()
+    const response = await execute(
+      'campaign.create-draft',
+      {
+        name: `Portal invitation: ${currentPerson.firstName} ${currentPerson.lastName}`,
+        subject: `Your ${event?.name ?? 'event'} speaker portal`,
+        body: `Hi ${currentPerson.firstName},\n\nYour speaker portal is ready. Use this private link to confirm your participation, update your profile, and complete your tasks:\n\n${portalUrl}\n\nPlease keep this link private.`,
+        audience: 'custom',
+        recipientParticipationIds: [participation.id],
+      },
+      undefined,
+      'Portal invitation drafted in Communications.',
+    )
+    if (!response.ok) return
+    setInviteDrafted(true)
+    window.setTimeout(() => setInviteDrafted(false), 1800)
+  }
 
   return (
     <Drawer
@@ -308,10 +407,61 @@ function PersonDrawer({
             <p className="text-base text-zinc-500 sm:text-sm">
               {person.title} at {person.company}
             </p>
-            <div className="pt-2">
+            <div className="flex flex-wrap items-center gap-2 pt-2">
               <StatusBadge status={participation.status} />
+              <label>
+                <span className="sr-only">Change speaker status</span>
+                <select
+                  aria-label="Change speaker status"
+                  value={participation.status}
+                  disabled={mutating}
+                  onChange={(event) =>
+                    void execute(
+                      'participation.set-status',
+                      { participationId: participation.id, status: event.target.value },
+                      { expectedVersions: { [participation.id]: participation.version } },
+                      `Speaker status changed to ${sentenceCase(event.target.value)}.`,
+                    )
+                  }
+                  className="focus-ring min-h-8 appearance-none rounded-full bg-white px-3 text-sm font-medium text-zinc-700 shadow-xs ring-1 ring-zinc-950/10"
+                >
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {sentenceCase(status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="compact"
+            disabled={!portalHref || mutating}
+            onClick={() => void draftPortalInvite()}
+          >
+            <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
+            {inviteDrafted ? 'Draft created' : 'Draft portal invite'}
+          </Button>
+          <Button size="compact" disabled={!portalHref} onClick={() => void copyPortalLink()}>
+            <ClipboardDocumentIcon className="size-4 h-lh shrink-0 fill-current" />
+            {copied ? 'Copied' : 'Copy portal link'}
+          </Button>
+          {portalHref ? (
+            <a
+              href={portalHref}
+              target="_blank"
+              rel="noreferrer"
+              className="touch-target focus-ring inline-flex min-h-8 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-medium text-zinc-700 shadow-xs ring-1 ring-zinc-950/10 hover:bg-zinc-950/5"
+            >
+              Open portal
+              <ArrowTopRightOnSquareIcon className="size-4 h-lh shrink-0 fill-current" />
+            </a>
+          ) : (
+            <p className="self-center text-sm text-zinc-500">Available after the next save.</p>
+          )}
         </div>
 
         <div className="min-w-0 overflow-x-auto border-b border-zinc-950/5">
@@ -337,36 +487,99 @@ function PersonDrawer({
 
         {tab === 'details' ? (
           <div className="flex flex-col gap-6">
-            <dl className="grid gap-4 sm:grid-cols-2">
-              {[
-                ['Email', person.email],
-                ['Location', person.city || 'Not provided'],
-                ['Timezone', person.timezone],
-                ['Roles', sentenceCase(participation.roles.join(', '))],
-              ].map(([term, detail]) => (
-                <div key={term}>
-                  <dt className="text-base font-medium text-zinc-950 sm:text-sm">{term}</dt>
-                  <dd className="text-base text-zinc-500 sm:text-sm">{detail}</dd>
+            <div className="flex justify-end">
+              <Button size="compact" onClick={startEditing}>
+                <PencilSquareIcon className="size-4 h-lh shrink-0 fill-current" />
+                Edit details
+              </Button>
+            </div>
+            {editing ? (
+              <form className="flex flex-col gap-4" onSubmit={(event) => void saveDetails(event)}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[
+                    ['firstName', 'First name'],
+                    ['lastName', 'Last name'],
+                    ['email', 'Email'],
+                    ['title', 'Title'],
+                    ['company', 'Company'],
+                    ['city', 'City'],
+                    ['timezone', 'Time zone'],
+                  ].map(([name, label]) => (
+                    <label key={name} className="flex flex-col gap-1.5">
+                      <span className="text-base font-medium text-zinc-950 sm:text-sm">
+                        {label}
+                      </span>
+                      <input
+                        type={name === 'email' ? 'email' : 'text'}
+                        required={['firstName', 'lastName', 'email', 'timezone'].includes(name)}
+                        value={editForm[name as keyof typeof editForm]}
+                        onChange={(event) =>
+                          setEditForm((current) => ({
+                            ...current,
+                            [name]: event.target.value,
+                          }))
+                        }
+                        className={textControl}
+                      />
+                    </label>
+                  ))}
                 </div>
-              ))}
-            </dl>
-            <div>
-              <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Public bio</h3>
-              <p className="pt-1 text-pretty text-base text-zinc-500 sm:text-sm">{person.bio}</p>
-            </div>
-            <div>
-              <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Sessions</h3>
-              <ul role="list" className="divide-y divide-zinc-950/5 pt-1">
-                {participation.sessionIds.map((sessionId) => {
-                  const session = state.sessions.find((entry) => entry.id === sessionId)
-                  return session ? (
-                    <li key={session.id} className="py-2 text-base text-zinc-600 sm:text-sm">
-                      {session.title}
-                    </li>
-                  ) : null
-                })}
-              </ul>
-            </div>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-base font-medium text-zinc-950 sm:text-sm">Public bio</span>
+                  <textarea
+                    rows={6}
+                    value={editForm.bio}
+                    onChange={(event) =>
+                      setEditForm((current) => ({ ...current, bio: event.target.value }))
+                    }
+                    className={textAreaControl}
+                  />
+                </label>
+                <div className="flex gap-2">
+                  <Button variant="primary" type="submit" disabled={mutating}>
+                    Save details
+                  </Button>
+                  <Button type="button" onClick={() => setEditing(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  {[
+                    ['Email', person.email],
+                    ['Location', person.city || 'Not provided'],
+                    ['Timezone', person.timezone],
+                    ['Roles', sentenceCase(participation.roles.join(', '))],
+                  ].map(([term, detail]) => (
+                    <div key={term}>
+                      <dt className="text-base font-medium text-zinc-950 sm:text-sm">{term}</dt>
+                      <dd className="text-base text-zinc-500 sm:text-sm">{detail}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <div>
+                  <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Public bio</h3>
+                  <p className="pt-1 text-pretty text-base text-zinc-500 sm:text-sm">
+                    {person.bio || 'No bio yet.'}
+                  </p>
+                </div>
+                <div>
+                  <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Sessions</h3>
+                  <ul role="list" className="divide-y divide-zinc-950/5 pt-1">
+                    {participation.sessionIds.map((sessionId) => {
+                      const session = state.sessions.find((entry) => entry.id === sessionId)
+                      return session ? (
+                        <li key={session.id} className="py-2 text-base text-zinc-600 sm:text-sm">
+                          {session.title}
+                        </li>
+                      ) : null
+                    })}
+                  </ul>
+                </div>
+              </>
+            )}
           </div>
         ) : null}
 
@@ -459,6 +672,7 @@ function AddPersonDrawer({
     email: '',
     company: '',
     title: '',
+    bio: '',
   })
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -470,7 +684,7 @@ function AddPersonDrawer({
       `${form.firstName} ${form.lastName} added.`,
     )
     if (!response.ok) return
-    setForm({ firstName: '', lastName: '', email: '', company: '', title: '' })
+    setForm({ firstName: '', lastName: '', email: '', company: '', title: '', bio: '' })
     onClose()
   }
 
@@ -520,7 +734,142 @@ function AddPersonDrawer({
             />
           </label>
         ))}
+        <label className="flex flex-col gap-1.5">
+          <span className="text-base font-medium text-zinc-950 sm:text-sm">Public bio</span>
+          <textarea
+            name="bio"
+            rows={5}
+            value={form.bio}
+            placeholder="A short biography for the public program"
+            onChange={(event) => setForm((current) => ({ ...current, bio: event.target.value }))}
+            className={textAreaControl}
+          />
+        </label>
       </form>
+    </Drawer>
+  )
+}
+
+function ImportSpeakersDrawer({
+  open,
+  onClose,
+  execute,
+  mutating,
+}: {
+  open: boolean
+  onClose: () => void
+  execute: ReturnType<typeof useWorkspace>['execute']
+  mutating: boolean
+}) {
+  const [rows, setRows] = useState<SpeakerCsvRow[]>([])
+  const [fileName, setFileName] = useState('')
+  const [error, setError] = useState('')
+
+  async function chooseFile(file: File | undefined) {
+    if (!file) return
+    try {
+      const parsed = parseSpeakerCsv(await file.text())
+      setRows(parsed)
+      setFileName(file.name)
+      setError('')
+    } catch (caught) {
+      setRows([])
+      setFileName(file.name)
+      setError(caught instanceof Error ? caught.message : 'The CSV could not be read.')
+    }
+  }
+
+  async function importRows() {
+    const response = await execute(
+      'person.import',
+      { people: rows },
+      undefined,
+      `${rows.length} speaker${rows.length === 1 ? '' : 's'} imported.`,
+    )
+    if (!response.ok) return
+    setRows([])
+    setFileName('')
+    setError('')
+    onClose()
+  }
+
+  function close() {
+    setRows([])
+    setFileName('')
+    setError('')
+    onClose()
+  }
+
+  return (
+    <Drawer
+      open={open}
+      onClose={close}
+      title="Import speakers"
+      footer={
+        <>
+          <Button variant="ghost" onClick={close}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={mutating || rows.length === 0}
+            onClick={() => void importRows()}
+          >
+            Import {rows.length > 0 ? rows.length : ''}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-5">
+        <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+          Choose a CSV with name, email, title, company, and bio columns. Existing email addresses
+          are skipped.
+        </p>
+        <label className="focus-ring flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-950/15 bg-zinc-950/2 p-6 text-center hover:bg-zinc-950/4">
+          <ArrowUpTrayIcon className="size-5 fill-zinc-500" />
+          <span className="text-base font-medium text-zinc-950 sm:text-sm">
+            {fileName || 'Choose a CSV file'}
+          </span>
+          <span className="text-base text-zinc-500 sm:text-sm">Up to 500 people</span>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="sr-only"
+            onChange={(event) => void chooseFile(event.target.files?.[0])}
+          />
+        </label>
+        {error ? (
+          <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </p>
+        ) : null}
+        {rows.length > 0 ? (
+          <div className="overflow-hidden rounded-2xl ring-1 ring-zinc-950/10">
+            <div className="flex items-center justify-between bg-zinc-950/2 px-4 py-3">
+              <p className="text-sm font-medium text-zinc-950">Preview</p>
+              <p className="text-sm tabular-nums text-zinc-500">{rows.length} people</p>
+            </div>
+            <ul role="list" className="max-h-80 divide-y divide-zinc-950/5 overflow-y-auto">
+              {rows.slice(0, 20).map((row) => (
+                <li key={row.email} className="px-4 py-3">
+                  <p className="text-sm font-medium text-zinc-950">
+                    {row.firstName} {row.lastName}
+                  </p>
+                  <p className="truncate text-sm text-zinc-500">
+                    {row.email}
+                    {row.company ? ` · ${row.company}` : ''}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            {rows.length > 20 ? (
+              <p className="border-t border-zinc-950/5 px-4 py-3 text-sm text-zinc-500">
+                And {rows.length - 20} more
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </Drawer>
   )
 }

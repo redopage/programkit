@@ -30,6 +30,7 @@ import { Route as OperatorSubmissionsRouteImport } from './routes/_operator.subm
 import { Route as PortalParticipationIdRouteImport } from './routes/portal.$participationId'
 import { Route as ReviewerReviewerIdRouteImport } from './routes/reviewer.$reviewerId'
 import { Route as SubmitFormSlugRouteImport } from './routes/submit.$formSlug'
+import { Route as PortalParticipationIdPortalAccessKeyRouteImport } from './routes/portal.$participationId_.$portalAccessKey'
 import { Route as ReviewerReviewerIdReviewerAccessKeyRouteImport } from './routes/reviewer.$reviewerId_.$reviewerAccessKey'
 import { Route as SubmitFormSlugMineSpeakerAccessKeyRouteImport } from './routes/submit.$formSlug_.mine.$speakerAccessKey'
 
@@ -137,6 +138,12 @@ const SubmitFormSlugRoute = SubmitFormSlugRouteImport.update({
   path: '/submit/$formSlug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PortalParticipationIdPortalAccessKeyRoute =
+  PortalParticipationIdPortalAccessKeyRouteImport.update({
+    id: '/portal/$participationId_/$portalAccessKey',
+    path: '/portal/$participationId/$portalAccessKey',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ReviewerReviewerIdReviewerAccessKeyRoute =
   ReviewerReviewerIdReviewerAccessKeyRouteImport.update({
     id: '/reviewer/$reviewerId_/$reviewerAccessKey',
@@ -171,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/portal/$participationId': typeof PortalParticipationIdRoute
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
+  '/portal/$participationId/$portalAccessKey': typeof PortalParticipationIdPortalAccessKeyRoute
   '/reviewer/$reviewerId/$reviewerAccessKey': typeof ReviewerReviewerIdReviewerAccessKeyRoute
   '/submit/$formSlug/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
@@ -195,6 +203,7 @@ export interface FileRoutesByTo {
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
   '/': typeof OperatorIndexRoute
+  '/portal/$participationId/$portalAccessKey': typeof PortalParticipationIdPortalAccessKeyRoute
   '/reviewer/$reviewerId/$reviewerAccessKey': typeof ReviewerReviewerIdReviewerAccessKeyRoute
   '/submit/$formSlug/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
@@ -221,6 +230,7 @@ export interface FileRoutesById {
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
   '/_operator/': typeof OperatorIndexRoute
+  '/portal/$participationId_/$portalAccessKey': typeof PortalParticipationIdPortalAccessKeyRoute
   '/reviewer/$reviewerId_/$reviewerAccessKey': typeof ReviewerReviewerIdReviewerAccessKeyRoute
   '/submit/$formSlug_/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
@@ -247,6 +257,7 @@ export interface FileRouteTypes {
     | '/portal/$participationId'
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
+    | '/portal/$participationId/$portalAccessKey'
     | '/reviewer/$reviewerId/$reviewerAccessKey'
     | '/submit/$formSlug/mine/$speakerAccessKey'
   fileRoutesByTo: FileRoutesByTo
@@ -271,6 +282,7 @@ export interface FileRouteTypes {
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
     | '/'
+    | '/portal/$participationId/$portalAccessKey'
     | '/reviewer/$reviewerId/$reviewerAccessKey'
     | '/submit/$formSlug/mine/$speakerAccessKey'
   id:
@@ -296,6 +308,7 @@ export interface FileRouteTypes {
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
     | '/_operator/'
+    | '/portal/$participationId_/$portalAccessKey'
     | '/reviewer/$reviewerId_/$reviewerAccessKey'
     | '/submit/$formSlug_/mine/$speakerAccessKey'
   fileRoutesById: FileRoutesById
@@ -309,6 +322,7 @@ export interface RootRouteChildren {
   PortalParticipationIdRoute: typeof PortalParticipationIdRoute
   ReviewerReviewerIdRoute: typeof ReviewerReviewerIdRoute
   SubmitFormSlugRoute: typeof SubmitFormSlugRoute
+  PortalParticipationIdPortalAccessKeyRoute: typeof PortalParticipationIdPortalAccessKeyRoute
   ReviewerReviewerIdReviewerAccessKeyRoute: typeof ReviewerReviewerIdReviewerAccessKeyRoute
   SubmitFormSlugMineSpeakerAccessKeyRoute: typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
@@ -462,6 +476,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubmitFormSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/portal/$participationId_/$portalAccessKey': {
+      id: '/portal/$participationId_/$portalAccessKey'
+      path: '/portal/$participationId/$portalAccessKey'
+      fullPath: '/portal/$participationId/$portalAccessKey'
+      preLoaderRoute: typeof PortalParticipationIdPortalAccessKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reviewer/$reviewerId_/$reviewerAccessKey': {
       id: '/reviewer/$reviewerId_/$reviewerAccessKey'
       path: '/reviewer/$reviewerId/$reviewerAccessKey'
@@ -524,6 +545,8 @@ const rootRouteChildren: RootRouteChildren = {
   PortalParticipationIdRoute: PortalParticipationIdRoute,
   ReviewerReviewerIdRoute: ReviewerReviewerIdRoute,
   SubmitFormSlugRoute: SubmitFormSlugRoute,
+  PortalParticipationIdPortalAccessKeyRoute:
+    PortalParticipationIdPortalAccessKeyRoute,
   ReviewerReviewerIdReviewerAccessKeyRoute:
     ReviewerReviewerIdReviewerAccessKeyRoute,
   SubmitFormSlugMineSpeakerAccessKeyRoute:

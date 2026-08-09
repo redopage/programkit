@@ -29,8 +29,14 @@ export function surfaceFromPathname(pathname: string): ProgramKitSurface {
     }
   }
 
-  const speaker = pathname.match(/^\/portal\/([^/]+)(?:\/|$)/u)
-  if (speaker) return { kind: 'speaker', participationId: decodedSegment(speaker[1]) }
+  const speaker = pathname.match(/^\/portal\/([^/]+)(?:\/([^/]+))?(?:\/|$)/u)
+  if (speaker) {
+    return {
+      kind: 'speaker',
+      participationId: decodedSegment(speaker[1]),
+      ...(speaker[2] ? { portalAccessKey: decodedSegment(speaker[2]) } : {}),
+    }
+  }
 
   if (pathname === '/agenda' || pathname.startsWith('/agenda/')) {
     return { kind: 'public-program' }
@@ -46,7 +52,7 @@ export function surfaceKey(surface: ProgramKitSurface) {
     case 'reviewer':
       return `reviewer:${surface.reviewerId}:${surface.reviewerAccessKey ?? 'unavailable'}`
     case 'speaker':
-      return `speaker:${surface.participationId}`
+      return `speaker:${surface.participationId}:${surface.portalAccessKey ?? 'unavailable'}`
     default:
       return surface.kind
   }
