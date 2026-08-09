@@ -21,12 +21,38 @@ Cloudflare Worker ── Workers Static Assets (Vite web build)
   ├── workspace Durable Object ── serialized mutations, hot cache, live clients
   ├── R2                      ── private uploads and generated files (next)
   ├── Queue / object alarm    ── email, webhooks, and mirrors (next)
-  └── Email Service           ── confirmations and reminders (next)
+  └── Email Service           ── sending domain and app binding (configured)
 ```
 
 The runnable application currently includes the Worker, static assets, and one SQLite-backed
 Durable Object per workspace key. `/demo` creates isolated hosted trials that expire after seven
 days. It needs no D1 database, R2 bucket, queue, or email binding to run the deterministic demo.
+
+## Official hosted environments
+
+The project deploys the same assembly into three explicit Wrangler profiles. This keeps product
+code, migrations, tests, and documentation together while isolating runtime state.
+
+| Profile | Host                                     | Worker            | Durable Objects     | Email                     |
+| ------- | ---------------------------------------- | ----------------- | ------------------- | ------------------------- |
+| default | `programkit.dev` or a self-hosted domain | `programkit`      | Default namespace   | None required             |
+| `demo`  | `demo.programkit.dev`                    | `programkit-demo` | Demo-only namespace | No binding                |
+| `app`   | `app.programkit.dev`                     | `programkit-app`  | App-only namespace  | Restricted sender binding |
+
+The demo host redirects visitors into the capability demo flow and rejects operator or API access
+until a private demo has been created or opened. The app host does not create anonymous demos. It
+is the future authenticated application surface, but it remains sample-data-only until real
+identity and workspace membership replace the reference actors.
+
+Deploy the official profiles with:
+
+```bash
+pnpm deploy:demo
+pnpm deploy:app
+```
+
+A separate demo repository would make schema, migrations, security fixes, and product behavior
+drift. Separate runtime profiles provide the useful isolation without duplicating the product.
 
 The production additions are intentionally Cloudflare-native:
 
@@ -167,6 +193,18 @@ curl https://YOUR_HOST/public/agenda.json
 
 Then open the operator app, public CFP, reviewer workspace, speaker portal, and public program.
 
+### Email on the official application host
+
+Inbound `support@programkit.dev` mail is forwarded through Cloudflare Email Routing. Outbound mail
+uses the dedicated `mail.programkit.dev` sending domain so application reputation is separate from
+normal human mail. Only the `app` profile receives the `EMAIL` binding, and Wrangler restricts it
+to `notifications@mail.programkit.dev`.
+
+This is infrastructure readiness, not a claim that campaign delivery is complete. The current
+domain operation records a demo outbox event and does not invoke the binding. The next delivery
+slice must persist an outbox entry with the domain transaction, process it asynchronously, retry
+with idempotency, and record provider results. See the [email guide](docs/integrations/email.md).
+
 ## Production bindings, in order
 
 The golden-path production work should land in this sequence:
@@ -175,8 +213,8 @@ The golden-path production work should land in this sequence:
    workspace membership.
 2. Add R2 upload initiation, direct upload, finalize/scanning, private download, and lifecycle
    cleanup.
-3. Add a transactional delivery outbox and Cloudflare Email Service for submission confirmations
-   and accepted-speaker reminders.
+3. Connect the existing app-only Cloudflare Email Service binding to a transactional delivery
+   outbox for submission confirmations and accepted-speaker reminders.
 4. Add webhook delivery from the same outbox, with signed payloads, retries, and delivery history.
 5. Finish Airtable webhook payload cursors, durable partial-write retry, inbound change sets, and
    actual last-success, quota, lag, conflict, and error state in the integrations screen.

@@ -30,10 +30,12 @@ not maintain a second version of product or architecture facts.
 4. Use the [HTTP API](api/README.md) for integrations and data sync.
 5. Read the [Airtable integration guide](integrations/airtable.md) before enabling the optional team
    workspace.
-6. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
+6. Read the [Cloudflare email guide](integrations/email.md) before enabling confirmations or
+   reminders.
+7. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
    notifications.
-7. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
-8. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
+8. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
+9. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
 
 ### I want to contribute
 

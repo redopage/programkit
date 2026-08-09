@@ -2,7 +2,7 @@
 
 An open-source conference-program toolkit for calls for proposals, review, speaker readiness, and published agendas.
 
-**Live demo:** [Create a private seven-day workspace](https://programkit.dev/demo)
+**Live demo:** [Create a private seven-day workspace](https://demo.programkit.dev)
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
 
@@ -74,6 +74,16 @@ TypeScript, production builds, and plugin validation.
 pnpm deploy
 ```
 
+The official hosted environments use the same repository and application assembly:
+
+| Host                                                 | Purpose                                                       | Data boundary                                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [`demo.programkit.dev`](https://demo.programkit.dev) | Anonymous seven-day evaluation workspaces                     | Separate Worker and Durable Object namespace, no outbound mail binding         |
+| [`app.programkit.dev`](https://app.programkit.dev)   | Stable application environment for authenticated hosting work | Separate Worker and Durable Object namespace, restricted outbound mail binding |
+
+`app.programkit.dev` still uses the reference passwordless actors and sample workspace. It is not
+ready for real participant data until production identity and authorization are implemented.
+
 The `apps/cloudflare` assembly uses one Worker, static assets, and one SQLite-backed Durable Object
 per workspace key. The seeded demo needs no external account. A production installation can add
 Airtable as durable source of truth while keeping the Durable Object as its fast coordination and
@@ -105,6 +115,11 @@ demo store. D1 is reserved for later cross-workspace search or analytics rather 
 the single-workspace write model. See [Deployment](DEPLOYMENT.md#how-the-airtable-integration-works)
 and the [Airtable guide](docs/integrations/airtable.md) for setup, measured request use, current
 limits, and the webhook path.
+
+The official application Worker also has a restricted Cloudflare Email Service binding. The
+delivery infrastructure and sending domain are configured, but `campaign.send` still writes only
+to the demo outbox until the durable transactional delivery worker is implemented. See the
+[email integration guide](docs/integrations/email.md).
 
 ## Data ownership
 

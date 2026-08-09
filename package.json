@@ -17,6 +17,8 @@
     "check": "pnpm test && pnpm lint && pnpm format:check && pnpm build && pnpm plugin:validate",
     "deploy": "pnpm deploy:cloudflare",
     "deploy:cloudflare": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --config ../../wrangler.jsonc",
+    "deploy:demo": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env demo --config ../../wrangler.jsonc",
+    "deploy:app": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env app --config ../../wrangler.jsonc",
     "airtable:setup": "pnpm --filter @programkit/core build && node scripts/airtable.mjs setup",
     "airtable:seed": "pnpm --filter @programkit/core build && node scripts/airtable.mjs seed",
     "airtable:verify": "pnpm --filter @programkit/core build && node scripts/airtable.mjs verify",

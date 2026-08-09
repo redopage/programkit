@@ -33,4 +33,53 @@
   "observability": {
     "enabled": true,
   },
+  "env": {
+    "demo": {
+      "routes": [
+        {
+          "pattern": "demo.programkit.dev",
+          "custom_domain": true,
+        },
+      ],
+      "vars": {
+        "PROGRAMKIT_DEPLOYMENT_PROFILE": "hosted-demo",
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "PROGRAMKIT_WORKSPACES",
+            "class_name": "WorkspaceDurableObject",
+          },
+        ],
+      },
+    },
+    "app": {
+      "routes": [
+        {
+          "pattern": "app.programkit.dev",
+          "custom_domain": true,
+        },
+      ],
+      "vars": {
+        "PROGRAMKIT_DEPLOYMENT_PROFILE": "hosted-app",
+        "PROGRAMKIT_EMAIL_FROM": "notifications@mail.programkit.dev",
+        "PROGRAMKIT_SUPPORT_EMAIL": "support@programkit.dev",
+      },
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["notifications@mail.programkit.dev"],
+          "remote": true,
+        },
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "PROGRAMKIT_WORKSPACES",
+            "class_name": "WorkspaceDurableObject",
+          },
+        ],
+      },
+    },
+  },
 }

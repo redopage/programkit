@@ -11,7 +11,14 @@ From the repository root:
 pnpm dev
 pnpm build
 pnpm deploy:cloudflare
+pnpm deploy:demo
+pnpm deploy:app
 ```
+
+The default profile is the self-hostable assembly. The `demo` and `app` profiles deploy the same
+build to ProgramKit's official hosts with separate Durable Object namespaces. Only the app profile
+has the restricted `EMAIL` binding. Keeping them in one repository prevents product and migration
+drift while preserving runtime isolation.
 
 Cloudflare bindings, the Worker entry point, and host identity routing remain in this directory.
 Reusable domain behavior belongs in `@programkit/core`; reusable React UI belongs in

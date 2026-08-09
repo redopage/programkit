@@ -25,15 +25,15 @@ identifier, and its 192 random bits provide more entropy than a UUID v4. A futur
 workspace may use a UUIDv7 or another sortable internal identifier, but that identifier must remain
 separate from the secret used to join a passwordless demo.
 
-The canonical hosted entry point is `/demo`, and private links use `/demo/{capability}`. Keeping the
-demo on the same origin as the application makes the HTTP-only cookie, OAuth callbacks, content
-security policy, and local development straightforward. It also lets a self-hosted installation use
-the exact same Worker artifact.
+The canonical hosted entry point is `demo.programkit.dev`, and private links use
+`/demo/{capability}` on that host. The capability is exchanged for an HTTP-only cookie on the same
+origin. Local development and self-hosted installations keep the same `/demo` route and Worker
+artifact.
 
-If `programkit.dev` later becomes a marketing and documentation site, `demo.programkit.dev` can be
-bound to the same Worker without moving the demo into another repository. The route and subdomain
-are deployment entry points, not separate applications. ProgramKit should keep the demo runtime,
-its schema, and its tests in this repository so product changes cannot drift from the hosted trial.
+The official demo is a separate `programkit-demo` Worker with its own Durable Object namespace and
+no outbound mail binding. `app.programkit.dev` is a separate `programkit-app` Worker and namespace.
+Both are built from this repository. The route and host are deployment entry points, not separate
+products, so the demo runtime, schema, migrations, and tests cannot drift from the application.
 
 ## Airtable
 

@@ -24,6 +24,19 @@ export { WorkspaceDurableObject }
 interface Env {
   ASSETS: Fetcher
   PROGRAMKIT_WORKSPACES: DurableObjectNamespace<WorkspaceDurableObject>
+  PROGRAMKIT_DEPLOYMENT_PROFILE?: 'hosted-demo' | 'hosted-app'
+  PROGRAMKIT_EMAIL_FROM?: string
+  PROGRAMKIT_SUPPORT_EMAIL?: string
+  EMAIL?: {
+    send(message: {
+      to: string | string[]
+      from: string
+      subject: string
+      html?: string
+      text?: string
+      replyTo?: string
+    }): Promise<{ messageId: string }>
+  }
   AIRTABLE_TOKEN?: string
   AIRTABLE_BASE_ID?: string
   AIRTABLE_WEBHOOK_MAC_SECRET?: string
@@ -34,6 +47,28 @@ interface Env {
 const workspaceCookieName = 'programkit_workspace'
 const workspaceKeyPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u
 const airtableCallbackPath = '/api/v1/integrations/airtable/oauth/callback'
+
+function deploymentProfile(env: Env) {
+  return env.PROGRAMKIT_DEPLOYMENT_PROFILE ?? 'single-workspace'
+}
+
+function isStaticOrLegalPath(pathname: string) {
+  return (
+    pathname === '/demo' ||
+    pathname === '/privacy' ||
+    pathname === '/terms' ||
+    pathname === '/favicon.svg' ||
+    pathname === '/robots.txt' ||
+    pathname.startsWith('/assets/')
+  )
+}
+
+function redirect(url: URL, pathname: string, headers?: HeadersInit) {
+  return new Response(null, {
+    status: 302,
+    headers: { location: new URL(pathname, url.origin).toString(), ...headers },
+  })
+}
 
 const demoStaffActor = {
   type: 'staff' as const,
@@ -333,8 +368,41 @@ async function executeWorkspaceOperation(
 export default {
   async fetch(request: Request, env: Env, context: ExecutionContext) {
     const url = new URL(request.url)
+    const profile = deploymentProfile(env)
+
+    if (profile === 'hosted-app' && (url.pathname === '/demo' || demoIdFromPath(url.pathname))) {
+      return redirect(url, '/')
+    }
+
+    if (
+      profile === 'hosted-demo' &&
+      request.method === 'GET' &&
+      !isStaticOrLegalPath(url.pathname) &&
+      !demoIdFromPath(url.pathname) &&
+      !url.pathname.startsWith('/api/') &&
+      !url.pathname.startsWith('/public/') &&
+      url.pathname !== '/mcp' &&
+      !isDemoId(cookie(request, demoCookieName))
+    ) {
+      return redirect(url, '/demo')
+    }
+
+    if (
+      profile === 'hosted-demo' &&
+      !isDemoId(cookie(request, demoCookieName)) &&
+      (url.pathname === '/mcp' ||
+        ((url.pathname.startsWith('/api/') || url.pathname.startsWith('/public/')) &&
+          url.pathname !== '/api/v1/demos' &&
+          url.pathname !== '/api/v1/demos/current'))
+    ) {
+      return Response.json(
+        { ok: false, error: 'Create or open a private demo first.' },
+        { status: 401, headers: { 'cache-control': 'no-store' } },
+      )
+    }
 
     if (request.method === 'POST' && url.pathname === '/api/v1/demos') {
+      if (profile === 'hosted-app') return new Response(null, { status: 404 })
       if (!sameOrigin(request, url)) {
         return Response.json(
           { ok: false, error: 'Cross-origin demo requests are not allowed.' },

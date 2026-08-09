@@ -153,6 +153,18 @@ run:
 pnpm deploy
 ```
 
+The ProgramKit-owned hosted environments use named profiles:
+
+```bash
+pnpm deploy:demo
+pnpm deploy:app
+```
+
+`demo.programkit.dev` and `app.programkit.dev` are separate Workers with separate Durable Object
+namespaces. The demo profile has no outbound email binding. The app profile has a sender-restricted
+Cloudflare Email Service binding, but still uses sample actors and must not hold real participant
+data.
+
 The configuration declares:
 
 - the `apps/cloudflare/src/worker.ts` entry point;
@@ -192,6 +204,18 @@ pointing a real domain or real data at it:
 email is delivered. The Airtable persistence adapter is real, but the integrations screen still
 uses seeded status rows and must not claim production health until it reports the actual base,
 cursor, quota, last success, retry, and webhook expiry state.
+
+### Email operations
+
+The official app Worker may send only from `notifications@mail.programkit.dev`. Its sending domain
+has Cloudflare-managed bounce, SPF, DKIM, and DMARC records. `support@programkit.dev` is an inbound
+Email Routing address and is not the automated sender.
+
+One direct delivery smoke test should be run after changing the domain, binding, or DNS. Do not
+send from the public demo Worker. Before wiring product notifications, implement a durable outbox,
+idempotent delivery keys, retry limits, provider response storage, suppression handling, and
+operator-visible failures. Full setup and self-hosting guidance is in
+[Cloudflare email](docs/integrations/email.md).
 
 ## Backup, restore, and departure
 
