@@ -202,6 +202,86 @@ describe('ProgramKit operation engine', () => {
     expect(updateResult.state.domainEvents.at(-1)?.type).toBe('session.updated')
   })
 
+  it('places unscheduled sessions, reports speaker conflicts, and blocks room overlaps', () => {
+    let state = createEmptyWorkspaceState({
+      eventId: 'evt_agenda',
+      eventName: 'Agenda Test',
+      eventSlug: 'agenda-test',
+      createdAt: '2026-08-09T12:00:00.000Z',
+    })
+    state = executeOperation(state, 'track.create', { input: { name: 'Platform' } }).state
+    state = executeOperation(state, 'room.create', {
+      input: { name: 'Room A', capacity: 100 },
+    }).state
+    state = executeOperation(state, 'room.create', {
+      input: { name: 'Room B', capacity: 100 },
+    }).state
+    state = executeOperation(state, 'person.create', {
+      input: { firstName: 'Priya', lastName: 'Raman', email: 'priya@example.com' },
+    }).state
+    const participantId = state.participations[0].id
+    for (const title of ['CI in forty minutes', 'An honest pair programmer', 'Docs answer back']) {
+      state = executeOperation(state, 'session.create', {
+        input: {
+          title,
+          summary: `${title} session abstract.`,
+          format: 'talk',
+          trackId: state.tracks[0].id,
+          participantIds: title === 'Docs answer back' ? [] : [participantId],
+          durationMinutes: 30,
+          expectedAttendance: 80,
+          status: 'ready',
+        },
+      }).state
+    }
+    const startsAt = state.events[0].startsAt
+    const first = executeOperation(state, 'schedule.place-session', {
+      input: {
+        sessionId: state.sessions[0].id,
+        roomId: state.rooms[0].id,
+        startsAt,
+      },
+    })
+    expect(first.response.ok).toBe(true)
+    state = first.state
+    const second = executeOperation(state, 'schedule.place-session', {
+      input: {
+        sessionId: state.sessions[1].id,
+        roomId: state.rooms[1].id,
+        startsAt,
+      },
+    })
+    expect(second.response.ok).toBe(true)
+    expect(scheduleConflicts(second.state)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'person_overlap',
+          message: expect.stringContaining('Priya Raman'),
+        }),
+      ]),
+    )
+
+    const roomConflict = executeOperation(second.state, 'schedule.place-session', {
+      input: {
+        sessionId: second.state.sessions[2].id,
+        roomId: second.state.rooms[0].id,
+        startsAt,
+      },
+    })
+    expect(roomConflict.response).toMatchObject({
+      ok: false,
+      error: { code: 'ROOM_CONFLICT' },
+    })
+    expect(roomConflict.state.placements).toHaveLength(2)
+
+    const autoPlaced = executeOperation(second.state, 'schedule.auto-place', { input: {} })
+    expect(autoPlaced.response.ok).toBe(true)
+    expect(autoPlaced.state.placements).toHaveLength(3)
+    expect(
+      scheduleConflicts(autoPlaced.state).filter((conflict) => conflict.type === 'room_overlap'),
+    ).toHaveLength(0)
+  })
+
   it('finds schedule boundary, duration, and missing-record failures deterministically', () => {
     const state = createSeedState()
     const placement = state.placements[0]

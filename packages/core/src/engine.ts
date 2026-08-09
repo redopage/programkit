@@ -2908,6 +2908,59 @@ function applyHandler(
       return { person, participation, changed }
     }
 
+    case 'schedule.place-session': {
+      const session = findRequired(state.sessions, input.sessionId, 'session')
+      const room = findRequired(state.rooms, input.roomId, 'room')
+      if (session.eventId !== state.activeEventId || room.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The session and room must belong to this event.')
+      }
+      if (session.status === 'cancelled') {
+        throw new OperationError('INVALID_INPUT', 'A cancelled session cannot be scheduled.')
+      }
+      if (
+        state.placements.some(
+          (entry) => entry.eventId === state.activeEventId && entry.sessionId === session.id,
+        )
+      ) {
+        throw new OperationError('DUPLICATE', 'This session is already on the schedule.')
+      }
+      const startsAt = assertString(input.startsAt, 'startsAt')
+      if (Number.isNaN(new Date(startsAt).getTime())) {
+        throw new OperationError('INVALID_INPUT', 'startsAt must be an ISO date and time.')
+      }
+      const placement = {
+        id: createId('plc'),
+        eventId: state.activeEventId,
+        sessionId: session.id,
+        roomId: room.id,
+        startsAt: new Date(startsAt).toISOString(),
+        endsAt: addMinutes(new Date(startsAt).toISOString(), session.durationMinutes),
+        scheduleVersion: 0,
+        published: false,
+        version: 1,
+      }
+      state.placements.push(placement)
+      const conflicts = scheduleConflicts(state).filter((conflict) =>
+        conflict.placementIds.includes(placement.id),
+      )
+      const blocking = conflicts.find(
+        (conflict) => conflict.severity === 'error' && conflict.type !== 'person_overlap',
+      )
+      if (blocking) {
+        throw new OperationError(
+          blocking.type === 'room_overlap' ? 'ROOM_CONFLICT' : 'SCHEDULE_CONFLICT',
+          blocking.message,
+        )
+      }
+      appendEvent(state, context, {
+        type: 'schedule.session-placed',
+        aggregate: { type: 'placement', id: placement.id, version: placement.version },
+        summary: `Placed ${session.title} in ${room.name}.`,
+        data: { sessionId: session.id, roomId: room.id, startsAt: placement.startsAt },
+      })
+      return { placement, conflicts }
+    }
+
     case 'schedule.move-session': {
       const placement = findRequired(state.placements, input.placementId, 'placement')
       const room = findRequired(state.rooms, input.roomId, 'room')
@@ -2929,6 +2982,75 @@ function applyHandler(
         data: { previous, next: { roomId: room.id, startsAt: placement.startsAt } },
       })
       return { placement, conflicts: scheduleConflicts(state) }
+    }
+
+    case 'schedule.auto-place': {
+      const event = findRequired(state.events, state.activeEventId, 'event')
+      const rooms = state.rooms
+        .filter((room) => room.eventId === state.activeEventId)
+        .sort((left, right) => right.capacity - left.capacity)
+      if (rooms.length === 0) {
+        throw new OperationError('INVALID_INPUT', 'Add at least one room before auto-scheduling.')
+      }
+      const placedSessionIds = new Set(
+        state.placements
+          .filter((placement) => placement.eventId === state.activeEventId)
+          .map((placement) => placement.sessionId),
+      )
+      const unscheduled = state.sessions.filter(
+        (session) =>
+          session.eventId === state.activeEventId &&
+          session.status !== 'cancelled' &&
+          !placedSessionIds.has(session.id),
+      )
+      const placed = []
+      const unplaced: string[] = []
+      const eventEnd = Date.parse(event.endsAt)
+      for (const session of unscheduled) {
+        let placement = null
+        for (
+          let candidateStart = Date.parse(event.startsAt);
+          candidateStart + session.durationMinutes * 60_000 <= eventEnd;
+          candidateStart += 30 * 60_000
+        ) {
+          for (const room of rooms) {
+            const candidate = {
+              id: createId('plc'),
+              eventId: state.activeEventId,
+              sessionId: session.id,
+              roomId: room.id,
+              startsAt: new Date(candidateStart).toISOString(),
+              endsAt: addMinutes(new Date(candidateStart).toISOString(), session.durationMinutes),
+              scheduleVersion: 0,
+              published: false,
+              version: 1,
+            }
+            state.placements.push(candidate)
+            const hasHardConflict = scheduleConflicts(state).some(
+              (conflict) =>
+                conflict.severity === 'error' && conflict.placementIds.includes(candidate.id),
+            )
+            if (!hasHardConflict) {
+              placement = candidate
+              break
+            }
+            state.placements.pop()
+          }
+          if (placement) break
+        }
+        if (placement) placed.push(placement)
+        else unplaced.push(session.id)
+      }
+      appendEvent(state, context, {
+        type: 'schedule.sessions-auto-placed',
+        aggregate: { type: 'event', id: event.id, version: event.version },
+        summary: `Auto-placed ${placed.length} session${placed.length === 1 ? '' : 's'}.`,
+        data: {
+          placementIds: placed.map((placement) => placement.id),
+          unplacedSessionIds: unplaced,
+        },
+      })
+      return { placements: placed, unplacedSessionIds: unplaced }
     }
 
     case 'schedule.publish': {
@@ -3343,7 +3465,11 @@ export function executeOperation(
     } else {
       const context: ApplyContext = { actor, operation, emittedEventIds }
       data = applyHandler(working, operation, request.input, context)
-      if (operation === 'schedule.move-session') {
+      if (
+        operation === 'schedule.move-session' ||
+        operation === 'schedule.place-session' ||
+        operation === 'schedule.auto-place'
+      ) {
         const conflicts = scheduleConflicts(working)
         for (const conflict of conflicts) {
           warnings.push({ code: conflict.type.toUpperCase(), message: conflict.message })

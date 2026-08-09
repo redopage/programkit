@@ -4,6 +4,7 @@ import {
   ExclamationTriangleIcon,
   GlobeAltIcon,
   LinkIcon,
+  SparklesIcon,
 } from '@heroicons/react/16/solid'
 import {
   Fragment,
@@ -30,6 +31,7 @@ import {
   Toolbar,
   TrackBadge,
   cx,
+  selectControl,
   textControl,
 } from '../components/ui.tsx'
 
@@ -82,9 +84,61 @@ function previewPlacementMove(
   )
 }
 
+function previewSessionPlacement(
+  state: WorkspaceState,
+  sessionId: string,
+  roomId: string,
+  startsAt: string,
+) {
+  const preview = structuredClone(state)
+  const session = preview.sessions.find((entry) => entry.id === sessionId)
+  if (!session) return []
+  const placementId = 'plc_preview'
+  preview.placements.push({
+    id: placementId,
+    eventId: preview.activeEventId,
+    sessionId,
+    roomId,
+    startsAt,
+    endsAt: new Date(Date.parse(startsAt) + session.durationMinutes * 60_000).toISOString(),
+    scheduleVersion: 0,
+    published: false,
+    version: 1,
+  })
+  return scheduleConflicts(preview).filter((conflict) =>
+    conflict.placementIds.includes(placementId),
+  )
+}
+
+function calendarDays(startsAt: string, endsAt: string, timeZone: string) {
+  const first = toZonedDateTimeInput(startsAt, timeZone).slice(0, 10)
+  const last = toZonedDateTimeInput(endsAt, timeZone).slice(0, 10)
+  const days: string[] = []
+  let cursor = first
+  while (cursor <= last && days.length < 31) {
+    days.push(cursor)
+    const next = new Date(`${cursor}T12:00:00.000Z`)
+    next.setUTCDate(next.getUTCDate() + 1)
+    cursor = next.toISOString().slice(0, 10)
+  }
+  return days
+}
+
+function calendarDayLabel(day: string, index: number) {
+  const date = new Date(`${day}T12:00:00.000Z`)
+  const label = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(date)
+  return `Day ${index + 1} · ${label}`
+}
+
 export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const { payload, execute, mutating } = useWorkspace()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedDay, setSelectedDay] = useState('')
+  const [placingSessionId, setPlacingSessionId] = useState<string | null>(null)
   const [mode, setMode] = useState<ScheduleMode>('grid')
   const [draggedPlacementId, setDraggedPlacementId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
@@ -94,6 +148,14 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const [sharedTrackId, setSharedTrackId] = useState('all')
   const [sharedRoomId, setSharedRoomId] = useState('all')
   const [copied, setCopied] = useState<'link' | 'embed' | null>(null)
+  const eventForDay = payload?.state.events.find(
+    (entry) => entry.id === payload.state.activeEventId,
+  )
+  useEffect(() => {
+    if (!eventForDay) return
+    const firstDay = toZonedDateTimeInput(eventForDay.startsAt, eventForDay.timezone).slice(0, 10)
+    setSelectedDay((current) => current || firstDay)
+  }, [eventForDay])
   if (!payload) return null
   const { state } = payload
   const conflicts = scheduleConflicts(state)
@@ -101,7 +163,43 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const event = state.events.find((entry) => entry.id === state.activeEventId)!
   const timeLabel = (iso: string) =>
     eventDateTime(iso, event.timezone, { hour: 'numeric', minute: '2-digit' })
-  const startTimes = [...new Set(state.placements.map((placement) => placement.startsAt))].sort()
+  const days = calendarDays(event.startsAt, event.endsAt, event.timezone)
+  const activeDay = selectedDay || days[0]
+  const generatedStartTimes = Array.from({ length: 11 }, (_, index) => index + 8)
+    .map((hour) => {
+      try {
+        return zonedDateTimeInputToIso(
+          `${activeDay}T${String(hour).padStart(2, '0')}:00`,
+          event.timezone,
+        )
+      } catch {
+        return null
+      }
+    })
+    .filter(
+      (startsAt): startsAt is string =>
+        Boolean(startsAt) &&
+        Date.parse(startsAt!) >= Date.parse(event.startsAt) &&
+        Date.parse(startsAt!) + 5 * 60_000 <= Date.parse(event.endsAt),
+    )
+  const dayPlacements = state.placements.filter(
+    (placement) =>
+      toZonedDateTimeInput(placement.startsAt, event.timezone).slice(0, 10) === activeDay,
+  )
+  const startTimes = [
+    ...new Set([...generatedStartTimes, ...dayPlacements.map((placement) => placement.startsAt)]),
+  ].sort()
+  const placedSessionIds = new Set(
+    state.placements
+      .filter((placement) => placement.eventId === state.activeEventId)
+      .map((placement) => placement.sessionId),
+  )
+  const unscheduled = state.sessions.filter(
+    (session) =>
+      session.eventId === state.activeEventId &&
+      session.status !== 'cancelled' &&
+      !placedSessionIds.has(session.id),
+  )
   const draggedSession = draggedPlacementId
     ? state.sessions.find(
         (session) =>
@@ -232,16 +330,20 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       />
 
       <Callout
-        tone={hardConflicts.length > 0 ? 'danger' : 'success'}
+        tone={hardConflicts.length > 0 ? 'danger' : unscheduled.length > 0 ? 'info' : 'success'}
         title={
           hardConflicts.length > 0
             ? `${hardConflicts.length} blocking conflict${hardConflicts.length === 1 ? '' : 's'} before publish`
-            : 'The schedule is ready to publish'
+            : unscheduled.length > 0
+              ? `${unscheduled.length} session${unscheduled.length === 1 ? '' : 's'} still ${unscheduled.length === 1 ? 'needs' : 'need'} a time`
+              : 'The schedule is ready to publish'
         }
       >
         <p>
           {hardConflicts[0]?.message ??
-            `${conflicts.length} non-blocking capacity warning${conflicts.length === 1 ? '' : 's'} remain.`}
+            (unscheduled.length > 0
+              ? 'Assign them one at a time or let ProgramKit find open slots.'
+              : `${conflicts.length} non-blocking capacity warning${conflicts.length === 1 ? '' : 's'} remain.`)}
         </p>
       </Callout>
 
@@ -257,6 +359,12 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       ) : null}
 
       <Toolbar>
+        <FilterTabs
+          label="Event day"
+          value={activeDay}
+          options={days.map((day, index) => [day, calendarDayLabel(day, index)])}
+          onChange={setSelectedDay}
+        />
         <div className="hidden lg:block">
           <FilterTabs
             label="Schedule view"
@@ -276,6 +384,57 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
               : 'Open a session to change its room or start time.'}
         </p>
       </Toolbar>
+
+      <section aria-labelledby="unscheduled-sessions-heading">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="unscheduled-sessions-heading" className="text-base font-medium text-zinc-950">
+              Unscheduled sessions
+            </h2>
+            <p className="text-base text-zinc-500 sm:text-sm">
+              {unscheduled.length === 0
+                ? 'Every active session has a room and time.'
+                : 'Choose a session to place it precisely.'}
+            </p>
+          </div>
+          {unscheduled.length > 0 ? (
+            <Button
+              disabled={mutating || state.rooms.length === 0}
+              onClick={() =>
+                void execute('schedule.auto-place', {}, undefined, 'Unscheduled sessions placed.')
+              }
+            >
+              <SparklesIcon className="size-4 shrink-0 fill-violet-500" />
+              Auto-place
+            </Button>
+          ) : null}
+        </div>
+        {unscheduled.length > 0 ? (
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {unscheduled.map((session) => {
+              const track = state.tracks.find((entry) => entry.id === session.trackId)
+              return (
+                <button
+                  key={session.id}
+                  type="button"
+                  className="focus-ring min-w-64 rounded-2xl bg-white p-3 text-left shadow-xs ring-1 ring-zinc-950/10 hover:bg-zinc-50"
+                  onClick={() => setPlacingSessionId(session.id)}
+                >
+                  <span className="block text-pretty text-base font-medium text-zinc-950 sm:text-sm">
+                    {session.title}
+                  </span>
+                  <span className="mt-2 flex items-center justify-between gap-2">
+                    {track ? <TrackBadge name={track.name} color={track.color} /> : <span />}
+                    <span className="text-sm tabular-nums text-zinc-500">
+                      {session.durationMinutes} min
+                    </span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+      </section>
 
       {/*
         Rooms are columns and start times are rows, so a session always sits on the
@@ -418,7 +577,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
 
       <div className={cx(mode === 'grid' ? 'lg:hidden' : '')}>
         <ol role="list" className="divide-y divide-zinc-950/5">
-          {state.placements
+          {dayPlacements
             .slice()
             .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
             .map((placement) => {
@@ -455,6 +614,13 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         placementId={selectedId}
         open={Boolean(selectedId)}
         onClose={() => setSelectedId(null)}
+      />
+      <PlaceSessionDialog
+        key={placingSessionId ?? 'closed'}
+        sessionId={placingSessionId}
+        defaultDay={activeDay}
+        open={Boolean(placingSessionId)}
+        onClose={() => setPlacingSessionId(null)}
       />
       <Dialog
         open={shareOpen}
@@ -559,6 +725,147 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         trail.
       </p>
     </div>
+  )
+}
+
+function PlaceSessionDialog({
+  sessionId,
+  defaultDay,
+  open,
+  onClose,
+}: {
+  sessionId: string | null
+  defaultDay: string
+  open: boolean
+  onClose: () => void
+}) {
+  const { payload, execute, mutating } = useWorkspace()
+  const session = payload?.state.sessions.find((entry) => entry.id === sessionId)
+  const event = payload?.state.events.find((entry) => entry.id === payload.state.activeEventId)
+  const [roomId, setRoomId] = useState('')
+  const [startsAt, setStartsAt] = useState('')
+  const [timeError, setTimeError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!payload || !open) return
+    setRoomId(payload.state.rooms[0]?.id ?? '')
+    setStartsAt(`${defaultDay}T10:00`)
+    setTimeError(null)
+  }, [defaultDay, open, payload])
+
+  if (!payload || !session || !event) return null
+  let previewStartsAt: string | null = null
+  try {
+    previewStartsAt = startsAt ? zonedDateTimeInputToIso(startsAt, event.timezone) : null
+  } catch {
+    previewStartsAt = null
+  }
+  const previewConflicts =
+    previewStartsAt && roomId
+      ? previewSessionPlacement(payload.state, session.id, roomId, previewStartsAt)
+      : []
+  const blocking = previewConflicts.filter(
+    (conflict) => conflict.severity === 'error' && conflict.type !== 'person_overlap',
+  )
+  const speakerConflicts = previewConflicts.filter((conflict) => conflict.type === 'person_overlap')
+  const warnings = previewConflicts.filter((conflict) => conflict.severity === 'warning')
+
+  async function submit(submitEvent: FormEvent<HTMLFormElement>) {
+    submitEvent.preventDefault()
+    let iso: string
+    try {
+      iso = zonedDateTimeInputToIso(startsAt, event!.timezone)
+      setTimeError(null)
+    } catch (error) {
+      setTimeError(error instanceof Error ? error.message : 'Enter a valid date and time.')
+      return
+    }
+    const response = await execute(
+      'schedule.place-session',
+      { sessionId: session!.id, roomId, startsAt: iso },
+      undefined,
+      `${session!.title} placed.`,
+    )
+    if (response.ok) onClose()
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={`Place ${session.title}`}
+      description="Choose its day, local start time, and room."
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            type="submit"
+            form="place-session-form"
+            variant="primary"
+            disabled={mutating || !roomId || !previewStartsAt || blocking.length > 0}
+          >
+            Place session
+          </Button>
+        </>
+      }
+    >
+      <form
+        id="place-session-form"
+        className="grid gap-4 sm:grid-cols-2"
+        onSubmit={(submitEvent) => void submit(submitEvent)}
+      >
+        <Field label="Room" htmlFor="place-session-room">
+          <select
+            id="place-session-room"
+            required
+            value={roomId}
+            onChange={(event) => setRoomId(event.target.value)}
+            className={selectControl}
+          >
+            <option value="">Choose a room</option>
+            {payload.state.rooms.map((room) => (
+              <option key={room.id} value={room.id}>
+                {room.name} · {room.capacity} seats
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Starts" htmlFor="place-session-starts">
+          <input
+            id="place-session-starts"
+            type="datetime-local"
+            required
+            value={startsAt}
+            aria-invalid={Boolean(timeError || blocking.length > 0)}
+            onChange={(event) => {
+              setStartsAt(event.target.value)
+              setTimeError(null)
+            }}
+            className={textControl}
+          />
+          {timeError ? <p className="text-sm text-rose-700">{timeError}</p> : null}
+        </Field>
+        {blocking.length > 0 ? (
+          <div className="sm:col-span-2">
+            <Callout tone="danger" title="That slot is not available">
+              {blocking[0].message}
+            </Callout>
+          </div>
+        ) : speakerConflicts.length > 0 ? (
+          <div className="sm:col-span-2">
+            <Callout tone="warning" title="Speaker conflict">
+              {speakerConflicts[0].message}
+            </Callout>
+          </div>
+        ) : warnings.length > 0 ? (
+          <div className="sm:col-span-2">
+            <Callout tone="warning" title="Capacity warning">
+              {warnings[0].message}
+            </Callout>
+          </div>
+        ) : null}
+      </form>
+    </Dialog>
   )
 }
 
