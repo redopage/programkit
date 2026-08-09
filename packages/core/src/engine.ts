@@ -115,6 +115,30 @@ function optionalString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function assertEmail(value: unknown, field = 'email') {
+  const email = assertString(value, field).toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
+    throw new OperationError('INVALID_INPUT', `${field} must be a valid email address.`, {
+      [field]: 'Enter a valid email address.',
+    })
+  }
+  return email
+}
+
+function assertEventReviewerIds(state: WorkspaceState, value: unknown) {
+  const reviewerIds = assertStringArray(value, 'reviewerIds')
+  if (new Set(reviewerIds).size !== reviewerIds.length) {
+    throw new OperationError('INVALID_INPUT', 'A reviewer can only appear once in a pool.')
+  }
+  for (const reviewerId of reviewerIds) {
+    const reviewer = findRequired(state.reviewers, reviewerId, 'reviewer')
+    if (reviewer.eventId !== state.activeEventId) {
+      throw new OperationError('FORBIDDEN', 'Reviewer pools cannot cross event boundaries.')
+    }
+  }
+  return reviewerIds
+}
+
 function optionalBoolean(value: unknown, fallback: boolean) {
   if (value === undefined) return fallback
   if (typeof value !== 'boolean') {
@@ -976,6 +1000,73 @@ function applyHandler(
         data: { formId: form.id, assignmentIds: createdAssignments.map((entry) => entry.id) },
       })
       return { submission, assignments: createdAssignments }
+    }
+
+    case 'reviewer.create': {
+      const email = assertEmail(input.email)
+      if (
+        state.reviewers.some(
+          (reviewer) => reviewer.eventId === state.activeEventId && reviewer.email === email,
+        )
+      ) {
+        throw new OperationError('DUPLICATE', 'A reviewer already uses that email address.', {
+          email: 'Use a different email address.',
+        })
+      }
+      const reviewer = {
+        id: createId('rev'),
+        eventId: state.activeEventId,
+        name: assertString(input.name, 'name'),
+        email,
+        status: 'active' as const,
+        createdAt: timestamp,
+        version: 1,
+      }
+      state.reviewers.push(reviewer)
+      appendEvent(state, context, {
+        type: 'reviewer.created',
+        aggregate: { type: 'reviewer', id: reviewer.id, version: reviewer.version },
+        summary: `Added reviewer ${reviewer.name}.`,
+        data: { email: reviewer.email },
+      })
+      return { reviewer }
+    }
+
+    case 'reviewer-team.create': {
+      const team = {
+        id: createId('rvt'),
+        eventId: state.activeEventId,
+        name: assertString(input.name, 'name'),
+        reviewerIds: assertEventReviewerIds(state, input.reviewerIds),
+        version: 1,
+      }
+      state.reviewerTeams.push(team)
+      appendEvent(state, context, {
+        type: 'reviewer-team.created',
+        aggregate: { type: 'reviewer-team', id: team.id, version: team.version },
+        summary: `Created reviewer pool “${team.name}”.`,
+        data: { reviewerIds: team.reviewerIds },
+      })
+      return { team }
+    }
+
+    case 'reviewer-team.update': {
+      const team = findRequired(state.reviewerTeams, input.teamId, 'reviewer team')
+      if (team.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'Only active-event reviewer pools can be updated.')
+      }
+      if (input.name !== undefined) team.name = assertString(input.name, 'name')
+      if (input.reviewerIds !== undefined) {
+        team.reviewerIds = assertEventReviewerIds(state, input.reviewerIds)
+      }
+      team.version += 1
+      appendEvent(state, context, {
+        type: 'reviewer-team.updated',
+        aggregate: { type: 'reviewer-team', id: team.id, version: team.version },
+        summary: `Updated reviewer pool “${team.name}”.`,
+        data: { reviewerIds: team.reviewerIds },
+      })
+      return { team }
     }
 
     case 'evaluation-plan.create': {

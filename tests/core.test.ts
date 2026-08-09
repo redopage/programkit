@@ -713,13 +713,34 @@ describe('ProgramKit operation engine', () => {
 
   it('configures independent review rounds with typed scorecards', () => {
     let state = createSeedState()
-    state.reviewerTeams.push({
-      id: 'rvt_final',
-      eventId: state.activeEventId,
-      name: 'Final review committee',
-      reviewerIds: ['rev_002', 'rev_003'],
-      version: 1,
+    const addedReviewer = executeOperation(state, 'reviewer.create', {
+      input: { name: 'Sam Rodriguez', email: 'sam@example.com' },
     })
+    expect(addedReviewer.response.ok).toBe(true)
+    state = addedReviewer.state
+    const sam = state.reviewers.find((reviewer) => reviewer.email === 'sam@example.com')!
+    const initialPool = state.reviewerTeams.find((team) => team.id === 'rvt_program')!
+    const updatedPool = executeOperation(state, 'reviewer-team.update', {
+      input: {
+        teamId: initialPool.id,
+        reviewerIds: [...initialPool.reviewerIds, sam.id],
+      },
+      expectedVersions: { [initialPool.id]: initialPool.version },
+    })
+    expect(updatedPool.response.ok).toBe(true)
+    state = updatedPool.state
+    expect(state.reviewerTeams.find((team) => team.id === initialPool.id)?.reviewerIds).toContain(
+      sam.id,
+    )
+    const createdPool = executeOperation(state, 'reviewer-team.create', {
+      input: {
+        name: 'Final review committee',
+        reviewerIds: [sam.id, 'rev_003'],
+      },
+    })
+    expect(createdPool.response.ok).toBe(true)
+    state = createdPool.state
+    const finalTeam = state.reviewerTeams.find((team) => team.name === 'Final review committee')!
     const plan = state.evaluationPlans[0]
     const updated = executeOperation(state, 'evaluation-plan.update', {
       input: {
@@ -770,7 +791,7 @@ describe('ProgramKit operation engine', () => {
             name: 'Final Review',
             opensAt: '2026-10-16T00:00:00-04:00',
             closesAt: '2026-11-30T23:59:00-05:00',
-            reviewerTeamId: 'rvt_final',
+            reviewerTeamId: finalTeam.id,
             blindReview: false,
             reviewersPerSubmission: 1,
             minimumCompletedReviews: 1,
@@ -816,7 +837,7 @@ describe('ProgramKit operation engine', () => {
     ])
     expect(savedPlan.rounds[1]).toMatchObject({
       name: 'Final Review',
-      reviewerTeamId: 'rvt_final',
+      reviewerTeamId: finalTeam.id,
       blindReview: false,
     })
     expect(savedPlan.rounds[1].criteria).toEqual([

@@ -1,4 +1,5 @@
-import { ArrowRightIcon, ClockIcon } from '@heroicons/react/16/solid'
+import { AdjustmentsHorizontalIcon, ArrowRightIcon, ClockIcon } from '@heroicons/react/16/solid'
+import { useState } from 'react'
 
 import {
   evaluationCriterionKind,
@@ -11,6 +12,7 @@ import {
 } from '@programkit/core'
 
 import { Button, PageHeader, ProgressBar, cx, sentenceCase } from '../components/ui.tsx'
+import { ReviewSetupDrawer } from '../components/ReviewSetupDrawer.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 
 function answerText(value: SubmissionAnswerValue | undefined) {
@@ -35,6 +37,7 @@ function AssignmentStatus({ status }: { status: 'assigned' | 'in_progress' | 'co
 }
 
 export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
+  const [setupOpen, setSetupOpen] = useState(false)
   const { payload } = useWorkspace()
   if (!payload) return null
   const { state } = payload
@@ -69,6 +72,10 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
         title="Review"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => setSetupOpen(true)}>
+              <AdjustmentsHorizontalIcon className="size-4 h-lh shrink-0 fill-current" />
+              Configure
+            </Button>
             <Button onClick={() => navigate('/reviewer/rev_001')}>Open reviewer portal</Button>
             <Button onClick={() => navigate('/submissions')}>
               Review submissions
@@ -307,6 +314,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
           </div>
         </div>
       </section>
+      <ReviewSetupDrawer open={setupOpen} onClose={() => setSetupOpen(false)} />
     </div>
   )
 }
