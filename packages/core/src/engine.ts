@@ -1161,6 +1161,160 @@ function applyHandler(
       return { plan }
     }
 
+    case 'review.assign': {
+      const plan = findRequired(state.evaluationPlans, input.evaluationPlanId, 'evaluation plan')
+      if (plan.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'Only active-event reviews can be assigned.')
+      }
+      const round = plan.rounds.find((entry) => entry.id === input.roundId)
+      if (!round) throw new OperationError('NOT_FOUND', 'The evaluation round was not found.')
+      const reviewer = findRequired(state.reviewers, input.reviewerId, 'reviewer')
+      if (reviewer.eventId !== state.activeEventId || reviewer.status !== 'active') {
+        throw new OperationError('INVALID_INPUT', 'Choose an active reviewer for this event.')
+      }
+      const teamId = evaluationRoundReviewerTeamId(plan, round.id)
+      const team = state.reviewerTeams.find((entry) => entry.id === teamId)
+      if (!team?.reviewerIds.includes(reviewer.id)) {
+        throw new OperationError('FORBIDDEN', 'The reviewer is not in this round’s reviewer pool.')
+      }
+
+      const submissionIds = [...new Set(assertStringArray(input.submissionIds, 'submissionIds'))]
+      if (submissionIds.length === 0) {
+        throw new OperationError('INVALID_INPUT', 'Select at least one proposal to assign.', {
+          submissionIds: 'Select at least one proposal.',
+        })
+      }
+      const trackValues =
+        input.trackValues === undefined
+          ? null
+          : new Set(assertStringArray(input.trackValues, 'trackValues'))
+      const maxAssignments =
+        input.maxAssignments === undefined
+          ? 500
+          : boundedInteger(input.maxAssignments, 'maxAssignments', 1, 500)
+      const existingForReviewer = state.reviewerAssignments.filter(
+        (entry) => entry.roundId === round.id && entry.reviewerId === reviewer.id,
+      ).length
+      let available = Math.max(0, maxAssignments - existingForReviewer)
+      const assignments = []
+      const skipped: Array<{ submissionId: string; reason: 'existing' | 'cap' | 'track' }> = []
+
+      for (const submissionId of submissionIds) {
+        const submission = findRequired(state.submissions, submissionId, 'submission')
+        if (
+          submission.eventId !== state.activeEventId ||
+          submission.formId !== plan.formId ||
+          !plan.submissionKinds.includes(submission.kind)
+        ) {
+          throw new OperationError(
+            'FORBIDDEN',
+            'Review assignments cannot cross event, form, or submission-kind boundaries.',
+          )
+        }
+        if (submission.status !== 'submitted' && submission.status !== 'in_review') {
+          throw new OperationError(
+            'INVALID_TRANSITION',
+            'Only submitted proposals can be assigned.',
+          )
+        }
+        if (trackValues && !trackValues.has(stringAnswer(state, submission, 'track'))) {
+          skipped.push({ submissionId, reason: 'track' })
+          continue
+        }
+        if (
+          state.reviewerAssignments.some(
+            (entry) =>
+              entry.roundId === round.id &&
+              entry.reviewerId === reviewer.id &&
+              entry.submissionId === submission.id,
+          )
+        ) {
+          skipped.push({ submissionId, reason: 'existing' })
+          continue
+        }
+        if (available === 0) {
+          skipped.push({ submissionId, reason: 'cap' })
+          continue
+        }
+        const assignment = {
+          id: createId('rva'),
+          eventId: state.activeEventId,
+          evaluationPlanId: plan.id,
+          roundId: round.id,
+          submissionId: submission.id,
+          reviewerId: reviewer.id,
+          status: 'assigned' as const,
+          dueAt: round.closesAt ?? null,
+          updatedAt: timestamp,
+          version: 1,
+        }
+        state.reviewerAssignments.push(assignment)
+        assignments.push(assignment)
+        available -= 1
+        if (submission.status === 'submitted') {
+          submission.status = 'in_review'
+          submission.updatedAt = timestamp
+          submission.version += 1
+        }
+      }
+
+      appendEvent(state, context, {
+        type: 'reviewer-assignment.created',
+        aggregate: { type: 'reviewer', id: reviewer.id, version: reviewer.version },
+        summary: `Assigned ${assignments.length} review${assignments.length === 1 ? '' : 's'} to ${reviewer.name}.`,
+        data: {
+          roundId: round.id,
+          assignmentIds: assignments.map((entry) => entry.id),
+          skipped,
+          maxAssignments,
+          trackValues: trackValues ? [...trackValues] : [],
+        },
+      })
+      return { assignments, skipped }
+    }
+
+    case 'review.unassign': {
+      const assignment = findRequired(
+        state.reviewerAssignments,
+        input.assignmentId,
+        'reviewer assignment',
+      )
+      if (assignment.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'Only active-event reviews can be unassigned.')
+      }
+      if (
+        assignment.status === 'completed' ||
+        state.scorecards.some((entry) => entry.assignmentId === assignment.id)
+      ) {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Completed reviews cannot be unassigned. Keep their audit history intact.',
+        )
+      }
+      const reviewer = findRequired(state.reviewers, assignment.reviewerId, 'reviewer')
+      const submission = findRequired(state.submissions, assignment.submissionId, 'submission')
+      state.reviewerAssignments.splice(state.reviewerAssignments.indexOf(assignment), 1)
+      if (
+        submission.status === 'in_review' &&
+        !state.reviewerAssignments.some((entry) => entry.submissionId === submission.id)
+      ) {
+        submission.status = 'submitted'
+        submission.updatedAt = timestamp
+        submission.version += 1
+      }
+      appendEvent(state, context, {
+        type: 'reviewer-assignment.removed',
+        aggregate: {
+          type: 'reviewer-assignment',
+          id: assignment.id,
+          version: assignment.version + 1,
+        },
+        summary: `Removed ${reviewer.name} from “${stringAnswer(state, submission, 'proposal_title')}”.`,
+        data: { reviewerId: reviewer.id, submissionId: submission.id, roundId: assignment.roundId },
+      })
+      return { assignmentId: assignment.id }
+    }
+
     case 'review.submit-scorecard': {
       const assignment = findRequired(
         state.reviewerAssignments,

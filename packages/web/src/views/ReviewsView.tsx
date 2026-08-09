@@ -1,4 +1,9 @@
-import { AdjustmentsHorizontalIcon, ArrowRightIcon, ClockIcon } from '@heroicons/react/16/solid'
+import {
+  AdjustmentsHorizontalIcon,
+  ArrowRightIcon,
+  ClockIcon,
+  UserPlusIcon,
+} from '@heroicons/react/16/solid'
 import { useState } from 'react'
 
 import {
@@ -12,6 +17,7 @@ import {
 } from '@programkit/core'
 
 import { Button, PageHeader, ProgressBar, cx, sentenceCase } from '../components/ui.tsx'
+import { ReviewAssignmentsDrawer } from '../components/ReviewAssignmentsDrawer.tsx'
 import { ReviewSetupDrawer } from '../components/ReviewSetupDrawer.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 
@@ -38,6 +44,7 @@ function AssignmentStatus({ status }: { status: 'assigned' | 'in_progress' | 'co
 
 export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   const [setupOpen, setSetupOpen] = useState(false)
+  const [assignmentsOpen, setAssignmentsOpen] = useState(false)
   const { payload } = useWorkspace()
   if (!payload) return null
   const { state } = payload
@@ -75,6 +82,10 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             <Button onClick={() => setSetupOpen(true)}>
               <AdjustmentsHorizontalIcon className="size-4 h-lh shrink-0 fill-current" />
               Configure
+            </Button>
+            <Button onClick={() => setAssignmentsOpen(true)}>
+              <UserPlusIcon className="size-4 h-lh shrink-0 fill-current" />
+              Assign reviews
             </Button>
             <Button onClick={() => navigate('/reviewer/rev_001')}>Open reviewer portal</Button>
             <Button onClick={() => navigate('/submissions')}>
@@ -314,6 +325,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
           </div>
         </div>
       </section>
+      <ReviewAssignmentsDrawer open={assignmentsOpen} onClose={() => setAssignmentsOpen(false)} />
       <ReviewSetupDrawer open={setupOpen} onClose={() => setSetupOpen(false)} />
     </div>
   )

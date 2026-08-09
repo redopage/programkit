@@ -872,6 +872,83 @@ describe('ProgramKit operation engine', () => {
       recommendation: 'accept',
     })
   })
+
+  it('bulk assigns only eligible proposals with reviewer caps and track filters', () => {
+    let state = createSeedState()
+    const addedReviewer = executeOperation(state, 'reviewer.create', {
+      input: { name: 'Sam Whitfield', email: 'sam.reviewer@example.com' },
+    })
+    state = addedReviewer.state
+    const sam = state.reviewers.find((reviewer) => reviewer.email === 'sam.reviewer@example.com')!
+    const team = state.reviewerTeams.find((entry) => entry.id === 'rvt_program')!
+    state = executeOperation(state, 'reviewer-team.update', {
+      input: { teamId: team.id, reviewerIds: [...team.reviewerIds, sam.id] },
+      expectedVersions: { [team.id]: team.version },
+    }).state
+
+    const plan = state.evaluationPlans[0]
+    const round = plan.rounds[0]
+    const trackFiltered = executeOperation(state, 'review.assign', {
+      input: {
+        evaluationPlanId: plan.id,
+        roundId: round.id,
+        reviewerId: sam.id,
+        submissionIds: ['sub_005'],
+        trackValues: ['trk_operate'],
+        maxAssignments: 5,
+      },
+    })
+    expect(trackFiltered.response.ok).toBe(true)
+    expect(
+      (trackFiltered.response.data as { assignments: unknown[]; skipped: unknown[] }).assignments,
+    ).toHaveLength(0)
+    expect((trackFiltered.response.data as { skipped: Array<{ reason: string }> }).skipped).toEqual(
+      [{ submissionId: 'sub_005', reason: 'track' }],
+    )
+
+    const capped = executeOperation(trackFiltered.state, 'review.assign', {
+      input: {
+        evaluationPlanId: plan.id,
+        roundId: round.id,
+        reviewerId: sam.id,
+        submissionIds: ['sub_002', 'sub_005'],
+        maxAssignments: 1,
+      },
+    })
+    expect(capped.response.ok).toBe(true)
+    expect((capped.response.data as { assignments: unknown[] }).assignments).toHaveLength(1)
+    expect((capped.response.data as { skipped: Array<{ reason: string }> }).skipped).toEqual([
+      { submissionId: 'sub_005', reason: 'cap' },
+    ])
+
+    const second = executeOperation(capped.state, 'review.assign', {
+      input: {
+        evaluationPlanId: plan.id,
+        roundId: round.id,
+        reviewerId: sam.id,
+        submissionIds: ['sub_005'],
+        maxAssignments: 2,
+      },
+    })
+    expect(second.response.ok).toBe(true)
+    state = second.state
+    const assignedToSam = state.reviewerAssignments.filter(
+      (assignment) => assignment.roundId === round.id && assignment.reviewerId === sam.id,
+    )
+    expect(assignedToSam.map((assignment) => assignment.submissionId).sort()).toEqual([
+      'sub_002',
+      'sub_005',
+    ])
+
+    const removed = executeOperation(state, 'review.unassign', {
+      input: { assignmentId: assignedToSam[1].id },
+      expectedVersions: { [assignedToSam[1].id]: assignedToSam[1].version },
+    })
+    expect(removed.response.ok).toBe(true)
+    expect(
+      removed.state.reviewerAssignments.some((assignment) => assignment.id === assignedToSam[1].id),
+    ).toBe(false)
+  })
 })
 
 describe('next actions', () => {
