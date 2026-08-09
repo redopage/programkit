@@ -2,8 +2,8 @@
 
 The competition asks for a submission form, an open-source repository, and a deployed,
 walkthrough-ready site. The product demonstration must cover the nine rows below. “Ready” here
-means product behavior is implemented in local checkpoints; final design acceptance, integration,
-clean-checkout QA, and Andrew's public-release gates remain separate.
+means product behavior, accepted design/copy, tests, documentation, and browser evidence agree on
+the local candidate; Andrew's provider and public-release gates remain separate.
 
 | #   | Required demonstration                                           | Judge route and action                                                                                                                                                                        | Domain and trust evidence                                                                                                                                                                               | Focused verification                                                                                                                                                             | Status before final gate                                                                                 |
 | --- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
