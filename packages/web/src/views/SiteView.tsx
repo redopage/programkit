@@ -32,10 +32,42 @@ const workflowBars = [
   { label: 'Agenda', width: 'w-[58%]', color: 'bg-emerald-100 text-emerald-950' },
 ]
 
+function BackgroundProgramMark({ dark = false, active = false }) {
+  const outline = dark ? 'ring-white/8' : 'ring-blue-950/5'
+  const surface = active
+    ? dark
+      ? 'bg-blue-500/5 ring-blue-400/10'
+      : 'bg-blue-600/2 ring-blue-600/6'
+    : 'bg-transparent'
+
+  return (
+    <div className="grid aspect-[56/58] w-full grid-cols-[20fr_16fr_20fr] grid-rows-5 gap-1.5">
+      <span className={`col-span-3 row-start-1 rounded-md ring-1 ${outline} ${surface}`} />
+      <span className={`row-start-2 rounded-md ring-1 ${outline} ${surface}`} />
+      <span className={`col-start-3 row-start-2 rounded-md ring-1 ${outline} ${surface}`} />
+      <span className={`col-span-3 row-start-3 rounded-md ring-1 ${outline} ${surface}`} />
+      <span className={`row-start-4 rounded-md ring-1 ${outline} ${surface}`} />
+      <span className={`row-start-5 rounded-md ring-1 ${outline} ${surface}`} />
+    </div>
+  )
+}
+
+function ProgramSlotField({ dark = false }: { dark?: boolean }) {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute -top-20 left-[42%] grid w-[64rem] -rotate-6 grid-cols-4 gap-8 opacity-75 sm:-top-28 sm:left-[46%] sm:w-[78rem] sm:gap-10">
+        {Array.from({ length: 12 }, (_, index) => (
+          <BackgroundProgramMark key={index} dark={dark} active={index === 5 || index === 10} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function SiteView() {
   return (
-    <main className="isolate min-h-dvh bg-[#f5f7ff] text-zinc-950">
-      <div className="mx-auto min-h-dvh w-full max-w-[96rem] bg-white shadow-[0_0_0_1px_rgba(24,24,27,0.06)] sm:w-[calc(100%-2rem)] lg:w-[calc(100%-4rem)]">
+    <main className="isolate min-h-dvh bg-white text-zinc-950">
+      <div className="mx-auto min-h-dvh w-full max-w-[96rem] bg-white ring-1 ring-zinc-950/6 sm:w-[calc(100%-2rem)] lg:w-[calc(100%-4rem)]">
         <header className="border-b border-zinc-950/8">
           <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center justify-between gap-4 px-5 sm:min-h-18 sm:px-8 lg:px-10">
             <a
@@ -70,9 +102,10 @@ export function SiteView() {
           </div>
         </header>
 
-        <section className="px-5 pt-20 pb-12 sm:px-8 sm:pt-28 sm:pb-16 lg:px-10 lg:pt-32">
-          <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
-            <h1 className="max-w-[18ch] text-balance text-5xl/[0.96] font-semibold tracking-[-0.055em] sm:text-7xl/[0.94] lg:text-[5.25rem]/[0.92]">
+        <section className="relative overflow-hidden px-5 pt-20 pb-12 sm:px-8 sm:pt-28 sm:pb-16 lg:px-10 lg:pt-32">
+          <ProgramSlotField />
+          <div className="relative mx-auto flex max-w-5xl flex-col items-center text-center">
+            <h1 className="max-w-[18ch] text-balance text-5xl font-semibold tracking-[-0.055em] sm:text-7xl lg:text-[5.25rem]">
               From call for speakers to showtime.
             </h1>
             <p className="max-w-4xl pt-6 text-pretty text-lg/8 text-zinc-600 sm:text-xl/8">
@@ -99,26 +132,15 @@ export function SiteView() {
 
         <section className="px-3 pb-24 sm:px-6 sm:pb-32 lg:px-8">
           <div className="mx-auto max-w-[88rem] rounded-[2rem] bg-blue-600 p-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)] sm:p-4 lg:p-6">
-            <div className="grid min-w-0 gap-2 sm:gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.55fr)] lg:gap-6">
-              <div className="min-w-0 overflow-hidden rounded-[calc(2rem-0.5rem)] bg-white shadow-xl shadow-blue-950/18 outline outline-white/12">
-                <img
-                  src="/assets/marketing/form-preview.jpg"
-                  alt="ProgramKit call for speakers form preview"
-                  width="877"
-                  height="747"
-                  fetchPriority="high"
-                  className="aspect-[16/10] h-full w-full object-cover object-top"
-                />
-              </div>
-              <div className="hidden min-w-0 overflow-hidden rounded-[calc(2rem-0.5rem)] bg-white shadow-xl shadow-blue-950/18 outline outline-white/12 sm:block">
-                <img
-                  src="/assets/marketing/overview.jpg"
-                  alt="ProgramKit organizer overview"
-                  width="706"
-                  height="747"
-                  className="aspect-[16/10] h-full w-full object-cover object-top lg:aspect-auto"
-                />
-              </div>
+            <div className="min-w-0 overflow-hidden rounded-[calc(2rem-0.5rem)] bg-white shadow-xl shadow-blue-950/18 outline outline-white/12">
+              <img
+                src="/assets/marketing/main-app.png"
+                alt="ProgramKit organizer workspace"
+                width="1440"
+                height="1010"
+                fetchPriority="high"
+                className="aspect-[16/10] w-full object-cover object-top"
+              />
             </div>
           </div>
         </section>
@@ -126,7 +148,7 @@ export function SiteView() {
         <section id="product" className="scroll-mt-8 border-y border-zinc-950/8">
           <div className="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 sm:py-28 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20 lg:px-10">
             <div className="min-w-0">
-              <h2 className="max-w-[14ch] text-balance text-4xl/[1.02] font-semibold tracking-[-0.045em] sm:text-5xl/[1]">
+              <h2 className="max-w-[14ch] text-balance text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
                 One workspace for the whole program.
               </h2>
               <p className="max-w-xl pt-5 text-pretty text-base/7 text-zinc-600 sm:text-lg/8">
@@ -153,7 +175,7 @@ export function SiteView() {
           <div className="mx-auto max-w-7xl">
             <div className="grid min-w-0 items-end gap-10 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20">
               <div className="min-w-0">
-                <h2 className="max-w-[12ch] text-balance text-4xl/[1.02] font-semibold tracking-[-0.045em] sm:text-5xl/[1]">
+                <h2 className="max-w-[12ch] text-balance text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
                   The program stays connected.
                 </h2>
                 <p className="max-w-xl pt-5 text-pretty text-base/7 text-zinc-600 sm:text-lg/8">
@@ -181,10 +203,10 @@ export function SiteView() {
               <figure className="min-w-0">
                 <div className="overflow-hidden rounded-[2rem] bg-zinc-100 p-2 ring-1 ring-zinc-950/8 sm:p-3">
                   <img
-                    src="/assets/marketing/readiness.jpg"
+                    src="/assets/marketing/readiness.png"
                     alt="ProgramKit speaker readiness dashboard"
-                    width="877"
-                    height="747"
+                    width="1440"
+                    height="1010"
                     loading="lazy"
                     className="aspect-[4/3] w-full rounded-[calc(2rem-0.75rem)] object-cover object-top outline outline-zinc-950/8"
                   />
@@ -197,10 +219,10 @@ export function SiteView() {
               <figure className="min-w-0">
                 <div className="overflow-hidden rounded-[2rem] bg-zinc-100 p-2 ring-1 ring-zinc-950/8 sm:p-3">
                   <img
-                    src="/assets/marketing/schedule.jpg"
+                    src="/assets/marketing/schedule.png"
                     alt="ProgramKit schedule studio"
-                    width="877"
-                    height="747"
+                    width="1440"
+                    height="1010"
                     loading="lazy"
                     className="aspect-[4/3] w-full rounded-[calc(2rem-0.75rem)] object-cover object-top outline outline-zinc-950/8"
                   />
@@ -214,8 +236,9 @@ export function SiteView() {
         </section>
 
         <section className="px-3 pb-3 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8">
-          <div className="mx-auto grid max-w-[88rem] gap-8 rounded-[2rem] bg-zinc-950 px-6 py-12 text-white sm:px-10 sm:py-16 lg:grid-cols-[1fr_auto] lg:items-end lg:px-14">
-            <div className="min-w-0">
+          <div className="relative mx-auto grid max-w-[88rem] gap-8 overflow-hidden rounded-[2rem] bg-zinc-950 px-6 py-12 text-white sm:px-10 sm:py-16 lg:grid-cols-[1fr_auto] lg:items-end lg:px-14">
+            <ProgramSlotField dark />
+            <div className="relative min-w-0">
               <ProgramKitMark className="size-9" />
               <h2 className="max-w-[16ch] pt-8 text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
                 Open source and ready to make your own.
@@ -225,7 +248,7 @@ export function SiteView() {
                 event needs.
               </p>
             </div>
-            <div className="flex flex-wrap gap-5 text-sm font-medium">
+            <div className="relative flex flex-wrap gap-5 text-sm font-medium">
               <a
                 href="https://forge.smol.ai/andheller/programkit"
                 className="focus-ring rounded-md text-white underline decoration-white/30 underline-offset-4 hover:decoration-white"
