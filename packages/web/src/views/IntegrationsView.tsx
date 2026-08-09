@@ -1,13 +1,11 @@
 import {
   ArrowDownTrayIcon,
-  ArrowRightIcon,
   ArrowPathIcon,
   ArrowUpTrayIcon,
   CheckCircleIcon,
   CloudIcon,
   ExclamationTriangleIcon,
   MinusCircleIcon,
-  TableCellsIcon,
 } from '@heroicons/react/16/solid'
 import { useState } from 'react'
 
@@ -25,7 +23,6 @@ export function IntegrationsView() {
   const effectiveEventUrl = eventUrl ?? eventSlug ?? ''
   if (!payload) return null
   const { state } = payload
-  const airtable = state.integrations.find((integration) => integration.kind === 'airtable')
   const accelevents = state.integrations.find((integration) => integration.kind === 'accelevents')
   const connections = state.integrations.filter(
     (integration) => integration.kind !== 'airtable' && integration.kind !== 'accelevents',
@@ -59,7 +56,7 @@ export function IntegrationsView() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Infrastructure & integrations"
-        description="Keep ProgramKit authoritative while delivery services work from durable, reviewable outboxes."
+        description="ProgramKit holds the program. Outbound services work from batches you can review here."
         actions={
           <Button variant="secondary" onClick={() => window.open('/api/v1/export', '_blank')}>
             <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
@@ -68,118 +65,53 @@ export function IntegrationsView() {
         }
       />
 
-      <section aria-labelledby="deployment-heading">
+      <section aria-labelledby="runtime-heading">
         <div className="border-b border-zinc-950/5 pb-2">
-          <h2 id="deployment-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-            Deployment shape
+          <h2 id="runtime-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+            Where ProgramKit runs
           </h2>
           <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-            Cloudflare is the supported host. Airtable is an optional, conflict-aware team view; the
-            event workspace remains authoritative.
+            Cloudflare is the supported host, and the event workspace inside it is the record of the
+            program.
           </p>
         </div>
 
-        <div className="@container pt-5">
-          <div className="grid gap-4 @4xl:grid-cols-2">
-            <article className="relative overflow-hidden rounded-2xl bg-zinc-950 p-5 text-white sm:p-6">
-              <div
-                aria-hidden="true"
-                className="absolute -right-16 -top-20 size-52 rounded-full bg-blue-400/15 blur-3xl"
-              />
-              <div className="relative flex h-full flex-col justify-between gap-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <CloudIcon className="size-4 h-lh shrink-0 fill-blue-300" />
-                    <div className="min-w-0">
-                      <p className="text-base font-medium text-zinc-400 sm:text-sm">
-                        Primary runtime
-                      </p>
-                      <h3 className="text-balance text-lg font-semibold">Cloudflare</h3>
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-sm font-semibold text-emerald-200 ring-1 ring-inset ring-emerald-300/20">
-                    Active
-                  </span>
+        <div className="pt-5">
+          <article className="relative overflow-hidden rounded-2xl bg-zinc-950 p-5 text-white sm:p-6">
+            <div
+              aria-hidden="true"
+              className="absolute -right-16 -top-20 size-52 rounded-full bg-blue-400/15 blur-3xl"
+            />
+            <div className="relative flex flex-col gap-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <CloudIcon className="size-4 h-lh shrink-0 fill-blue-300" />
+                  <h3 className="text-balance text-lg font-semibold">Cloudflare</h3>
                 </div>
-
-                <p className="max-w-xl text-pretty text-base text-zinc-300 sm:text-sm">
-                  The web app, API, and atomic event workspace deploy together. Organizer actions do
-                  not wait on a third-party database round trip.
-                </p>
-
-                <dl className="grid gap-3 sm:grid-cols-3">
-                  {[
-                    ['Worker', 'App + API'],
-                    ['SQLite DO', 'Source of truth'],
-                    ['Static Assets', 'Vite build'],
-                  ].map(([term, detail]) => (
-                    <div key={term} className="min-w-0">
-                      <dt className="truncate text-base font-semibold text-white sm:text-sm">
-                        {term}
-                      </dt>
-                      <dd className="text-base text-zinc-400 sm:text-sm">{detail}</dd>
-                    </div>
-                  ))}
-                </dl>
+                <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-sm font-semibold text-emerald-200 ring-1 ring-inset ring-emerald-300/20">
+                  Active
+                </span>
               </div>
-            </article>
 
-            <article className="rounded-2xl bg-violet-50/70 p-5 ring-1 ring-inset ring-violet-950/10 sm:p-6">
-              <div className="flex h-full flex-col justify-between gap-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <TableCellsIcon className="size-4 h-lh shrink-0 fill-violet-700" />
-                    <div className="min-w-0">
-                      <p className="text-base font-medium text-violet-700/70 sm:text-sm">
-                        Team workspace
-                      </p>
-                      <h3 className="text-balance text-lg font-semibold text-zinc-950">Airtable</h3>
-                    </div>
+              <p className="max-w-xl text-pretty text-base text-zinc-300 sm:text-sm">
+                The web app, the API, and the event workspace deploy together. Your edits are saved
+                here first and never wait on an outside service.
+              </p>
+
+              <dl className="grid gap-3 sm:grid-cols-3">
+                {[
+                  ['App and API', 'One Cloudflare Worker'],
+                  ['Event workspace', 'SQLite storage, one event at a time'],
+                  ['Web assets', 'Static build served by the Worker'],
+                ].map(([term, detail]) => (
+                  <div key={term} className="min-w-0">
+                    <dt className="text-base font-semibold text-white sm:text-sm">{term}</dt>
+                    <dd className="text-pretty text-base text-zinc-400 sm:text-sm">{detail}</dd>
                   </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-violet-700 ring-1 ring-inset ring-violet-950/10">
-                    {airtable?.status === 'connected' ? 'Connected' : 'Optional'}
-                  </span>
-                </div>
-
-                <p className="text-pretty text-base text-zinc-600 sm:text-sm">
-                  Let program teams work in familiar tables. Safe inbound edits become validated
-                  proposals; concurrent edits wait in a reconciliation queue.
-                </p>
-
-                <div className="flex flex-wrap items-center gap-2 text-base font-semibold text-zinc-700 sm:text-sm">
-                  <span className="rounded-lg bg-zinc-950 px-2.5 py-1.5 text-white">
-                    ProgramKit
-                  </span>
-                  <ArrowRightIcon className="size-4 h-lh shrink-0 rotate-180 fill-violet-500" />
-                  <ArrowRightIcon className="size-4 h-lh shrink-0 fill-violet-500" />
-                  <span className="rounded-lg bg-white px-2.5 py-1.5 ring-1 ring-inset ring-violet-950/10">
-                    Airtable
-                  </span>
-                  <span className="font-normal text-zinc-500">Reconciled after commit</span>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5" aria-label="Mirrored tables">
-                  {['Submissions', 'Speakers', 'Sessions', 'Tasks'].map((table) => (
-                    <span
-                      key={table}
-                      className="rounded-md bg-violet-100/70 px-2 py-1 text-sm font-medium text-violet-950"
-                    >
-                      {table}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </article>
-          </div>
-        </div>
-
-        <div className="pt-4">
-          <Callout tone="success" title="Why this stays fast">
-            <p>
-              Writes commit locally in the event workspace; Airtable sync runs afterward with
-              retries and never blocks the UI.
-            </p>
-          </Callout>
+                ))}
+              </dl>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -190,8 +122,9 @@ export function IntegrationsView() {
               Accelevents export
             </h2>
             <p className="max-w-3xl text-pretty text-base text-zinc-500 sm:text-sm">
-              Freeze the latest published speakers and sessions into a one-way delivery batch. No
-              API request leaves ProgramKit until a credentialed consumer is connected.
+              The required hand-off to the event platform. Freeze the latest published speakers and
+              sessions into a delivery batch that only goes one way: nothing is read back from
+              Accelevents into ProgramKit.
             </p>
           </div>
           <span
@@ -262,7 +195,7 @@ export function IntegrationsView() {
                 'accelevents.prepare-export',
                 { eventUrl: effectiveEventUrl },
                 undefined,
-                'Accelevents export staged. No provider request was sent.',
+                'Export batch committed. Provider delivery state updates in the batch details below.',
               )
             }}
           >
@@ -390,8 +323,8 @@ export function IntegrationsView() {
           <h2 id="connections-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
             Connections
           </h2>
-          <p className="text-base text-zinc-500 sm:text-sm">
-            Delivery services around the primary Cloudflare runtime.
+          <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+            What ProgramKit can hand off today, and what still needs setup.
           </p>
         </div>
         <ul role="list" className="divide-y divide-zinc-950/5">
@@ -402,6 +335,21 @@ export function IntegrationsView() {
                 : integration.status === 'attention'
                   ? ExclamationTriangleIcon
                   : MinusCircleIcon
+            // ProgramKit writes standard invitation files; it does not sign in to
+            // an external calendar account, so this row is named for what it does.
+            const label =
+              integration.kind === 'calendar'
+                ? {
+                    name: 'Calendar invitations',
+                    status: 'Available',
+                    detail:
+                      'Events download as standard .ics invitation files and attach to campaigns. No external calendar account is connected.',
+                  }
+                : {
+                    name: integration.name,
+                    status: sentenceCase(integration.status),
+                    detail: integration.detail,
+                  }
             return (
               <li key={integration.id} className="flex items-start gap-4 py-4">
                 <Icon
@@ -414,9 +362,7 @@ export function IntegrationsView() {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-base font-medium text-zinc-950 sm:text-sm">
-                      {integration.name}
-                    </p>
+                    <p className="text-base font-medium text-zinc-950 sm:text-sm">{label.name}</p>
                     <p
                       className={cx(
                         'shrink-0 whitespace-nowrap text-base font-medium sm:text-sm',
@@ -425,12 +371,10 @@ export function IntegrationsView() {
                         integration.status === 'not_configured' && 'text-zinc-500',
                       )}
                     >
-                      {sentenceCase(integration.status)}
+                      {label.status}
                     </p>
                   </div>
-                  <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-                    {integration.detail}
-                  </p>
+                  <p className="text-pretty text-base text-zinc-500 sm:text-sm">{label.detail}</p>
                 </div>
               </li>
             )
@@ -472,6 +416,23 @@ export function IntegrationsView() {
             </div>
           ))}
         </dl>
+      </section>
+
+      <section aria-labelledby="airtable-heading">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b border-zinc-950/5 pb-2">
+          <h2 id="airtable-heading" className="text-base font-medium text-zinc-500 sm:text-sm">
+            Airtable view
+          </h2>
+          <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-sm font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-950/10">
+            Planned, optional
+          </span>
+        </div>
+        <p className="max-w-3xl text-pretty pt-3 text-base text-zinc-500 sm:text-sm">
+          An idea for teams who would rather read the program in familiar tables. It has not been
+          built and is not connected: ProgramKit sends nothing to Airtable and reads nothing from
+          it. If it is built later it would stay optional, the event workspace here would remain the
+          record of the program, and nothing on this page would depend on it.
+        </p>
       </section>
 
       <section
