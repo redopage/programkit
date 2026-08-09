@@ -230,6 +230,27 @@ function finiteNumber(value: unknown, field: string, minimum = 0) {
   return value
 }
 
+const sessionFormats = ['keynote', 'talk', 'lightning', 'panel', 'workshop', 'break'] as const
+
+const trackColors = ['emerald', 'amber', 'sky', 'rose', 'violet', 'zinc'] as const
+
+function sessionParticipantIds(state: WorkspaceState, value: unknown) {
+  if (value === undefined) return []
+  const participantIds = assertStringArray(value, 'participantIds')
+  if (new Set(participantIds).size !== participantIds.length) {
+    throw new OperationError('INVALID_INPUT', 'A speaker can only be assigned once.', {
+      participantIds: 'Remove duplicate speakers.',
+    })
+  }
+  for (const participantId of participantIds) {
+    const participation = findRequired(state.participations, participantId, 'participation')
+    if (participation.eventId !== state.activeEventId) {
+      throw new OperationError('FORBIDDEN', 'Session speakers cannot cross event boundaries.')
+    }
+  }
+  return participantIds
+}
+
 function parseEvaluationCriteria(value: unknown, roundIndex: number): EvaluationCriterion[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new OperationError('INVALID_INPUT', 'Every evaluation round needs a scorecard.', {
@@ -826,6 +847,197 @@ function applyHandler(
         data: { previous },
       })
       return { event }
+    }
+
+    case 'track.create': {
+      const name = assertString(input.name, 'name')
+      if (
+        state.tracks.some(
+          (entry) =>
+            entry.eventId === state.activeEventId &&
+            entry.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+        )
+      ) {
+        throw new OperationError('DUPLICATE', 'A track already uses that name.', {
+          name: 'Choose another track name.',
+        })
+      }
+      const color =
+        input.color === undefined
+          ? trackColors[
+              state.tracks.filter((entry) => entry.eventId === state.activeEventId).length %
+                trackColors.length
+            ]
+          : assertOneOf(input.color, 'color', trackColors)
+      const track = {
+        id: createId('trk'),
+        eventId: state.activeEventId,
+        name,
+        color,
+      }
+      state.tracks.push(track)
+      appendEvent(state, context, {
+        type: 'track.created',
+        aggregate: { type: 'track', id: track.id, version: 1 },
+        summary: `Created track “${track.name}”.`,
+        data: { color: track.color },
+      })
+      return { track }
+    }
+
+    case 'room.create': {
+      const name = assertString(input.name, 'name')
+      const capacity = boundedInteger(input.capacity, 'capacity', 1, 100_000)
+      if (
+        state.rooms.some(
+          (entry) =>
+            entry.eventId === state.activeEventId &&
+            entry.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+        )
+      ) {
+        throw new OperationError('DUPLICATE', 'A room already uses that name.', {
+          name: 'Choose another room name.',
+        })
+      }
+      const room = { id: createId('rom'), eventId: state.activeEventId, name, capacity }
+      state.rooms.push(room)
+      appendEvent(state, context, {
+        type: 'room.created',
+        aggregate: { type: 'room', id: room.id, version: 1 },
+        summary: `Created room “${room.name}”.`,
+        data: { capacity: room.capacity },
+      })
+      return { room }
+    }
+
+    case 'session.create': {
+      const title = assertString(input.title, 'title')
+      const summary = assertString(input.summary, 'summary')
+      const format = assertOneOf(input.format, 'format', sessionFormats)
+      const track = findRequired(state.tracks, input.trackId, 'track')
+      if (track.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The track does not belong to the active event.')
+      }
+      const participantIds = sessionParticipantIds(state, input.participantIds)
+      const durationMinutes = boundedInteger(input.durationMinutes, 'durationMinutes', 5, 480)
+      const expectedAttendance = boundedInteger(
+        input.expectedAttendance,
+        'expectedAttendance',
+        1,
+        100_000,
+      )
+      const status =
+        input.status === undefined
+          ? 'draft'
+          : assertOneOf(input.status, 'status', ['draft', 'ready', 'cancelled'] as const)
+      const session: Session = {
+        id: createId('ses'),
+        eventId: state.activeEventId,
+        title,
+        summary,
+        format,
+        trackId: track.id,
+        participantIds,
+        durationMinutes,
+        expectedAttendance,
+        status,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      state.sessions.push(session)
+      for (const participationId of participantIds) {
+        const participation = findRequired(state.participations, participationId, 'participation')
+        if (!participation.sessionIds.includes(session.id)) {
+          participation.sessionIds.push(session.id)
+          participation.updatedAt = timestamp
+          participation.version += 1
+        }
+      }
+      appendEvent(state, context, {
+        type: 'session.created',
+        aggregate: { type: 'session', id: session.id, version: session.version },
+        summary: `Created session “${session.title}”.`,
+        data: { trackId: track.id, participantIds, status },
+      })
+      return { session }
+    }
+
+    case 'session.update': {
+      const session = findRequired(state.sessions, input.sessionId, 'session')
+      if (session.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The session does not belong to the active event.')
+      }
+      const previous = {
+        title: session.title,
+        summary: session.summary,
+        format: session.format,
+        trackId: session.trackId,
+        participantIds: [...session.participantIds],
+        durationMinutes: session.durationMinutes,
+        expectedAttendance: session.expectedAttendance,
+        status: session.status,
+      }
+      if (input.title !== undefined) session.title = assertString(input.title, 'title')
+      if (input.summary !== undefined) session.summary = assertString(input.summary, 'summary')
+      if (input.format !== undefined) {
+        session.format = assertOneOf(input.format, 'format', sessionFormats)
+      }
+      if (input.trackId !== undefined) {
+        const track = findRequired(state.tracks, input.trackId, 'track')
+        if (track.eventId !== state.activeEventId) {
+          throw new OperationError('FORBIDDEN', 'The track does not belong to the active event.')
+        }
+        session.trackId = track.id
+      }
+      if (input.durationMinutes !== undefined) {
+        session.durationMinutes = boundedInteger(input.durationMinutes, 'durationMinutes', 5, 480)
+      }
+      if (input.expectedAttendance !== undefined) {
+        session.expectedAttendance = boundedInteger(
+          input.expectedAttendance,
+          'expectedAttendance',
+          1,
+          100_000,
+        )
+      }
+      if (input.status !== undefined) {
+        session.status = assertOneOf(input.status, 'status', [
+          'draft',
+          'ready',
+          'cancelled',
+        ] as const)
+      }
+      if (input.participantIds !== undefined) {
+        const nextParticipantIds = sessionParticipantIds(state, input.participantIds)
+        const nextSet = new Set(nextParticipantIds)
+        for (const participation of state.participations) {
+          if (participation.eventId !== session.eventId) continue
+          const hadSession = participation.sessionIds.includes(session.id)
+          const hasSession = nextSet.has(participation.id)
+          if (hadSession === hasSession) continue
+          participation.sessionIds = hasSession
+            ? [...participation.sessionIds, session.id]
+            : participation.sessionIds.filter((sessionId) => sessionId !== session.id)
+          participation.updatedAt = timestamp
+          participation.version += 1
+        }
+        session.participantIds = nextParticipantIds
+      }
+      const placement = state.placements.find((entry) => entry.sessionId === session.id)
+      if (placement && session.durationMinutes !== previous.durationMinutes) {
+        placement.endsAt = addMinutes(placement.startsAt, session.durationMinutes)
+        placement.published = false
+        placement.version += 1
+      }
+      session.updatedAt = timestamp
+      session.version += 1
+      appendEvent(state, context, {
+        type: 'session.updated',
+        aggregate: { type: 'session', id: session.id, version: session.version },
+        summary: `Updated session “${session.title}”.`,
+        data: { previous },
+      })
+      return { session, conflicts: scheduleConflicts(state) }
     }
 
     case 'submission-form.create': {

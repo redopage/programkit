@@ -309,7 +309,7 @@ export interface Session {
   id: Id
   eventId: Id
   title: string
-  format: 'keynote' | 'talk' | 'panel' | 'workshop' | 'break'
+  format: 'keynote' | 'talk' | 'lightning' | 'panel' | 'workshop' | 'break'
   summary: string
   trackId: Id
   participantIds: Id[]

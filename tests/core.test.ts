@@ -129,6 +129,79 @@ describe('ProgramKit operation engine', () => {
     expect(invalid.response.error?.fields?.timezone).toBeTruthy()
   })
 
+  it('builds program inventory and sessions from an empty event', () => {
+    let state = createEmptyWorkspaceState({
+      eventId: 'evt_summit',
+      eventName: 'Open Source Summit',
+      eventSlug: 'open-source-summit',
+      createdAt: '2026-08-09T12:00:00.000Z',
+    })
+    const trackResult = executeOperation(state, 'track.create', {
+      input: { name: 'Engineering', color: 'sky' },
+    })
+    expect(trackResult.response.ok).toBe(true)
+    state = trackResult.state
+    const track = state.tracks[0]
+
+    const roomResult = executeOperation(state, 'room.create', {
+      input: { name: 'Main stage', capacity: 450 },
+    })
+    expect(roomResult.response.ok).toBe(true)
+    state = roomResult.state
+    expect(state.rooms[0]).toMatchObject({ name: 'Main stage', capacity: 450 })
+
+    const personResult = executeOperation(state, 'person.create', {
+      input: {
+        firstName: 'Samira',
+        lastName: 'Wiley',
+        email: 'samira@example.com',
+        roles: ['speaker'],
+      },
+    })
+    expect(personResult.response.ok).toBe(true)
+    state = personResult.state
+    const participation = state.participations[0]
+
+    const sessionResult = executeOperation(state, 'session.create', {
+      input: {
+        title: 'The small web wins',
+        summary: 'A practical tour of portable web primitives.',
+        format: 'lightning',
+        trackId: track.id,
+        participantIds: [participation.id],
+        durationMinutes: 10,
+        expectedAttendance: 180,
+        status: 'draft',
+      },
+    })
+    expect(sessionResult.response.ok).toBe(true)
+    state = sessionResult.state
+    const session = state.sessions[0]
+    expect(session).toMatchObject({
+      title: 'The small web wins',
+      format: 'lightning',
+      durationMinutes: 10,
+      status: 'draft',
+    })
+    expect(state.participations[0].sessionIds).toContain(session.id)
+
+    const updateResult = executeOperation(state, 'session.update', {
+      input: {
+        sessionId: session.id,
+        title: 'The small web keeps winning',
+        status: 'ready',
+      },
+      expectedVersions: { [session.id]: session.version },
+    })
+    expect(updateResult.response.ok).toBe(true)
+    expect(updateResult.state.sessions[0]).toMatchObject({
+      title: 'The small web keeps winning',
+      status: 'ready',
+      version: 2,
+    })
+    expect(updateResult.state.domainEvents.at(-1)?.type).toBe('session.updated')
+  })
+
   it('finds schedule boundary, duration, and missing-record failures deterministically', () => {
     const state = createSeedState()
     const placement = state.placements[0]

@@ -1,4 +1,4 @@
-import { ChevronUpDownIcon } from '@heroicons/react/16/solid'
+import { ChevronUpDownIcon, PlusIcon } from '@heroicons/react/16/solid'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import { toZonedDateTimeInput, zonedDateTimeInputToIso } from '../lib/date.ts'
@@ -10,6 +10,7 @@ import {
   Field,
   PageHeader,
   SectionHeading,
+  TrackBadge,
   selectControl,
   textControl,
 } from '../components/ui.tsx'
@@ -369,6 +370,194 @@ function TeamSettings({
   )
 }
 
+function ProgramInventory({ disabled }: { disabled: boolean }) {
+  const { payload, execute, mutating } = useWorkspace()
+  const [trackName, setTrackName] = useState('')
+  const [trackColor, setTrackColor] = useState('sky')
+  const [roomName, setRoomName] = useState('')
+  const [roomCapacity, setRoomCapacity] = useState('100')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  if (!payload) return null
+  const tracks = payload.state.tracks.filter(
+    (track) => track.eventId === payload.state.activeEventId,
+  )
+  const rooms = payload.state.rooms.filter((room) => room.eventId === payload.state.activeEventId)
+
+  async function addTrack(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const response = await execute(
+      'track.create',
+      { name: trackName, color: trackColor },
+      undefined,
+      'Track added.',
+    )
+    if (!response.ok) {
+      setErrors(response.error?.fields ?? { track: response.error?.message ?? 'Could not add.' })
+      return
+    }
+    setTrackName('')
+    setErrors({})
+  }
+
+  async function addRoom(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const capacity = Number(roomCapacity)
+    if (!Number.isInteger(capacity) || capacity < 1) {
+      setErrors({ capacity: 'Enter at least 1 seat.' })
+      return
+    }
+    const response = await execute(
+      'room.create',
+      { name: roomName, capacity },
+      undefined,
+      'Room added.',
+    )
+    if (!response.ok) {
+      setErrors(response.error?.fields ?? { room: response.error?.message ?? 'Could not add.' })
+      return
+    }
+    setRoomName('')
+    setRoomCapacity('100')
+    setErrors({})
+  }
+
+  return (
+    <section className="mx-auto w-full max-w-4xl" aria-labelledby="program-inventory-heading">
+      <SectionHeading
+        id="program-inventory-heading"
+        title="Tracks and rooms"
+        description="Set up the places and program lanes used by sessions and the schedule."
+      />
+      <div className="grid gap-8 pt-5 lg:grid-cols-2">
+        <div>
+          <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Tracks</h3>
+          {tracks.length > 0 ? (
+            <ul role="list" className="divide-y divide-zinc-950/5 pt-2">
+              {tracks.map((track) => (
+                <li key={track.id} className="flex min-h-11 items-center gap-3 py-2 sm:min-h-9">
+                  <TrackBadge name={track.name} color={track.color} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-3 text-base text-zinc-500 sm:text-sm">No tracks yet.</p>
+          )}
+          <form
+            className="grid grid-cols-[1fr_auto] gap-2 pt-3"
+            onSubmit={(event) => void addTrack(event)}
+          >
+            <label className="sr-only" htmlFor="new-track-name">
+              Track name
+            </label>
+            <input
+              id="new-track-name"
+              required
+              disabled={disabled}
+              value={trackName}
+              onChange={(event) => setTrackName(event.target.value)}
+              placeholder="Track name"
+              className={textControl}
+            />
+            <span className="relative grid">
+              <label className="sr-only" htmlFor="new-track-color">
+                Track color
+              </label>
+              <select
+                id="new-track-color"
+                disabled={disabled}
+                value={trackColor}
+                onChange={(event) => setTrackColor(event.target.value)}
+                className={selectControl}
+              >
+                <option value="sky">Blue</option>
+                <option value="violet">Violet</option>
+                <option value="emerald">Green</option>
+                <option value="amber">Amber</option>
+                <option value="rose">Rose</option>
+                <option value="zinc">Gray</option>
+              </select>
+            </span>
+            <Button
+              type="submit"
+              className="col-span-2 justify-center"
+              disabled={disabled || mutating || trackName.trim().length === 0}
+            >
+              <PlusIcon className="size-4 fill-current" />
+              Add track
+            </Button>
+            {errors.name || errors.track ? (
+              <p className="col-span-2 text-sm text-rose-700">{errors.name ?? errors.track}</p>
+            ) : null}
+          </form>
+        </div>
+
+        <div>
+          <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Rooms</h3>
+          {rooms.length > 0 ? (
+            <ul role="list" className="divide-y divide-zinc-950/5 pt-2">
+              {rooms.map((room) => (
+                <li
+                  key={room.id}
+                  className="flex min-h-11 items-center justify-between gap-3 py-2 sm:min-h-9"
+                >
+                  <span className="text-base text-zinc-700 sm:text-sm">{room.name}</span>
+                  <span className="text-sm tabular-nums text-zinc-500">{room.capacity} seats</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-3 text-base text-zinc-500 sm:text-sm">No rooms yet.</p>
+          )}
+          <form
+            className="grid grid-cols-[1fr_7rem] gap-2 pt-3"
+            onSubmit={(event) => void addRoom(event)}
+          >
+            <label className="sr-only" htmlFor="new-room-name">
+              Room name
+            </label>
+            <input
+              id="new-room-name"
+              required
+              disabled={disabled}
+              value={roomName}
+              onChange={(event) => setRoomName(event.target.value)}
+              placeholder="Room name"
+              className={textControl}
+            />
+            <label className="sr-only" htmlFor="new-room-capacity">
+              Capacity
+            </label>
+            <input
+              id="new-room-capacity"
+              type="number"
+              min={1}
+              max={100000}
+              required
+              disabled={disabled}
+              value={roomCapacity}
+              aria-invalid={Boolean(errors.capacity)}
+              onChange={(event) => setRoomCapacity(event.target.value)}
+              placeholder="Seats"
+              className={textControl}
+            />
+            <Button
+              type="submit"
+              className="col-span-2 justify-center"
+              disabled={disabled || mutating || roomName.trim().length === 0}
+            >
+              <PlusIcon className="size-4 fill-current" />
+              Add room
+            </Button>
+            {errors.capacity || errors.room ? (
+              <p className="col-span-2 text-sm text-rose-700">{errors.capacity ?? errors.room}</p>
+            ) : null}
+          </form>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function SettingsView() {
   const { payload, execute, mutating } = useWorkspace()
   const event = payload?.state.events.find((entry) => entry.id === payload.state.activeEventId)
@@ -597,6 +786,8 @@ export function SettingsView() {
           </section>
         </fieldset>
       </form>
+
+      <ProgramInventory disabled={teamRole === 'member'} />
 
       {isHostedApp() ? <TeamSettings eventId={eventId} onRoleChange={setTeamRole} /> : null}
     </div>
