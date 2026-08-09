@@ -1,5 +1,27 @@
 export { executeOperation } from './engine.ts'
 export { reconcileAirtableRecord } from './airtable.ts'
+export {
+  AIRTABLE_SCHEMA_VERSION,
+  airtableTableDefinitions,
+  createAirtableWorkspaceBundle,
+  rebuildWorkspaceFromAirtable,
+} from './airtable-schema.ts'
+export type {
+  AirtableCellValue,
+  AirtableFieldDefinition,
+  AirtableRecord,
+  AirtableRecordFields,
+  AirtableRecordInput,
+  AirtableTableDefinition,
+  AirtableWorkspaceBundle,
+} from './airtable-schema.ts'
+export { AirtableApiError, AirtableWorkspaceStore } from './airtable-store.ts'
+export type {
+  AirtableDeltaResult,
+  AirtableExportResult,
+  AirtableSchemaIssue,
+} from './airtable-store.ts'
+export { AirtableCachedWorkspaceRepository } from './airtable-repository.ts'
 export type {
   AirtableFieldChange,
   AirtableFieldConflict,

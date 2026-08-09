@@ -47,7 +47,7 @@ Example:
 curl 'http://localhost:4173/api/v1/events/evt_nyc_2026/sessions?status=ready&pageSize=25'
 ```
 
-These resources are designed for websites, Airtable mirrors, and narrow integrations. The operator
+These resources are designed for websites, Airtable tools, and narrow integrations. The operator
 application currently reads its richer projection from `/api/v1/state`; that endpoint is an
 application bootstrap payload, not the preferred public integration contract.
 
@@ -101,9 +101,10 @@ workspace revision atomically.
 | `GET`  | `/api/v1/export`                 | Download the versioned logical workspace document |
 | `GET`  | `/api/v1/health`                 | Check schema and workspace revision               |
 
-The domain-event route is an operator feed, not a delivery guarantee. Production webhooks and the
-Airtable mirror will use a transactional outbox with independent attempt and cursor records so a
-temporary provider failure cannot lose accepted work.
+The domain-event route is an operator feed, not a delivery guarantee. The Airtable persistence
+adapter uses stable-ID upserts and cache acknowledgement. Production hardening still needs a
+durable partial-write retry journal and webhook cursor so a temporary provider failure cannot lose
+accepted work.
 
 ## Public and scoped projections
 

@@ -1173,10 +1173,10 @@ const integrations: Integration[] = [
   },
   {
     id: 'int_airtable',
-    name: 'Airtable team mirror',
+    name: 'Airtable source of truth',
     kind: 'airtable',
     status: 'not_configured',
-    detail: 'Optional conflict-aware mirror for submissions, speakers, sessions, and tasks.',
+    detail: 'Versioned schema and cached persistence adapter are ready for scoped credentials.',
     lastSeenAt: null,
   },
   {

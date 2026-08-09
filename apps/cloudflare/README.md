@@ -1,7 +1,9 @@
 # `@programkit/app-cloudflare`
 
 The private, runnable, supported Cloudflare assembly for ProgramKit. It composes the three public
-packages with Workers Static Assets and one SQLite-backed Durable Object per workspace.
+packages with Workers Static Assets and one SQLite-backed Durable Object per workspace. A scoped
+Airtable base can be composed as durable source of truth while the object remains the hot cache and
+serialized mutation boundary.
 
 From the repository root:
 

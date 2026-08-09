@@ -1,0 +1,4 @@
+# Copy this file to .dev.vars. Never commit the real token or webhook secret.
+AIRTABLE_TOKEN=pat_your_scoped_personal_access_token
+AIRTABLE_BASE_ID=app_your_programkit_base_id
+AIRTABLE_WEBHOOK_MAC_SECRET=base64_secret_returned_when_the_webhook_is_created

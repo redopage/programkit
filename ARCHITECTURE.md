@@ -11,6 +11,9 @@ Speaker portal ─────────────┤    │                
 Public program ─────────────┤    └── tenant key ── workspace gateway ──┤
 REST clients ───────────────┤                                           ├── domain events
 Agent MCP + skills ─────────┘                                           └── workspace state
+                                                                            │
+                                             Airtable source of truth ◄──────┤
+                                             Durable Object hot cache ◄──────┘
 ```
 
 ## Package responsibilities
@@ -71,7 +74,9 @@ Every command reaches `executeOperation` through one operation definition:
 5. Apply domain invariants to a cloned workspace state.
 6. Append domain events and increment the workspace revision.
 7. Return the next state and operation response from one repository `mutate` callback.
-8. Commit the accepted transition atomically.
+8. If Airtable is configured, idempotently write the changed source records and acknowledge only
+   after Airtable accepts them.
+9. Update the Durable Object cache and return the accepted transition.
 
 A dry run returns a preview without mutation. In propose mode, core first validates the proposed
 operation against a cloned state, then stores it in a change set. Approval and commit are separate
@@ -130,29 +135,40 @@ publication time, and a monotonically increasing version. The public agenda sele
 latest release for the active event. Moving a draft placement after publication cannot rewrite a
 previous release.
 
-## Durable Object persistence
+## Airtable persistence and Durable Object cache
 
-The Cloudflare adapter stores one logical JSON workspace document per SQLite-backed Durable Object.
-It serializes the document and splits it into values of 200,000 characters plus a metadata record.
+The Cloudflare host has two modes. The zero-configuration demo stores one logical JSON workspace
+document per SQLite-backed Durable Object. With Airtable variables configured, Airtable becomes the
+durable source of truth and that same document becomes a hot cache.
+
+The Airtable version 1 schema stores one non-native workspace snapshot plus native events, people,
+participations, submissions, tasks, reviews, sessions, placements, tracks, and rooms. Native
+collections are intentionally absent from the snapshot, so a successful restore must reassemble
+all managed tables. Stable IDs make full exports and record deltas idempotent.
+
+The object serializes cached documents into values of 200,000 characters plus a metadata record.
 Writes, metadata replacement, removal of obsolete chunks, and migration from the original single
-storage value occur inside the object's storage transaction.
+storage value occur inside an object storage transaction. A durable hydration marker prevents an
+Airtable read after every isolate restart. Normal application reads use the cache and make zero
+Airtable requests.
 
-This design favors inspectable, atomic multi-record operations for the reference workload of
-hundreds of people and relatively low write concurrency. Chunking avoids relying on one large
-Durable Object value, but it is not a substitute for retention limits, capacity monitoring, or an
-external file store.
+This design favors inspectable multi-record operations for the reference workload of hundreds of
+people and relatively low write concurrency. Airtable does not offer one atomic transaction across
+tables. ProgramKit therefore writes idempotent table deltas in the serialized object request,
+returns an error without advancing the cache if Airtable rejects them, and needs a durable retry
+journal before the path is production-complete.
 
 ## Cloudflare data services
 
-The authoritative metadata boundary is one SQLite-backed Durable Object per workspace. D1 is not a
-second primary database. If organization-wide search or analytics warrants it, D1 receives a
-rebuildable projection from domain events and may lag behind the workspace transaction.
+The recommended metadata source of truth is one Airtable base per installation. One SQLite-backed
+Durable Object per workspace supplies serialized coordination, cached reads, and future live-client
+fan-out. D1 is not a second primary database. If organization-wide search or analytics warrants it,
+D1 receives a rebuildable projection and may lag behind the workspace transaction.
 
-Airtable is also downstream of accepted operations. A transactional outbox will wake a Queue or
-Durable Object alarm that batch-upserts selected read models and records its cursor, attempts, and
-errors. Inbound edits are compared against the last-synced baseline. Safe allowlisted changes become
-named operations or previewable change sets; concurrent changes become explicit conflicts. Airtable
-never overwrites ProgramKit state silently.
+The current Airtable adapter creates the schema, batch-upserts changed records, rebuilds the cache,
+and verifies webhook HMACs. The experimental webhook performs a full refresh. Production work must
+add the Airtable payload cursor, narrow affected-record fetches, a durable retry journal, and
+conversion of direct edits to named operations or previewable change sets before real data is used.
 
 R2 will own private file bytes. Domain `Asset` records store opaque object keys and safe metadata;
 upload and download routes recheck workspace and record ownership. Cloudflare Email Service will
@@ -179,5 +195,5 @@ condition used in the workspace.
 storage. Identity, email, webhooks, R2, queues, Airtable credentials, and secret management are
 composed in `apps/cloudflare` and are not provided by the reference demo.
 
-See [Deployment](DEPLOYMENT.md) for the supported Cloudflare stack, D1 decision, Airtable mirror,
+See [Deployment](DEPLOYMENT.md) for the supported Cloudflare stack, D1 decision, Airtable adapter,
 and production binding sequence.

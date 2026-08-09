@@ -2,11 +2,16 @@ import { handleMcpRequest } from '@programkit/agent'
 import { WorkspaceDurableObject } from '@programkit/core/cloudflare'
 import type { OperationRequest, OperationResponse, WorkspaceState } from '@programkit/core'
 
+import { verifyAirtableWebhookMac } from './airtable-webhook.ts'
+
 export { WorkspaceDurableObject }
 
 interface Env {
   ASSETS: Fetcher
   PROGRAMKIT_WORKSPACES: DurableObjectNamespace<WorkspaceDurableObject>
+  AIRTABLE_TOKEN?: string
+  AIRTABLE_BASE_ID?: string
+  AIRTABLE_WEBHOOK_MAC_SECRET?: string
 }
 
 const demoStaffActor = {
@@ -31,7 +36,9 @@ const publicReaderActor = {
 }
 
 function workspaceStub(env: Env, request: Request) {
-  const requested = request.headers.get('x-programkit-workspace-key') ?? 'demo'
+  const requested = env.AIRTABLE_BASE_ID
+    ? 'demo'
+    : (request.headers.get('x-programkit-workspace-key') ?? 'demo')
   const workspaceKey = /^[a-z0-9][a-z0-9_-]{0,63}$/u.test(requested) ? requested : 'demo'
   return env.PROGRAMKIT_WORKSPACES.get(env.PROGRAMKIT_WORKSPACES.idFromName(workspaceKey))
 }
@@ -84,9 +91,32 @@ async function executeWorkspaceOperation(
 }
 
 export default {
-  async fetch(request: Request, env: Env) {
+  async fetch(request: Request, env: Env, context: ExecutionContext) {
     const url = new URL(request.url)
     const stub = workspaceStub(env, request)
+
+    if (request.method === 'POST' && url.pathname === '/webhooks/airtable') {
+      if (!env.AIRTABLE_WEBHOOK_MAC_SECRET || !env.AIRTABLE_BASE_ID) {
+        return new Response(null, { status: 404 })
+      }
+      if (
+        !(await verifyAirtableWebhookMac(
+          await request.clone().arrayBuffer(),
+          request.headers.get('x-airtable-content-mac'),
+          env.AIRTABLE_WEBHOOK_MAC_SECRET,
+        ))
+      ) {
+        return new Response(null, { status: 401 })
+      }
+      const body = (await request.json()) as { base?: { id?: string } }
+      if (body.base?.id !== env.AIRTABLE_BASE_ID) return new Response(null, { status: 403 })
+      context.waitUntil(
+        stub.fetch(
+          new Request('http://workspace.internal/internal/airtable/refresh', { method: 'POST' }),
+        ),
+      )
+      return new Response(null, { status: 204 })
+    }
 
     if (url.pathname === '/mcp') {
       return handleMcpRequest(request, {

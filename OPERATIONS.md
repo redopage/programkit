@@ -29,6 +29,24 @@ workspace.
 The operator has no login, and the participant ID in the portal URL acts as identity in this demo.
 Use sample data only.
 
+### Optional Airtable source of truth
+
+The local demo remains zero-configuration. To exercise the Airtable-backed path, create a blank
+base and a token scoped to that base, then run:
+
+```bash
+cp apps/cloudflare/.dev.vars.example apps/cloudflare/.dev.vars
+# Add AIRTABLE_TOKEN and AIRTABLE_BASE_ID to the ignored file.
+pnpm airtable:setup
+pnpm airtable:seed
+pnpm airtable:verify
+pnpm dev
+```
+
+`airtable:verify` reconstructs the complete workspace from the base and reports collection counts.
+The detailed scopes, tables, request budget, and webhook boundary are in
+[Airtable source of truth](docs/integrations/airtable.md).
+
 ### HTTP endpoints
 
 - `GET /api/v1/health`
@@ -158,16 +176,17 @@ pointing a real domain or real data at it:
 - complete every item in `SECURITY.md`.
 
 `campaign.send` currently records a demo outbox event and marks the campaign sent; no external
-email is delivered. Integration rows are demonstrative status records, not provider connections.
-The Airtable row describes the planned one-way mirror and must not be shown as connected until a
-real cursor and delivery state exist.
+email is delivered. The Airtable persistence adapter is real, but the integrations screen still
+uses seeded status rows and must not claim production health until it reports the actual base,
+cursor, quota, last success, retry, and webhook expiry state.
 
 ## Backup, restore, and departure
 
 `GET /api/v1/export` returns the selected workspace with an explicit schema version. Recent
-idempotency response caches are omitted. A production system should schedule encrypted exports
-outside the primary Durable Object, record their workspace and schema version, and test restoration
-into a separate environment.
+idempotency response caches are omitted. An Airtable-enabled installation can also run
+`pnpm airtable:verify` to prove source reconstruction. A production system should schedule
+encrypted logical exports outside both Airtable and the cache, record their workspace and schema
+version, and test restoration into a separate environment.
 
 File objects are not part of this demo. The R2 implementation must export and restore them alongside
 their logical record IDs. D1 and Airtable projections are rebuildable and are not backup sources.

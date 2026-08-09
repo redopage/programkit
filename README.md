@@ -72,7 +72,9 @@ pnpm deploy
 ```
 
 The `apps/cloudflare` assembly uses one Worker, static assets, and one SQLite-backed Durable Object
-per workspace key. No D1 database or R2 bucket is required for the seeded demo.
+per workspace key. The seeded demo needs no external account. A production installation can add
+Airtable as durable source of truth while keeping the Durable Object as its fast coordination and
+cache layer.
 
 The Worker maps the `x-programkit-workspace-key` request header to a Durable Object name; a missing or
 invalid key uses `demo`. Inside the object, every operation runs through an atomic repository
@@ -84,18 +86,19 @@ The workspace header is routing input, not tenant authentication. A production h
 both workspace and actor identity from a verified session or token instead of trusting a caller
 header.
 
-### D1 and Airtable
+### Airtable and D1
 
-Durable Object SQLite remains the authoritative database because accepting proposals, onboarding
-speakers, and publishing schedules are atomic event-workspace operations. D1 is reserved for a
-later cross-workspace search or analytics projection; adding it now would duplicate the primary
-database without improving the golden path.
+ProgramKit now includes a versioned Airtable schema and persistence adapter. With Airtable
+credentials configured, Airtable holds the reconstructable workspace and native event, people,
+participation, submission, task, review, session, placement, track, and room records. The Durable
+Object serializes mutations, keeps the hot cache, and makes normal page loads without Airtable API
+calls. App writes reach Airtable before the new cache revision is acknowledged.
 
-Airtable is planned as an optional, asynchronously reconciled team workspace for submissions,
-speakers, sessions, and tasks. Safe inbound edits become validated proposals; concurrent edits wait
-for a human instead of using last-write-wins. Airtable never sits in the request path or silently
-overwrites ProgramKit. See [Deployment](DEPLOYMENT.md#how-the-airtable-integration-works) and the
-[Airtable guide](docs/integrations/airtable.md).
+Without Airtable credentials, the Durable Object remains a complete zero-configuration local and
+demo store. D1 is reserved for later cross-workspace search or analytics rather than duplicating
+the single-workspace write model. See [Deployment](DEPLOYMENT.md#how-the-airtable-integration-works)
+and the [Airtable guide](docs/integrations/airtable.md) for setup, measured request use, current
+limits, and the webhook path.
 
 ## Data ownership
 

@@ -23,7 +23,7 @@ export function IntegrationsView() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Infrastructure & API"
-        description="Run on Cloudflare, sync a team view to Airtable, and export through the API."
+        description="Deploy on Cloudflare, keep durable records in Airtable, and export through the API."
         actions={
           <Button variant="primary" onClick={() => window.open('/api/v1/export', '_blank')}>
             <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
@@ -38,8 +38,8 @@ export function IntegrationsView() {
             Deployment shape
           </h2>
           <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-            Cloudflare is the supported host. Airtable is an optional, conflict-aware team view; the
-            event workspace remains authoritative.
+            Cloudflare is the supported host. Airtable can own durable records while the event
+            workspace stays fast through a local coordination cache.
           </p>
         </div>
 
@@ -55,9 +55,6 @@ export function IntegrationsView() {
                   <div className="flex min-w-0 items-start gap-3">
                     <CloudIcon className="size-4 h-lh shrink-0 fill-blue-300" />
                     <div className="min-w-0">
-                      <p className="text-base font-medium text-zinc-400 sm:text-sm">
-                        Primary runtime
-                      </p>
                       <h3 className="text-balance text-lg font-semibold">Cloudflare</h3>
                     </div>
                   </div>
@@ -67,14 +64,14 @@ export function IntegrationsView() {
                 </div>
 
                 <p className="max-w-xl text-pretty text-base text-zinc-300 sm:text-sm">
-                  The web app, API, and atomic event workspace deploy together. Organizer actions do
+                  The web app, API, and serialized event workspace deploy together. Cached reads do
                   not wait on a third-party database round trip.
                 </p>
 
                 <dl className="grid gap-3 sm:grid-cols-3">
                   {[
                     ['Worker', 'App + API'],
-                    ['SQLite DO', 'Source of truth'],
+                    ['SQLite DO', 'Hot cache'],
                     ['Static Assets', 'Vite build'],
                   ].map(([term, detail]) => (
                     <div key={term} className="min-w-0">
@@ -94,20 +91,17 @@ export function IntegrationsView() {
                   <div className="flex min-w-0 items-start gap-3">
                     <TableCellsIcon className="size-4 h-lh shrink-0 fill-violet-700" />
                     <div className="min-w-0">
-                      <p className="text-base font-medium text-violet-700/70 sm:text-sm">
-                        Team workspace
-                      </p>
                       <h3 className="text-balance text-lg font-semibold text-zinc-950">Airtable</h3>
                     </div>
                   </div>
                   <span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-violet-700 ring-1 ring-inset ring-violet-950/10">
-                    {airtable?.status === 'connected' ? 'Connected' : 'Optional'}
+                    {airtable?.status === 'connected' ? 'Connected' : 'Not configured'}
                   </span>
                 </div>
 
                 <p className="text-pretty text-base text-zinc-600 sm:text-sm">
-                  Let program teams work in familiar tables. Safe inbound edits become validated
-                  proposals; concurrent edits wait in a reconciliation queue.
+                  A versioned base holds reconstructable program records. Stable IDs support exact
+                  restore, batched writes, and direct team edits.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-2 text-base font-semibold text-zinc-700 sm:text-sm">
@@ -119,11 +113,13 @@ export function IntegrationsView() {
                   <span className="rounded-lg bg-white px-2.5 py-1.5 ring-1 ring-inset ring-violet-950/10">
                     Airtable
                   </span>
-                  <span className="font-normal text-zinc-500">Reconciled after commit</span>
+                  <span className="font-normal text-zinc-500">
+                    Acknowledged writes + cached reads
+                  </span>
                 </div>
 
-                <div className="flex flex-wrap gap-1.5" aria-label="Mirrored tables">
-                  {['Submissions', 'Speakers', 'Sessions', 'Tasks'].map((table) => (
+                <div className="flex flex-wrap gap-1.5" aria-label="Managed tables">
+                  {['People', 'Submissions', 'Tasks', 'Sessions', 'Schedule'].map((table) => (
                     <span
                       key={table}
                       className="rounded-md bg-violet-100/70 px-2 py-1 text-sm font-medium text-violet-950"
@@ -140,8 +136,8 @@ export function IntegrationsView() {
         <div className="pt-4">
           <Callout tone="success" title="Why this stays fast">
             <p>
-              Writes commit locally in the event workspace; Airtable sync runs afterward with
-              retries and never blocks the UI.
+              Page loads use the Durable Object cache and make zero Airtable calls. A simple edit
+              writes only the workspace revision and changed native record.
             </p>
           </Callout>
         </div>

@@ -37,12 +37,12 @@ is the source of truth for that distinction.
 - Typed, split TanStack routes and TanStack Query server-state lifecycle.
 - Stable URL state for form/field selection, proposal selection and filtering, people detail, and
   reviewer assignment selection.
-- SQLite-backed Durable Object persistence for the supported Cloudflare host and a testable atomic
-  repository contract in core.
+- A testable repository contract, SQLite-backed Durable Object cache, and versioned Airtable
+  source-of-truth adapter for the supported Cloudflare host.
 - Event-scoped, paginated read APIs for sessions, speakers, and submissions, with named operations
   as the single write path.
-- An explicit storage decision: Durable Objects are authoritative; D1 and Airtable are downstream
-  projections for different use cases.
+- An explicit storage decision: Airtable is the recommended production source of truth, Durable
+  Objects serialize operations and cache reads, and D1 is a future cross-workspace projection.
 
 The reference host still uses passwordless, path-derived demo actors. These projections reduce
 data exposure and enforce capability shape, but they do not replace real authentication or tenant
@@ -92,14 +92,18 @@ provider; provider calls run after a transactional outbox commit.
 - Deep-link every work item and proposed change.
 - Add hibernating workspace WebSockets for revision invalidation and durable in-app notifications.
 
-### 7. Add the Airtable team mirror
+### 7. Finish Airtable production hardening
 
-- Provide a documented base template for submissions, speakers, sessions, and tasks.
-- Batch-upsert by stable ProgramKit ID from the delivery outbox with backoff and a durable cursor.
-- Accept only allowlisted inbound edits and route them through named operations or human-approved
-  change sets.
+- Done: versioned additive schema for the workspace plus ten native operational tables.
+- Done: stable-ID batch upserts, exact reconstruction, record-level deltas, cached reads, and
+  Airtable-before-cache acknowledgement.
+- Done: HMAC-verified notification endpoint and source-filter strategy for loop prevention.
+- Add webhook payload cursors and fetch only affected records instead of a full refresh.
+- Add a durable retry journal or alarm for partially completed multi-table writes.
+- Route allowlisted inbound edits through named operations or human-approved change sets.
 - Use the tested three-way comparison to surface concurrent field edits without choosing a winner.
-- Show real last-success, lag, attempt, conflict, and error state on the integrations screen.
+- Show real last-success, quota, lag, webhook expiry, attempt, conflict, and error state in the web
+  application.
 
 ## Deliberate non-goals for the golden path
 
@@ -108,7 +112,7 @@ provider; provider calls run after a transactional outbox commit.
 - Multilingual content management
 - Enterprise awards, digital posters, or attendee networking
 - A maintained Vercel, Node, or general deployment-adapter matrix
-- Airtable as the live application database or last-write-wins two-way sync
+- Querying Airtable on every page load or unvalidated last-write-wins two-way sync
 - Broad MCP expansion before the human workflows are complete
 - Pixel-for-pixel Sessionboard compatibility
 

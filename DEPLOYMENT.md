@@ -17,7 +17,8 @@ Browser
   ▼
 Cloudflare Worker ── Workers Static Assets (Vite web build)
   │
-  ├── workspace Durable Object ── SQLite-backed atomic event state
+  ├── Airtable                 ── durable workspace records (recommended production)
+  ├── workspace Durable Object ── serialized mutations, hot cache, live clients
   ├── R2                      ── private uploads and generated files (next)
   ├── Queue / object alarm    ── email, webhooks, and mirrors (next)
   └── Email Service           ── confirmations and reminders (next)
@@ -32,78 +33,71 @@ The production additions are intentionally Cloudflare-native:
 | Concern                   | Default                                              | Why                                                                                    |
 | ------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | Web and API               | Worker + Static Assets                               | One origin, one deploy, no client-side API configuration                               |
-| Operational state         | SQLite-backed Durable Object                         | Atomic conference workflows and strongly consistent workspace reads                    |
+| Durable business records  | Airtable                                             | Familiar source of truth the program team can inspect and work with                    |
+| Coordination and cache    | SQLite-backed Durable Object                         | Serialized workspace writes and fast reads with zero Airtable calls on page load       |
 | Files                     | R2                                                   | Direct uploads, private objects, lifecycle policies, and no file bytes in domain state |
 | Background delivery       | Transactional outbox + Queue or Durable Object alarm | Retryable work that does not hold open a user request                                  |
 | Email                     | Cloudflare Email Service binding                     | Native Worker delivery; Resend may remain an optional provider                         |
-| Team tables               | Airtable mirror                                      | Familiar collaboration without putting Airtable on the request path                    |
 | Cross-workspace analytics | D1 projection, only when needed                      | SQL reporting across many workspace objects                                            |
 
-## Why Durable Objects are the default database
+## Why Durable Objects remain in the write path
 
-ProgramKit's important writes are workspace transactions: accept a proposal and create the related
-speaker, participation, requirements, and session; publish one immutable schedule release; approve
-and commit a group of changes. A SQLite-backed Durable Object gives each workspace a single
-coordination boundary with attached transactional storage. That matches the domain today.
+ProgramKit's important writes span several records: accept a proposal and create its speaker,
+participation, requirements, and session; publish one immutable schedule release; approve and
+commit a group of changes. Airtable is excellent durable, inspectable storage but does not provide
+one atomic multi-table application transaction. A SQLite-backed Durable Object gives each
+workspace the missing serialized coordination boundary.
 
-The current repository stores one logical workspace JSON document in chunked Durable Object values
-and replaces it atomically. This is deliberately simple and inspectable for an event-sized data
-set. Moving to normalized SQLite tables inside the same Durable Object is available when query or
-document-size evidence justifies it; it does not require a product-level database change.
+When Airtable is configured, the object stores a durable hot cache and hydration marker. It
+validates one operation at a time, computes a record delta, sends idempotent Airtable upserts, and
+updates the cache only after every required Airtable write succeeds. Reads then stay inside the
+object. Without Airtable configuration, the same chunked JSON cache is the complete local demo
+store.
 
 ### Where D1 fits
 
-D1 is not the default source of truth. It becomes useful when ProgramKit needs queries that cross
+D1 is not a source of truth. It becomes useful when ProgramKit needs queries that cross
 many workspace objects, such as an organization-wide event index, global search, analytics, or an
 administrative control plane.
 
-That future D1 database should be a rebuildable read projection fed by domain events. Event writes
-still commit in the workspace object; the projection may lag briefly and must never decide whether
-a domain transition is valid.
+That future D1 database should be a rebuildable read projection. It may lag briefly and must never
+decide whether a domain transition is valid.
 
 ## How the Airtable integration works
 
-Airtable is an optional, conflict-aware operational workspace. It is valuable because program and
-review teams already know how to filter, group, comment on, and edit an Airtable base. It is not
-ProgramKit's live application database: every page load and accepted proposal must not depend on a
-third-party API limit or retry window.
+Airtable is ProgramKit's recommended production source of truth because program and review teams
+already know how to filter, group, comment on, and edit a base. It is not queried on every page
+load. The Durable Object cache isolates the application from routine API latency and quota use.
 
 ```text
 named operation
       │
       ▼
-Durable Object transaction ── domain event + outbox intent
-      │                                      │
-      │ user receives success                ▼
-      │                              Queue / object alarm
-      │                                      │
-      └────────────────────────────── batch upsert to Airtable
-                                             │
-                                  webhook / cursor polling
-                                             │
-                                             ▼
-                              three-way reconciliation preview
+Durable Object serializer and current cache
+      │
+      ├── validate operation and compute record delta
+      ├── batch upsert changed Airtable records
+      ├── update cache after Airtable acknowledgement
+      └── return success
+
+direct Airtable edit ── verified webhook ── cache refresh
 ```
 
-The first mirror should create four tables:
+The version 1 schema has one `ProgramKit State` record and ten native tables for events, people,
+participations, submissions, tasks, reviews, sessions, placements, tracks, and rooms. Stable IDs,
+deterministic sort values, native columns, and lossless JSON make the full workspace reconstructable
+without relying on Durable Object storage.
 
-| Airtable table | Stable key      | Useful mirrored fields                                                            |
-| -------------- | --------------- | --------------------------------------------------------------------------------- |
-| Submissions    | `ProgramKit ID` | title, kind, status, speaker, track, review score, updated time, ProgramKit link  |
-| Speakers       | `ProgramKit ID` | name, email, company, confirmation, readiness, session links, portal link         |
-| Sessions       | `ProgramKit ID` | title, format, track, duration, status, speakers, scheduled time, ProgramKit link |
-| Tasks          | `ProgramKit ID` | speaker, requirement, status, due time, review state, ProgramKit link             |
+The checked-in adapter creates and validates that schema, batch-upserts by stable ID, removes stale
+managed rows, writes record-level deltas, restores the complete state, and verifies Airtable webhook
+HMACs. The current seed uses 171 records. Measured steady-state costs are zero Airtable requests per
+page load, two requests for a simple one-record mutation, and eleven requests for an explicit full
+restore.
 
-Every mirrored row also carries `ProgramKit Revision` and `Last Synced At`. Sync uses Airtable batch
-requests, exponential backoff, and a per-workspace cursor. Secrets stay in Worker secrets. File
-bytes stay in R2; Airtable receives only authorized ProgramKit links or safe metadata.
-
-Inbound edits use an explicit field allowlist and a saved last-synced baseline. A safe Airtable-only
-edit becomes a named operation or previewable change set. A ProgramKit-only edit is exported. If a
-field changed differently on both sides, neither side silently wins: the integration creates a
-reconciliation item for a human. Protected fields are repaired from ProgramKit, and row deletion
-never hard-deletes domain data. See [the Airtable integration guide](docs/integrations/airtable.md)
-for the field policy, loop prevention, and tested comparison primitive.
+The inbound webhook currently performs a full refresh and is intentionally marked experimental.
+Production work still needs payload cursors, narrow record fetches, durable partial-write retries,
+and conversion of direct edits through named operations or reviewable change sets. See the
+[Airtable integration guide](docs/integrations/airtable.md) for setup and the exact current boundary.
 
 ## Local development
 
@@ -151,12 +145,14 @@ The golden-path production work should land in this sequence:
 3. Add a transactional delivery outbox and Cloudflare Email Service for submission confirmations
    and accepted-speaker reminders.
 4. Add webhook delivery from the same outbox, with signed payloads, retries, and delivery history.
-5. Add the optional Airtable batch mirror, inbound reconciliation queue, and actual cursor, last
-   success, conflict, and error state in the integrations screen.
+5. Finish Airtable webhook payload cursors, durable partial-write retry, inbound change sets, and
+   actual last-success, quota, lag, conflict, and error state in the integrations screen.
 6. Add scheduled encrypted logical exports and test restore into a separate workspace key.
 
-Do not call email, webhook, or Airtable APIs while a domain transaction is open. The state
-transition and outbox intent commit together; external delivery is idempotent and retryable.
+Do not call email or delivery webhooks while a domain transaction is open. Airtable persistence is
+the exception because its acknowledgement defines whether a source-of-truth write succeeded. Its
+record upserts are idempotent, the local cache advances only after acknowledgement, and the next
+production step is a durable retry journal for partial multi-table failures.
 
 ## Repository hosting and Forge
 

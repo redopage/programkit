@@ -1,5 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
 
+import { AirtableCachedWorkspaceRepository } from './airtable-repository.ts'
+import { AIRTABLE_SCHEMA_VERSION } from './airtable-schema.ts'
+import { AirtableWorkspaceStore } from './airtable-store.ts'
 import { handleCoreRequest } from './http.ts'
 import type { WorkspaceRepository } from './repository.ts'
 import { createSeedState } from './seed.ts'
@@ -86,13 +89,65 @@ class DurableObjectRepository implements WorkspaceRepository {
 
 export class WorkspaceDurableObject extends DurableObject {
   readonly #repository: WorkspaceRepository
+  readonly #airtableRepository: AirtableCachedWorkspaceRepository | null
+  readonly #ctx: DurableObjectState
+  #hydration: Promise<void> | null = null
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env)
-    this.#repository = new DurableObjectRepository(ctx.storage)
+    this.#ctx = ctx
+    const cache = new DurableObjectRepository(ctx.storage)
+    const airtableEnv = env as unknown as {
+      AIRTABLE_TOKEN?: string
+      AIRTABLE_BASE_ID?: string
+    }
+    if (airtableEnv.AIRTABLE_TOKEN && airtableEnv.AIRTABLE_BASE_ID) {
+      const store = new AirtableWorkspaceStore({
+        token: airtableEnv.AIRTABLE_TOKEN,
+        baseId: airtableEnv.AIRTABLE_BASE_ID,
+      })
+      this.#airtableRepository = new AirtableCachedWorkspaceRepository(cache, store)
+      this.#repository = this.#airtableRepository
+    } else {
+      this.#airtableRepository = null
+      this.#repository = cache
+    }
+  }
+
+  async #hydrateFromAirtable(force = false) {
+    if (!this.#airtableRepository) return
+    if (!force) {
+      const marker = await this.#ctx.storage.get<{ schemaVersion: number }>(
+        'airtable-cache:hydrated',
+      )
+      if (marker?.schemaVersion === AIRTABLE_SCHEMA_VERSION) return
+    }
+    await this.#airtableRepository.replaceCacheFromAirtable()
+    await this.#ctx.storage.put('airtable-cache:hydrated', {
+      schemaVersion: AIRTABLE_SCHEMA_VERSION,
+      refreshedAt: new Date().toISOString(),
+    })
+  }
+
+  #ensureHydrated() {
+    this.#hydration ??= this.#hydrateFromAirtable().catch((error: unknown) => {
+      this.#hydration = null
+      throw error
+    })
+    return this.#hydration
   }
 
   async fetch(request: Request) {
+    const url = new URL(request.url)
+    if (request.method === 'POST' && url.pathname === '/internal/airtable/refresh') {
+      if (!this.#airtableRepository) {
+        return Response.json({ ok: false, error: 'Airtable is not configured.' }, { status: 409 })
+      }
+      await this.#hydrateFromAirtable(true)
+      return Response.json({ ok: true })
+    }
+
+    await this.#ensureHydrated()
     const response = await handleCoreRequest(request, this.#repository, {
       actor: actorFromRequest(request),
     })

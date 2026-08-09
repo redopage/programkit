@@ -3,7 +3,7 @@
 The platform-independent source of truth for conference-program records and behavior. Core contains domain types, one
 operation manifest, authorization, invariants, expected-version checks, idempotency, audit events,
 change sets, selectors, repository contracts, HTTP handling, deterministic seed data, and the
-Cloudflare Durable Object adapter.
+versioned Airtable and Cloudflare Durable Object adapters.
 
 It has no React or agent dependency.
 
@@ -14,6 +14,8 @@ The package root exports:
 - `executeOperation` and the operation manifest;
 - `handleCoreRequest` for a Fetch API host;
 - `MemoryWorkspaceRepository`;
+- `AirtableWorkspaceStore`, `AirtableCachedWorkspaceRepository`, and the versioned native table
+  definitions;
 - `createSeedState`;
 - readiness, form-publish readiness, mapping compatibility, schedule, agenda, and relationship
   selectors;
@@ -78,24 +80,25 @@ interface WorkspaceRepository {
 }
 ```
 
-`mutate` must be an atomic read/modify/write boundary. `MemoryWorkspaceRepository` serializes
-mutations. The Cloudflare adapter runs the callback and persistence inside a Durable Object storage
-transaction.
+`mutate` must serialize the read, validation, and accepted state replacement. The memory repository
+uses a promise queue. When Airtable is configured, `AirtableCachedWorkspaceRepository` writes the
+record delta before advancing its wrapped cache. Without Airtable, the Cloudflare adapter runs the
+callback and persistence inside a Durable Object storage transaction.
 
-The Cloudflare adapter stores one logical JSON workspace per SQLite-backed object, chunked into
-200,000-character values with transactional metadata. This keeps multi-record commands atomic and
-avoids relying on one large storage value. It also reads and migrates the original single-value
-format.
+The Cloudflare cache stores one logical JSON workspace per SQLite-backed object, chunked into
+200,000-character values with transactional metadata. The Airtable adapter separately creates and
+validates its schema, batch-upserts stable records, computes state deltas, and rebuilds the full
+workspace. It takes credentials through its constructor and does not read environment variables.
 
 ## Publication and storage boundary
 
 Schedule placements are mutable drafts. Publishing appends an immutable `ScheduleRelease` snapshot;
 the public agenda selector reads the latest release rather than draft placements.
 
-Keep authentication, Cloudflare Email Service delivery, webhooks, R2 storage, Airtable sync, and
-secrets in `apps/cloudflare` rather than adding provider concerns to the domain package. The
-repository contract keeps tests deterministic and Durable Object persistence replaceable without
-creating another supported deployment.
+Keep authentication, Cloudflare Email Service delivery, webhook routing, R2 storage, and secrets in
+`apps/cloudflare`. The Airtable client stays in core because it implements the repository boundary
+with the web-standard Fetch API and is independently testable. The reference host decides whether
+to compose it.
 
 ## Build
 
