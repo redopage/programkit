@@ -49,7 +49,8 @@ The default HTTP client expects these routes:
 
 - operator: `/api/v1/state` and `/api/v1/operations/{operationName}`;
 - public CFP: `/public/v1/submission-forms/{formSlug}/state` and its restricted operations;
-- reviewer: `/api/v1/reviewers/{reviewerId}/state` and its restricted operations;
+- reviewer: `/public/v1/reviewers/{reviewerId}/state` with the reviewer capability header and its
+  restricted operations;
 - speaker: `/api/v1/portal/{participationId}/state` and its restricted operations;
 - public program: `/public/v1/program/state` (read-only).
 
@@ -75,7 +76,7 @@ not authorization.
 - `/agent` — agent tasks and guardrails
 - `/agenda` — public agenda, sessions, speakers, itinerary, and gallery from one immutable release
 - `/submit/{formSlug}` — public submission form
-- `/reviewer/{reviewerId}` — scoped reviewer scorecard workspace
+- `/reviewer/{reviewerId}/{accessKey}` — scoped reviewer scorecard workspace
 - `/portal/{participationId}` — scoped participant profile and requirements
 
 Dense data uses desktop tables and mobile relational lists rather than shrinking a spreadsheet.

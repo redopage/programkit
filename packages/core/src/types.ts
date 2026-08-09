@@ -193,6 +193,7 @@ export interface Reviewer {
   eventId: Id
   name: string
   email: string
+  accessKey: string
   status: 'invited' | 'active' | 'inactive'
   lastRemindedAt?: ISODateTime | null
   createdAt: ISODateTime

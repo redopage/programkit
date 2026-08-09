@@ -188,7 +188,9 @@ describe('operation HTTP surface', () => {
     expect(programBody.state.participations.every((entry) => entry.internalNotes === '')).toBe(true)
 
     const reviewerResponse = await handleCoreRequest(
-      new Request('http://local/api/v1/reviewers/rev_001/state'),
+      new Request('http://local/public/v1/reviewers/rev_001/state', {
+        headers: { 'x-programkit-reviewer-key': 'reviewer_elena_vasquez' },
+      }),
       repository,
       {
         actor: {
@@ -220,7 +222,9 @@ describe('operation HTTP surface', () => {
     }))
     const repository = new MemoryWorkspaceRepository(state)
     const response = await handleCoreRequest(
-      new Request('http://local/api/v1/reviewers/rev_001/state'),
+      new Request('http://local/public/v1/reviewers/rev_001/state', {
+        headers: { 'x-programkit-reviewer-key': 'reviewer_elena_vasquez' },
+      }),
       repository,
       {
         actor: {
@@ -242,6 +246,51 @@ describe('operation HTTP surface', () => {
       expect(submission.answers.proposal_title).toBeTruthy()
       expect(submission.contributors).toEqual([])
     }
+  })
+
+  it('requires a reviewer capability and permits conflict handling', async () => {
+    const repository = new MemoryWorkspaceRepository()
+    const actor = {
+      type: 'reviewer' as const,
+      id: 'rev_001',
+      name: 'Elena Vasquez',
+      scopes: ['reviews:write'],
+    }
+    const denied = await handleCoreRequest(
+      new Request('http://local/public/v1/reviewers/rev_001/state', {
+        headers: { 'x-programkit-reviewer-key': 'wrong-key' },
+      }),
+      repository,
+      { actor },
+    )
+    expect(denied?.status).toBe(403)
+
+    const assignment = (await repository.read()).reviewerAssignments.find(
+      (entry) => entry.id === 'rva_007',
+    )!
+    const recused = await handleCoreRequest(
+      new Request('http://local/public/v1/reviewers/rev_001/operations/review.recuse', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-programkit-reviewer-key': 'reviewer_elena_vasquez',
+        },
+        body: JSON.stringify({
+          input: { assignmentId: assignment.id, reason: 'I work with the submitter.' },
+          expectedVersions: { [assignment.id]: assignment.version },
+        }),
+      }),
+      repository,
+      { actor },
+    )
+    expect(recused?.status).toBe(200)
+    expect((await repository.read()).reviewerAssignments).toContainEqual(
+      expect.objectContaining({
+        id: assignment.id,
+        status: 'recused',
+        conflictReason: 'I work with the submitter.',
+      }),
+    )
   })
 
   it('serves a private speaker submission history without exposing another speaker', async () => {
@@ -341,9 +390,12 @@ describe('operation HTTP surface', () => {
       (entry) => entry.id === foreignAssignment.evaluationPlanId,
     )!
     const reviewerResponse = await handleCoreRequest(
-      new Request('http://local/api/v1/reviewers/rev_001/operations/review.submit-scorecard', {
+      new Request('http://local/public/v1/reviewers/rev_001/operations/review.submit-scorecard', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          'x-programkit-reviewer-key': 'reviewer_elena_vasquez',
+        },
         body: JSON.stringify({
           input: {
             assignmentId: foreignAssignment.id,

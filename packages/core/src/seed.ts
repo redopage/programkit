@@ -798,6 +798,7 @@ const reviewers: Reviewer[] = [
     eventId,
     name: 'Elena Vasquez',
     email: 'elena@aie.example',
+    accessKey: 'reviewer_elena_vasquez',
     status: 'active',
     createdAt: '2026-07-14T15:00:00.000Z',
     version: 1,
@@ -807,6 +808,7 @@ const reviewers: Reviewer[] = [
     eventId,
     name: 'Marcus Lin',
     email: 'marcus@aie.example',
+    accessKey: 'reviewer_marcus_lin',
     status: 'active',
     createdAt: '2026-07-14T15:00:00.000Z',
     version: 1,
@@ -816,6 +818,7 @@ const reviewers: Reviewer[] = [
     eventId,
     name: 'Samira Cole',
     email: 'samira@aie.example',
+    accessKey: 'reviewer_samira_cole',
     status: 'active',
     createdAt: '2026-07-14T15:00:00.000Z',
     version: 1,
@@ -1214,7 +1217,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 4,
+    schemaVersion: 6,
     revision: 1,
     workspace: {
       id: 'wrk_aie',

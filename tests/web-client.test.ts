@@ -4,6 +4,7 @@ import {
   createProgramKitHttpClient,
   publicProgramPath,
   publicSubmissionPath,
+  reviewerAccessPath,
   surfaceFromPathname,
   surfaceKey,
   type WorkspacePayload,
@@ -38,6 +39,9 @@ describe('ProgramKit web client', () => {
     expect(publicSubmissionPath(eventId, 'summer-cfp', 'single-workspace')).toBe(
       '/submit/summer-cfp',
     )
+    expect(reviewerAccessPath(eventId, 'rev/1', 'key/1', 'hosted-app')).toBe(
+      '/reviewer/rev%2F1/key%2F1?event=evt_1234567890abcdef12345678',
+    )
   })
 
   it('maps deep links to explicit surfaces', () => {
@@ -46,9 +50,10 @@ describe('ProgramKit web client', () => {
       kind: 'submission',
       formSlug: 'aie-nyc-2026-cfp',
     })
-    expect(surfaceFromPathname('/reviewer/rev_001')).toEqual({
+    expect(surfaceFromPathname('/reviewer/rev_001/reviewer_elena')).toEqual({
       kind: 'reviewer',
       reviewerId: 'rev_001',
+      reviewerAccessKey: 'reviewer_elena',
     })
     expect(surfaceFromPathname('/portal/par_003')).toEqual({
       kind: 'speaker',
@@ -68,11 +73,17 @@ describe('ProgramKit web client', () => {
     const client = createProgramKitHttpClient({ fetch })
     const signal = new AbortController().signal
 
-    await client.readSurface({ kind: 'reviewer', reviewerId: 'rev_001' }, signal)
+    await client.readSurface(
+      { kind: 'reviewer', reviewerId: 'rev_001', reviewerAccessKey: 'reviewer_elena' },
+      signal,
+    )
 
     expect(fetch).toHaveBeenCalledOnce()
-    expect(receivedInput).toBe('/api/v1/reviewers/rev_001/state')
+    expect(receivedInput).toBe('/public/v1/reviewers/rev_001/state')
     expect(receivedInit).toMatchObject({ signal })
+    expect(new Headers(receivedInit?.headers).get('x-programkit-reviewer-key')).toBe(
+      'reviewer_elena',
+    )
   })
 
   it('rejects operations that do not belong to a surface before fetching', async () => {
@@ -83,7 +94,11 @@ describe('ProgramKit web client', () => {
       client.execute({ kind: 'public-program' }, 'schedule.publish', {}),
     ).rejects.toThrow('is not available')
     await expect(
-      client.execute({ kind: 'reviewer', reviewerId: 'rev_001' }, 'person.create', {}),
+      client.execute(
+        { kind: 'reviewer', reviewerId: 'rev_001', reviewerAccessKey: 'reviewer_elena' },
+        'person.create',
+        {},
+      ),
     ).rejects.toThrow('is not available')
     expect(fetch).not.toHaveBeenCalled()
   })

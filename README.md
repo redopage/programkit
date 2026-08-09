@@ -57,8 +57,7 @@ Useful routes:
 | `/forms`                   | Call-for-proposals builder and live preview                         |
 | `/submit/aie-nyc-2026-cfp` | Public proposal form                                                |
 | `/submissions`             | Submission pipeline and decisions                                   |
-| `/reviews`                 | Reviewer assignments and evaluation progress                        |
-| `/reviewer/rev_001`        | One reviewer's scorecard workspace                                  |
+| `/reviews`                 | Reviewer invite links, assignments, progress, and results           |
 | `/readiness`               | Outstanding speaker onboarding work                                 |
 | `/schedule`                | Draft schedule and publication workflow                             |
 | `/portal/par_003`          | Accepted-speaker portal                                             |

@@ -18,9 +18,11 @@ not maintain a second version of product or architecture facts.
    to working evidence and missing end-to-end depth.
 5. [Evaluator runbook](product/evaluator-runbook.md) explains how to produce repeatable browser
    evidence without overstating a seeded screen.
-6. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
+6. [Abstract management evaluator coverage](product/evals/02-abstract-management.md) records the
+   exercised organizer and reviewer workflow for the second evaluator spec.
+7. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
    competition brief.
-7. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
+8. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
    processor, and persistence boundary.
 
 ### I want to run or adapt ProgramKit

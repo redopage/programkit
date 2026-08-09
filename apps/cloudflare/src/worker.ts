@@ -322,7 +322,11 @@ function isHostedAlwaysPublicPage(pathname: string) {
 }
 
 function isHostedPublicDocument(pathname: string) {
-  return pathname === '/agenda' || pathname.startsWith('/submit/')
+  return (
+    pathname === '/agenda' ||
+    pathname.startsWith('/submit/') ||
+    /^\/reviewer\/[^/]+\/[^/]+\/?$/u.test(pathname)
+  )
 }
 
 function hostedPublicEventId(request: Request, url: URL) {
@@ -1566,37 +1570,36 @@ export default {
 
     if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/public/')) {
       const portalMatch = url.pathname.match(/^\/api\/v1\/portal\/([^/]+)\//u)
-      const reviewerMatch = url.pathname.match(/^\/api\/v1\/reviewers\/([^/]+)\//u)
+      const reviewerMatch = url.pathname.match(/^\/(?:api|public)\/v1\/reviewers\/([^/]+)\//u)
       const publicSubmissionMatch = url.pathname.match(
         /^\/public\/v1\/submission-forms\/([^/]+)\//u,
       )
-      const actor =
-        profile === 'hosted-app' && hostedPrincipal
-          ? hostedStaffActor(hostedPrincipal)
-          : portalMatch
+      const actor = portalMatch
+        ? ({
+            type: 'participant' as const,
+            id: decodeURIComponent(portalMatch[1]),
+            name: 'Portal participant',
+            scopes: ['participations:write', 'requirements:write', 'portal:write'],
+          } satisfies OperationRequest['actor'])
+        : reviewerMatch
+          ? ({
+              type: 'reviewer' as const,
+              id: decodeURIComponent(reviewerMatch[1]),
+              name: 'Program reviewer',
+              scopes: ['reviews:write'],
+            } satisfies OperationRequest['actor'])
+          : publicSubmissionMatch
             ? ({
-                type: 'participant' as const,
-                id: decodeURIComponent(portalMatch[1]),
-                name: 'Portal participant',
-                scopes: ['participations:write', 'requirements:write', 'portal:write'],
+                type: 'submitter' as const,
+                id: decodeURIComponent(publicSubmissionMatch[1]),
+                name: 'Public submitter',
+                scopes: ['submissions:write', 'submissions:submit'],
               } satisfies OperationRequest['actor'])
-            : reviewerMatch
-              ? ({
-                  type: 'reviewer' as const,
-                  id: decodeURIComponent(reviewerMatch[1]),
-                  name: 'Program reviewer',
-                  scopes: ['reviews:write'],
-                } satisfies OperationRequest['actor'])
-              : publicSubmissionMatch
-                ? ({
-                    type: 'submitter' as const,
-                    id: decodeURIComponent(publicSubmissionMatch[1]),
-                    name: 'Public submitter',
-                    scopes: ['submissions:write', 'submissions:submit'],
-                  } satisfies OperationRequest['actor'])
-                : url.pathname.startsWith('/public/')
-                  ? publicReaderActor
-                  : demoStaffActor
+            : profile === 'hosted-app' && hostedPrincipal
+              ? hostedStaffActor(hostedPrincipal)
+              : url.pathname.startsWith('/public/')
+                ? publicReaderActor
+                : demoStaffActor
       return stub.fetch(withActor(request, actor))
     }
 

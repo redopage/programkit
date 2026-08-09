@@ -163,9 +163,12 @@ function publicSubmissionState(state: WorkspaceState, slug: string, speakerAcces
   return projected
 }
 
-function reviewerState(state: WorkspaceState, reviewerId: string) {
+function reviewerState(state: WorkspaceState, reviewerId: string, accessKey: string) {
   const reviewer = state.reviewers.find(
-    (entry) => entry.id === reviewerId && entry.eventId === state.activeEventId,
+    (entry) =>
+      entry.id === reviewerId &&
+      entry.eventId === state.activeEventId &&
+      entry.accessKey === accessKey,
   )
   if (!reviewer) return null
   const projected = projectionBase(state)
@@ -511,15 +514,19 @@ export async function handleCoreRequest(
     return json(projectionPayload(projected))
   }
 
-  const reviewerStateMatch = path.match(/^\/api\/v1\/reviewers\/([^/]+)\/state$/u)
+  const reviewerStateMatch = path.match(/^\/(?:api|public)\/v1\/reviewers\/([^/]+)\/state$/u)
   if (request.method === 'GET' && reviewerStateMatch) {
     const reviewerId = decodeURIComponent(reviewerStateMatch[1])
     if (actor.type !== 'reviewer' || actor.id !== reviewerId) {
       return json({ error: 'The reviewer session does not match this workspace.' }, { status: 403 })
     }
     const state = await repository.read()
-    const projected = reviewerState(state, reviewerId)
-    if (!projected) return json({ error: 'Reviewer not found.' }, { status: 404 })
+    const projected = reviewerState(
+      state,
+      reviewerId,
+      request.headers.get('x-programkit-reviewer-key') ?? '',
+    )
+    if (!projected) return json({ error: 'This reviewer link is unavailable.' }, { status: 403 })
     return json(projectionPayload(projected))
   }
 
@@ -545,7 +552,9 @@ export async function handleCoreRequest(
     ? decodeURIComponent(path.slice('/api/v1/operations/'.length))
     : null
   const portalOperationMatch = path.match(/^\/api\/v1\/portal\/([^/]+)\/operations\/(.+)$/u)
-  const reviewerOperationMatch = path.match(/^\/api\/v1\/reviewers\/([^/]+)\/operations\/(.+)$/u)
+  const reviewerOperationMatch = path.match(
+    /^\/(?:api|public)\/v1\/reviewers\/([^/]+)\/operations\/(.+)$/u,
+  )
   const publicSubmissionOperationMatch = path.match(
     /^\/public\/v1\/submission-forms\/([^/]+)\/operations\/(.+)$/u,
   )
@@ -586,13 +595,28 @@ export async function handleCoreRequest(
           publicSubmissionOperationMatch?.[2] ??
           '',
       )
-    if (reviewerId && operation !== 'review.submit-scorecard') {
+    if (
+      reviewerId &&
+      !['review.submit-scorecard', 'review.recuse', 'review.restore-recusal'].includes(operation)
+    ) {
       return json(
         { error: 'That operation is not available in the reviewer workspace.' },
         {
           status: 403,
         },
       )
+    }
+    if (reviewerId) {
+      const state = await repository.read()
+      const validReviewerLink = state.reviewers.some(
+        (reviewer) =>
+          reviewer.id === reviewerId &&
+          reviewer.eventId === state.activeEventId &&
+          reviewer.accessKey === request.headers.get('x-programkit-reviewer-key'),
+      )
+      if (!validReviewerLink) {
+        return json({ error: 'This reviewer link is unavailable.' }, { status: 403 })
+      }
     }
     if (
       submissionFormSlug &&

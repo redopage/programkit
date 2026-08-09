@@ -153,18 +153,19 @@ ProgramKit does not return the operator workspace to every client.
 | Public program     | `/public/v1/program/state`                 |
 | Public agenda data | `/public/agenda.json`                      |
 | Public CFP         | `/public/v1/submission-forms/{slug}/state` |
-| Reviewer workspace | `/api/v1/reviewers/{reviewerId}/state`     |
+| Reviewer workspace | `/public/v1/reviewers/{reviewerId}/state`  |
 | Speaker portal     | `/api/v1/portal/{participationId}/state`   |
 
 Each scoped surface has an ownership check and, where writes are allowed, a narrow operation
 allowlist. Public program data comes only from the latest immutable schedule release.
 
-On `app.programkit.dev`, organizers share the same-origin document links
-`/agenda?event={eventId}` and `/submit/{slug}?event={eventId}`. The Worker verifies that the event
-exists and sets an HTTP-only event-routing cookie for the public projection requests made by that
-page. This cookie cannot call operator endpoints or select another event. Local and disposable demo
-workspaces continue to use `/agenda` and `/submit/{slug}` because their workspace is already scoped
-by the host.
+On `app.programkit.dev`, organizers share same-origin agenda, submission, and reviewer links. A
+reviewer link has the form `/reviewer/{reviewerId}/{accessKey}?event={eventId}`. Its projection API
+requires the same capability in the `x-programkit-reviewer-key` header and exposes only that
+reviewer's queue and scorecard operations. The Worker verifies the event and sets an HTTP-only
+event-routing cookie for the public projection requests made by that page. This cookie cannot call
+operator endpoints or select another event. Local and disposable demo workspaces omit the event
+query because their workspace is already scoped by the host.
 
 ## External API key contract
 

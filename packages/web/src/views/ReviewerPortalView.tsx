@@ -1,5 +1,4 @@
 import {
-  ArrowLeftIcon,
   ArrowUturnLeftIcon,
   CheckCircleIcon,
   ChevronUpDownIcon,
@@ -189,14 +188,10 @@ function ReviewerWorkspace({
     <div className="min-h-dvh bg-white">
       <header className="border-b border-zinc-950/5 bg-white">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-6">
-          <a
-            href={`/reviewer/${reviewer.id}`}
-            aria-label="ProgramKit homepage"
-            className="focus-ring flex items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-zinc-950"
-          >
+          <div className="flex items-center gap-2 text-base font-semibold tracking-tight text-zinc-950">
             <ProgramKitMark className="size-6" />
             ProgramKit
-          </a>
+          </div>
           <div className="min-w-0 text-right">
             <p className="truncate text-base font-medium text-zinc-950 sm:text-sm">
               {reviewer.name}
@@ -207,7 +202,7 @@ function ReviewerWorkspace({
       </header>
 
       <main className="mx-auto flex max-w-[90rem] flex-col gap-7 px-4 py-8 sm:px-6 lg:py-10">
-        <div className="flex flex-col gap-4 border-b border-zinc-950/5 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="border-b border-zinc-950/5 pb-5">
           <div>
             <p className="text-base text-zinc-500 sm:text-sm">
               {complete} of {assigned} assignments complete
@@ -220,15 +215,6 @@ function ReviewerWorkspace({
               committee decision.
             </p>
           </div>
-          <Button
-            size="compact"
-            onClick={() => {
-              window.location.href = '/reviews'
-            }}
-          >
-            <ArrowLeftIcon className="size-4 h-lh shrink-0 fill-current" />
-            Organizer view
-          </Button>
         </div>
 
         {selected?.submission && plan ? (

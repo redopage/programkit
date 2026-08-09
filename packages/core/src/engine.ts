@@ -82,7 +82,8 @@ function initializeProgramCollections(state: WorkspaceState) {
     submission.contributors ??= []
     submission.speakerAccessKey ??= createId('speaker')
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 5)
+  for (const reviewer of state.reviewers) reviewer.accessKey ??= createId('reviewer')
+  state.schemaVersion = Math.max(state.schemaVersion, 6)
 }
 
 function assertRecord(value: unknown, field: string) {
@@ -1161,6 +1162,7 @@ function applyHandler(
         eventId: state.activeEventId,
         name: assertString(input.name, 'name'),
         email,
+        accessKey: createId('reviewer'),
         status: 'active' as const,
         createdAt: timestamp,
         version: 1,

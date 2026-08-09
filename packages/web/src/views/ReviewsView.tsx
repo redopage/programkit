@@ -2,8 +2,10 @@ import {
   AdjustmentsHorizontalIcon,
   ArrowDownTrayIcon,
   ArrowRightIcon,
+  ArrowTopRightOnSquareIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ClipboardDocumentIcon,
   ClockIcon,
   EnvelopeIcon,
   UserPlusIcon,
@@ -32,6 +34,7 @@ import {
 import { ReviewAssignmentsDrawer } from '../components/ReviewAssignmentsDrawer.tsx'
 import { ReviewSetupDrawer } from '../components/ReviewSetupDrawer.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
+import { reviewerAccessPath } from '../lib/public-links.ts'
 
 function answerText(value: SubmissionAnswerValue | undefined) {
   if (Array.isArray(value)) return value.join(', ')
@@ -65,6 +68,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   const [reminderReviewerIds, setReminderReviewerIds] = useState<string[]>([])
   const [scoreOrder, setScoreOrder] = useState<'descending' | 'ascending'>('descending')
   const [exported, setExported] = useState(false)
+  const [copiedReviewerId, setCopiedReviewerId] = useState<string | null>(null)
   const { payload, execute, mutating } = useWorkspace()
   if (!payload) return null
   const { state } = payload
@@ -148,6 +152,24 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
     if (response.ok) setReminderReviewerIds([])
   }
 
+  function reviewerLink(reviewerId: string, accessKey: string) {
+    return reviewerAccessPath(state.activeEventId, reviewerId, accessKey)
+  }
+
+  async function copyReviewerLink(reviewerId: string, accessKey: string) {
+    try {
+      const url = new URL(reviewerLink(reviewerId, accessKey), window.location.origin)
+      await navigator.clipboard.writeText(url.toString())
+      setCopiedReviewerId(reviewerId)
+      window.setTimeout(
+        () => setCopiedReviewerId((current) => (current === reviewerId ? null : current)),
+        1800,
+      )
+    } catch {
+      setCopiedReviewerId(null)
+    }
+  }
+
   function downloadReviewResults() {
     const event = state.events.find((entry) => entry.id === state.activeEventId)
     const blob = new Blob([createReviewResultsCsv(state)], { type: 'text/csv;charset=utf-8' })
@@ -176,7 +198,6 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
               <UserPlusIcon className="size-4 h-lh shrink-0 fill-current" />
               Assign reviews
             </Button>
-            <Button onClick={() => navigate('/reviewer/rev_001')}>Open reviewer portal</Button>
             <Button onClick={() => navigate('/submissions')}>
               Review submissions
               <ArrowRightIcon className="size-4 h-lh shrink-0 fill-current" />
@@ -262,17 +283,22 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                   <th scope="col" className="w-10 py-3 pr-2">
                     <span className="sr-only">Select</span>
                   </th>
-                  {['Reviewer', 'Assigned', 'Completed', 'Progress', 'Last reminder'].map(
-                    (heading) => (
-                      <th
-                        key={heading}
-                        scope="col"
-                        className="whitespace-nowrap py-3 pr-4 text-sm font-medium text-zinc-500"
-                      >
-                        {heading}
-                      </th>
-                    ),
-                  )}
+                  {[
+                    'Reviewer',
+                    'Assigned',
+                    'Completed',
+                    'Progress',
+                    'Last reminder',
+                    'Portal link',
+                  ].map((heading) => (
+                    <th
+                      key={heading}
+                      scope="col"
+                      className="whitespace-nowrap py-3 pr-4 text-sm font-medium text-zinc-500"
+                    >
+                      {heading}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-950/5">
@@ -318,13 +344,37 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                           </span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap py-3 text-sm text-zinc-500">
+                      <td className="whitespace-nowrap py-3 pr-4 text-sm text-zinc-500">
                         {reviewer.lastRemindedAt
                           ? new Intl.DateTimeFormat('en-US', {
                               month: 'short',
                               day: 'numeric',
                             }).format(new Date(reviewer.lastRemindedAt))
                           : 'Never'}
+                      </td>
+                      <td className="whitespace-nowrap py-3 text-sm">
+                        {reviewer.accessKey ? (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="compact"
+                              onClick={() => void copyReviewerLink(reviewer.id, reviewer.accessKey)}
+                            >
+                              <ClipboardDocumentIcon className="size-4 h-lh shrink-0 fill-current" />
+                              {copiedReviewerId === reviewer.id ? 'Copied' : 'Copy link'}
+                            </Button>
+                            <a
+                              href={reviewerLink(reviewer.id, reviewer.accessKey)}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`Open ${reviewer.name}'s reviewer portal`}
+                              className="touch-target focus-ring inline-flex size-8 shrink-0 items-center justify-center rounded-full text-zinc-500 motion-safe:transition-transform motion-safe:active:scale-95 hover:bg-zinc-950/5 hover:text-zinc-950"
+                            >
+                              <ArrowTopRightOnSquareIcon className="size-4 fill-current" />
+                            </a>
+                          </div>
+                        ) : (
+                          <span className="text-zinc-400">Available after next save</span>
+                        )}
                       </td>
                     </tr>
                   )

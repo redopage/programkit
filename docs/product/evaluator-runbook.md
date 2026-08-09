@@ -31,12 +31,13 @@ not verified evidence of a transition.
 | --------- | ------------------------------ | ----------------------------------------------------- |
 | Organizer | `/forms`, `/submissions`, etc. | Full sample-workspace operations                      |
 | Submitter | `/submit/{formSlug}`           | One public form and its allowed submission operations |
-| Reviewer  | `/reviewer/{reviewerId}`       | Assigned proposals and scorecard operations only      |
+| Reviewer  | Copy from `/reviews`           | Assigned proposals and scorecard operations only      |
 | Speaker   | `/portal/{participationId}`    | One accepted participation and eligible tasks only    |
 | Attendee  | `/agenda?view={view}`          | Five public views of one immutable published program  |
 
-The demo derives scoped actors from these sample IDs. That is useful for deterministic evaluation,
-but it is not production identity. Hosted participant and reviewer sessions remain separate work.
+The demo derives scoped actors from sample participant IDs and reviewer capabilities. Reviewer
+links work on the hosted app without exposing organizer navigation. Account-based reviewer login,
+recovery, and capability rotation remain separate hardening work.
 
 Public program views use `agenda`, `sessions`, `speakers`, `itinerary`, and `gallery`. Add
 `track={trackId}` to verify filtered links and embeds. The itinerary selection must survive a reload,

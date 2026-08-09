@@ -852,6 +852,7 @@ describe('ProgramKit operation engine', () => {
     expect(addedReviewer.response.ok).toBe(true)
     state = addedReviewer.state
     const sam = state.reviewers.find((reviewer) => reviewer.email === 'sam@example.com')!
+    expect(sam.accessKey).toMatch(/^reviewer_/u)
     const initialPool = state.reviewerTeams.find((team) => team.id === 'rvt_program')!
     const updatedPool = executeOperation(state, 'reviewer-team.update', {
       input: {

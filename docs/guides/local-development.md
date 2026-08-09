@@ -30,13 +30,14 @@ published agenda.
 1. Open `/forms` and inspect the call-for-proposals form and conditional workshop field.
 2. Open `/submit/aie-nyc-2026-cfp` and submit a proposal.
 3. Open `/submissions`, select that proposal, and make a decision.
-4. Open `/reviews` and `/reviewer/rev_001` to inspect committee work and scorecards.
+4. Open `/reviews`, then use a reviewer's **Open portal** link to inspect the exact assigned queue
+   and scorecard workspace.
 5. Open `/portal/par_003` to complete accepted-speaker requirements.
 6. Open `/schedule`, change the draft, run preflight, and publish a release.
 7. Open `/agenda` to verify that the public program reads the immutable release.
 
-The sample identities are intentionally route-derived so contributors can inspect every role. They
-are a development convenience, not production authentication.
+The sample submitter and participant identities are intentionally route-derived. Reviewer links
+also carry a per-reviewer capability, matching the links an organizer copies from `/reviews`.
 
 ## Reset local state
 

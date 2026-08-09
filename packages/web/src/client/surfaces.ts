@@ -20,8 +20,14 @@ export function surfaceFromPathname(pathname: string): ProgramKitSurface {
   const submission = pathname.match(/^\/submit\/([^/]+)(?:\/|$)/u)
   if (submission) return { kind: 'submission', formSlug: decodedSegment(submission[1]) }
 
-  const reviewer = pathname.match(/^\/reviewer\/([^/]+)(?:\/|$)/u)
-  if (reviewer) return { kind: 'reviewer', reviewerId: decodedSegment(reviewer[1]) }
+  const reviewer = pathname.match(/^\/reviewer\/([^/]+)(?:\/([^/]+))?(?:\/|$)/u)
+  if (reviewer) {
+    return {
+      kind: 'reviewer',
+      reviewerId: decodedSegment(reviewer[1]),
+      ...(reviewer[2] ? { reviewerAccessKey: decodedSegment(reviewer[2]) } : {}),
+    }
+  }
 
   const speaker = pathname.match(/^\/portal\/([^/]+)(?:\/|$)/u)
   if (speaker) return { kind: 'speaker', participationId: decodedSegment(speaker[1]) }
@@ -38,7 +44,7 @@ export function surfaceKey(surface: ProgramKitSurface) {
     case 'submission':
       return `submission:${surface.formSlug}:${surface.speakerAccessKey ?? 'public'}`
     case 'reviewer':
-      return `reviewer:${surface.reviewerId}`
+      return `reviewer:${surface.reviewerId}:${surface.reviewerAccessKey ?? 'unavailable'}`
     case 'speaker':
       return `speaker:${surface.participationId}`
     default:

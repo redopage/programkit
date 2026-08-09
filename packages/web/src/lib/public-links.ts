@@ -35,3 +35,16 @@ export function publicSubmissionPath(
 ) {
   return withHostedEvent(`/submit/${encodeURIComponent(formSlug)}`, eventId, profile)
 }
+
+export function reviewerAccessPath(
+  eventId: string,
+  reviewerId: string,
+  accessKey: string,
+  profile: DeploymentProfile = currentDeploymentProfile(),
+) {
+  return withHostedEvent(
+    `/reviewer/${encodeURIComponent(reviewerId)}/${encodeURIComponent(accessKey)}`,
+    eventId,
+    profile,
+  )
+}

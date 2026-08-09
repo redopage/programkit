@@ -10,7 +10,7 @@ import type {
 const surfaceOperationAllowlist: Record<ProgramKitSurface['kind'], ReadonlySet<string> | null> = {
   operator: null,
   submission: new Set(['submission.create', 'submission.submit', 'submission.update']),
-  reviewer: new Set(['review.submit-scorecard']),
+  reviewer: new Set(['review.submit-scorecard', 'review.recuse', 'review.restore-recusal']),
   speaker: new Set(['participation.set-status', 'requirement.set-status', 'portal.update-profile']),
   'public-program': new Set(),
 }
@@ -36,7 +36,7 @@ function stateEndpoint(surface: ProgramKitSurface) {
           : ''
       }`
     case 'reviewer':
-      return `/api/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/state`
+      return `/public/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/state`
     case 'speaker':
       return `/api/v1/portal/${encodeURIComponent(surface.participationId)}/state`
     case 'public-program':
@@ -52,7 +52,7 @@ function operationEndpoint(surface: ProgramKitSurface, operation: string) {
     case 'submission':
       return `/public/v1/submission-forms/${encodeURIComponent(surface.formSlug)}/operations/${encodedOperation}`
     case 'reviewer':
-      return `/api/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/operations/${encodedOperation}`
+      return `/public/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/operations/${encodedOperation}`
     case 'speaker':
       return `/api/v1/portal/${encodeURIComponent(surface.participationId)}/operations/${encodedOperation}`
     case 'operator':
@@ -73,12 +73,19 @@ export function createProgramKitHttpClient(
     new Headers(headers).forEach((value, key) => result.set(key, value))
     return result
   }
+  const surfaceHeaders = (surface: ProgramKitSurface, headers?: HeadersInit) => {
+    const result = requestHeaders(headers)
+    if (surface.kind === 'reviewer' && surface.reviewerAccessKey) {
+      result.set('x-programkit-reviewer-key', surface.reviewerAccessKey)
+    }
+    return result
+  }
 
   return {
     async readSurface(surface, signal) {
       return parseJson<WorkspacePayload>(
         await fetcher(resolveUrl(stateEndpoint(surface)), {
-          headers: requestHeaders({ accept: 'application/json' }),
+          headers: surfaceHeaders(surface, { accept: 'application/json' }),
           signal,
         }),
       )
@@ -93,7 +100,7 @@ export function createProgramKitHttpClient(
       return parseJson<OperationResponse>(
         await fetcher(resolveUrl(operationEndpoint(surface, operation)), {
           method: 'POST',
-          headers: requestHeaders({ 'content-type': 'application/json' }),
+          headers: surfaceHeaders(surface, { 'content-type': 'application/json' }),
           body: JSON.stringify({
             input,
             idempotencyKey: crypto.randomUUID(),
