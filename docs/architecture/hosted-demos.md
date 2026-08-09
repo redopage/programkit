@@ -5,9 +5,9 @@ isolated product evaluation with sample data, not for real conference operations
 
 ## Lifecycle
 
-1. `POST /api/v1/demos` generates a random 192-bit identifier and initializes a seeded Durable
+1. `POST /api/v1/demos` generates a random 192-bit capability token and initializes a seeded Durable
    Object.
-2. The returned `/demo/{id}` URL is the private collaboration link.
+2. The returned `/demo/{capability}` URL is the private collaboration link.
 3. Opening the link verifies that the object is active, stores the capability in an HTTP-only,
    same-site cookie, and redirects to `/`.
 4. `GET /api/v1/demos/current` powers the expiry banner without exposing the capability through the
@@ -17,6 +17,23 @@ isolated product evaluation with sample data, not for real conference operations
 
 The Worker does not accept a demo capability through `x-programkit-workspace-key`. This prevents a
 caller from selecting a hosted demo through the reference workspace-routing header.
+
+## Routing and deployment shape
+
+The capability token is intentionally not a UUID. It is a bearer secret, not a normal database
+identifier, and its 192 random bits provide more entropy than a UUID v4. A future authenticated
+workspace may use a UUIDv7 or another sortable internal identifier, but that identifier must remain
+separate from the secret used to join a passwordless demo.
+
+The canonical hosted entry point is `/demo`, and private links use `/demo/{capability}`. Keeping the
+demo on the same origin as the application makes the HTTP-only cookie, OAuth callbacks, content
+security policy, and local development straightforward. It also lets a self-hosted installation use
+the exact same Worker artifact.
+
+If `programkit.dev` later becomes a marketing and documentation site, `demo.programkit.dev` can be
+bound to the same Worker without moving the demo into another repository. The route and subdomain
+are deployment entry points, not separate applications. ProgramKit should keep the demo runtime,
+its schema, and its tests in this repository so product changes cannot drift from the hosted trial.
 
 ## Airtable
 

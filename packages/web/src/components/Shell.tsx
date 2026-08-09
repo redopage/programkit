@@ -403,6 +403,7 @@ function WorkspaceIdentity({
 export function Shell({ pathname, navigate, children }: ShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [commandMode, setCommandMode] = useState<CommandMode>(null)
+  const [demoActive, setDemoActive] = useState(false)
   const mobilePanelRef = useRef<HTMLDivElement>(null)
   const mobileTitleId = useId()
   const { payload } = useWorkspace()
@@ -560,192 +561,217 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
   }, [mobileOpen])
 
   return (
-    <div className="isolate min-h-dvh antialiased max-lg:bg-white lg:flex lg:bg-canvas">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col p-2 lg:flex">
-        <div className="flex flex-col gap-1.5">
-          <div className="min-w-0">
-            <WorkspaceIdentity
-              navigate={navigate}
-              pendingChanges={pendingChanges}
-              onOpenShortcuts={() => setCommandMode('shortcuts')}
-              commandOpen={commandMode !== null}
-            />
-          </div>
-          <div>
-            <button
-              type="button"
-              aria-keyshortcuts="Meta+K Control+K /"
-              onClick={() => setCommandMode('commands')}
-              className="focus-ring group flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-950/4 hover:text-zinc-950"
-            >
-              <MagnifyingGlassIcon className="size-4 shrink-0 fill-zinc-500" />
-              <span className="min-w-0 flex-1 truncate">Search</span>
-              <kbd className="font-sans text-xs font-normal text-zinc-400">⌘K</kbd>
-            </button>
-          </div>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto pt-4 pb-2">
-          <NavigationItems pathname={pathname} navigate={navigate} />
-        </div>
-      </aside>
-
-      <header className="fixed inset-x-0 top-0 z-40 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-end justify-between border-b border-zinc-950/5 bg-white/95 px-4 pb-3 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden">
-        <a
-          href="/"
-          aria-label="Event overview"
-          className="focus-ring flex min-w-0 items-center gap-2 rounded-md text-base font-medium text-zinc-950"
-          onClick={(event) => {
-            event.preventDefault()
-            navigate('/')
-          }}
+    <>
+      <DemoBanner onActiveChange={setDemoActive} />
+      <div
+        className={cx(
+          'isolate min-h-dvh antialiased max-lg:bg-white lg:flex lg:bg-canvas',
+          demoActive &&
+            'pt-[calc(3rem+env(safe-area-inset-top))] sm:pt-[calc(2.5rem+env(safe-area-inset-top))]',
+        )}
+      >
+        <aside
+          className={cx(
+            'fixed bottom-0 left-0 z-30 hidden w-60 flex-col p-2 lg:flex',
+            demoActive ? 'top-[calc(2.5rem+env(safe-area-inset-top))]' : 'top-0',
+          )}
         >
-          <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
-            AI
-          </span>
-          <span className="min-w-0 truncate">{activeEvent?.name ?? 'Program workspace'}</span>
-        </a>
-        <IconButton label="Search ProgramKit" onClick={() => setCommandMode('commands')}>
-          <MagnifyingGlassIcon className="size-4 shrink-0 fill-current" />
-        </IconButton>
-      </header>
-
-      {mobileOpen
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-50 lg:hidden"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby={mobileTitleId}
-            >
-              <div
-                className="absolute inset-0 cursor-default bg-zinc-950/20 backdrop-blur-[1px] motion-safe:animate-fade-in"
-                aria-hidden="true"
-                onClick={() => setMobileOpen(false)}
+          <div className="flex flex-col gap-1.5">
+            <div className="min-w-0">
+              <WorkspaceIdentity
+                navigate={navigate}
+                pendingChanges={pendingChanges}
+                onOpenShortcuts={() => setCommandMode('shortcuts')}
+                commandOpen={commandMode !== null}
               />
-              <div
-                ref={mobilePanelRef}
-                className="absolute inset-y-0 left-0 flex w-[min(86vw,20rem)] flex-col rounded-r-2xl bg-white p-3 pb-[max(--spacing(3),env(safe-area-inset-bottom))] pt-[max(--spacing(3),env(safe-area-inset-top))] shadow-2xl ring-1 ring-black/5 motion-safe:animate-slide-from-left"
+            </div>
+            <div>
+              <button
+                type="button"
+                aria-keyshortcuts="Meta+K Control+K /"
+                onClick={() => setCommandMode('commands')}
+                className="focus-ring group flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-950/4 hover:text-zinc-950"
               >
-                <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <WorkspaceIdentity
+                <MagnifyingGlassIcon className="size-4 shrink-0 fill-zinc-500" />
+                <span className="min-w-0 flex-1 truncate">Search</span>
+                <kbd className="font-sans text-xs font-normal text-zinc-400">⌘K</kbd>
+              </button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto pt-4 pb-2">
+            <NavigationItems pathname={pathname} navigate={navigate} />
+          </div>
+        </aside>
+
+        <header
+          className={cx(
+            'fixed inset-x-0 z-40 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-end justify-between border-b border-zinc-950/5 bg-white/95 px-4 pb-3 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden',
+            demoActive
+              ? 'top-[calc(3rem+env(safe-area-inset-top))] sm:top-[calc(2.5rem+env(safe-area-inset-top))]'
+              : 'top-0',
+          )}
+        >
+          <a
+            href="/"
+            aria-label="Event overview"
+            className="focus-ring flex min-w-0 items-center gap-2 rounded-md text-base font-medium text-zinc-950"
+            onClick={(event) => {
+              event.preventDefault()
+              navigate('/')
+            }}
+          >
+            <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
+              AI
+            </span>
+            <span className="min-w-0 truncate">{activeEvent?.name ?? 'Program workspace'}</span>
+          </a>
+          <IconButton label="Search ProgramKit" onClick={() => setCommandMode('commands')}>
+            <MagnifyingGlassIcon className="size-4 shrink-0 fill-current" />
+          </IconButton>
+        </header>
+
+        {mobileOpen
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-50 lg:hidden"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={mobileTitleId}
+              >
+                <div
+                  className="absolute inset-0 cursor-default bg-zinc-950/20 backdrop-blur-[1px] motion-safe:animate-fade-in"
+                  aria-hidden="true"
+                  onClick={() => setMobileOpen(false)}
+                />
+                <div
+                  ref={mobilePanelRef}
+                  className="absolute inset-y-0 left-0 flex w-[min(86vw,20rem)] flex-col rounded-r-2xl bg-white p-3 pb-[max(--spacing(3),env(safe-area-inset-bottom))] pt-[max(--spacing(3),env(safe-area-inset-top))] shadow-2xl ring-1 ring-black/5 motion-safe:animate-slide-from-left"
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <WorkspaceIdentity
+                        navigate={navigate}
+                        pendingChanges={pendingChanges}
+                        onOpenShortcuts={() => setCommandMode('shortcuts')}
+                        commandOpen={commandMode !== null}
+                        onNavigate={() => setMobileOpen(false)}
+                      />
+                    </div>
+                    <IconButton label="Close navigation" onClick={() => setMobileOpen(false)}>
+                      <XMarkIcon className="size-4 shrink-0 fill-current" />
+                    </IconButton>
+                  </div>
+                  <h2 id={mobileTitleId} className="sr-only">
+                    Navigation
+                  </h2>
+                  <div className="min-h-0 flex-1 overflow-y-auto pt-4">
+                    <NavigationItems
+                      pathname={pathname}
                       navigate={navigate}
-                      pendingChanges={pendingChanges}
-                      onOpenShortcuts={() => setCommandMode('shortcuts')}
-                      commandOpen={commandMode !== null}
                       onNavigate={() => setMobileOpen(false)}
                     />
                   </div>
-                  <IconButton label="Close navigation" onClick={() => setMobileOpen(false)}>
-                    <XMarkIcon className="size-4 shrink-0 fill-current" />
-                  </IconButton>
                 </div>
-                <h2 id={mobileTitleId} className="sr-only">
-                  Navigation
-                </h2>
-                <div className="min-h-0 flex-1 overflow-y-auto pt-4">
-                  <NavigationItems
-                    pathname={pathname}
-                    navigate={navigate}
-                    onNavigate={() => setMobileOpen(false)}
-                  />
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
-
-      <CommandCenter
-        mode={commandMode}
-        onModeChange={setCommandMode}
-        commands={commands}
-        pathname={pathname}
-        navigate={navigate}
-      />
-
-      <nav
-        aria-label="Mobile primary navigation"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-950/5 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
-      >
-        <ul role="list" className="grid grid-cols-5 px-1">
-          {mobileNavigation.map((item) => {
-            const active =
-              item.href === '/'
-                ? pathname === '/'
-                : pathname === item.href || pathname.startsWith(`${item.href}/`)
-            const Icon = item.icon
-            return (
-              <li key={item.href}>
-                <a
-                  href={item.href}
-                  aria-current={active ? 'page' : undefined}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    navigate(item.href)
-                  }}
-                  className={cx(
-                    'group focus-ring flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg text-sm',
-                    active ? 'text-blue-600' : 'text-zinc-500 hover:text-zinc-950',
-                  )}
-                >
-                  <Icon
-                    className={cx(
-                      'size-4 shrink-0',
-                      active ? 'fill-blue-600' : 'fill-zinc-500 group-hover:fill-zinc-950',
-                    )}
-                  />
-                  <p>{item.label}</p>
-                </a>
-              </li>
+              </div>,
+              document.body,
             )
-          })}
-          <li>
-            <button
-              type="button"
-              aria-label="Open all navigation"
-              onClick={() => setMobileOpen(true)}
-              className={cx(
-                'group focus-ring flex min-h-16 w-full flex-col items-center justify-center gap-1 rounded-lg text-sm',
-                mobileNavigation.some(
-                  (item) =>
-                    pathname === item.href ||
-                    (item.href !== '/' && pathname.startsWith(`${item.href}/`)),
-                )
-                  ? 'text-zinc-500 hover:text-zinc-950'
-                  : 'text-blue-600',
-              )}
-            >
-              <Bars3Icon
+          : null}
+
+        <CommandCenter
+          mode={commandMode}
+          onModeChange={setCommandMode}
+          commands={commands}
+          pathname={pathname}
+          navigate={navigate}
+        />
+
+        <nav
+          aria-label="Mobile primary navigation"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-950/5 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+        >
+          <ul role="list" className="grid grid-cols-5 px-1">
+            {mobileNavigation.map((item) => {
+              const active =
+                item.href === '/'
+                  ? pathname === '/'
+                  : pathname === item.href || pathname.startsWith(`${item.href}/`)
+              const Icon = item.icon
+              return (
+                <li key={item.href}>
+                  <a
+                    href={item.href}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      navigate(item.href)
+                    }}
+                    className={cx(
+                      'group focus-ring flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg text-sm',
+                      active ? 'text-blue-600' : 'text-zinc-500 hover:text-zinc-950',
+                    )}
+                  >
+                    <Icon
+                      className={cx(
+                        'size-4 shrink-0',
+                        active ? 'fill-blue-600' : 'fill-zinc-500 group-hover:fill-zinc-950',
+                      )}
+                    />
+                    <p>{item.label}</p>
+                  </a>
+                </li>
+              )
+            })}
+            <li>
+              <button
+                type="button"
+                aria-label="Open all navigation"
+                onClick={() => setMobileOpen(true)}
                 className={cx(
-                  'size-4 shrink-0',
+                  'group focus-ring flex min-h-16 w-full flex-col items-center justify-center gap-1 rounded-lg text-sm',
                   mobileNavigation.some(
                     (item) =>
                       pathname === item.href ||
                       (item.href !== '/' && pathname.startsWith(`${item.href}/`)),
                   )
-                    ? 'fill-zinc-500 group-hover:fill-zinc-950'
-                    : 'fill-blue-600',
+                    ? 'text-zinc-500 hover:text-zinc-950'
+                    : 'text-blue-600',
                 )}
-              />
-              <p>More</p>
-            </button>
-          </li>
-        </ul>
-      </nav>
+              >
+                <Bars3Icon
+                  className={cx(
+                    'size-4 shrink-0',
+                    mobileNavigation.some(
+                      (item) =>
+                        pathname === item.href ||
+                        (item.href !== '/' && pathname.startsWith(`${item.href}/`)),
+                    )
+                      ? 'fill-zinc-500 group-hover:fill-zinc-950'
+                      : 'fill-blue-600',
+                  )}
+                />
+                <p>More</p>
+              </button>
+            </li>
+          </ul>
+        </nav>
 
-      <main className="min-w-0 flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pb-0 lg:pt-0 lg:pl-60">
-        {/* The panel floats on the canvas, so the workspace reads as one document
+        <main className="min-w-0 flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pb-0 lg:pt-0 lg:pl-60">
+          {/* The panel floats on the canvas, so the workspace reads as one document
             with the navigation living outside it. */}
-        <div className="lg:py-2 lg:pr-2">
-          <div className="min-h-full bg-white p-4 sm:p-6 lg:min-h-[calc(100dvh-(--spacing(4)))] lg:rounded-2xl lg:shadow-xs lg:ring-1 lg:ring-zinc-950/5">
-            <div className="mx-auto w-full max-w-[100rem]">
-              <DemoBanner />
-              {children}
+          <div className="lg:py-2 lg:pr-2">
+            <div
+              className={cx(
+                'min-h-full bg-white p-4 sm:p-6 lg:rounded-2xl lg:shadow-xs lg:ring-1 lg:ring-zinc-950/5',
+                demoActive
+                  ? 'lg:min-h-[calc(100dvh-(--spacing(4))-2.5rem-env(safe-area-inset-top))]'
+                  : 'lg:min-h-[calc(100dvh-(--spacing(4)))]',
+              )}
+            >
+              <div className="mx-auto w-full max-w-[100rem]">{children}</div>
             </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </>
   )
 }
