@@ -86,6 +86,10 @@ function participantState(state: WorkspaceState, participationId: string) {
         (entry.owner.type === 'person' && entry.owner.id === person.id),
     )
     .map((entry) => ({ ...structuredClone(entry), storageKey: '' }))
+  clone.portalResources = (state.portalResources ?? [])
+    .filter((entry) => entry.eventId === participation.eventId && entry.status === 'published')
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((entry) => structuredClone(entry))
   clone.reviewers = []
   clone.reviewerTeams = []
   clone.evaluationPlans = []
@@ -119,6 +123,7 @@ function projectionBase(state: WorkspaceState) {
   clone.submissions = []
   clone.submissionReceiptDeliveries = []
   clone.assets = []
+  clone.portalResources = []
   clone.reviewers = []
   clone.reviewerTeams = []
   clone.evaluationPlans = []

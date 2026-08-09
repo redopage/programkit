@@ -1,6 +1,7 @@
 import {
   ArrowTopRightOnSquareIcon,
   Bars3Icon,
+  BookOpenIcon,
   CalendarDaysIcon,
   ChartBarSquareIcon,
   ChevronDownIcon,
@@ -97,6 +98,12 @@ const navigation = [
         iconClass: 'fill-zinc-500',
       },
       {
+        href: '/resources',
+        label: 'Speaker resources',
+        icon: BookOpenIcon,
+        iconClass: 'fill-zinc-500',
+      },
+      {
         href: '/changes',
         label: 'Change review',
         icon: Squares2X2Icon,
@@ -177,6 +184,11 @@ const commandDetails: Record<
   '/settings': {
     description: 'Update event identity, dates, and status.',
     keywords: ['event', 'timezone', 'venue'],
+    section: 'Settings',
+  },
+  '/resources': {
+    description: 'Publish guides and safe cards to speaker workspaces.',
+    keywords: ['portal', 'wiki', 'guides', 'embeds'],
     section: 'Settings',
   },
   '/changes': {
@@ -364,6 +376,7 @@ function WorkspaceIdentity({
             {[
               { href: '/agenda', label: 'View published program', icon: ArrowTopRightOnSquareIcon },
               { href: '/settings', label: 'Event settings', icon: Cog6ToothIcon },
+              { href: '/resources', label: 'Speaker resources', icon: BookOpenIcon },
               { href: '/changes', label: 'Change review', icon: Squares2X2Icon },
               { href: '/integrations', label: 'Integrations', icon: CircleStackIcon },
               { href: '/agent', label: 'Agent workspace', icon: CpuChipIcon },

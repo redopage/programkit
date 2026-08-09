@@ -39,6 +39,8 @@ describe('ProgramKit web client', () => {
       participationId: 'par_003',
     })
     expect(surfaceKey(surfaceFromPathname('/agenda'))).toBe('public-program')
+    expect(surfaceKey(surfaceFromPathname('/embed/speakers'))).toBe('public-program')
+    expect(surfaceKey(surfaceFromPathname('/embed/itinerary'))).toBe('public-program')
   })
 
   it('uses the scoped endpoint selected by the surface', async () => {

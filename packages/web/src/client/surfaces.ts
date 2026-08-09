@@ -18,7 +18,12 @@ export function surfaceFromPathname(pathname: string): ProgramKitSurface {
   const speaker = pathname.match(/^\/portal\/([^/]+)(?:\/|$)/u)
   if (speaker) return { kind: 'speaker', participationId: decodedSegment(speaker[1]) }
 
-  if (pathname === '/agenda' || pathname.startsWith('/agenda/')) {
+  if (
+    pathname === '/agenda' ||
+    pathname.startsWith('/agenda/') ||
+    pathname === '/embed/speakers' ||
+    pathname === '/embed/itinerary'
+  ) {
     return { kind: 'public-program' }
   }
 

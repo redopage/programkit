@@ -207,6 +207,20 @@ export const operationManifest = [
     emits: ['participant.profile-updated'],
   },
   {
+    name: 'portal-resource.save',
+    title: 'Save speaker resource',
+    description:
+      'Create or update a versioned guide or sandboxed HTML card for the speaker portal.',
+    kind: 'command',
+    scopes: ['portal-resources:write'],
+    risk: 'internal',
+    agentPolicy: 'propose_only',
+    reversible: true,
+    supportsDryRun: true,
+    requiredInput: ['eventId', 'title', 'summary', 'kind', 'status', 'sortOrder'],
+    emits: ['portal-resource.saved'],
+  },
+  {
     name: 'schedule.place-session',
     title: 'Place session',
     description: 'Add an unscheduled session to the draft agenda and recalculate conflicts.',

@@ -16,15 +16,17 @@ describe('operation HTTP surface', () => {
     delete (legacy as Partial<WorkspaceState>).campaignDeliveries
     delete (legacy as Partial<WorkspaceState>).submissionReceiptDeliveries
     delete (legacy as Partial<WorkspaceState>).acceleventsExports
+    delete (legacy as Partial<WorkspaceState>).portalResources
     for (const campaign of legacy.campaigns) {
       delete (campaign as Partial<typeof campaign>).includeEventInvite
       delete (campaign as Partial<typeof campaign>).queuedAt
     }
     const state = await new MemoryWorkspaceRepository(legacy).read()
-    expect(state.schemaVersion).toBe(7)
+    expect(state.schemaVersion).toBe(8)
     expect(state.campaignDeliveries).toEqual([])
     expect(state.submissionReceiptDeliveries).toEqual([])
     expect(state.acceleventsExports).toEqual([])
+    expect(state.portalResources).toEqual([])
     expect(state.campaigns.every((campaign) => campaign.includeEventInvite === false)).toBe(true)
     expect(state.campaigns.every((campaign) => campaign.queuedAt === null)).toBe(true)
   })
@@ -192,6 +194,10 @@ describe('operation HTTP surface', () => {
     expect(body.state.assets).toEqual([
       expect.objectContaining({ id: 'ast_private_portal', storageKey: '' }),
     ])
+    expect(body.state.portalResources.map((entry) => entry.id)).toEqual([
+      'por_speaker_guide',
+      'por_venue_card',
+    ])
   })
 
   it('serves distinct public and reviewer projections without operator records', async () => {
@@ -214,6 +220,7 @@ describe('operation HTTP surface', () => {
     expect(formBody.state.reviewerAssignments).toHaveLength(0)
     expect(formBody.state.domainEvents).toHaveLength(0)
     expect(formBody.state.acceleventsExports).toHaveLength(0)
+    expect(formBody.state.portalResources).toHaveLength(0)
 
     const programResponse = await handleCoreRequest(
       new Request('http://local/public/v1/program/state'),
@@ -228,6 +235,7 @@ describe('operation HTTP surface', () => {
     expect(programBody.state.campaignDeliveries).toHaveLength(0)
     expect(programBody.state.submissionReceiptDeliveries).toHaveLength(0)
     expect(programBody.state.acceleventsExports).toHaveLength(0)
+    expect(programBody.state.portalResources).toHaveLength(0)
     expect(programBody.state.people.every((entry) => entry.email === '')).toBe(true)
     expect(programBody.state.participations.every((entry) => entry.internalNotes === '')).toBe(true)
 

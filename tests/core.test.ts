@@ -21,7 +21,7 @@ import {
 describe('ProgramKit operation engine', () => {
   it('creates a useful deterministic workspace', () => {
     const state = createSeedState()
-    expect(state.schemaVersion).toBe(7)
+    expect(state.schemaVersion).toBe(8)
     expect(state.people).toHaveLength(16)
     expect(state.participations).toHaveLength(16)
     expect(state.sessions).toHaveLength(11)
@@ -34,6 +34,7 @@ describe('ProgramKit operation engine', () => {
     expect(state.submissionForms).toHaveLength(2)
     expect(state.submissions).toHaveLength(6)
     expect(state.submissionReceiptDeliveries).toHaveLength(1)
+    expect(state.portalResources).toHaveLength(2)
     expect(state.acceleventsExports).toHaveLength(0)
     expect(submissionPipelineSummary(state)).toMatchObject({
       total: 6,
@@ -305,6 +306,67 @@ describe('ProgramKit operation engine', () => {
       title: person.title,
       company: person.company,
     })
+  })
+
+  it('saves versioned speaker resources and rejects active HTML content', () => {
+    const state = createSeedState()
+    const created = executeOperation(state, 'portal-resource.save', {
+      input: {
+        eventId: state.activeEventId,
+        title: 'Recording checklist',
+        summary: 'A short production card for remote contributors.',
+        kind: 'html_embed',
+        embedHtml:
+          '<section><h2>Before recording</h2><ul><li>Close noisy apps.</li></ul></section>',
+        status: 'draft',
+        sortOrder: 30,
+      },
+      actor: {
+        type: 'staff',
+        id: 'usr_resource_editor',
+        name: 'Resource editor',
+        scopes: ['portal-resources:write'],
+      },
+    })
+    expect(created.response.ok).toBe(true)
+    const resource = created.state.portalResources.at(-1)!
+    expect(resource).toMatchObject({ kind: 'html_embed', status: 'draft', version: 1 })
+
+    const published = executeOperation(created.state, 'portal-resource.save', {
+      input: { ...resource, resourceId: resource.id, status: 'published' },
+      expectedVersions: { [resource.id]: resource.version },
+      actor: {
+        type: 'staff',
+        id: 'usr_resource_editor',
+        name: 'Resource editor',
+        scopes: ['portal-resources:write'],
+      },
+    })
+    expect(published.response.ok).toBe(true)
+    expect(published.state.portalResources.at(-1)).toMatchObject({
+      status: 'published',
+      version: 2,
+    })
+
+    const unsafe = executeOperation(state, 'portal-resource.save', {
+      input: {
+        eventId: state.activeEventId,
+        title: 'Unsafe card',
+        summary: 'Must not persist.',
+        kind: 'html_embed',
+        embedHtml: '<img src="https://tracker.example/pixel.png"><script>alert(1)</script>',
+        status: 'published',
+        sortOrder: 40,
+      },
+      actor: {
+        type: 'staff',
+        id: 'usr_resource_editor',
+        name: 'Resource editor',
+        scopes: ['portal-resources:write'],
+      },
+    })
+    expect(unsafe.response.error?.code).toBe('INVALID_INPUT')
+    expect(unsafe.state).toBe(state)
   })
 
   it('enforces nested permissions when proposals are created', () => {

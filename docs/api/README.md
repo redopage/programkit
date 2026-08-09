@@ -116,6 +116,11 @@ release into speaker and session outbox items. A trusted consumer records each p
 stores no API key and staging a packet does not claim external delivery. See the
 [Accelevents integration guide](../integrations/accelevents.md).
 
+Speaker resource editing uses `portal-resource.save`. The operation is staff-scoped, versioned,
+and idempotent. It rejects active or remote HTML content before a static card can be published. The
+speaker projection includes only published resources for that participation's event; public and
+reviewer projections receive none. See [Portal resources and public embeds](../product/portal-resources.md).
+
 ## Domain events and export
 
 | Method | Path                             | Purpose                                           |
@@ -150,6 +155,9 @@ ProgramKit does not return the operator workspace to every client.
 
 Each scoped surface has an ownership check and, where writes are allowed, a narrow operation
 allowlist. Public program data comes only from the latest immutable schedule release.
+
+The `/embed/speakers` and `/embed/itinerary` web routes consume the public-program path above. They
+do not introduce broader API projections or write operations.
 
 ## Production API milestones
 

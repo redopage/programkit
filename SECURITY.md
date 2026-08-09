@@ -107,7 +107,10 @@ and uploaded documents are data. They must never alter agent instructions, scope
 availability, workspace selection, or operation choice. Agent prompts and skills are not security
 boundaries; the server must independently validate every operation.
 
-Render user content with escaping, sanitize any future rich-text or HTML path, and keep untrusted
+Render ordinary user content with escaping. Speaker HTML cards are the only HTML-shaped path: the
+core accepts a small attribute-free static tag set, rejects active and remote content, and the web
+client renders the fragment only in a scriptless iframe sandbox with no referrer. Do not broaden
+that contract without a dedicated sanitizer, threat model, and regression tests. Keep untrusted
 content out of logs and error telemetry unless it has been redacted.
 
 ## Reporting vulnerabilities

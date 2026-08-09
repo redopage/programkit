@@ -19,11 +19,14 @@ import { Route as OperatorFormsRouteImport } from './routes/_operator.forms'
 import { Route as OperatorIntegrationsRouteImport } from './routes/_operator.integrations'
 import { Route as OperatorPeopleRouteImport } from './routes/_operator.people'
 import { Route as OperatorReadinessRouteImport } from './routes/_operator.readiness'
+import { Route as OperatorResourcesRouteImport } from './routes/_operator.resources'
 import { Route as OperatorReviewsRouteImport } from './routes/_operator.reviews'
 import { Route as OperatorScheduleRouteImport } from './routes/_operator.schedule'
 import { Route as OperatorSessionsRouteImport } from './routes/_operator.sessions'
 import { Route as OperatorSettingsRouteImport } from './routes/_operator.settings'
 import { Route as OperatorSubmissionsRouteImport } from './routes/_operator.submissions'
+import { Route as EmbedItineraryRouteImport } from './routes/embed.itinerary'
+import { Route as EmbedSpeakersRouteImport } from './routes/embed.speakers'
 import { Route as PortalParticipationIdRouteImport } from './routes/portal.$participationId'
 import { Route as ReviewerReviewerIdRouteImport } from './routes/reviewer.$reviewerId'
 import { Route as SubmitFormSlugRouteImport } from './routes/submit.$formSlug'
@@ -77,6 +80,11 @@ const OperatorReadinessRoute = OperatorReadinessRouteImport.update({
   path: '/readiness',
   getParentRoute: () => OperatorRoute,
 } as any)
+const OperatorResourcesRoute = OperatorResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
+  getParentRoute: () => OperatorRoute,
+} as any)
 const OperatorReviewsRoute = OperatorReviewsRouteImport.update({
   id: '/reviews',
   path: '/reviews',
@@ -101,6 +109,16 @@ const OperatorSubmissionsRoute = OperatorSubmissionsRouteImport.update({
   id: '/submissions',
   path: '/submissions',
   getParentRoute: () => OperatorRoute,
+} as any)
+const EmbedItineraryRoute = EmbedItineraryRouteImport.update({
+  id: '/embed/itinerary',
+  path: '/embed/itinerary',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbedSpeakersRoute = EmbedSpeakersRouteImport.update({
+  id: '/embed/speakers',
+  path: '/embed/speakers',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const PortalParticipationIdRoute = PortalParticipationIdRouteImport.update({
   id: '/portal/$participationId',
@@ -128,11 +146,14 @@ export interface FileRoutesByFullPath {
   '/integrations': typeof OperatorIntegrationsRoute
   '/people': typeof OperatorPeopleRoute
   '/readiness': typeof OperatorReadinessRoute
+  '/resources': typeof OperatorResourcesRoute
   '/reviews': typeof OperatorReviewsRoute
   '/schedule': typeof OperatorScheduleRoute
   '/sessions': typeof OperatorSessionsRoute
   '/settings': typeof OperatorSettingsRoute
   '/submissions': typeof OperatorSubmissionsRoute
+  '/embed/itinerary': typeof EmbedItineraryRoute
+  '/embed/speakers': typeof EmbedSpeakersRoute
   '/portal/$participationId': typeof PortalParticipationIdRoute
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
@@ -146,11 +167,14 @@ export interface FileRoutesByTo {
   '/integrations': typeof OperatorIntegrationsRoute
   '/people': typeof OperatorPeopleRoute
   '/readiness': typeof OperatorReadinessRoute
+  '/resources': typeof OperatorResourcesRoute
   '/reviews': typeof OperatorReviewsRoute
   '/schedule': typeof OperatorScheduleRoute
   '/sessions': typeof OperatorSessionsRoute
   '/settings': typeof OperatorSettingsRoute
   '/submissions': typeof OperatorSubmissionsRoute
+  '/embed/itinerary': typeof EmbedItineraryRoute
+  '/embed/speakers': typeof EmbedSpeakersRoute
   '/portal/$participationId': typeof PortalParticipationIdRoute
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
@@ -167,11 +191,14 @@ export interface FileRoutesById {
   '/_operator/integrations': typeof OperatorIntegrationsRoute
   '/_operator/people': typeof OperatorPeopleRoute
   '/_operator/readiness': typeof OperatorReadinessRoute
+  '/_operator/resources': typeof OperatorResourcesRoute
   '/_operator/reviews': typeof OperatorReviewsRoute
   '/_operator/schedule': typeof OperatorScheduleRoute
   '/_operator/sessions': typeof OperatorSessionsRoute
   '/_operator/settings': typeof OperatorSettingsRoute
   '/_operator/submissions': typeof OperatorSubmissionsRoute
+  '/embed/itinerary': typeof EmbedItineraryRoute
+  '/embed/speakers': typeof EmbedSpeakersRoute
   '/portal/$participationId': typeof PortalParticipationIdRoute
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
@@ -189,11 +216,14 @@ export interface FileRouteTypes {
     | '/integrations'
     | '/people'
     | '/readiness'
+    | '/resources'
     | '/reviews'
     | '/schedule'
     | '/sessions'
     | '/settings'
     | '/submissions'
+    | '/embed/itinerary'
+    | '/embed/speakers'
     | '/portal/$participationId'
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
@@ -207,11 +237,14 @@ export interface FileRouteTypes {
     | '/integrations'
     | '/people'
     | '/readiness'
+    | '/resources'
     | '/reviews'
     | '/schedule'
     | '/sessions'
     | '/settings'
     | '/submissions'
+    | '/embed/itinerary'
+    | '/embed/speakers'
     | '/portal/$participationId'
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
@@ -227,11 +260,14 @@ export interface FileRouteTypes {
     | '/_operator/integrations'
     | '/_operator/people'
     | '/_operator/readiness'
+    | '/_operator/resources'
     | '/_operator/reviews'
     | '/_operator/schedule'
     | '/_operator/sessions'
     | '/_operator/settings'
     | '/_operator/submissions'
+    | '/embed/itinerary'
+    | '/embed/speakers'
     | '/portal/$participationId'
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
@@ -241,6 +277,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   OperatorRoute: typeof OperatorRouteWithChildren
   AgendaRoute: typeof AgendaRoute
+  EmbedItineraryRoute: typeof EmbedItineraryRoute
+  EmbedSpeakersRoute: typeof EmbedSpeakersRoute
   PortalParticipationIdRoute: typeof PortalParticipationIdRoute
   ReviewerReviewerIdRoute: typeof ReviewerReviewerIdRoute
   SubmitFormSlugRoute: typeof SubmitFormSlugRoute
@@ -318,6 +356,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperatorReadinessRouteImport
       parentRoute: typeof OperatorRoute
     }
+    '/_operator/resources': {
+      id: '/_operator/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof OperatorResourcesRouteImport
+      parentRoute: typeof OperatorRoute
+    }
     '/_operator/reviews': {
       id: '/_operator/reviews'
       path: '/reviews'
@@ -353,6 +398,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperatorSubmissionsRouteImport
       parentRoute: typeof OperatorRoute
     }
+    '/embed/itinerary': {
+      id: '/embed/itinerary'
+      path: '/embed/itinerary'
+      fullPath: '/embed/itinerary'
+      preLoaderRoute: typeof EmbedItineraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embed/speakers': {
+      id: '/embed/speakers'
+      path: '/embed/speakers'
+      fullPath: '/embed/speakers'
+      preLoaderRoute: typeof EmbedSpeakersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/portal/$participationId': {
       id: '/portal/$participationId'
       path: '/portal/$participationId'
@@ -385,6 +444,7 @@ interface OperatorRouteChildren {
   OperatorIntegrationsRoute: typeof OperatorIntegrationsRoute
   OperatorPeopleRoute: typeof OperatorPeopleRoute
   OperatorReadinessRoute: typeof OperatorReadinessRoute
+  OperatorResourcesRoute: typeof OperatorResourcesRoute
   OperatorReviewsRoute: typeof OperatorReviewsRoute
   OperatorScheduleRoute: typeof OperatorScheduleRoute
   OperatorSessionsRoute: typeof OperatorSessionsRoute
@@ -401,6 +461,7 @@ const OperatorRouteChildren: OperatorRouteChildren = {
   OperatorIntegrationsRoute: OperatorIntegrationsRoute,
   OperatorPeopleRoute: OperatorPeopleRoute,
   OperatorReadinessRoute: OperatorReadinessRoute,
+  OperatorResourcesRoute: OperatorResourcesRoute,
   OperatorReviewsRoute: OperatorReviewsRoute,
   OperatorScheduleRoute: OperatorScheduleRoute,
   OperatorSessionsRoute: OperatorSessionsRoute,
@@ -416,6 +477,8 @@ const OperatorRouteWithChildren = OperatorRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   OperatorRoute: OperatorRouteWithChildren,
   AgendaRoute: AgendaRoute,
+  EmbedItineraryRoute: EmbedItineraryRoute,
+  EmbedSpeakersRoute: EmbedSpeakersRoute,
   PortalParticipationIdRoute: PortalParticipationIdRoute,
   ReviewerReviewerIdRoute: ReviewerReviewerIdRoute,
   SubmitFormSlugRoute: SubmitFormSlugRoute,

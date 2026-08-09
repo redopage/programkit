@@ -32,6 +32,7 @@ import type {
   ParticipationStatus,
   Placement,
   Person,
+  PortalResource,
   RequirementStatus,
   Session,
   Submission,
@@ -98,6 +99,30 @@ function assertSubmissionAnswers(value: unknown): SubmissionAnswers {
 
 function optionalString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+const portalEmbedTag =
+  /^<\/?(?:article|section|h1|h2|h3|p|ul|ol|li|strong|em|br|hr|blockquote|code|pre)\s*\/?>$/iu
+
+function validatedPortalEmbedHtml(value: unknown) {
+  const html = assertString(value, 'embedHtml')
+  if (html.length > 12_000) {
+    throw new OperationError('INVALID_INPUT', 'embedHtml must be 12,000 characters or fewer.', {
+      embedHtml: 'Shorten the embedded card.',
+    })
+  }
+  const tags = html.match(/<[^>]*>/gu) ?? []
+  if (
+    tags.some((tag) => !portalEmbedTag.test(tag)) ||
+    html.replaceAll(/<[^>]*>/gu, '').match(/[<>]/u)
+  ) {
+    throw new OperationError(
+      'INVALID_INPUT',
+      'Embedded cards accept only static headings, text, lists, quotes, and code.',
+      { embedHtml: 'Remove attributes, links, images, forms, scripts, and unsupported tags.' },
+    )
+  }
+  return html
 }
 
 function optionalDateTime(value: unknown, field: string) {
@@ -439,6 +464,7 @@ function allVersionedRecords(state: WorkspaceState) {
     ...(state.submissionForms ?? []),
     ...(state.submissions ?? []),
     ...(state.submissionReceiptDeliveries ?? []),
+    ...(state.portalResources ?? []),
     ...(state.reviewers ?? []),
     ...(state.reviewerTeams ?? []),
     ...(state.evaluationPlans ?? []),
@@ -1678,6 +1704,77 @@ function applyHandler(
         })
       }
       return { person, participation, changed }
+    }
+
+    case 'portal-resource.save': {
+      const event = findRequired(state.events, input.eventId, 'event')
+      if (event.id !== state.activeEventId) {
+        throw new OperationError('INVALID_INPUT', 'That resource belongs to another event.')
+      }
+      const title = assertString(input.title, 'title')
+      const summary = assertString(input.summary, 'summary')
+      if (title.length > 120 || summary.length > 240) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'Resource titles and summaries must stay concise.',
+          {
+            title: title.length > 120 ? 'Use 120 characters or fewer.' : '',
+            summary: summary.length > 240 ? 'Use 240 characters or fewer.' : '',
+          },
+        )
+      }
+      const kind = assertOneOf(input.kind, 'kind', ['guide', 'html_embed'] as const)
+      const status = assertOneOf(input.status, 'status', ['draft', 'published'] as const)
+      if (
+        typeof input.sortOrder !== 'number' ||
+        !Number.isInteger(input.sortOrder) ||
+        input.sortOrder < 0 ||
+        input.sortOrder > 10_000
+      ) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'sortOrder must be a whole number from 0 to 10,000.',
+        )
+      }
+      const body = kind === 'guide' ? assertString(input.body, 'body') : ''
+      if (body.length > 12_000) {
+        throw new OperationError('INVALID_INPUT', 'body must be 12,000 characters or fewer.')
+      }
+      const embedHtml = kind === 'html_embed' ? validatedPortalEmbedHtml(input.embedHtml) : null
+      const existing = optionalString(input.resourceId)
+        ? findRequired(state.portalResources, input.resourceId, 'portal resource')
+        : null
+      if (existing && existing.eventId !== event.id) {
+        throw new OperationError('INVALID_INPUT', 'That resource belongs to another event.')
+      }
+      const values = { title, summary, kind, body, embedHtml, status, sortOrder: input.sortOrder }
+      if (
+        existing &&
+        Object.entries(values).every(
+          ([key, value]) => existing[key as keyof typeof values] === value,
+        )
+      ) {
+        throw new OperationError('NO_CHANGES', 'That resource already matches the saved version.')
+      }
+      const resource: PortalResource = existing ?? {
+        id: createId('por'),
+        eventId: event.id,
+        ...values,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      if (existing) {
+        Object.assign(existing, values, { updatedAt: timestamp, version: existing.version + 1 })
+      } else {
+        state.portalResources.push(resource)
+      }
+      appendEvent(state, context, {
+        type: 'portal-resource.saved',
+        aggregate: { type: 'portal-resource', id: resource.id, version: resource.version },
+        summary: `${status === 'published' ? 'Published' : 'Saved'} speaker resource ${title}.`,
+        data: { kind, status, sortOrder: resource.sortOrder },
+      })
+      return { resource }
     }
 
     case 'schedule.place-session': {

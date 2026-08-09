@@ -14,9 +14,11 @@ not maintain a second version of product or architecture facts.
    are held to, and the checklist a UI change is reviewed against.
 3. [Product status and roadmap](../ROADMAP.md) distinguishes working capabilities from production
    depth that is still needed.
-4. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
+4. [Portal resources and public embeds](product/portal-resources.md) documents the resource model,
+   sandbox, scoped projections, and embed routes.
+5. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
    competition brief.
-5. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
+6. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
    processor, and persistence boundary.
 
 ### I want to run or adapt ProgramKit

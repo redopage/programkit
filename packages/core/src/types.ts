@@ -197,6 +197,23 @@ export interface Asset {
   createdAt: ISODateTime
 }
 
+export type PortalResourceKind = 'guide' | 'html_embed'
+export type PortalResourceStatus = 'draft' | 'published'
+
+export interface PortalResource {
+  id: Id
+  eventId: Id
+  title: string
+  summary: string
+  kind: PortalResourceKind
+  body: string
+  embedHtml: string | null
+  status: PortalResourceStatus
+  sortOrder: number
+  updatedAt: ISODateTime
+  version: number
+}
+
 export interface Reviewer {
   id: Id
   eventId: Id
@@ -520,6 +537,7 @@ export interface WorkspaceState {
   submissions: Submission[]
   submissionReceiptDeliveries: SubmissionReceiptDelivery[]
   assets: Asset[]
+  portalResources: PortalResource[]
   reviewers: Reviewer[]
   reviewerTeams: ReviewerTeam[]
   evaluationPlans: EvaluationPlan[]

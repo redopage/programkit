@@ -18,11 +18,12 @@ is the source of truth for that distinction.
 | Event setup        | Active-event identity, slug, venue, city, dates, timezone, lifecycle status, version checks and schedule-boundary validation                                                                                                                                                          | Multi-event switching, administrator membership, branding and public theme controls                                  |
 | CFP                | Multiple event forms, editable public content, ordered fields, choice options, required fields, explicit speaker/session data mappings, shared publish readiness, conditional visibility, draft preview, public submission, frozen confirmation receipts, and truthful delivery state | File restrictions, richer validation rules, category routing, published-version comparison and branch-coverage tests |
 | Review             | Reviewer teams, assignment rounds, scoped reviewer projection, scorecards, blind-review redaction, decision rules, accepted-record conversion                                                                                                                                         | Assignment UI, conflicts of interest, saved committee filters, multi-round release policy                            |
-| Speaker onboarding | Scoped participant projection, profile editing, typed text/form/file requirement submission, private R2 uploads and downloads, due dates, organizer review states                                                                                                                     | Shared cross-surface task renderer, release documents, revision conversations, logistics templates, upload scanning  |
+| Speaker onboarding | Scoped participant projection, profile editing, typed text/form/file requirement submission, private R2 uploads and downloads, due dates, organizer review states, published guides, and sandboxed static HTML cards                                                                  | Shared cross-surface task renderer, release documents, revision conversations, logistics templates, upload scanning  |
 | Communications     | Accepted-speaker template, audience preview, approval, frozen personalized messages, truthful recipient outbox, provider-result recording, calendar downloads, and submission-receipt outbox                                                                                          | Provider activation, test sends, scheduling, retry controls, and richer attempt history                              |
 | Scheduling         | Draft placements, unscheduled tray, timezone-safe place/move forms, accessible drag-and-drop, safe undo, day/room/track filters, conflict previews, full draft-versus-published preflight, immutable releases, public projection                                                      | Reusable time-block templates, travel/buffer constraints, track locking, and richer collaborative draft history      |
 | Readiness          | Participant matrix, due dates in the domain, blocker counts, submitted-item approval, speaker detail                                                                                                                                                                                  | Overdue explanations, saved filters, bulk reminders/approval and communication history                               |
 | Integrations       | Versioned API/export, Accelevents published-program mapping preflight, frozen per-item outbox, provider result/retry evidence, and conflict-aware Airtable reconciliation primitive                                                                                                   | Accelevents credentialed consumer and provider smoke test; Airtable runtime delivery and cursor UI                   |
+| Public program     | Immutable agenda, read-only public projection, embeddable mobile speaker gallery, and private-on-device itinerary                                                                                                                                                                     | Host-site theme controls, richer session detail, and production embed/CSP smoke tests                                |
 
 ## Foundation already in place
 
@@ -119,6 +120,16 @@ provider-result history; a richer per-message attempt timeline remains productio
 - Done: expose the preflight, mapping, packet status, and honest credential boundary to operators.
 - Next: connect the owner-managed Enterprise API key in a Cloudflare consumer and retain a
   provider-confirmed smoke-test receipt.
+
+### 9. Publish speaker resources and public embeds
+
+- Done: versioned guide and static HTML-card records with a staff-only save operation.
+- Done: participant projection includes only published resources for the matching event.
+- Done: HTML cards reject attributes and active content, then render in a scriptless sandbox.
+- Done: mobile speaker-gallery and itinerary routes read only the public immutable release; saved
+  itinerary choices remain on the attendee's device.
+- Next: verify embedding from the final host's Content Security Policy and add theme controls only
+  if pilot evidence requires them.
 
 ## Deliberate non-goals for the golden path
 

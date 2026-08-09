@@ -157,6 +157,10 @@ in the outbox rather than sent.
 
 Then open the operator app, public CFP, reviewer workspace, speaker portal, and public program. In
 the speaker portal, verify an allowed file can be uploaded and downloaded only through the owning
+participant session. Open `/embed/speakers` and `/embed/itinerary` from the intended parent site and
+verify the deployed Content Security Policy allows only that framing relationship. In the
+speaker portal, confirm published resources render and a rejected HTML card cannot execute active
+content.
 participant route.
 
 ## Production bindings, in order

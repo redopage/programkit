@@ -7,6 +7,7 @@ export function normalizeWorkspaceState(state: WorkspaceState) {
   state.submissions ??= []
   state.submissionReceiptDeliveries ??= []
   state.assets ??= []
+  state.portalResources ??= []
   state.reviewers ??= []
   state.reviewerTeams ??= []
   state.evaluationPlans ??= []
@@ -19,6 +20,6 @@ export function normalizeWorkspaceState(state: WorkspaceState) {
     campaign.includeEventInvite ??= false
     campaign.queuedAt ??= null
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 7)
+  state.schemaVersion = Math.max(state.schemaVersion, 8)
   return state
 }

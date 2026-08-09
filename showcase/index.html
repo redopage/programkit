@@ -222,9 +222,11 @@
               </tr>
               <tr>
                 <td>Speaker portal</td>
-                <td><span class="status status-partial">Partial</span></td>
-                <td>Scoped profile, confirmation, task responses, private R2 uploads/downloads</td>
-                <td>Upload scanning, revision conversations, release documents, resource pages</td>
+                <td><span class="status status-working">Working</span></td>
+                <td>
+                  Scoped profile, confirmation, tasks, private R2 files, guides, sandboxed cards
+                </td>
+                <td>Upload scanning, revision conversations, release documents</td>
               </tr>
               <tr>
                 <td>Communications</td>
@@ -273,9 +275,11 @@
               </tr>
               <tr>
                 <td>Portal resources and embeds</td>
-                <td><span class="status status-missing">Not built</span></td>
-                <td>Public agenda route and published read model exist</td>
-                <td>Wiki/resources, HTML embeds, speaker gallery, itinerary widget</td>
+                <td><span class="status status-working">Working</span></td>
+                <td>
+                  Versioned resources, restricted HTML sandbox, mobile gallery, local itinerary
+                </td>
+                <td>Host-site theme controls and deployed CSP/frame smoke test</td>
               </tr>
               <tr>
                 <td>Cloudflare deployment</td>
@@ -379,9 +383,9 @@
               <h3>Give accepted speakers one clear workspace.</h3>
               <p>
                 The portal is correctly scoped and supports confirmation, public profile editing,
-                typed and form requirements, private R2-backed uploads and downloads, and progress.
-                Upload scanning, revision conversations, and resource/wiki content remain as
-                production-depth work.
+                typed and form requirements, private R2-backed uploads and downloads, progress,
+                published guides, and sandboxed static HTML cards. Upload scanning, revision
+                conversations, and release documents remain as production-depth work.
               </p>
               <a href="http://localhost:4173/portal/par_003">Open speaker portal</a>
             </div>
@@ -445,16 +449,17 @@
             </div>
           </article>
 
-          <article class="evidence-block evidence-gap">
+          <article class="evidence-block">
             <div class="evidence-copy">
-              <span class="status status-missing">Gap</span>
-              <h3>Event settings, resources, and embeds need their own slice.</h3>
+              <span class="status status-working">Working</span>
+              <h3>Reuse the published program without exposing the workspace.</h3>
               <p>
-                The domain seed proves event configuration and the public agenda route proves a
-                publishable read model, but the brief’s admin settings screen, portal resources,
-                HTML embeds, speaker gallery, and itinerary widget do not yet exist as product
-                flows.
+                Organizers publish versioned portal guides and static HTML cards through a narrow
+                safe contract. The mobile speaker gallery and itinerary use the immutable public
+                release; itinerary choices stay on the attendee’s device. The final host still needs
+                a real Content Security Policy and framing smoke test.
               </p>
+              <a href="http://localhost:4173/resources">Open speaker resources</a>
             </div>
             <div class="comparison-grid comparison-grid-three">
               <figure>
@@ -538,9 +543,9 @@
             <p class="eyebrow">Recommended next milestone</p>
             <h2>Make one pilot trustworthy.</h2>
             <p>
-              Finish identity, upload scanning, provider activation, and the remaining public portal
-              experiences before broadening the product. Then add Airtable reconciliation and
-              Accelevents as explicit adapters around the stable core.
+              Finish identity, upload scanning, and provider activation before broadening the
+              product. Then add Airtable reconciliation and Accelevents as explicit adapters around
+              the stable core.
             </p>
           </div>
           <ol>
@@ -548,7 +553,7 @@
             <li>Authenticated private uploads with scanning, retention, and lifecycle controls</li>
             <li>Provider activation plus retry controls for the existing communication outboxes</li>
             <li>Activate the Accelevents consumer with Andrew's owner-managed API key</li>
-            <li>Portal resources, safe embeds, mobile speaker gallery, and itinerary</li>
+            <li>Verify public embed framing and CSP on Andrew's final host</li>
             <li>Airtable base template, webhook/poll adapter, and reconciliation queue</li>
           </ol>
         </div>

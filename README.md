@@ -46,6 +46,9 @@ Useful demo routes include:
 - `http://localhost:4173/reviewer/rev_001` — one reviewer's focused scorecard workspace
 - `http://localhost:4173/schedule` — draft schedule and publication workflow
 - `http://localhost:4173/agenda` — public agenda backed only by the latest published release
+- `http://localhost:4173/resources` — operator library for speaker guides and static HTML cards
+- `http://localhost:4173/embed/speakers` — embeddable public speaker gallery
+- `http://localhost:4173/embed/itinerary` — embeddable, private-on-device itinerary builder
 - `http://localhost:4173/portal/par_003` — one participant's projected portal workspace
 
 Every identity in the reference Worker is a passwordless demo convenience. Its separate surface

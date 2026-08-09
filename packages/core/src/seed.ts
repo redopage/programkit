@@ -7,6 +7,7 @@ import type {
   Participation,
   Person,
   Placement,
+  PortalResource,
   ReviewDecision,
   Reviewer,
   ReviewerAssignment,
@@ -801,6 +802,36 @@ const assets: Asset[] = [
   },
 ]
 
+const portalResources: PortalResource[] = [
+  {
+    id: 'por_speaker_guide',
+    eventId,
+    title: 'Speaker guide',
+    summary: 'Arrival, green room, and production notes for your event days.',
+    kind: 'guide',
+    body: 'Arrival\nCheck in at Building 77 at least 45 minutes before your first session. Bring a photo ID for the venue desk.\n\nGreen room\nThe speaker green room is on the third floor. Program staff can review slides, microphones, and accessibility needs with you there.\n\nOn stage\nA confidence monitor, presentation remote, and water will be ready. Please keep the final five minutes open for audience questions.',
+    embedHtml: null,
+    status: 'published',
+    sortOrder: 10,
+    updatedAt: '2026-08-07T14:00:00.000Z',
+    version: 1,
+  },
+  {
+    id: 'por_venue_card',
+    eventId,
+    title: 'Venue quick card',
+    summary: 'A safe embedded briefing you can keep open on arrival.',
+    kind: 'html_embed',
+    body: '',
+    embedHtml:
+      '<article><h2>Brooklyn Navy Yard</h2><p>Building 77, first-floor check-in.</p><ul><li>Doors open at 8:00 AM.</li><li>Bring a photo ID.</li><li>Ask for the AIE speaker desk.</li></ul></article>',
+    status: 'published',
+    sortOrder: 20,
+    updatedAt: '2026-08-07T14:00:00.000Z',
+    version: 1,
+  },
+]
+
 const reviewers: Reviewer[] = [
   {
     id: 'rev_001',
@@ -1286,7 +1317,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     revision: 1,
     workspace: {
       id: 'wrk_aie',
@@ -1319,6 +1350,7 @@ export function createSeedState(): WorkspaceState {
     submissions: structuredClone(submissions),
     submissionReceiptDeliveries: structuredClone(submissionReceiptDeliveries),
     assets: structuredClone(assets),
+    portalResources: structuredClone(portalResources),
     reviewers: structuredClone(reviewers),
     reviewerTeams: structuredClone(reviewerTeams),
     evaluationPlans: structuredClone(evaluationPlans),

@@ -74,6 +74,9 @@ not authorization.
 - `/integrations` — integration status and demo reset
 - `/agent` — agent tasks and guardrails
 - `/agenda` — public agenda from the latest immutable schedule release
+- `/resources` — operator management for versioned speaker guides and static HTML cards
+- `/embed/speakers` — read-only public speaker gallery
+- `/embed/itinerary` — read-only public schedule with device-local saved sessions
 - `/submit/{formSlug}` — public submission form
 - `/reviewer/{reviewerId}` — scoped reviewer scorecard workspace
 - `/portal/{participationId}` — scoped participant profile and requirements

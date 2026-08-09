@@ -79,6 +79,10 @@ ownership checks. Release approval remains deliberately unavailable until the ev
 an actual document and response contract. The next production-depth milestone is a shared
 cross-surface task renderer plus revision conversations, upload scanning, and lifecycle cleanup.
 
+Organizers can also publish versioned guides and static HTML cards. Participants receive only the
+published resources for their event. HTML cards accept no attributes, links, images, forms, or
+scripts and render in an iframe sandbox, so this capability does not become an arbitrary code path.
+
 ## 6. Communicate with accepted speakers
 
 Organizers can start from an accepted-speaker template, target confirmed speakers, preview rendered
@@ -116,6 +120,17 @@ or duplicating the packet.
 The reference host does not store an Accelevents API key or claim provider delivery. A credentialed
 consumer runs after the workspace commit and records its outcomes through the trusted result
 operation.
+
+## 9. Share the public program as embeds
+
+The speaker gallery and itinerary routes use the same public projection as the agenda: only people
+and sessions from the latest immutable release are present, with private contact and organizer data
+redacted. The itinerary stores an attendee's saved session IDs only in that browser. It performs no
+write against the workspace and makes no claim of cross-device sync.
+
+The final host must allow these routes to be framed by the intended event site. A production
+Content Security Policy and cross-origin smoke test remain deployment evidence rather than a core
+domain concern.
 
 ## Cross-cutting rules
 
