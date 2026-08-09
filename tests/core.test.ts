@@ -949,6 +949,52 @@ describe('ProgramKit operation engine', () => {
       removed.state.reviewerAssignments.some((assignment) => assignment.id === assignedToSam[1].id),
     ).toBe(false)
   })
+
+  it('records reviewer reminders only when work is outstanding', () => {
+    const state = createSeedState()
+    const reviewer = state.reviewers.find((entry) => entry.id === 'rev_001')!
+    const outstanding = state.reviewerAssignments.filter(
+      (assignment) => assignment.reviewerId === reviewer.id && assignment.status !== 'completed',
+    )
+
+    const reminded = executeOperation(state, 'review.remind', {
+      input: { reviewerIds: [reviewer.id] },
+    })
+
+    expect(reminded.response.ok).toBe(true)
+    expect(reminded.state.reviewers.find((entry) => entry.id === reviewer.id)).toMatchObject({
+      lastRemindedAt: expect.any(String),
+      version: reviewer.version + 1,
+    })
+    expect(reminded.response.data).toMatchObject({
+      reviewers: [
+        {
+          id: reviewer.id,
+          email: reviewer.email,
+          outstanding: outstanding.length,
+          sentAt: expect.any(String),
+        },
+      ],
+    })
+    expect(reminded.state.domainEvents.at(-1)).toMatchObject({
+      type: 'reviewer.reminder-sent',
+      data: {
+        reviewerId: reviewer.id,
+        recipient: reviewer.email,
+        outstandingAssignmentIds: outstanding.map((assignment) => assignment.id),
+        deliveryMode: 'demo-outbox',
+      },
+    })
+
+    const completedReviewer = reminded.state.reviewers.find((entry) => entry.id === 'rev_003')!
+    const skipped = executeOperation(reminded.state, 'review.remind', {
+      input: { reviewerIds: [completedReviewer.id] },
+    })
+    expect(skipped.response).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT' },
+    })
+  })
 })
 
 describe('next actions', () => {

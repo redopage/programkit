@@ -1315,6 +1315,56 @@ function applyHandler(
       return { assignmentId: assignment.id }
     }
 
+    case 'review.remind': {
+      const reviewerIds = [...new Set(assertStringArray(input.reviewerIds, 'reviewerIds'))]
+      if (reviewerIds.length === 0) {
+        throw new OperationError('INVALID_INPUT', 'Select at least one reviewer to remind.', {
+          reviewerIds: 'Select at least one reviewer.',
+        })
+      }
+      const reminded = []
+      for (const reviewerId of reviewerIds) {
+        const reviewer = findRequired(state.reviewers, reviewerId, 'reviewer')
+        if (reviewer.eventId !== state.activeEventId || reviewer.status !== 'active') {
+          throw new OperationError('INVALID_INPUT', 'Only active reviewers can be reminded.')
+        }
+        const outstanding = state.reviewerAssignments.filter(
+          (assignment) =>
+            assignment.eventId === state.activeEventId &&
+            assignment.reviewerId === reviewer.id &&
+            assignment.status !== 'completed',
+        )
+        if (outstanding.length === 0) {
+          throw new OperationError(
+            'INVALID_INPUT',
+            `${reviewer.name} has no outstanding reviews to remind them about.`,
+          )
+        }
+        reviewer.lastRemindedAt = timestamp
+        reviewer.version += 1
+        reminded.push({ reviewer, outstanding: outstanding.length })
+        appendEvent(state, context, {
+          type: 'reviewer.reminder-sent',
+          aggregate: { type: 'reviewer', id: reviewer.id, version: reviewer.version },
+          summary: `Sent ${reviewer.name} a reminder for ${outstanding.length} outstanding review${outstanding.length === 1 ? '' : 's'}.`,
+          data: {
+            reviewerId: reviewer.id,
+            recipient: reviewer.email,
+            outstandingAssignmentIds: outstanding.map((assignment) => assignment.id),
+            deliveryMode: 'demo-outbox',
+          },
+        })
+      }
+      return {
+        reviewers: reminded.map(({ reviewer, outstanding }) => ({
+          id: reviewer.id,
+          email: reviewer.email,
+          outstanding,
+          sentAt: timestamp,
+        })),
+      }
+    }
+
     case 'review.submit-scorecard': {
       const assignment = findRequired(
         state.reviewerAssignments,

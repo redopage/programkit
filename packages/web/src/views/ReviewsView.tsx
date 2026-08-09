@@ -2,6 +2,7 @@ import {
   AdjustmentsHorizontalIcon,
   ArrowRightIcon,
   ClockIcon,
+  EnvelopeIcon,
   UserPlusIcon,
 } from '@heroicons/react/16/solid'
 import { useState } from 'react'
@@ -45,7 +46,8 @@ function AssignmentStatus({ status }: { status: 'assigned' | 'in_progress' | 'co
 export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   const [setupOpen, setSetupOpen] = useState(false)
   const [assignmentsOpen, setAssignmentsOpen] = useState(false)
-  const { payload } = useWorkspace()
+  const [reminderReviewerIds, setReminderReviewerIds] = useState<string[]>([])
+  const { payload, execute, mutating } = useWorkspace()
   if (!payload) return null
   const { state } = payload
   const assignments = (state.reviewerAssignments ?? []).filter(
@@ -64,6 +66,26 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
       .flatMap((team) => team.reviewerIds),
   )
   const reviewers = (state.reviewers ?? []).filter((entry) => reviewerIds.has(entry.id))
+  const reviewerProgress = reviewers
+    .map((reviewer) => {
+      const reviewerAssignments = assignments.filter(
+        (assignment) => assignment.reviewerId === reviewer.id,
+      )
+      const reviewerCompleted = reviewerAssignments.filter(
+        (assignment) => assignment.status === 'completed',
+      ).length
+      return {
+        reviewer,
+        assigned: reviewerAssignments.length,
+        completed: reviewerCompleted,
+        outstanding: reviewerAssignments.length - reviewerCompleted,
+      }
+    })
+    .sort(
+      (left, right) =>
+        right.outstanding - left.outstanding ||
+        left.reviewer.name.localeCompare(right.reviewer.name),
+    )
   const inReview = (state.submissions ?? [])
     .filter(
       (submission) =>
@@ -72,6 +94,16 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
     )
     .map((submission) => ({ submission, review: submissionReviewSummary(state, submission.id) }))
     .sort((left, right) => right.review.completed - left.review.completed)
+
+  async function remindReviewers() {
+    const response = await execute(
+      'review.remind',
+      { reviewerIds: reminderReviewerIds },
+      undefined,
+      `Reminder${reminderReviewerIds.length === 1 ? '' : 's'} sent.`,
+    )
+    if (response.ok) setReminderReviewerIds([])
+  }
 
   return (
     <div className="flex flex-col gap-7">
@@ -142,6 +174,108 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             </div>
           ))}
         </dl>
+      </section>
+
+      <section aria-labelledby="reviewer-progress-heading" className="min-w-0">
+        <div className="flex flex-col gap-3 border-b border-zinc-950/5 pb-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2
+              id="reviewer-progress-heading"
+              className="text-base font-medium text-zinc-950 sm:text-sm"
+            >
+              Reviewer progress
+            </h2>
+            <p className="text-base text-zinc-500 sm:text-sm">
+              Select anyone who is behind and send one reminder.
+            </p>
+          </div>
+          <Button
+            disabled={mutating || reminderReviewerIds.length === 0}
+            onClick={() => void remindReviewers()}
+          >
+            <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
+            Send reminder{reminderReviewerIds.length === 1 ? '' : 's'}
+          </Button>
+        </div>
+        <div className="-mx-4 overflow-x-auto sm:-mx-6">
+          <div className="inline-block min-w-full px-4 align-middle sm:px-6">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-zinc-950/5 text-left">
+                  <th scope="col" className="w-10 py-3 pr-2">
+                    <span className="sr-only">Select</span>
+                  </th>
+                  {['Reviewer', 'Assigned', 'Completed', 'Progress', 'Last reminder'].map(
+                    (heading) => (
+                      <th
+                        key={heading}
+                        scope="col"
+                        className="whitespace-nowrap py-3 pr-4 text-sm font-medium text-zinc-500"
+                      >
+                        {heading}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-950/5">
+                {reviewerProgress.map(({ reviewer, assigned, completed, outstanding }) => {
+                  const percent = assigned === 0 ? 0 : Math.round((completed / assigned) * 100)
+                  const selected = reminderReviewerIds.includes(reviewer.id)
+                  return (
+                    <tr key={reviewer.id}>
+                      <td className="py-3 pr-2">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${reviewer.name}`}
+                          className="size-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-600"
+                          disabled={outstanding === 0}
+                          checked={selected}
+                          onChange={() =>
+                            setReminderReviewerIds((current) =>
+                              current.includes(reviewer.id)
+                                ? current.filter((id) => id !== reviewer.id)
+                                : [...current, reviewer.id],
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="whitespace-nowrap py-3 pr-4">
+                        <span className="block text-sm font-medium text-zinc-950">
+                          {reviewer.name}
+                        </span>
+                        <span className="block text-sm text-zinc-500">{reviewer.email}</span>
+                      </td>
+                      <td className="py-3 pr-4 text-sm tabular-nums text-zinc-600">{assigned}</td>
+                      <td className="py-3 pr-4 text-sm tabular-nums text-zinc-600">{completed}</td>
+                      <td className="min-w-36 py-3 pr-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 min-w-20 flex-1 overflow-hidden rounded-full bg-zinc-100">
+                            <div
+                              className="h-full rounded-full bg-blue-600"
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                          <span className="w-9 text-right text-sm tabular-nums text-zinc-500">
+                            {percent}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap py-3 text-sm text-zinc-500">
+                        {reviewer.lastRemindedAt
+                          ? new Intl.DateTimeFormat('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                            }).format(new Date(reviewer.lastRemindedAt))
+                          : 'Never'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <div className="grid gap-8 xl:grid-cols-[7fr_5fr]">

@@ -179,6 +179,7 @@ export interface Reviewer {
   name: string
   email: string
   status: 'invited' | 'active' | 'inactive'
+  lastRemindedAt?: ISODateTime | null
   createdAt: ISODateTime
   version: number
 }
