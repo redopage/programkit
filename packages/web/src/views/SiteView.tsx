@@ -49,7 +49,6 @@ const programFeatures = [
     icon: DocumentTextIcon,
     iconColor: 'text-blue-600',
     surface: 'bg-blue-50',
-    cardClassName: 'lg:col-span-8 lg:row-span-2',
   },
   {
     title: 'Submissions',
@@ -59,7 +58,6 @@ const programFeatures = [
     icon: InboxStackIcon,
     iconColor: 'text-amber-500',
     surface: 'bg-amber-50',
-    cardClassName: 'lg:col-span-4',
   },
   {
     title: 'Review',
@@ -69,7 +67,6 @@ const programFeatures = [
     icon: ClipboardDocumentCheckIcon,
     iconColor: 'text-violet-600',
     surface: 'bg-violet-50',
-    cardClassName: 'lg:col-span-4',
   },
   {
     title: 'Readiness',
@@ -79,7 +76,6 @@ const programFeatures = [
     icon: UserGroupIcon,
     iconColor: 'text-rose-500',
     surface: 'bg-rose-50',
-    cardClassName: 'lg:col-span-4',
   },
   {
     title: 'Schedule',
@@ -89,7 +85,6 @@ const programFeatures = [
     icon: CalendarDaysIcon,
     iconColor: 'text-cyan-600',
     surface: 'bg-cyan-50',
-    cardClassName: 'lg:col-span-4',
   },
   {
     title: 'Public agenda',
@@ -99,17 +94,14 @@ const programFeatures = [
     icon: GlobeAltIcon,
     iconColor: 'text-emerald-600',
     surface: 'bg-emerald-50',
-    cardClassName: 'lg:col-span-4',
   },
 ]
 
-function ProgramFeatureCard({ feature }: { feature: (typeof programFeatures)[number] }) {
+function ProgramFeature({ feature }: { feature: (typeof programFeatures)[number] }) {
   return (
-    <article
-      className={`flex min-w-0 flex-col overflow-hidden rounded-[2rem] bg-zinc-50 p-2 ring-1 ring-zinc-950/8 sm:p-3 ${feature.cardClassName}`}
-    >
+    <div className="min-w-0">
       <div
-        className={`relative min-h-64 flex-1 overflow-hidden rounded-[calc(2rem-0.75rem)] outline outline-zinc-950/8 lg:min-h-0 ${feature.surface}`}
+        className={`relative aspect-[4/3] overflow-hidden rounded-[min(1.25vw,1.25rem)] outline outline-zinc-950/8 ${feature.surface}`}
       >
         <img
           src={feature.image}
@@ -117,17 +109,20 @@ function ProgramFeatureCard({ feature }: { feature: (typeof programFeatures)[num
           width="1440"
           height="1010"
           loading="lazy"
-          className="absolute inset-x-3 bottom-0 w-[calc(100%-1.5rem)] rounded-t-[1.25rem] bg-white object-cover object-top shadow-xl shadow-zinc-950/8 outline outline-zinc-950/8 sm:inset-x-5 sm:w-[calc(100%-2.5rem)]"
+          className="absolute inset-x-5 bottom-0 w-[calc(100%-2.5rem)] rounded-t-[min(0.9vw,0.875rem)] bg-white shadow-xl shadow-zinc-950/8 outline outline-zinc-950/8 sm:inset-x-6 sm:w-[calc(100%-3rem)]"
         />
       </div>
-      <div className="px-3 pt-5 pb-4 sm:px-4 sm:pt-6 sm:pb-5">
-        <div className="flex items-center gap-2.5">
-          <feature.icon aria-hidden="true" className={`size-5 shrink-0 ${feature.iconColor}`} />
-          <h3 className="text-lg font-semibold tracking-tight text-zinc-950">{feature.title}</h3>
+      <div className="pt-5">
+        <div className="flex items-baseline gap-2.5">
+          <feature.icon
+            aria-hidden="true"
+            className={`size-4 h-lh shrink-0 ${feature.iconColor}`}
+          />
+          <dt className="text-lg font-semibold tracking-tight text-zinc-950">{feature.title}</dt>
         </div>
-        <p className="max-w-xl pt-2 text-base/7 text-zinc-600">{feature.description}</p>
+        <dd className="max-w-md pt-2 text-base/7 text-zinc-600">{feature.description}</dd>
       </div>
-    </article>
+    </div>
   )
 }
 
@@ -416,11 +411,11 @@ export function SiteView() {
               </p>
             </div>
 
-            <div className="grid min-w-0 gap-4 pt-14 md:grid-cols-2 lg:auto-rows-[19rem] lg:grid-cols-12">
+            <dl className="grid min-w-0 gap-x-6 gap-y-12 pt-14 md:grid-cols-2 lg:grid-cols-3 lg:gap-x-8 lg:gap-y-16">
               {programFeatures.map((feature) => (
-                <ProgramFeatureCard key={feature.title} feature={feature} />
+                <ProgramFeature key={feature.title} feature={feature} />
               ))}
-            </div>
+            </dl>
           </div>
         </section>
 
