@@ -42,3 +42,7 @@ export function surfaceKey(surface: ProgramKitSurface) {
       return surface.kind
   }
 }
+
+export function surfaceRefreshInterval(surface: ProgramKitSurface) {
+  return surface.kind === 'operator' ? 5_000 : 15_000
+}

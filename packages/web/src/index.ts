@@ -1,6 +1,6 @@
 export { App, ProgramKitApp } from './App.tsx'
 export { createProgramKitHttpClient } from './client/http.ts'
-export { surfaceFromPathname, surfaceKey } from './client/surfaces.ts'
+export { surfaceFromPathname, surfaceKey, surfaceRefreshInterval } from './client/surfaces.ts'
 export type {
   ProgramKitClient,
   ProgramKitHttpClientOptions,

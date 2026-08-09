@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import type { OperationRequest, OperationResponse } from '@programkit/core'
 
 import { useProgramKitClient } from '../client/context.tsx'
-import { surfaceFromPathname, surfaceKey } from '../client/surfaces.ts'
+import { surfaceFromPathname, surfaceKey, surfaceRefreshInterval } from '../client/surfaces.ts'
 import type { WorkspacePayload } from '../client/types.ts'
 
 interface Toast {
@@ -59,7 +59,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const workspaceQuery = useQuery({
     queryKey: workspaceQueryKey,
     queryFn: ({ signal }) => client.readSurface(surface, signal),
-    refetchInterval: surface.kind === 'operator' ? 5_000 : 15_000,
+    refetchInterval: surfaceRefreshInterval(surface),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: 'always',
     staleTime: 2_000,

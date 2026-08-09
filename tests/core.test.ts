@@ -628,13 +628,21 @@ describe('ProgramKit operation engine', () => {
     expect(deliveries.every((delivery) => delivery.status === 'pending_provider')).toBe(true)
     expect(deliveries.every((delivery) => delivery.attachmentNames.length === 1)).toBe(true)
     expect(
-      deliveries.every(
-        (delivery) =>
+      deliveries.every((delivery) => {
+        const invitation = delivery.attachments[0]?.content.replaceAll('\r\n ', '')
+        return (
           delivery.attachments.length === 1 &&
           delivery.attachments[0]?.contentType === 'text/calendar; charset=utf-8; method=REQUEST' &&
-          delivery.attachments[0]?.content.includes('METHOD:REQUEST\r\n'),
-      ),
+          invitation?.includes('METHOD:REQUEST\r\n') &&
+          invitation.includes(
+            `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${delivery.recipientEmail}`,
+          )
+        )
+      }),
     ).toBe(true)
+    expect(new Set(deliveries.map((delivery) => delivery.attachments[0]?.content)).size).toBe(
+      deliveries.length,
+    )
     expect(deliveries.every((delivery) => !delivery.body.includes('{{'))).toBe(true)
     expect(deliveries.every((delivery) => !delivery.subject.includes('{{'))).toBe(true)
 
