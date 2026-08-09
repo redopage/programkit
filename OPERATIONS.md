@@ -19,6 +19,7 @@ workspace.
 
 ### Demo routes
 
+- `/demo` — create an isolated workspace that expires after seven days
 - `/` — operator overview
 - `/people`, `/readiness`, `/sessions`, `/schedule`, `/communications`, `/changes` — operator work
 - `/integrations` — integration state and demo reset
@@ -26,8 +27,10 @@ workspace.
 - `/agenda` — public agenda using the latest immutable published release
 - `/portal/par_003` — example participant portal using a server-side data projection
 
-The operator has no login, and the participant ID in the portal URL acts as identity in this demo.
-Use sample data only.
+The private `/demo/{capability}` link grants edit access to its workspace. The operator has no
+login, and the participant ID in the portal URL acts as identity in this demo. Use sample data
+only. Copy or delete the workspace from the banner. Expiry and early deletion remove local state
+and authorization but never delete records in a connected Airtable base.
 
 ### Optional Airtable source of truth
 
@@ -87,7 +90,8 @@ The host supplies the actor. An `actor` in this public JSON is ignored by the HT
 
 ### Workspace routing
 
-The reference Worker selects the Durable Object with `x-programkit-workspace-key`:
+The reference Worker selects non-capability development workspaces with
+`x-programkit-workspace-key`:
 
 ```bash
 curl http://localhost:4173/api/v1/health \
@@ -98,7 +102,8 @@ Valid keys contain lowercase letters, numbers, underscores, or hyphens, begin wi
 number, and are at most 64 characters. Missing or invalid keys use `demo`.
 
 This header creates or selects isolated Durable Object state, but it does not authenticate the
-caller. Production routing must derive the workspace from verified membership instead.
+caller. It cannot select a hosted capability demo. Production routing must derive the workspace
+from verified membership instead.
 
 ### Reset the demo
 

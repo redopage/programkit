@@ -25,8 +25,8 @@ Cloudflare Worker ── Workers Static Assets (Vite web build)
 ```
 
 The runnable application currently includes the Worker, static assets, and one SQLite-backed
-Durable Object per workspace key. It needs no D1 database, R2 bucket, queue, or email binding to run
-the deterministic demo.
+Durable Object per workspace key. `/demo` creates isolated hosted trials that expire after seven
+days. It needs no D1 database, R2 bucket, queue, or email binding to run the deterministic demo.
 
 The production additions are intentionally Cloudflare-native:
 
@@ -99,6 +99,22 @@ edits currently perform a debounced full refresh. Production work still needs pa
 narrow record fetches, durable partial-write retries, and conversion of direct edits through named
 operations or reviewable change sets. See the
 [Airtable integration guide](docs/integrations/airtable.md) for setup and the exact current boundary.
+
+## Hosted demo lifecycle
+
+`/demo` creates a random 192-bit capability and initializes a seeded Durable Object before the link
+is returned. Opening `/demo/{capability}` verifies that object, exchanges the capability for an
+HTTP-only same-site cookie, and redirects to `/` so the secret is not left in the address bar.
+
+The object keeps its expiration alongside its workspace state and uses its single alarm for the
+earliest pending lifecycle event: demo expiry, Airtable webhook refresh, or webhook renewal. A
+compact banner shows the remaining time, copies the private link, and supports early deletion.
+Natural and manual deletion remove local state, cached OAuth credentials, and the ProgramKit
+webhook. They never delete a connected Airtable base or any records in it.
+
+This is an evaluation surface, not production identity. Possession of the capability grants edit
+access to the demo, so it must contain sample data only. See
+[Hosted demos](docs/architecture/hosted-demos.md) for the exact boundary.
 
 ## Local development
 

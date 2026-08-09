@@ -14,6 +14,17 @@ import type { WorkspaceRepository } from './repository.ts'
 import { createSeedState } from './seed.ts'
 import type { Actor, WorkspaceState } from './types.ts'
 
+interface DemoMetadata {
+  id: string
+  createdAt: string
+  expiresAt: string
+  deletedAt?: string
+}
+
+const demoMetadataKey = 'programkit-demo:metadata'
+const webhookRefreshAtKey = 'airtable-webhook:refresh-at'
+const webhookRetryAtKey = 'airtable-webhook:retry-at'
+
 function actorFromRequest(request: Request): Actor {
   const type = request.headers.get('x-programkit-internal-actor-type')
   const allowedTypes = [
@@ -119,6 +130,76 @@ export class WorkspaceDurableObject extends DurableObject {
     }
   }
 
+  async #demoMetadata() {
+    return (await this.#ctx.storage.get<DemoMetadata>(demoMetadataKey)) ?? null
+  }
+
+  async #scheduleNextAlarm() {
+    const due: number[] = []
+    const demo = await this.#demoMetadata()
+    if (demo) due.push(Date.parse(demo.expiresAt))
+
+    const refreshAt = await this.#ctx.storage.get<number>(webhookRefreshAtKey)
+    const retryAt = await this.#ctx.storage.get<number>(webhookRetryAtKey)
+    if (typeof refreshAt === 'number') due.push(refreshAt)
+    if (typeof retryAt === 'number') due.push(retryAt)
+
+    const connection = await this.#ctx.storage.get<StoredAirtableConnection>(
+      'airtable-oauth:connection',
+    )
+    if (connection?.webhook?.expirationTime) {
+      due.push(Date.parse(connection.webhook.expirationTime) - 24 * 60 * 60 * 1_000)
+    }
+
+    const next = due.filter(Number.isFinite).sort((left, right) => left - right)[0]
+    if (next == null) {
+      await this.#ctx.storage.deleteAlarm()
+      return
+    }
+    await this.#ctx.storage.setAlarm(Math.max(Date.now() + 500, next))
+  }
+
+  async #removeAirtableConnection() {
+    const connection = await this.#ctx.storage.get<StoredAirtableConnection>(
+      'airtable-oauth:connection',
+    )
+    if (connection?.webhook) {
+      try {
+        const store = new AirtableWorkspaceStore({
+          token: connection.accessToken,
+          baseId: connection.baseId,
+        })
+        await store.deleteWebhook(connection.webhook.id)
+      } catch {
+        // Local deletion must still succeed if Airtable is unavailable.
+      }
+    }
+    await this.#ctx.storage.delete('airtable-oauth:connection')
+    await this.#ctx.storage.delete('airtable-oauth:pending-connection')
+    await this.#ctx.storage.delete('airtable-cache:hydrated')
+    await this.#ctx.storage.delete(webhookRefreshAtKey)
+    await this.#ctx.storage.delete(webhookRetryAtKey)
+    this.#airtableRepository = null
+    this.#repositoryFingerprint = 'cache'
+    this.#hydration = null
+  }
+
+  async #expireDemo(metadata: DemoMetadata) {
+    await this.#removeAirtableConnection()
+    await this.#ctx.storage.deleteAll()
+    return metadata
+  }
+
+  async #assertActiveDemo() {
+    const metadata = await this.#demoMetadata()
+    if (!metadata) return null
+    if (metadata.deletedAt || Date.parse(metadata.expiresAt) <= Date.now()) {
+      if (!metadata.deletedAt) await this.#expireDemo(metadata)
+      throw new Error('This demo has expired.')
+    }
+    return metadata
+  }
+
   async #freshConnection() {
     const connection = await this.#ctx.storage.get<StoredAirtableConnection>(
       'airtable-oauth:connection',
@@ -150,9 +231,10 @@ export class WorkspaceDurableObject extends DurableObject {
 
   async #repository() {
     const connection = await this.#freshConnection()
+    const demo = await this.#demoMetadata()
     const binding = connection
       ? { baseId: connection.baseId, token: connection.accessToken, mode: 'oauth' }
-      : this.#env.AIRTABLE_TOKEN && this.#env.AIRTABLE_BASE_ID
+      : !demo && this.#env.AIRTABLE_TOKEN && this.#env.AIRTABLE_BASE_ID
         ? {
             baseId: this.#env.AIRTABLE_BASE_ID,
             token: this.#env.AIRTABLE_TOKEN,
@@ -178,7 +260,8 @@ export class WorkspaceDurableObject extends DurableObject {
     const connection = await this.#ctx.storage.get<StoredAirtableConnection>(
       'airtable-oauth:connection',
     )
-    return connection?.baseId ?? this.#env.AIRTABLE_BASE_ID ?? null
+    if (connection) return connection.baseId
+    return (await this.#demoMetadata()) ? null : (this.#env.AIRTABLE_BASE_ID ?? null)
   }
 
   async #hydrateFromAirtable(force = false) {
@@ -212,6 +295,7 @@ export class WorkspaceDurableObject extends DurableObject {
     const connection = await this.#ctx.storage.get<StoredAirtableConnection>(
       'airtable-oauth:connection',
     )
+    const demo = await this.#demoMetadata()
     const pending = await this.#ctx.storage.get<PendingAirtableConnection>(
       'airtable-oauth:pending-connection',
     )
@@ -219,13 +303,15 @@ export class WorkspaceDurableObject extends DurableObject {
       available: Boolean(this.#env.AIRTABLE_OAUTH_CLIENT_ID),
       mode: connection
         ? 'oauth'
-        : this.#env.AIRTABLE_TOKEN && this.#env.AIRTABLE_BASE_ID
+        : !demo && this.#env.AIRTABLE_TOKEN && this.#env.AIRTABLE_BASE_ID
           ? 'token'
           : 'none',
-      connected: Boolean(connection || (this.#env.AIRTABLE_TOKEN && this.#env.AIRTABLE_BASE_ID)),
+      connected: Boolean(
+        connection || (!demo && this.#env.AIRTABLE_TOKEN && this.#env.AIRTABLE_BASE_ID),
+      ),
       base: connection
         ? { id: connection.baseId, name: connection.baseName }
-        : this.#env.AIRTABLE_BASE_ID
+        : !demo && this.#env.AIRTABLE_BASE_ID
           ? { id: this.#env.AIRTABLE_BASE_ID, name: 'Configured base' }
           : null,
       bases: pending?.bases ?? [],
@@ -245,8 +331,7 @@ export class WorkspaceDurableObject extends DurableObject {
   async #scheduleWebhookRenewal(connection: StoredAirtableConnection) {
     const expiration = connection.webhook?.expirationTime
     if (!expiration) return
-    const renewAt = Math.max(Date.now() + 60_000, Date.parse(expiration) - 24 * 60 * 60 * 1_000)
-    await this.#ctx.storage.setAlarm(renewAt)
+    await this.#scheduleNextAlarm()
   }
 
   async #connectPendingBase(baseId: string, webhookUrl?: string) {
@@ -359,19 +444,34 @@ export class WorkspaceDurableObject extends DurableObject {
   }
 
   async alarm() {
-    const pendingRefresh = await this.#ctx.storage.get<boolean>('airtable-webhook:pending-refresh')
-    if (pendingRefresh) {
+    const demo = await this.#demoMetadata()
+    if (demo && Date.parse(demo.expiresAt) <= Date.now()) {
+      await this.#expireDemo(demo)
+      return
+    }
+
+    const refreshAt = await this.#ctx.storage.get<number>(webhookRefreshAtKey)
+    const retryAt = await this.#ctx.storage.get<number>(webhookRetryAtKey)
+    if (
+      (typeof refreshAt === 'number' && refreshAt <= Date.now()) ||
+      (typeof retryAt === 'number' && retryAt <= Date.now())
+    ) {
       try {
         await this.#hydrateFromAirtable(true)
-        await this.#ctx.storage.delete('airtable-webhook:pending-refresh')
+        await this.#ctx.storage.delete(webhookRefreshAtKey)
+        await this.#ctx.storage.delete(webhookRetryAtKey)
       } catch {
-        await this.#ctx.storage.setAlarm(Date.now() + 60_000)
+        await this.#ctx.storage.put(webhookRetryAtKey, Date.now() + 60_000)
+        await this.#scheduleNextAlarm()
         return
       }
     }
 
     const connection = await this.#freshConnection()
-    if (!connection?.webhook) return
+    if (!connection?.webhook) {
+      await this.#scheduleNextAlarm()
+      return
+    }
     const expiresAt = connection.webhook.expirationTime
       ? Date.parse(connection.webhook.expirationTime)
       : Number.POSITIVE_INFINITY
@@ -384,15 +484,70 @@ export class WorkspaceDurableObject extends DurableObject {
           webhookError:
             error instanceof Error ? error.message : 'Airtable live sync renewal failed.',
         } satisfies StoredAirtableConnection)
-        await this.#ctx.storage.setAlarm(Date.now() + 60 * 60 * 1_000)
+        await this.#ctx.storage.put(webhookRetryAtKey, Date.now() + 60 * 60 * 1_000)
       }
-    } else {
-      await this.#scheduleWebhookRenewal(connection)
     }
+    await this.#scheduleNextAlarm()
   }
 
   async fetch(request: Request) {
     const url = new URL(request.url)
+    if (request.method === 'POST' && url.pathname === '/internal/demo/initialize') {
+      const input = (await request.json()) as DemoMetadata
+      if (
+        !input.id ||
+        !input.createdAt ||
+        !input.expiresAt ||
+        Date.parse(input.expiresAt) <= Date.now()
+      ) {
+        return Response.json({ ok: false, error: 'Invalid demo lifetime.' }, { status: 400 })
+      }
+      const existing = await this.#demoMetadata()
+      if (existing) {
+        return Response.json(
+          { ok: false, error: 'This demo capability already exists.' },
+          { status: 409 },
+        )
+      }
+      const metadata: DemoMetadata = {
+        id: input.id,
+        createdAt: input.createdAt,
+        expiresAt: input.expiresAt,
+      }
+      await this.#ctx.storage.put(demoMetadataKey, metadata)
+      await this.#cache.read()
+      await this.#scheduleNextAlarm()
+      return Response.json({ ok: true, demo: metadata })
+    }
+
+    if (request.method === 'GET' && url.pathname === '/internal/demo/status') {
+      const metadata = await this.#demoMetadata()
+      if (!metadata) return Response.json({ ok: false, active: false }, { status: 404 })
+      const active = !metadata.deletedAt && Date.parse(metadata.expiresAt) > Date.now()
+      if (!active && !metadata.deletedAt) await this.#expireDemo(metadata)
+      return Response.json({ ok: active, active, demo: metadata }, { status: active ? 200 : 410 })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/internal/demo/delete') {
+      const metadata = await this.#demoMetadata()
+      if (!metadata) return Response.json({ ok: false, active: false }, { status: 404 })
+      await this.#removeAirtableConnection()
+      await this.#ctx.storage.deleteAll()
+      const tombstone: DemoMetadata = { ...metadata, deletedAt: new Date().toISOString() }
+      await this.#ctx.storage.put(demoMetadataKey, tombstone)
+      await this.#scheduleNextAlarm()
+      return Response.json({ ok: true, active: false, demo: tombstone })
+    }
+
+    try {
+      await this.#assertActiveDemo()
+    } catch (error) {
+      return Response.json(
+        { ok: false, error: error instanceof Error ? error.message : 'This demo has expired.' },
+        { status: 410 },
+      )
+    }
+
     if (request.method === 'POST' && url.pathname === '/internal/airtable/oauth/start') {
       const pending = (await request.json()) as PendingAirtableAuthorization
       if (
@@ -455,26 +610,8 @@ export class WorkspaceDurableObject extends DurableObject {
     }
 
     if (request.method === 'POST' && url.pathname === '/internal/airtable/disconnect') {
-      const connection = await this.#freshConnection()
-      if (connection?.webhook) {
-        try {
-          const store = new AirtableWorkspaceStore({
-            token: connection.accessToken,
-            baseId: connection.baseId,
-          })
-          await store.deleteWebhook(connection.webhook.id)
-        } catch {
-          // The local connection should still be removable if Airtable is unavailable.
-        }
-      }
-      await this.#ctx.storage.delete('airtable-oauth:connection')
-      await this.#ctx.storage.delete('airtable-oauth:pending-connection')
-      await this.#ctx.storage.delete('airtable-cache:hydrated')
-      await this.#ctx.storage.delete('airtable-webhook:pending-refresh')
-      await this.#ctx.storage.deleteAlarm()
-      this.#airtableRepository = null
-      this.#repositoryFingerprint = 'cache'
-      this.#hydration = null
+      await this.#removeAirtableConnection()
+      await this.#scheduleNextAlarm()
       return Response.json({ ok: true })
     }
 
@@ -503,8 +640,8 @@ export class WorkspaceDurableObject extends DurableObject {
       ) {
         return new Response(null, { status: 403 })
       }
-      await this.#ctx.storage.put('airtable-webhook:pending-refresh', true)
-      await this.#ctx.storage.setAlarm(Date.now() + 1_500)
+      await this.#ctx.storage.put(webhookRefreshAtKey, Date.now() + 1_500)
+      await this.#scheduleNextAlarm()
       return new Response(null, { status: 204 })
     }
 

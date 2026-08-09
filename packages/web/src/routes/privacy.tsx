@@ -37,8 +37,9 @@ function PrivacyPage() {
 
       <h2>Retention and deletion</h2>
       <p>
-        Data remains until the workspace operator deletes it or the connected service is removed.
-        For the hosted demo, contact support to request deletion. Self-hosted operators control
+        Hosted demo data is automatically deleted after seven days and can be deleted sooner from
+        the in-app banner. Deleting a demo removes ProgramKit&apos;s local state and connection, but
+        does not delete records from an Airtable base you granted. Self-hosted operators control
         their own retention, backups, and deletion process.
       </p>
 

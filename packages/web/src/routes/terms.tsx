@@ -29,7 +29,8 @@ function TermsPage() {
 
       <h2>Availability</h2>
       <p>
-        The hosted demo is provided for evaluation and may change or be reset. It is not a paid
+        The hosted demo is provided for evaluation, expires after seven days, and may change or be
+        reset sooner. Its private link grants edit access to anyone who has it. It is not a paid
         hosted service or a promise of uninterrupted availability. Self-hosted installations are
         operated by the person or organization that deploys them.
       </p>

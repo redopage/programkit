@@ -27,6 +27,11 @@ That means the best next work is not another broad UI pass. It is a smaller numb
 flows that create, update, persist, reload, authorize, and expose the right result on every relevant
 surface.
 
+The expiring `/demo/{capability}` workspace now provides a clean, isolated starting point for
+scenario runs and collaborator handoff. It improves test repeatability and safe evaluation, but it
+does not count as the real identity, role membership, or per-person authorization required by the
+scenarios.
+
 ## Recommended implementation order
 
 1. **Real identity and evaluator fixtures.** Add staff, submitter, reviewer, and speaker sessions,

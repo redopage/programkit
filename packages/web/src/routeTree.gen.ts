@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as OperatorRouteImport } from './routes/_operator'
 import { Route as AgendaRouteImport } from './routes/agenda'
+import { Route as DemoRouteImport } from './routes/demo'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as OperatorIndexRouteImport } from './routes/_operator.index'
@@ -37,6 +38,11 @@ const OperatorRoute = OperatorRouteImport.update({
 const AgendaRoute = AgendaRouteImport.update({
   id: '/agenda',
   path: '/agenda',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -133,6 +139,7 @@ const SubmitFormSlugRoute = SubmitFormSlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof OperatorIndexRoute
   '/agenda': typeof AgendaRoute
+  '/demo': typeof DemoRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/agent': typeof OperatorAgentRoute
@@ -153,6 +160,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/agenda': typeof AgendaRoute
+  '/demo': typeof DemoRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/agent': typeof OperatorAgentRoute
@@ -176,6 +184,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_operator': typeof OperatorRouteWithChildren
   '/agenda': typeof AgendaRoute
+  '/demo': typeof DemoRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/_operator/agent': typeof OperatorAgentRoute
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agenda'
+    | '/demo'
     | '/privacy'
     | '/terms'
     | '/agent'
@@ -220,6 +230,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/agenda'
+    | '/demo'
     | '/privacy'
     | '/terms'
     | '/agent'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_operator'
     | '/agenda'
+    | '/demo'
     | '/privacy'
     | '/terms'
     | '/_operator/agent'
@@ -265,6 +277,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   OperatorRoute: typeof OperatorRouteWithChildren
   AgendaRoute: typeof AgendaRoute
+  DemoRoute: typeof DemoRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
   PortalParticipationIdRoute: typeof PortalParticipationIdRoute
@@ -286,6 +299,13 @@ declare module '@tanstack/react-router' {
       path: '/agenda'
       fullPath: '/agenda'
       preLoaderRoute: typeof AgendaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -456,6 +476,7 @@ const OperatorRouteWithChildren = OperatorRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   OperatorRoute: OperatorRouteWithChildren,
   AgendaRoute: AgendaRoute,
+  DemoRoute: DemoRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
   PortalParticipationIdRoute: PortalParticipationIdRoute,

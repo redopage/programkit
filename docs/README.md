@@ -32,7 +32,8 @@ not maintain a second version of product or architecture facts.
    workspace.
 6. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
    notifications.
-7. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
+7. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
+8. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
 
 ### I want to contribute
 

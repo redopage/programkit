@@ -22,11 +22,13 @@ The demo intentionally makes all workflows immediately inspectable:
   who knows that ID can impersonate the reviewer in the reference deployment.
 - `/mcp` has no OAuth gate. MCP operations use the fixed ProgramKit agent identity and its curated
   scopes.
-- `x-programkit-workspace-key` selects a Durable Object. It is routing input, not verified organization
-  membership or tenant isolation.
-- Starting Airtable OAuth creates a random, HTTP-only trial workspace cookie so one demo visitor
-  cannot replace another visitor's Airtable connection. This is browser isolation, not team
-  identity or cross-device authentication.
+- `/demo/{capability}` selects an isolated seven-day Durable Object and exchanges the capability
+  for an HTTP-only cookie. Possession of the link grants demo access; it is not a user account.
+- `x-programkit-workspace-key` selects only non-capability reference workspaces. It is routing input,
+  not verified organization membership or tenant isolation.
+- Starting Airtable OAuth inside a capability demo keeps the connection in that isolated workspace.
+  Other reference workspaces still receive a random HTTP-only trial cookie. This is browser
+  isolation, not team identity or cross-device authentication.
 
 These shortcuts are acceptable only for deterministic sample data. Production deployments must
 replace the actor and workspace resolution in `apps/cloudflare/src/worker.ts`; hiding the routes or

@@ -26,6 +26,7 @@ import { submissionPipelineSummary } from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
 import { CommandCenter, type CommandMode, type ProgramCommand } from './CommandCenter.tsx'
+import { DemoBanner } from './DemoBanner.tsx'
 import { cx, IconButton } from './ui.tsx'
 
 interface ShellProps {
@@ -738,7 +739,10 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
             with the navigation living outside it. */}
         <div className="lg:py-2 lg:pr-2">
           <div className="min-h-full bg-white p-4 sm:p-6 lg:min-h-[calc(100dvh-(--spacing(4)))] lg:rounded-2xl lg:shadow-xs lg:ring-1 lg:ring-zinc-950/5">
-            <div className="mx-auto w-full max-w-[100rem]">{children}</div>
+            <div className="mx-auto w-full max-w-[100rem]">
+              <DemoBanner />
+              {children}
+            </div>
           </div>
         </div>
       </main>

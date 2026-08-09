@@ -2,7 +2,7 @@
 
 An open-source conference-program toolkit for calls for proposals, review, speaker readiness, and published agendas.
 
-**Live demo:** [programkit.dev](https://programkit.dev)
+**Live demo:** [Create a private seven-day workspace](https://programkit.dev/demo)
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
 
@@ -40,6 +40,7 @@ first access.
 
 Useful demo routes include:
 
+- `http://localhost:4173/demo` — create an isolated seven-day demo with a private capability link
 - `http://localhost:4173/` — operator overview
 - `http://localhost:4173/forms` — call-for-proposals form builder and preview
 - `http://localhost:4173/submissions` — submission pipeline and decisions
@@ -78,8 +79,11 @@ per workspace key. The seeded demo needs no external account. A production insta
 Airtable as durable source of truth while keeping the Durable Object as its fast coordination and
 cache layer.
 
-The Worker maps the `x-programkit-workspace-key` request header to a Durable Object name; a missing or
-invalid key uses `demo`. Inside the object, every operation runs through an atomic repository
+The hosted demo creates one random Durable Object workspace per private capability link. The link
+is exchanged for an HTTP-only seven-day cookie and the object deletes itself when it expires. For
+local development and self-hosting, the Worker also maps a non-demo
+`x-programkit-workspace-key` request header to a Durable Object name; a missing or invalid key uses
+`demo`. Inside the object, every operation runs through an atomic repository
 `mutate` call. The workspace JSON is chunked across Durable Object storage values, and schedule
 publication creates an immutable release snapshot so later draft edits do not change the public
 agenda.

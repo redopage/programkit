@@ -9,6 +9,15 @@ import {
   type OperationResponse,
   type WorkspaceState,
 } from '@programkit/core'
+import {
+  createDemoId,
+  demoCookieName,
+  demoExpiresAt,
+  demoIdFromPath,
+  demoIdFromWorkspaceKey,
+  demoWorkspaceKey,
+  isDemoId,
+} from './demo.ts'
 
 export { WorkspaceDurableObject }
 
@@ -56,11 +65,12 @@ function cookie(request: Request, name: string) {
 }
 
 function workspaceKey(env: Env, request: Request) {
+  const demoId = cookie(request, demoCookieName)
+  if (isDemoId(demoId)) return demoWorkspaceKey(demoId)
   if (env.AIRTABLE_BASE_ID) return 'demo'
-  const requested =
-    request.headers.get('x-programkit-workspace-key') ??
-    cookie(request, workspaceCookieName) ??
-    'demo'
+  const headerKey = request.headers.get('x-programkit-workspace-key')
+  const requested = headerKey ?? cookie(request, workspaceCookieName) ?? 'demo'
+  if (demoIdFromWorkspaceKey(requested)) return 'demo'
   return workspaceKeyPattern.test(requested) ? requested : 'demo'
 }
 
@@ -79,6 +89,44 @@ function workspaceCookie(value: string, url: URL) {
   ]
     .filter(Boolean)
     .join('; ')
+}
+
+function demoCookie(value: string, url: URL, expiresAt: string) {
+  const maxAge = Math.max(0, Math.floor((Date.parse(expiresAt) - Date.now()) / 1_000))
+  return [
+    `${demoCookieName}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAge}`,
+    `Expires=${new Date(expiresAt).toUTCString()}`,
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+function clearDemoCookie(url: URL) {
+  return [
+    `${demoCookieName}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=0',
+    'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+async function demoStatus(stub: DurableObjectStub<WorkspaceDurableObject>) {
+  const response = await stub.fetch(new Request('http://workspace.internal/internal/demo/status'))
+  const body = (await response.json()) as {
+    active?: boolean
+    demo?: { id: string; createdAt: string; expiresAt: string; deletedAt?: string }
+  }
+  return { response, body }
 }
 
 function redirectToIntegrations(url: URL, status: string, message?: string) {
@@ -285,6 +333,119 @@ async function executeWorkspaceOperation(
 export default {
   async fetch(request: Request, env: Env, context: ExecutionContext) {
     const url = new URL(request.url)
+
+    if (request.method === 'POST' && url.pathname === '/api/v1/demos') {
+      if (!sameOrigin(request, url)) {
+        return Response.json(
+          { ok: false, error: 'Cross-origin demo requests are not allowed.' },
+          { status: 403 },
+        )
+      }
+      const id = createDemoId()
+      const createdAt = new Date().toISOString()
+      const expiresAt = demoExpiresAt()
+      const stub = workspaceStub(env, demoWorkspaceKey(id))
+      const initialized = await stub.fetch(
+        new Request('http://workspace.internal/internal/demo/initialize', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id, createdAt, expiresAt }),
+        }),
+      )
+      if (!initialized.ok) {
+        return Response.json(
+          { ok: false, error: 'The demo workspace could not be created.' },
+          { status: 500 },
+        )
+      }
+      return Response.json(
+        {
+          ok: true,
+          demo: {
+            createdAt,
+            expiresAt,
+            url: new URL(`/demo/${id}`, url.origin).toString(),
+          },
+        },
+        { status: 201, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+
+    const capabilityId = demoIdFromPath(url.pathname)
+    if (request.method === 'GET' && capabilityId) {
+      const { response, body } = await demoStatus(
+        workspaceStub(env, demoWorkspaceKey(capabilityId)),
+      )
+      if (!response.ok || !body.active || !body.demo) {
+        return new Response(
+          '<!doctype html><meta name="viewport" content="width=device-width"><title>Demo unavailable</title><main style="font:16px system-ui;max-width:32rem;margin:20vh auto;padding:24px"><h1>This demo is no longer available.</h1><p>ProgramKit demos expire after seven days or can be deleted early.</p><a href="/demo">Create a new demo</a></main>',
+          {
+            status: response.status === 404 ? 404 : 410,
+            headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+          },
+        )
+      }
+      const headers = new Headers({ location: '/', 'cache-control': 'no-store' })
+      headers.append('set-cookie', demoCookie(capabilityId, url, body.demo.expiresAt))
+      return new Response(null, { status: 302, headers })
+    }
+
+    if (url.pathname === '/api/v1/demos/current') {
+      const id = cookie(request, demoCookieName)
+      if (!isDemoId(id)) {
+        return Response.json(
+          { ok: true, active: false },
+          { headers: { 'cache-control': 'no-store' } },
+        )
+      }
+      const stub = workspaceStub(env, demoWorkspaceKey(id))
+      if (request.method === 'GET') {
+        const { response, body } = await demoStatus(stub)
+        if (!response.ok || !body.active || !body.demo) {
+          return Response.json(
+            { ok: true, active: false },
+            {
+              headers: {
+                'cache-control': 'no-store',
+                'set-cookie': clearDemoCookie(url),
+              },
+            },
+          )
+        }
+        return Response.json(
+          {
+            ok: true,
+            active: true,
+            demo: {
+              createdAt: body.demo.createdAt,
+              expiresAt: body.demo.expiresAt,
+              url: new URL(`/demo/${id}`, url.origin).toString(),
+            },
+          },
+          { headers: { 'cache-control': 'no-store' } },
+        )
+      }
+      if (request.method === 'POST') {
+        if (!sameOrigin(request, url)) {
+          return Response.json(
+            { ok: false, error: 'Cross-origin demo requests are not allowed.' },
+            { status: 403 },
+          )
+        }
+        const deleted = await stub.fetch(
+          new Request('http://workspace.internal/internal/demo/delete', { method: 'POST' }),
+        )
+        return Response.json(
+          { ok: deleted.ok, active: false },
+          {
+            status: deleted.ok ? 200 : deleted.status,
+            headers: { 'cache-control': 'no-store', 'set-cookie': clearDemoCookie(url) },
+          },
+        )
+      }
+      return new Response(null, { status: 405, headers: { allow: 'GET, POST' } })
+    }
+
     const oauthWebhookMatch = url.pathname.match(
       /^\/api\/v1\/integrations\/airtable\/webhook\/([^/]+)$/u,
     )

@@ -12,7 +12,7 @@ export const Route = createRootRoute({
 
 function RootRoute() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  if (pathname === '/privacy' || pathname === '/terms') return <Outlet />
+  if (pathname === '/privacy' || pathname === '/terms' || pathname === '/demo') return <Outlet />
   return (
     <WorkspaceProvider>
       <WorkspaceBoundary>
