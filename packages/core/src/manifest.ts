@@ -109,6 +109,20 @@ export const operationManifest = [
     emits: ['review.scorecard-submitted'],
   },
   {
+    name: 'review.advance-round',
+    title: 'Advance proposal to next review round',
+    description:
+      'Verify the active round is complete, then assign the proposal to the next evaluation round.',
+    kind: 'command',
+    scopes: ['reviews:decide'],
+    risk: 'administrative',
+    agentPolicy: 'denied',
+    reversible: false,
+    supportsDryRun: true,
+    requiredInput: ['submissionId'],
+    emits: ['review.round-advanced'],
+  },
+  {
     name: 'review.decide',
     title: 'Decide submission',
     description:

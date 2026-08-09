@@ -1077,6 +1077,119 @@ function applyHandler(
       }
     }
 
+    case 'review.advance-round': {
+      const submission = findRequired(state.submissions, input.submissionId, 'submission')
+      if (submission.status !== 'submitted' && submission.status !== 'in_review') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          `A ${submission.status} submission cannot advance to another review round.`,
+        )
+      }
+      const plan = state.evaluationPlans.find(
+        (entry) =>
+          entry.formId === submission.formId && entry.submissionKinds.includes(submission.kind),
+      )
+      if (!plan) {
+        throw new OperationError('INVALID_TRANSITION', 'This submission has no evaluation plan.')
+      }
+      const rounds = [...plan.rounds].sort((left, right) => left.order - right.order)
+      if (rounds.length === 0) {
+        throw new OperationError('INVALID_TRANSITION', 'This evaluation plan has no review rounds.')
+      }
+      const submissionAssignments = state.reviewerAssignments.filter(
+        (entry) => entry.submissionId === submission.id && entry.evaluationPlanId === plan.id,
+      )
+      const assignedRoundIds = new Set(submissionAssignments.map((entry) => entry.roundId))
+      const currentRoundIndex = rounds.reduce(
+        (highest, round, index) => (assignedRoundIds.has(round.id) ? index : highest),
+        -1,
+      )
+      if (currentRoundIndex < 0) {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Assign the first evaluation round before advancing this submission.',
+        )
+      }
+      const currentRound = rounds[currentRoundIndex]
+      const nextRound = rounds[currentRoundIndex + 1]
+      if (!nextRound) {
+        throw new OperationError(
+          'REVIEW_PLAN_COMPLETE',
+          'This submission is already in the final review round.',
+        )
+      }
+      const completed = submissionAssignments.filter(
+        (entry) => entry.roundId === currentRound.id && entry.status === 'completed',
+      ).length
+      if (completed < currentRound.minimumCompletedReviews) {
+        throw new OperationError(
+          'REVIEWS_INCOMPLETE',
+          `Complete ${currentRound.minimumCompletedReviews} reviews in ${currentRound.name} before advancing this submission.`,
+        )
+      }
+      if (submissionAssignments.some((entry) => entry.roundId === nextRound.id)) {
+        throw new OperationError(
+          'DUPLICATE',
+          `This submission already has ${nextRound.name.toLowerCase()} assignments.`,
+        )
+      }
+      const team = state.reviewerTeams.find((entry) => entry.id === plan.reviewerTeamId)
+      const activeReviewerIds = (team?.reviewerIds ?? []).filter(
+        (reviewerId) =>
+          state.reviewers.find((reviewer) => reviewer.id === reviewerId)?.status === 'active',
+      )
+      if (activeReviewerIds.length < nextRound.reviewersPerSubmission) {
+        throw new OperationError(
+          'REVIEWERS_UNAVAILABLE',
+          `${nextRound.name} needs ${nextRound.reviewersPerSubmission} active reviewers.`,
+        )
+      }
+      const previousReviewerIds = new Set(
+        submissionAssignments
+          .filter((entry) => entry.roundId === currentRound.id)
+          .map((entry) => entry.reviewerId),
+      )
+      const startIndex = Math.max(0, state.submissions.indexOf(submission)) + nextRound.order
+      const rotatedReviewerIds = activeReviewerIds.map(
+        (_, index) => activeReviewerIds[(startIndex + index) % activeReviewerIds.length],
+      )
+      const reviewerIds = [
+        ...rotatedReviewerIds.filter((reviewerId) => !previousReviewerIds.has(reviewerId)),
+        ...rotatedReviewerIds.filter((reviewerId) => previousReviewerIds.has(reviewerId)),
+      ].slice(0, nextRound.reviewersPerSubmission)
+      const form = findRequired(state.submissionForms, submission.formId, 'submission form')
+      const assignments = reviewerIds.map((reviewerId) => ({
+        id: createId('rva'),
+        eventId: submission.eventId,
+        evaluationPlanId: plan.id,
+        roundId: nextRound.id,
+        submissionId: submission.id,
+        reviewerId,
+        status: 'assigned' as const,
+        dueAt: form.closesAt,
+        updatedAt: timestamp,
+        version: 1,
+      }))
+      state.reviewerAssignments.push(...assignments)
+      const previous = submission.status
+      submission.status = 'in_review'
+      submission.updatedAt = timestamp
+      submission.version += 1
+      appendEvent(state, context, {
+        type: 'review.round-advanced',
+        aggregate: { type: 'submission', id: submission.id, version: submission.version },
+        summary: `Advanced “${stringAnswer(state, submission, 'proposal_title')}” to ${nextRound.name}.`,
+        data: {
+          previous,
+          evaluationPlanId: plan.id,
+          previousRoundId: currentRound.id,
+          roundId: nextRound.id,
+          assignmentIds: assignments.map((entry) => entry.id),
+        },
+      })
+      return { submission, previousRound: currentRound, round: nextRound, assignments }
+    }
+
     case 'review.decide': {
       const submission = findRequired(state.submissions, input.submissionId, 'submission')
       if (
@@ -1099,7 +1212,29 @@ function applyHandler(
           entry.formId === submission.formId && entry.submissionKinds.includes(submission.kind),
       )
       if (plan && input.override !== true) {
-        const round = [...plan.rounds].sort((left, right) => left.order - right.order)[0]
+        const rounds = [...plan.rounds].sort((left, right) => left.order - right.order)
+        if (rounds.length === 0) {
+          throw new OperationError(
+            'INVALID_TRANSITION',
+            'This evaluation plan has no review rounds.',
+          )
+        }
+        const assignedRoundIds = new Set(
+          state.reviewerAssignments
+            .filter(
+              (entry) => entry.submissionId === submission.id && entry.evaluationPlanId === plan.id,
+            )
+            .map((entry) => entry.roundId),
+        )
+        const activeRound = [...rounds].reverse().find((round) => assignedRoundIds.has(round.id))
+        const round = activeRound ?? rounds[0]
+        const finalRound = rounds.at(-1)
+        if (decision === 'accepted' && round.id !== finalRound?.id) {
+          throw new OperationError(
+            'REVIEWS_INCOMPLETE',
+            `Advance this submission to ${finalRound?.name ?? 'the final review round'} before accepting it.`,
+          )
+        }
         const completed = state.reviewerAssignments.filter(
           (entry) =>
             entry.submissionId === submission.id &&

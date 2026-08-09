@@ -41,7 +41,7 @@ Useful demo routes include:
 - `http://localhost:4173/` — operator overview
 - `http://localhost:4173/forms` — call-for-proposals form builder and preview
 - `http://localhost:4173/submissions` — submission pipeline and decisions
-- `http://localhost:4173/reviews` — committee progress and evaluation plan
+- `http://localhost:4173/reviews` — committee progress, round advancement, and evaluation plan
 - `http://localhost:4173/submit/aie-nyc-2026-cfp` — public call for proposals
 - `http://localhost:4173/reviewer/rev_001` — one reviewer's focused scorecard workspace
 - `http://localhost:4173/schedule` — draft schedule and publication workflow

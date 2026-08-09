@@ -104,6 +104,13 @@ reference, and truthful delivery state. `pending_provider` means prepared in the
 A trusted consumer records `delivered` or `failed` through
 `submission.record-receipt-delivery`.
 
+Multi-round review uses `review.advance-round`. The staff-scoped operation verifies that the active
+round has its minimum completed scorecards, creates the next round's assignments atomically, and
+emits `review.round-advanced`. Stable idempotency keys make retries non-duplicating. `review.decide`
+allows rejection or waitlisting after a completed active round, but acceptance requires the final
+round to exist and meet its own completion threshold unless a staff member supplies an explicit,
+reasoned override.
+
 Schedule drafting uses `schedule.place-session`, `schedule.move-session`, and
 `schedule.unplace-session`. Each accepted change is event-scoped, version-checked, audited, and
 kept out of the public program until `schedule.publish` creates the next immutable release.

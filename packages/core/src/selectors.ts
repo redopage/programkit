@@ -104,15 +104,27 @@ export function submissionReviewSummary(
   state: WorkspaceState,
   submissionId: string,
 ): SubmissionReviewSummary {
-  const assignments = (state.reviewerAssignments ?? []).filter(
+  const allAssignments = (state.reviewerAssignments ?? []).filter(
     (entry) => entry.submissionId === submissionId,
   )
+  const submission = (state.submissions ?? []).find((entry) => entry.id === submissionId)
+  const plan = (state.evaluationPlans ?? []).find(
+    (entry) =>
+      entry.id === allAssignments[0]?.evaluationPlanId ||
+      (submission !== undefined &&
+        entry.formId === submission.formId &&
+        entry.submissionKinds.includes(submission.kind)),
+  )
+  const assignedRoundIds = new Set(allAssignments.map((entry) => entry.roundId))
+  const activeRound = [...(plan?.rounds ?? [])]
+    .sort((left, right) => right.order - left.order)
+    .find((round) => assignedRoundIds.has(round.id))
+  const assignments = activeRound
+    ? allAssignments.filter((entry) => entry.roundId === activeRound.id)
+    : allAssignments
   const assignmentIds = new Set(assignments.map((entry) => entry.id))
   const scorecards = (state.scorecards ?? []).filter((entry) =>
     assignmentIds.has(entry.assignmentId),
-  )
-  const plan = (state.evaluationPlans ?? []).find(
-    (entry) => entry.id === assignments[0]?.evaluationPlanId,
   )
   const criterionAverages = Object.fromEntries(
     (plan?.criteria ?? []).map((criterion) => {

@@ -31,7 +31,7 @@ function AssignmentStatus({ status }: { status: 'assigned' | 'in_progress' | 'co
 }
 
 export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
-  const { payload } = useWorkspace()
+  const { payload, execute, mutating } = useWorkspace()
   if (!payload) return null
   const { state } = payload
   const assignments = (state.reviewerAssignments ?? []).filter(
@@ -41,6 +41,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   const completion =
     assignments.length === 0 ? 0 : Math.round((completed / assignments.length) * 100)
   const plan = (state.evaluationPlans ?? []).find((entry) => entry.eventId === state.activeEventId)
+  const rounds = [...(plan?.rounds ?? [])].sort((left, right) => left.order - right.order)
   const team = state.reviewerTeams?.find((entry) => entry.id === plan?.reviewerTeamId)
   const reviewers = (state.reviewers ?? []).filter((entry) => team?.reviewerIds.includes(entry.id))
   const inReview = (state.submissions ?? [])
@@ -49,8 +50,44 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
         submission.eventId === state.activeEventId &&
         (submission.status === 'submitted' || submission.status === 'in_review'),
     )
-    .map((submission) => ({ submission, review: submissionReviewSummary(state, submission.id) }))
+    .map((submission) => {
+      const submissionAssignments = assignments.filter(
+        (entry) => entry.submissionId === submission.id,
+      )
+      const assignedRoundIds = new Set(submissionAssignments.map((entry) => entry.roundId))
+      const currentRoundIndex = rounds.reduce(
+        (highest, round, index) => (assignedRoundIds.has(round.id) ? index : highest),
+        -1,
+      )
+      const currentRound = rounds[currentRoundIndex]
+      const nextRound = rounds[currentRoundIndex + 1]
+      const review = submissionReviewSummary(state, submission.id)
+      return {
+        submission,
+        review,
+        currentRound,
+        nextRound,
+        canAdvance:
+          Boolean(currentRound && nextRound) &&
+          review.completed >= (currentRound?.minimumCompletedReviews ?? Number.POSITIVE_INFINITY),
+      }
+    })
     .sort((left, right) => right.review.completed - left.review.completed)
+
+  async function advanceRound(
+    submission: (typeof inReview)[number]['submission'],
+    nextRound: NonNullable<(typeof inReview)[number]['nextRound']>,
+  ) {
+    await execute(
+      'review.advance-round',
+      { submissionId: submission.id },
+      {
+        expectedVersions: { [submission.id]: submission.version },
+        idempotencyKey: `review-round:${submission.id}:${nextRound.id}`,
+      },
+      `Proposal advanced to ${nextRound.name}.`,
+    )
+  }
 
   return (
     <div className="flex flex-col gap-7">
@@ -138,11 +175,11 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             </button>
           </div>
           <ul role="list" className="divide-y divide-zinc-950/5">
-            {inReview.map(({ submission, review }) => (
-              <li key={submission.id}>
+            {inReview.map(({ submission, review, currentRound, nextRound, canAdvance }) => (
+              <li key={submission.id} className="flex flex-wrap items-center gap-3 py-3">
                 <button
                   type="button"
-                  className="focus-ring flex w-full items-center gap-4 rounded-lg py-4 text-left hover:bg-zinc-950/2"
+                  className="focus-ring flex min-w-0 flex-1 items-center gap-4 rounded-lg py-1 text-left hover:bg-zinc-950/2"
                   onClick={() => navigate('/submissions')}
                 >
                   <span className="min-w-0 flex-1">
@@ -152,7 +189,8 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                     <span className="block truncate text-base text-zinc-500 sm:text-sm">
                       {answerText(submissionAnswerByPurpose(state, submission, 'first_name'))}{' '}
                       {answerText(submissionAnswerByPurpose(state, submission, 'last_name'))} ·{' '}
-                      {review.completed}/{review.assigned} reviews
+                      {currentRound?.name ?? 'Review'} · {review.completed}/{review.assigned}{' '}
+                      reviews
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
@@ -162,6 +200,16 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                     <span className="block text-sm text-zinc-500">average</span>
                   </span>
                 </button>
+                {canAdvance && nextRound ? (
+                  <Button
+                    size="compact"
+                    disabled={mutating}
+                    onClick={() => void advanceRound(submission, nextRound)}
+                  >
+                    Advance to {nextRound.name}
+                    <ArrowRightIcon className="size-4 h-lh shrink-0 fill-current" />
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -192,6 +240,46 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                   </dd>
                 </div>
               </dl>
+              <div>
+                <p className="text-base font-medium text-zinc-950 sm:text-sm">Review rounds</p>
+                <ol role="list" className="divide-y divide-zinc-950/5 pt-1">
+                  {rounds.map((round, index) => {
+                    const roundAssignments = assignments.filter(
+                      (entry) => entry.roundId === round.id,
+                    )
+                    const roundCompleted = roundAssignments.filter(
+                      (entry) => entry.status === 'completed',
+                    ).length
+                    const proposalCount = new Set(
+                      roundAssignments.map((entry) => entry.submissionId),
+                    ).size
+                    return (
+                      <li key={round.id} className="flex items-start gap-3 py-3">
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-medium tabular-nums text-zinc-700">
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-base font-medium text-zinc-950 sm:text-sm">
+                            {round.name}
+                          </span>
+                          <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
+                            {round.minimumCompletedReviews} completed reviews required ·{' '}
+                            {round.reviewersPerSubmission} reviewers per proposal
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right text-sm tabular-nums text-zinc-500">
+                          <span className="block font-medium text-zinc-700">
+                            {roundCompleted}/{roundAssignments.length}
+                          </span>
+                          <span className="block">
+                            {proposalCount} proposal{proposalCount === 1 ? '' : 's'}
+                          </span>
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ol>
+              </div>
               <div>
                 <p className="text-base font-medium text-zinc-950 sm:text-sm">Scoring criteria</p>
                 <ul role="list" className="divide-y divide-zinc-950/5 pt-1">

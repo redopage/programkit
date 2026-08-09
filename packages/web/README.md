@@ -64,7 +64,7 @@ not authorization.
 - `/forms` — call-for-proposals form builder, explicit speaker/session data mappings, publish
   readiness, and draft preview
 - `/submissions` — proposal pipeline, review context, and decisions
-- `/reviews` — committee progress and evaluation-plan overview
+- `/reviews` — committee progress, multi-round advancement, and evaluation-plan overview
 - `/people` — relational people and participation records
 - `/readiness` — requirement completion and blockers
 - `/sessions` — program content

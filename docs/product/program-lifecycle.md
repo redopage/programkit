@@ -51,12 +51,17 @@ receipt in `pending_provider`; it does not claim delivery before a trusted provi
 
 ## 3. Review consistently
 
-Evaluation plans define criteria, reviewer teams, blind-review policy, and assignment behavior.
-Reviewers receive scoped queues and can read only assigned proposals. Blind plans redact answers
-that reveal submitter identity. Scorecards validate every criterion before submission.
+Evaluation plans define ordered rounds, criteria, reviewer teams, blind-review policy, and
+assignment behavior. Reviewers receive scoped queues and can read only assigned proposals. Blind
+plans redact answers that reveal submitter identity. Scorecards validate every criterion before
+submission.
 
-The committee view aggregates progress and recommendations; it does not replace the underlying
-scorecards or silently decide on their behalf.
+The committee view aggregates progress and recommendations by active round. A proposal advances
+only after the current round reaches its minimum completed-review threshold; the transition creates
+the next round's assignments once, records an audit event, and remains safe to retry with an
+idempotency key. Rejection and waitlisting may close a completed earlier round, while acceptance
+requires the completed final round. The view does not replace scorecards or silently decide on the
+committee's behalf.
 
 ## 4. Decide and create the accepted program
 

@@ -889,6 +889,13 @@ const evaluationPlans: EvaluationPlan[] = [
         reviewersPerSubmission: 2,
         minimumCompletedReviews: 2,
       },
+      {
+        id: 'rnd_finalist_review',
+        name: 'Finalist review',
+        order: 2,
+        reviewersPerSubmission: 2,
+        minimumCompletedReviews: 2,
+      },
     ],
     criteria: [
       {

@@ -340,24 +340,37 @@ function SubmissionDrawer({
     : []
   const title = answerText(submissionAnswerByPurpose(state, submission, 'proposal_title'))
   const review = submissionReviewSummary(state, submission.id)
-  const assignmentIds = new Set(
-    state.reviewerAssignments
-      .filter((entry) => entry.submissionId === submission.id)
-      .map((entry) => entry.id),
+  const submissionAssignments = state.reviewerAssignments.filter(
+    (entry) => entry.submissionId === submission.id,
   )
-  const scorecards = state.scorecards.filter((entry) => assignmentIds.has(entry.assignmentId))
   const plan = state.evaluationPlans.find(
     (entry) =>
-      entry.id ===
-      state.reviewerAssignments.find((a) => a.submissionId === submission.id)?.evaluationPlanId,
+      entry.formId === submission.formId && entry.submissionKinds.includes(submission.kind),
   )
-  const firstRound = plan?.rounds.slice().sort((left, right) => left.order - right.order)[0]
+  const rounds = [...(plan?.rounds ?? [])].sort((left, right) => left.order - right.order)
+  const assignedRoundIds = new Set(submissionAssignments.map((entry) => entry.roundId))
+  const currentRound = [...rounds].reverse().find((round) => assignedRoundIds.has(round.id))
+  const finalRound = rounds.at(-1)
+  const currentAssignmentIds = new Set(
+    submissionAssignments
+      .filter((entry) => !currentRound || entry.roundId === currentRound.id)
+      .map((entry) => entry.id),
+  )
+  const scorecards = state.scorecards.filter((entry) =>
+    currentAssignmentIds.has(entry.assignmentId),
+  )
   const decisionReady =
     submission.kind === 'guaranteed_session' ||
-    !firstRound ||
-    review.completed >= firstRound.minimumCompletedReviews
-  const canDecide =
+    !plan ||
+    Boolean(currentRound && review.completed >= currentRound.minimumCompletedReviews)
+  const canResolve =
     decisionReady && (submission.status === 'submitted' || submission.status === 'in_review')
+  const canAccept =
+    canResolve &&
+    (submission.kind === 'guaranteed_session' ||
+      !plan ||
+      !finalRound ||
+      currentRound?.id === finalRound.id)
   const trackValue = answerText(submissionAnswerByPurpose(state, submission, 'track'))
   const trackLabel = state.tracks.find((entry) => entry.id === trackValue)?.name ?? trackValue
 
@@ -388,7 +401,7 @@ function SubmissionDrawer({
       onClose={onClose}
       title={title}
       footer={
-        canDecide ? (
+        canResolve ? (
           <>
             <Button
               size="compact"
@@ -401,10 +414,12 @@ function SubmissionDrawer({
             <Button size="compact" disabled={mutating} onClick={() => void decide('waitlisted')}>
               Waitlist
             </Button>
-            <Button variant="primary" disabled={mutating} onClick={() => void decide('accepted')}>
-              <CheckIcon className="size-4 h-lh shrink-0 fill-current" />
-              Accept proposal
-            </Button>
+            {canAccept ? (
+              <Button variant="primary" disabled={mutating} onClick={() => void decide('accepted')}>
+                <CheckIcon className="size-4 h-lh shrink-0 fill-current" />
+                Accept proposal
+              </Button>
+            ) : null}
           </>
         ) : null
       }
@@ -520,7 +535,7 @@ function SubmissionDrawer({
                 id="review-summary-heading"
                 className="text-base font-medium text-zinc-950 sm:text-sm"
               >
-                Committee review
+                {currentRound?.name ?? 'Committee review'}
               </h3>
               <p className="text-base text-zinc-500 sm:text-sm">
                 {review.completed} of {review.assigned} assignments complete.
@@ -569,12 +584,20 @@ function SubmissionDrawer({
               <p className="text-pretty text-base sm:text-sm">No review plan is assigned yet.</p>
             </div>
           )}
-          {!decisionReady && firstRound ? (
+          {!decisionReady && currentRound ? (
             <div className="mt-5 rounded-lg bg-amber-50 p-3 text-amber-800 ring-1 ring-amber-800/10">
               <p className="text-pretty text-base sm:text-sm">
-                Complete {firstRound.minimumCompletedReviews - review.completed} more review
-                {firstRound.minimumCompletedReviews - review.completed === 1 ? '' : 's'} before the
-                committee records a decision.
+                Complete {currentRound.minimumCompletedReviews - review.completed} more review
+                {currentRound.minimumCompletedReviews - review.completed === 1 ? '' : 's'} before
+                the committee records a decision.
+              </p>
+            </div>
+          ) : null}
+          {decisionReady && !canAccept && finalRound ? (
+            <div className="mt-5 rounded-lg bg-blue-50 p-3 text-blue-800 ring-1 ring-blue-800/10">
+              <p className="text-pretty text-base sm:text-sm">
+                This round is complete. Advance the proposal to {finalRound.name} from the Review
+                workspace before accepting it.
               </p>
             </div>
           ) : null}

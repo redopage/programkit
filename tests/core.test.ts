@@ -36,6 +36,10 @@ describe('ProgramKit operation engine', () => {
     expect(state.submissionReceiptDeliveries).toHaveLength(1)
     expect(state.portalResources).toHaveLength(2)
     expect(state.acceleventsExports).toHaveLength(0)
+    expect(state.evaluationPlans[0].rounds.map((round) => round.name)).toEqual([
+      'Program committee review',
+      'Finalist review',
+    ])
     expect(submissionPipelineSummary(state)).toMatchObject({
       total: 6,
       draft: 1,
@@ -1115,9 +1119,45 @@ describe('ProgramKit operation engine', () => {
     })
   })
 
-  it('scores reviews and atomically converts an accepted abstract into the program', () => {
+  it('advances a completed finalist, scores the final round, and atomically converts it', () => {
     let state = createSeedState()
-    const submission = state.submissions.find((entry) => entry.id === 'sub_002')!
+    let submission = state.submissions.find((entry) => entry.id === 'sub_002')!
+    const advanced = executeOperation(state, 'review.advance-round', {
+      input: { submissionId: submission.id },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+    expect(advanced.response.ok).toBe(true)
+    state = advanced.state
+    submission = state.submissions.find((entry) => entry.id === submission.id)!
+    const finalistAssignments = state.reviewerAssignments.filter(
+      (entry) => entry.submissionId === submission.id && entry.roundId === 'rnd_finalist_review',
+    )
+    expect(finalistAssignments).toHaveLength(2)
+    expect(new Set(finalistAssignments.map((entry) => entry.reviewerId)).size).toBe(2)
+    expect(submissionReviewSummary(state, submission.id)).toMatchObject({
+      assigned: 2,
+      completed: 0,
+      averageScore: null,
+    })
+    for (const assignment of finalistAssignments) {
+      const scored = executeOperation(state, 'review.submit-scorecard', {
+        input: {
+          assignmentId: assignment.id,
+          scores: { crt_relevance: 5, crt_specificity: 5, crt_takeaway: 5 },
+          recommendation: 'strong_accept',
+          comments: 'Finalist review confirms a clear program fit.',
+        },
+        expectedVersions: { [assignment.id]: assignment.version },
+      })
+      expect(scored.response.ok).toBe(true)
+      state = scored.state
+    }
+    expect(submissionReviewSummary(state, submission.id)).toMatchObject({
+      assigned: 2,
+      completed: 2,
+      averageScore: 5,
+    })
+    submission = state.submissions.find((entry) => entry.id === submission.id)!
     const decision = executeOperation(state, 'review.decide', {
       input: {
         submissionId: submission.id,
@@ -1158,6 +1198,69 @@ describe('ProgramKit operation engine', () => {
         'review.decision-recorded',
       ]),
     )
+  })
+
+  it('guards review-round progression, final-round acceptance, scope, and duplicate retries', () => {
+    const state = createSeedState()
+    const pending = state.submissions.find((entry) => entry.id === 'sub_005')!
+    const incomplete = executeOperation(state, 'review.advance-round', {
+      input: { submissionId: pending.id },
+      expectedVersions: { [pending.id]: pending.version },
+    })
+    expect(incomplete.response.error?.code).toBe('REVIEWS_INCOMPLETE')
+    expect(incomplete.state).toBe(state)
+
+    const scopedOut = executeOperation(state, 'review.advance-round', {
+      input: { submissionId: 'sub_002' },
+      actor: {
+        type: 'reviewer',
+        id: 'rev_001',
+        name: 'Elena Vasquez',
+        scopes: ['reviews:write'],
+      },
+    })
+    expect(scopedOut.response.error?.code).toBe('FORBIDDEN')
+
+    const eligible = state.submissions.find((entry) => entry.id === 'sub_002')!
+    const request = {
+      input: { submissionId: eligible.id },
+      expectedVersions: { [eligible.id]: eligible.version },
+      idempotencyKey: 'advance-sub-002-finalist',
+    }
+    const advanced = executeOperation(state, 'review.advance-round', request)
+    expect(advanced.response.ok).toBe(true)
+    expect(
+      advanced.state.domainEvents.find(
+        (event) =>
+          event.operation === 'review.advance-round' && event.type === 'review.round-advanced',
+      ),
+    ).toMatchObject({
+      aggregate: { type: 'submission', id: eligible.id },
+      data: { previousRoundId: 'rnd_program_review', roundId: 'rnd_finalist_review' },
+    })
+
+    const replayed = executeOperation(advanced.state, 'review.advance-round', request)
+    expect(replayed.state).toBe(advanced.state)
+    expect(replayed.response).toEqual(advanced.response)
+    expect(
+      replayed.state.reviewerAssignments.filter(
+        (entry) => entry.submissionId === eligible.id && entry.roundId === 'rnd_finalist_review',
+      ),
+    ).toHaveLength(2)
+
+    const advancedSubmission = advanced.state.submissions.find((entry) => entry.id === eligible.id)!
+    const duplicate = executeOperation(advanced.state, 'review.advance-round', {
+      input: { submissionId: eligible.id },
+      expectedVersions: { [eligible.id]: advancedSubmission.version },
+      idempotencyKey: 'advance-sub-002-again',
+    })
+    expect(duplicate.response.error?.code).toBe('REVIEW_PLAN_COMPLETE')
+
+    const prematureAcceptance = executeOperation(advanced.state, 'review.decide', {
+      input: { submissionId: eligible.id, decision: 'accepted' },
+      expectedVersions: { [eligible.id]: advancedSubmission.version },
+    })
+    expect(prematureAcceptance.response.error?.code).toBe('REVIEWS_INCOMPLETE')
   })
 
   it('records scorecards and allows guaranteed sessions to bypass abstract review', () => {
