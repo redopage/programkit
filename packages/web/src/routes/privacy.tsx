@@ -37,10 +37,11 @@ function PrivacyPage() {
 
       <h2>Retention and deletion</h2>
       <p>
-        Hosted demo data is automatically deleted after seven days and can be deleted sooner from
-        the in-app banner. Deleting a demo removes ProgramKit&apos;s local state and connection, but
-        does not delete records from an Airtable base you granted. Self-hosted operators control
-        their own retention, backups, and deletion process.
+        Hosted demo data is automatically deleted after seven days. Leaving a demo only removes its
+        private capability from that browser, so collaborators using the same link can continue.
+        Expiration removes ProgramKit&apos;s local state and connection, but does not delete records
+        from an Airtable base you granted. Self-hosted operators control their own retention,
+        backups, and deletion process.
       </p>
 
       <h2>Security</h2>

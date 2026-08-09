@@ -12,8 +12,9 @@ isolated product evaluation with sample data, not for real conference operations
    same-site cookie, and redirects to `/`.
 4. `GET /api/v1/demos/current` powers the expiry banner without exposing the capability through the
    workspace API.
-5. The Durable Object alarm deletes the workspace after seven days. The banner can delete it
-   sooner.
+5. `POST /api/v1/demos/current` leaves the demo by clearing only the current browser cookie. It does
+   not revoke the shared capability or delete the workspace.
+6. The Durable Object alarm deletes the workspace after seven days.
 
 The Worker does not accept a demo capability through `x-programkit-workspace-key`. This prevents a
 caller from selecting a hosted demo through the reference workspace-routing header.
@@ -44,9 +45,9 @@ source of truth while the Durable Object remains the hot cache and serialized wr
 This is useful for testing the real integration, but ProgramKit does not create an Airtable base
 for every anonymous demo.
 
-Deleting or expiring a demo removes the local cache, stored authorization, and ProgramKit webhook.
-It does not delete the user's base, tables, or records. A later demo may reconnect the same base and
-import its ProgramKit state.
+Expiring a demo removes the local cache, stored authorization, and ProgramKit webhook. Leaving a
+demo does not remove any shared workspace data. Expiration does not delete the user's base, tables,
+or records. A later demo may reconnect the same base and import its ProgramKit state.
 
 ## Security boundary
 

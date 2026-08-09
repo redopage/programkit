@@ -1,7 +1,7 @@
-import { CheckIcon, LinkIcon, TrashIcon } from '@heroicons/react/16/solid'
+import { ArrowRightStartOnRectangleIcon, CheckIcon, LinkIcon } from '@heroicons/react/16/solid'
 import { useEffect, useState } from 'react'
 
-import { readCurrentDemo, type DemoStatus } from '../lib/demo.ts'
+import { leaveCurrentDemo, readCurrentDemo, type DemoStatus } from '../lib/demo.ts'
 import { Button } from './ui.tsx'
 
 function expiryLabel(expiresAt: string) {
@@ -16,8 +16,7 @@ export function DemoBanner({
 }) {
   const [status, setStatus] = useState<DemoStatus | null>(null)
   const [copied, setCopied] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [leaving, setLeaving] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -42,22 +41,14 @@ export function DemoBanner({
     window.setTimeout(() => setCopied(false), 1_800)
   }
 
-  const deleteDemo = async () => {
-    if (!confirming) {
-      setConfirming(true)
-      return
+  const leaveDemo = async () => {
+    setLeaving(true)
+    try {
+      await leaveCurrentDemo()
+      window.location.assign('/')
+    } catch {
+      setLeaving(false)
     }
-    setDeleting(true)
-    const response = await fetch('/api/v1/demos/current', {
-      method: 'POST',
-      credentials: 'same-origin',
-    })
-    if (!response.ok) {
-      setDeleting(false)
-      setConfirming(false)
-      return
-    }
-    window.location.assign('/demo')
   }
 
   return (
@@ -73,44 +64,28 @@ export function DemoBanner({
           <span className="hidden md:inline">. Anyone with the link can edit.</span>
         </p>
         <div className="flex shrink-0 items-center gap-1">
-          {confirming ? (
-            <Button
-              variant="ghost"
-              size="compact"
-              className="text-zinc-300! hover:bg-white/10! hover:text-white!"
-              onClick={() => setConfirming(false)}
-              disabled={deleting}
-            >
-              Keep
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="compact"
-              className="text-zinc-300! hover:bg-white/10! hover:text-white! lg:hidden"
-              onClick={() => void copyLink()}
-            >
-              {copied ? (
-                <CheckIcon className="size-4 fill-emerald-400" />
-              ) : (
-                <LinkIcon className="size-4" />
-              )}
-              {copied ? 'Copied' : 'Copy'}
-            </Button>
-          )}
           <Button
             variant="ghost"
             size="compact"
-            className={
-              confirming
-                ? 'bg-red-500/15! text-red-200! ring-red-400/20! hover:bg-red-500/25! hover:text-white!'
-                : 'text-zinc-300! hover:bg-white/10! hover:text-white!'
-            }
-            onClick={() => void deleteDemo()}
-            disabled={deleting}
+            className="text-zinc-300! hover:bg-white/10! hover:text-white! lg:hidden"
+            onClick={() => void copyLink()}
           >
-            <TrashIcon className="size-4" />
-            {deleting ? 'Deleting…' : confirming ? 'Delete now' : 'Delete'}
+            {copied ? (
+              <CheckIcon className="size-4 fill-emerald-400" />
+            ) : (
+              <LinkIcon className="size-4" />
+            )}
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="compact"
+            className="text-zinc-300! hover:bg-white/10! hover:text-white!"
+            onClick={() => void leaveDemo()}
+            disabled={leaving}
+          >
+            <ArrowRightStartOnRectangleIcon className="size-4" />
+            {leaving ? 'Leaving…' : 'Leave'}
           </Button>
         </div>
       </div>

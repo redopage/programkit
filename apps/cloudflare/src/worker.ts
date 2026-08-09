@@ -795,11 +795,16 @@ export default {
         workspaceStub(env, demoWorkspaceKey(capabilityId)),
       )
       if (!response.ok || !body.active || !body.demo) {
+        const headers = new Headers({
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'no-store',
+        })
+        headers.append('set-cookie', clearDemoCookie(url))
         return new Response(
-          '<!doctype html><meta name="viewport" content="width=device-width"><title>Demo unavailable</title><main style="font:16px system-ui;max-width:32rem;margin:20vh auto;padding:24px"><h1>This demo is no longer available.</h1><p>ProgramKit demos expire after seven days or can be deleted early.</p><a href="/demo">Create a new demo</a></main>',
+          '<!doctype html><meta name="viewport" content="width=device-width"><title>Demo unavailable</title><main style="font:16px system-ui;max-width:32rem;margin:20vh auto;padding:24px"><h1>This demo is no longer available.</h1><p>ProgramKit demos expire after seven days.</p><a href="/">Create a new demo</a></main>',
           {
             status: response.status === 404 ? 404 : 410,
-            headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+            headers,
           },
         )
       }
@@ -850,13 +855,9 @@ export default {
             { status: 403 },
           )
         }
-        const deleted = await stub.fetch(
-          new Request('http://workspace.internal/internal/demo/delete', { method: 'POST' }),
-        )
         return Response.json(
-          { ok: deleted.ok, active: false },
+          { ok: true, active: false },
           {
-            status: deleted.ok ? 200 : deleted.status,
             headers: { 'cache-control': 'no-store', 'set-cookie': clearDemoCookie(url) },
           },
         )
@@ -951,6 +952,31 @@ export default {
       newWorkspaceCookie = key
     }
     const stub = workspaceStub(env, key)
+
+    const requiresDemoWorkspace =
+      profile === 'hosted-demo' &&
+      isDemoId(cookie(request, demoCookieName)) &&
+      (isDocumentNavigation(request) ||
+        url.pathname.startsWith('/api/') ||
+        url.pathname.startsWith('/public/') ||
+        url.pathname === '/mcp')
+    if (requiresDemoWorkspace) {
+      const { response, body } = await demoStatus(stub)
+      if (!response.ok || !body.active || !body.demo) {
+        const headers = new Headers({
+          'cache-control': 'no-store',
+          'set-cookie': clearDemoCookie(url),
+        })
+        if (request.method === 'GET' && isDocumentNavigation(request)) {
+          headers.set('location', new URL('/', url.origin).toString())
+          return new Response(null, { status: 302, headers })
+        }
+        return Response.json(
+          { ok: false, error: 'This demo is no longer available.' },
+          { status: 410, headers },
+        )
+      }
+    }
 
     if (url.pathname.startsWith('/api/v1/integrations/airtable/')) {
       const integrationResponse = await handleAirtableIntegration(

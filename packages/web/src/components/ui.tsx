@@ -950,11 +950,13 @@ export function ErrorState({
   description,
   onRetry,
   retrying = false,
+  action,
 }: {
   title: string
   description: string
   onRetry?: () => void
   retrying?: boolean
+  action?: ReactNode
 }) {
   return (
     <div className="py-12 text-center">
@@ -963,7 +965,9 @@ export function ErrorState({
       <p className="mx-auto max-w-[52ch] text-pretty text-base text-zinc-500 sm:text-sm">
         {description}
       </p>
-      {onRetry ? (
+      {action ? (
+        <div className="flex justify-center pt-4">{action}</div>
+      ) : onRetry ? (
         <div className="flex justify-center pt-4">
           <Button size="compact" disabled={retrying} onClick={onRetry}>
             {retrying ? 'Trying again…' : 'Try again'}

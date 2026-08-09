@@ -2,16 +2,16 @@ import { ArrowRightIcon, CheckIcon, LinkIcon } from '@heroicons/react/16/solid'
 import { useEffect, useState } from 'react'
 
 import { Button } from '../components/ui.tsx'
-import { readCurrentDemo, type DemoDetails } from '../lib/demo.ts'
-
-interface CreatedDemo {
-  ok: boolean
-  demo?: { url: string }
-  error?: string
-}
+import {
+  createDemo as createHostedDemo,
+  leaveCurrentDemo,
+  readCurrentDemo,
+  type DemoDetails,
+} from '../lib/demo.ts'
 
 export function DemoView() {
   const [creating, setCreating] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [current, setCurrent] = useState<DemoDetails | null>(null)
   const [copied, setCopied] = useState(false)
@@ -31,17 +31,23 @@ export function DemoView() {
     setCreating(true)
     setError(null)
     try {
-      const response = await fetch('/api/v1/demos', {
-        method: 'POST',
-        credentials: 'same-origin',
-      })
-      const result = (await response.json()) as CreatedDemo
-      if (!response.ok || !result.demo)
-        throw new Error(result.error ?? 'The demo could not be created.')
-      window.location.assign(result.demo.url)
+      const demo = await createHostedDemo()
+      window.location.assign(demo.url)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The demo could not be created.')
       setCreating(false)
+    }
+  }
+
+  const leaveDemo = async () => {
+    setLeaving(true)
+    setError(null)
+    try {
+      await leaveCurrentDemo()
+      window.location.assign('/')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The demo could not be left.')
+      setLeaving(false)
     }
   }
 
@@ -94,6 +100,14 @@ export function DemoView() {
                     <LinkIcon className="size-4" />
                   )}
                   {copied ? 'Copied' : 'Copy private link'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => void leaveDemo()}
+                  disabled={leaving}
+                >
+                  {leaving ? 'Leaving…' : 'Leave demo'}
                 </Button>
               </>
             ) : (
