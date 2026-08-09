@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   acceleventsExportPreflight,
+  buildAcceleventsExportItems,
   createSeedState,
   eventCalendar,
+  eventCalendarInvitation,
   executeOperation,
   nextActions,
   publicAgenda,
@@ -21,7 +23,7 @@ import {
 describe('ProgramKit operation engine', () => {
   it('creates a useful deterministic workspace', () => {
     const state = createSeedState()
-    expect(state.schemaVersion).toBe(8)
+    expect(state.schemaVersion).toBe(9)
     expect(state.people).toHaveLength(16)
     expect(state.participations).toHaveLength(16)
     expect(state.sessions).toHaveLength(11)
@@ -625,6 +627,14 @@ describe('ProgramKit operation engine', () => {
     expect(deliveries).toHaveLength(pending.recipientParticipationIds.length)
     expect(deliveries.every((delivery) => delivery.status === 'pending_provider')).toBe(true)
     expect(deliveries.every((delivery) => delivery.attachmentNames.length === 1)).toBe(true)
+    expect(
+      deliveries.every(
+        (delivery) =>
+          delivery.attachments.length === 1 &&
+          delivery.attachments[0]?.contentType === 'text/calendar; charset=utf-8; method=REQUEST' &&
+          delivery.attachments[0]?.content.includes('METHOD:REQUEST\r\n'),
+      ),
+    ).toBe(true)
     expect(deliveries.every((delivery) => !delivery.body.includes('{{'))).toBe(true)
     expect(deliveries.every((delivery) => !delivery.subject.includes('{{'))).toBe(true)
 
@@ -707,6 +717,18 @@ describe('ProgramKit operation engine', () => {
         .filter(Boolean)
         .every((line) => new TextEncoder().encode(line).byteLength <= 75),
     ).toBe(true)
+
+    const invitation = eventCalendarInvitation(
+      state.workspace,
+      event,
+      'speaker@example.com',
+      '2026-08-09T02:00:00.000Z',
+    ).replaceAll('\r\n ', '')
+    expect(invitation).toContain('METHOD:REQUEST\r\n')
+    expect(invitation).toContain('ORGANIZER:mailto:notifications@programkit.dev\r\n')
+    expect(invitation).toContain(
+      'ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:speaker@example.com\r\n',
+    )
   })
 
   it('records trusted provider outcomes without closing a campaign early', () => {
@@ -737,6 +759,39 @@ describe('ProgramKit operation engine', () => {
         index === deliveries.length - 1 ? 'sent' : 'queued',
       )
     }
+  })
+
+  it('requeues failed frozen campaign deliveries without losing attempt evidence', () => {
+    let state = createSeedState()
+    const pending = state.campaigns.find((campaign) => campaign.status === 'awaiting_approval')!
+    state = executeOperation(state, 'campaign.approve', {
+      input: { campaignId: pending.id },
+    }).state
+    const approved = state.campaigns.find((campaign) => campaign.id === pending.id)!
+    state = executeOperation(state, 'campaign.send', {
+      input: { campaignId: approved.id },
+    }).state
+    let campaign = state.campaigns.find((entry) => entry.id === pending.id)!
+    let delivery = state.campaignDeliveries.find((entry) => entry.campaignId === pending.id)!
+    state = executeOperation(state, 'campaign.record-delivery', {
+      input: { deliveryId: delivery.id, status: 'failed', lastError: 'Temporary provider error.' },
+    }).state
+    campaign = state.campaigns.find((entry) => entry.id === pending.id)!
+    delivery = state.campaignDeliveries.find((entry) => entry.id === delivery.id)!
+
+    const retried = executeOperation(state, 'campaign.retry-deliveries', {
+      input: { campaignId: campaign.id },
+      expectedVersions: { [campaign.id]: campaign.version },
+    })
+    expect(retried.response.ok).toBe(true)
+    expect(
+      retried.state.campaignDeliveries.find((entry) => entry.id === delivery.id),
+    ).toMatchObject({
+      status: 'pending_provider',
+      attemptCount: 1,
+      lastError: null,
+      version: delivery.version + 1,
+    })
   })
 
   it('evaluates conditional CFP fields from canonical answers', () => {
@@ -1047,6 +1102,21 @@ describe('ProgramKit operation engine', () => {
       version: 2,
     })
 
+    const queuedRetry = executeOperation(state, 'accelevents.retry-export', {
+      input: { exportId: batch.id },
+      expectedVersions: { [batch.id]: batch.version },
+    })
+    expect(queuedRetry.response.ok).toBe(true)
+    state = queuedRetry.state
+    batch = state.acceleventsExports[0]
+    item = batch.items.find((entry) => entry.id === item.id)!
+    expect(item).toMatchObject({
+      status: 'pending_provider',
+      attemptCount: 1,
+      lastError: null,
+      version: 3,
+    })
+
     const retried = executeOperation(state, 'accelevents.record-result', {
       input: {
         exportId: batch.id,
@@ -1064,7 +1134,7 @@ describe('ProgramKit operation engine', () => {
       providerId: 'acc-speaker-001',
       attemptCount: 2,
       lastError: null,
-      version: 3,
+      version: 4,
     })
 
     for (const pending of batch.items.filter((entry) => entry.status === 'pending_provider')) {
@@ -1088,6 +1158,12 @@ describe('ProgramKit operation engine', () => {
       status: 'connected',
       lastSeenAt: expect.any(String),
     })
+    const nextItems = buildAcceleventsExportItems(state, '2026-08-10T12:00:00.000Z', () =>
+      crypto.randomUUID(),
+    )
+    expect(nextItems.find((entry) => entry.externalKey === item.externalKey)?.providerId).toBe(
+      'acc-speaker-001',
+    )
   })
 
   it('guards Accelevents export scope, target identifiers, and published-release readiness', () => {

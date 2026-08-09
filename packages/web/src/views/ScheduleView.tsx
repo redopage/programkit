@@ -37,7 +37,7 @@ import {
   textControl,
 } from '../components/ui.tsx'
 
-type ScheduleMode = 'grid' | 'list'
+type ScheduleMode = 'list' | 'day' | 'week' | 'track' | 'room'
 
 interface DropTarget {
   roomId: string
@@ -149,7 +149,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const { payload, execute, mutating } = useWorkspace()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedUnscheduledId, setSelectedUnscheduledId] = useState<string | null>(null)
-  const [mode, setMode] = useState<ScheduleMode>('grid')
+  const [mode, setMode] = useState<ScheduleMode>('week')
   const [dayFilter, setDayFilter] = useState('all')
   const [roomFilter, setRoomFilter] = useState('all')
   const [trackFilter, setTrackFilter] = useState('all')
@@ -193,6 +193,29 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
     (session) => trackFilter === 'all' || session.trackId === trackFilter,
   )
   const filtersActive = dayFilter !== 'all' || roomFilter !== 'all' || trackFilter !== 'all'
+  const gridMode = mode === 'day' || mode === 'week'
+  const listGroups =
+    mode === 'track'
+      ? eventTracks
+          .map((track) => ({
+            id: track.id,
+            label: track.name,
+            placements: visiblePlacements.filter(
+              (placement) =>
+                state.sessions.find((session) => session.id === placement.sessionId)?.trackId ===
+                track.id,
+            ),
+          }))
+          .filter((group) => group.placements.length > 0)
+      : mode === 'room'
+        ? eventRooms
+            .map((room) => ({
+              id: room.id,
+              label: room.name,
+              placements: visiblePlacements.filter((placement) => placement.roomId === room.id),
+            }))
+            .filter((group) => group.placements.length > 0)
+        : [{ id: 'schedule', label: null, placements: visiblePlacements }]
   const draggedSession = draggedPlacementId
     ? state.sessions.find(
         (session) =>
@@ -211,6 +234,25 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
     event.dataTransfer.setData('text/plain', placementId)
     setDraggedPlacementId(placementId)
     setMoveFeedback(null)
+  }
+
+  function selectMode(next: ScheduleMode) {
+    setMode(next)
+    if (next === 'week') setDayFilter('all')
+    if (next === 'day' && dayFilter === 'all') setDayFilter(eventDays[0] ?? 'all')
+  }
+
+  function selectDay(next: string) {
+    setDayFilter(next)
+    if (next === 'all' && mode === 'day') setMode('week')
+    if (next !== 'all' && mode === 'week') setMode('day')
+  }
+
+  function clearFilters() {
+    setDayFilter('all')
+    setRoomFilter('all')
+    setTrackFilter('all')
+    if (mode === 'day') setMode('week')
   }
 
   function stopDragging() {
@@ -530,15 +572,18 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       </section>
 
       <Toolbar>
-        <div className="hidden shrink-0 lg:block">
+        <div className="min-w-0 shrink-0">
           <FilterTabs
             label="Schedule view"
             value={mode}
             options={[
-              ['grid', 'Room grid'],
               ['list', 'Session list'],
+              ['day', 'Day'],
+              ['week', 'Week'],
+              ['track', 'Track'],
+              ['room', 'Room'],
             ]}
-            onChange={setMode}
+            onChange={selectMode}
           />
         </div>
         {/*
@@ -549,7 +594,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
           <ScheduleFilterSelect
             label="Day"
             value={dayFilter}
-            onChange={setDayFilter}
+            onChange={selectDay}
             className="col-span-2 sm:col-span-1"
           >
             <option value="all">All days</option>
@@ -577,15 +622,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
           </ScheduleFilterSelect>
         </div>
         {filtersActive ? (
-          <Button
-            size="compact"
-            variant="ghost"
-            onClick={() => {
-              setDayFilter('all')
-              setRoomFilter('all')
-              setTrackFilter('all')
-            }}
-          >
+          <Button size="compact" variant="ghost" onClick={clearFilters}>
             Clear filters
           </Button>
         ) : null}
@@ -595,9 +632,13 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         >
           {draggedSession
             ? `Moving ${draggedSession.title}. Drop it on a room and time.`
-            : mode === 'grid'
+            : gridMode
               ? 'Drag a session onto another room or time. Open one for exact date and time controls.'
-              : 'Open a session to change its room or start time.'}
+              : mode === 'track'
+                ? 'Sessions are grouped by track. Open one to change its room or start time.'
+                : mode === 'room'
+                  ? 'Sessions are grouped by room. Open one to change its room or start time.'
+                  : 'Open a session to change its room or start time.'}
         </p>
       </Toolbar>
 
@@ -609,7 +650,9 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       {visiblePlacements.length === 0 ? (
         <EmptyState
           title={
-            filtersActive ? 'No scheduled sessions match these filters' : 'The draft grid is empty'
+            filtersActive
+              ? 'No scheduled sessions match these filters'
+              : 'The draft schedule is empty'
           }
           description={
             filtersActive
@@ -618,14 +661,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
           }
           action={
             filtersActive ? (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setDayFilter('all')
-                  setRoomFilter('all')
-                  setTrackFilter('all')
-                }}
-              >
+              <Button variant="secondary" onClick={clearFilters}>
                 Clear filters
               </Button>
             ) : undefined
@@ -635,7 +671,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       <div
         className={cx(
           'hidden min-w-0 grid-cols-[4.5rem_repeat(var(--room-count),minmax(0,1fr))]',
-          mode === 'grid' && visiblePlacements.length > 0 && 'lg:grid',
+          gridMode && visiblePlacements.length > 0 && 'lg:grid',
         )}
         style={{ '--room-count': visibleRooms.length } as CSSProperties}
       >
@@ -793,50 +829,65 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         })}
       </div>
 
-      <div
-        className={cx(
-          mode === 'grid' ? 'lg:hidden' : '',
-          visiblePlacements.length === 0 && 'hidden',
-        )}
-      >
-        <ol role="list" className="divide-y divide-zinc-950/5 border-y border-zinc-950/5">
-          {visiblePlacements
-            .slice()
-            .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
-            .map((placement) => {
-              const session = state.sessions.find((entry) => entry.id === placement.sessionId)!
-              const track = state.tracks.find((entry) => entry.id === session.trackId)!
-              const room = state.rooms.find((entry) => entry.id === placement.roomId)!
-              return (
-                <li key={placement.id}>
-                  {/*
+      <div className={cx(gridMode ? 'lg:hidden' : '', visiblePlacements.length === 0 && 'hidden')}>
+        {listGroups.map((group) => (
+          <section
+            key={group.id}
+            aria-labelledby={group.label ? `schedule-group-${group.id}` : undefined}
+          >
+            {group.label ? (
+              <div className="flex items-end justify-between gap-3 border-b border-zinc-950/10 pt-5 pb-2 first:pt-0">
+                <h2
+                  id={`schedule-group-${group.id}`}
+                  className="text-base font-medium text-zinc-950"
+                >
+                  {group.label}
+                </h2>
+                <p className="text-sm tabular-nums text-zinc-500">
+                  {group.placements.length} session{group.placements.length === 1 ? '' : 's'}
+                </p>
+              </div>
+            ) : null}
+            <ol role="list" className="divide-y divide-zinc-950/5 border-y border-zinc-950/5">
+              {group.placements
+                .slice()
+                .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
+                .map((placement) => {
+                  const session = state.sessions.find((entry) => entry.id === placement.sessionId)!
+                  const track = state.tracks.find((entry) => entry.id === session.trackId)!
+                  const room = state.rooms.find((entry) => entry.id === placement.roomId)!
+                  return (
+                    <li key={placement.id}>
+                      {/*
                     The time stacks above the title at 375px rather than sitting
                     in a fixed column, where a weekday-prefixed label wrapped.
                   */}
-                  <button
-                    type="button"
-                    className="focus-ring flex w-full flex-col gap-1 rounded-lg py-3 text-left hover:bg-zinc-950/2 sm:flex-row sm:items-center sm:gap-4"
-                    onClick={() => setSelectedId(placement.id)}
-                  >
-                    <span className="text-base font-medium tabular-nums text-zinc-950 sm:w-44 sm:shrink-0 sm:text-sm">
-                      {slotLabel(placement.startsAt)}–{timeLabel(placement.endsAt)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-pretty text-base font-medium text-zinc-950 sm:text-sm">
-                        {session.title}
-                      </span>
-                      <span className="block truncate text-base text-zinc-500 sm:text-sm">
-                        {room.name}
-                      </span>
-                    </span>
-                    <span className="shrink-0">
-                      <TrackBadge name={track.name} color={track.color} />
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-        </ol>
+                      <button
+                        type="button"
+                        className="focus-ring flex w-full flex-col gap-1 rounded-lg py-3 text-left hover:bg-zinc-950/2 sm:flex-row sm:items-center sm:gap-4"
+                        onClick={() => setSelectedId(placement.id)}
+                      >
+                        <span className="text-base font-medium tabular-nums text-zinc-950 sm:w-44 sm:shrink-0 sm:text-sm">
+                          {slotLabel(placement.startsAt)}–{timeLabel(placement.endsAt)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-pretty text-base font-medium text-zinc-950 sm:text-sm">
+                            {session.title}
+                          </span>
+                          <span className="block truncate text-base text-zinc-500 sm:text-sm">
+                            {room.name}
+                          </span>
+                        </span>
+                        <span className="shrink-0">
+                          <TrackBadge name={track.name} color={track.color} />
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+            </ol>
+          </section>
+        ))}
       </div>
 
       <MoveSessionDrawer

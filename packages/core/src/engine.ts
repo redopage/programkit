@@ -1,5 +1,5 @@
 import { operationDefinition } from './manifest.ts'
-import { eventCalendarFilename } from './calendar.ts'
+import { eventCalendarFilename, eventCalendarInvitation } from './calendar.ts'
 import { acceleventsExportPreflight, buildAcceleventsExportItems } from './accelevents.ts'
 import { normalizeWorkspaceState } from './migrations.ts'
 import {
@@ -2231,6 +2231,49 @@ function applyHandler(
       return { export: acceleventsExport, item }
     }
 
+    case 'accelevents.retry-export': {
+      const acceleventsExport = findRequired(
+        state.acceleventsExports,
+        input.exportId,
+        'Accelevents export',
+      )
+      if (acceleventsExport.status === 'delivered') {
+        throw new OperationError('NO_CHANGES', 'Every item in that export is already delivered.')
+      }
+      const retryable = acceleventsExport.items.filter((entry) => entry.status !== 'delivered')
+      if (retryable.length === 0) {
+        throw new OperationError('NO_CHANGES', 'That export has no retryable items.')
+      }
+      for (const item of retryable) {
+        if (item.status === 'failed') {
+          item.status = 'pending_provider'
+          item.lastError = null
+          item.updatedAt = timestamp
+          item.version += 1
+        }
+      }
+      const delivered = acceleventsExport.items.filter(
+        (entry) => entry.status === 'delivered',
+      ).length
+      acceleventsExport.status = delivered > 0 ? 'partial' : 'pending_provider'
+      acceleventsExport.updatedAt = timestamp
+      acceleventsExport.version += 1
+      appendEvent(state, context, {
+        type: 'accelevents.export-retry-queued',
+        aggregate: {
+          type: 'accelevents-export',
+          id: acceleventsExport.id,
+          version: acceleventsExport.version,
+        },
+        summary: `Queued ${retryable.length} Accelevents export items for provider delivery.`,
+        data: {
+          exportId: acceleventsExport.id,
+          deliveryItemIds: retryable.map((entry) => entry.id),
+        },
+      })
+      return { export: acceleventsExport, items: retryable }
+    }
+
     case 'campaign.create-draft': {
       const audience = assertOneOf(input.audience, 'audience', [
         'all_active',
@@ -2325,7 +2368,7 @@ function applyHandler(
         )
       }
       const event = findRequired(state.events, campaign.eventId, 'event')
-      const attachmentNames = campaign.includeEventInvite ? [eventCalendarFilename(event)] : []
+      const calendarFilename = eventCalendarFilename(event)
       const deliveries: CampaignDelivery[] = []
       for (const participationId of new Set(campaign.recipientParticipationIds)) {
         const participation = findRequired(state.participations, participationId, 'participation')
@@ -2342,6 +2385,16 @@ function applyHandler(
           participation.status === 'declined' ||
           participation.status === 'withdrawn' ||
           !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)
+        const attachments =
+          campaign.includeEventInvite && !suppressed
+            ? [
+                {
+                  filename: calendarFilename,
+                  contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+                  content: eventCalendarInvitation(state.workspace, event, email, timestamp),
+                },
+              ]
+            : []
         deliveries.push({
           id: createId('dlv'),
           campaignId: campaign.id,
@@ -2355,7 +2408,8 @@ function applyHandler(
           status: suppressed ? 'suppressed' : 'pending_provider',
           provider: null,
           providerMessageId: null,
-          attachmentNames: [...attachmentNames],
+          attachmentNames: attachments.map((attachment) => attachment.filename),
+          attachments: structuredClone(attachments),
           attemptCount: 0,
           lastError: suppressed ? 'Recipient is unavailable or has no deliverable email.' : null,
           createdAt: timestamp,
@@ -2446,6 +2500,43 @@ function applyHandler(
         },
       })
       return { campaign, delivery }
+    }
+
+    case 'campaign.retry-deliveries': {
+      const campaign = findRequired(state.campaigns, input.campaignId, 'campaign')
+      if (campaign.status !== 'queued') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Only a queued campaign can retry provider delivery.',
+        )
+      }
+      const retryable = state.campaignDeliveries.filter(
+        (entry) =>
+          entry.campaignId === campaign.id &&
+          (entry.status === 'pending_provider' || entry.status === 'failed'),
+      )
+      if (retryable.length === 0) {
+        throw new OperationError('NO_CHANGES', 'That campaign has no retryable deliveries.')
+      }
+      for (const delivery of retryable) {
+        if (delivery.status === 'failed') {
+          delivery.status = 'pending_provider'
+          delivery.lastError = null
+          delivery.updatedAt = timestamp
+          delivery.version += 1
+        }
+      }
+      campaign.version += 1
+      appendEvent(state, context, {
+        type: 'campaign.delivery-retry-queued',
+        aggregate: { type: 'campaign', id: campaign.id, version: campaign.version },
+        summary: `Queued ${retryable.length} ${campaign.name} deliveries for provider retry.`,
+        data: {
+          campaignId: campaign.id,
+          deliveryIds: retryable.map((entry) => entry.id),
+        },
+      })
+      return { campaign, deliveries: retryable }
     }
 
     case 'change-set.create': {

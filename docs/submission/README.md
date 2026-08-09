@@ -12,6 +12,7 @@ core operation, authorization boundary, tests, documentation, and browser proof 
 | ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Product spine      | Behavior-complete in local checkpoints | CFP, review, speaker portal, communications, scheduling, readiness, integrations, resources, and public embeds                                   |
 | Multi-round review | Verified local checkpoint              | `7cce2e1`; 68/68 tests; full browser flow from round advancement through accepted-session conversion                                             |
+| Rules compliance   | Verified local checkpoint              | 72/72 tests; full calendar attachments, provider consumers, five agenda views, near-real-time readiness refresh, and local browser QA            |
 | Design and copy    | In progress                            | Claude receives only bounded view-file scopes; Codex reviews and rejects behavioral or architectural changes                                     |
 | Integration        | Pending                                | Accepted local checkpoints still need a deliberate local integration pass and clean-checkout verification                                        |
 | Submission assets  | Drafted here                           | [Evidence matrix](evidence-matrix.md), [walkthrough](walkthrough.md), [submission copy](submission-copy.md), and [QA checklist](qa-checklist.md) |

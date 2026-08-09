@@ -154,10 +154,11 @@ errors. Inbound edits are compared against the last-synced baseline. Safe allowl
 named operations or previewable change sets; concurrent changes become explicit conflicts. Airtable
 never overwrites ProgramKit state silently.
 
-R2 will own private file bytes. Domain `Asset` records store opaque object keys and safe metadata;
-upload and download routes recheck workspace and record ownership. Cloudflare Email Service will
-be the default outbound transport behind the same delivery outbox, with provider identifiers and
-attempt history stored as operational records.
+R2 owns private file bytes. Domain `Asset` records store opaque object keys and safe metadata;
+upload and download routes recheck workspace and record ownership. Cloudflare Email Service is the
+accepted-speaker outbound transport behind the delivery outbox: the full calendar attachment is
+frozen in the transaction, the host starts delivery only after commit, and provider identifiers and
+attempt history remain operational records. Sender-domain activation is a release-time host gate.
 
 The workspace object can also own hibernating WebSocket connections. After a transaction commits,
 it broadcasts a small revision and topic hint; each authorized web surface invalidates and refetches
@@ -176,8 +177,9 @@ Package exports point to `dist/` by default and to TypeScript source under the `
 condition used in the workspace.
 
 `WorkspaceRepository` is the testable boundary between domain transitions and Durable Object
-storage. Identity, email, webhooks, R2, queues, Airtable credentials, and secret management are
-composed in `apps/cloudflare` and are not provided by the reference demo.
+storage. Identity, email, Accelevents, webhooks, R2, queues, Airtable credentials, and secret
+management are composed in `apps/cloudflare`. The email and Accelevents adapters are executable but
+remain inert without their owner-managed host configuration.
 
 See [Deployment](DEPLOYMENT.md) for the supported Cloudflare stack, D1 decision, Airtable mirror,
 and production binding sequence.

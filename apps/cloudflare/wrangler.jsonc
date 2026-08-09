@@ -4,6 +4,10 @@
   "compatibility_date": "2026-07-07",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./src/worker.ts",
+  "vars": {
+    "PROGRAMKIT_EMAIL_FROM": "notifications@programkit.dev",
+  },
+  "send_email": [{ "name": "EMAIL" }],
   "assets": {
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",

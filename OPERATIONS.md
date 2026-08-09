@@ -150,8 +150,8 @@ pointing a real domain or real data at it:
 
 - replace demo actor and workspace routing with verified staff and participant identity;
 - add OAuth and workspace-scoped authorization to `/mcp`;
-- connect the existing campaign and submission-receipt outboxes to retrying email and webhook
-  delivery consumers;
+- activate the checked-in campaign Email Service consumer only after sender verification, then
+  connect the separate submission-receipt outbox and future webhooks to equivalent consumers;
 - add private object storage, scanning, signed downloads, and lifecycle policies;
 - remove wildcard scopes and restrict administrative operations;
 - configure rate limits, alerts, structured logs, and incident procedures;
@@ -159,11 +159,13 @@ pointing a real domain or real data at it:
 - complete every item in `SECURITY.md`.
 
 `campaign.send` creates durable, per-recipient delivery records and marks the campaign `queued`; it
-does not mark the message sent or contact an external provider. Calendar attachments are real RFC
-5545 downloads. `campaign.record-delivery` is the trusted provider-result boundary and closes a
-campaign only after every recipient is delivered or suppressed. Configure sender-domain
-verification, the Cloudflare Email Service binding, retries, and the consumer before processing
-`pending_provider` rows. The Airtable row describes the planned mirror and must not be shown as
+does not mark the message sent or contact an external provider inside the transaction. Each row
+contains the full RFC 5545 attachment. After commit, the Cloudflare host invokes the checked-in
+Email Service consumer only when its binding and sender address exist. `campaign.record-delivery`
+is the trusted provider-result boundary and closes a campaign only after every recipient is
+delivered or suppressed; `campaign.retry-deliveries` queues pending and failed rows again without
+discarding attempt counts. Complete sender-domain verification and use controlled recipients before
+processing real rows. The Airtable row describes the planned mirror and must not be shown as
 connected until a real cursor and delivery state exist.
 
 `submission.submit` atomically freezes one confirmation receipt alongside the accepted proposal.

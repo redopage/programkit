@@ -1,13 +1,28 @@
 import { handleMcpRequest } from '@programkit/agent'
 import { WorkspaceDurableObject } from '@programkit/core/cloudflare'
-import type { OperationRequest, OperationResponse, WorkspaceState } from '@programkit/core'
+import type {
+  AcceleventsExport,
+  CampaignDelivery,
+  OperationRequest,
+  OperationResponse,
+  WorkspaceState,
+} from '@programkit/core'
+
+import {
+  deliverAcceleventsItem,
+  deliverCampaignMessage,
+  type EmailSendBinding,
+} from './providers.ts'
 
 export { WorkspaceDurableObject }
 
 interface Env {
   ASSETS: Fetcher
+  EMAIL?: EmailSendBinding
   PROGRAMKIT_ASSETS: R2Bucket
   PROGRAMKIT_WORKSPACES: DurableObjectNamespace<WorkspaceDurableObject>
+  PROGRAMKIT_EMAIL_FROM?: string
+  ACCELEVENTS_API_KEY?: string
 }
 
 const demoStaffActor = {
@@ -22,6 +37,13 @@ const agentReaderActor = {
   id: 'agent_programkit',
   name: 'ProgramKit Agent',
   scopes: ['workspace:read'],
+}
+
+const providerServiceActor = {
+  type: 'service' as const,
+  id: 'service_provider_delivery',
+  name: 'Provider delivery consumer',
+  scopes: ['workspace:read', 'communications:deliver', 'integrations:deliver'],
 }
 
 const publicReaderActor = {
@@ -143,8 +165,105 @@ async function executeWorkspaceOperation(
   return (await response.json()) as OperationResponse
 }
 
+function providerFailure(error: unknown) {
+  if (!(error instanceof Error)) return 'The provider request failed.'
+  const code = 'code' in error && typeof error.code === 'string' ? `${error.code}: ` : ''
+  return `${code}${error.message}`.replace(/\s+/gu, ' ').trim().slice(0, 500)
+}
+
+async function recordCampaignDelivery(
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  delivery: CampaignDelivery,
+  result:
+    { status: 'delivered'; providerMessageId: string } | { status: 'failed'; lastError: string },
+) {
+  return executeWorkspaceOperation(stub, 'campaign.record-delivery', {
+    actor: providerServiceActor,
+    input: { deliveryId: delivery.id, ...result },
+    expectedVersions: { [delivery.id]: delivery.version },
+    idempotencyKey: `provider-email-${delivery.id}-${delivery.attemptCount + 1}`,
+  })
+}
+
+async function deliverPendingCampaigns(
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  env: Env,
+  campaignId: string,
+) {
+  if (!env.EMAIL || !env.PROGRAMKIT_EMAIL_FROM) return
+  const state = await readWorkspace(stub)
+  const pending = state.campaignDeliveries.filter(
+    (entry) => entry.campaignId === campaignId && entry.status === 'pending_provider',
+  )
+  for (const delivery of pending) {
+    try {
+      const providerMessageId = await deliverCampaignMessage(
+        env.EMAIL,
+        env.PROGRAMKIT_EMAIL_FROM,
+        delivery,
+      )
+      await recordCampaignDelivery(stub, delivery, { status: 'delivered', providerMessageId })
+    } catch (error) {
+      await recordCampaignDelivery(stub, delivery, {
+        status: 'failed',
+        lastError: providerFailure(error),
+      })
+    }
+  }
+}
+
+async function recordAcceleventsResult(
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  batch: AcceleventsExport,
+  item: AcceleventsExport['items'][number],
+  result: { status: 'delivered'; providerId: string } | { status: 'failed'; lastError: string },
+) {
+  return executeWorkspaceOperation(stub, 'accelevents.record-result', {
+    actor: providerServiceActor,
+    input: { exportId: batch.id, itemId: item.id, ...result },
+    expectedVersions: { [item.id]: item.version },
+    idempotencyKey: `provider-accelevents-${item.id}-${item.attemptCount + 1}`,
+  })
+}
+
+async function deliverPendingAcceleventsExports(
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  env: Env,
+  exportId: string,
+) {
+  if (!env.ACCELEVENTS_API_KEY) return
+  const state = await readWorkspace(stub)
+  for (const batch of state.acceleventsExports.filter((entry) => entry.id === exportId)) {
+    const pending = batch.items.filter((entry) => entry.status === 'pending_provider')
+    if (pending.length === 0) continue
+    const speakerProviderIds = new Map(
+      batch.items
+        .filter((entry) => entry.resource === 'speaker' && entry.providerId)
+        .map((entry) => [entry.externalKey, entry.providerId!]),
+    )
+    for (const item of pending) {
+      try {
+        const providerId = await deliverAcceleventsItem(
+          fetch,
+          env.ACCELEVENTS_API_KEY,
+          batch.eventUrl,
+          item,
+          speakerProviderIds,
+        )
+        if (item.resource === 'speaker') speakerProviderIds.set(item.externalKey, providerId)
+        await recordAcceleventsResult(stub, batch, item, { status: 'delivered', providerId })
+      } catch (error) {
+        await recordAcceleventsResult(stub, batch, item, {
+          status: 'failed',
+          lastError: providerFailure(error),
+        })
+      }
+    }
+  }
+}
+
 export default {
-  async fetch(request: Request, env: Env) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url)
     const stub = workspaceStub(env, request)
 
@@ -291,7 +410,61 @@ export default {
             : url.pathname.startsWith('/public/')
               ? publicReaderActor
               : demoStaffActor
-      return stub.fetch(withActor(request, actor))
+      const response = await stub.fetch(withActor(request, actor))
+      const operatorOperation = url.pathname.startsWith('/api/v1/operations/')
+        ? decodeURIComponent(url.pathname.slice('/api/v1/operations/'.length))
+        : null
+      if (response.ok && operatorOperation) {
+        let operationData: Record<string, unknown> = {}
+        try {
+          const operationResponse = (await response.clone().json()) as OperationResponse
+          operationData =
+            operationResponse.data && typeof operationResponse.data === 'object'
+              ? (operationResponse.data as Record<string, unknown>)
+              : {}
+        } catch {
+          operationData = {}
+        }
+        if (
+          operatorOperation === 'campaign.send' ||
+          operatorOperation === 'campaign.retry-deliveries'
+        ) {
+          const campaign = operationData.campaign
+          if (
+            campaign &&
+            typeof campaign === 'object' &&
+            typeof (campaign as Record<string, unknown>).id === 'string'
+          ) {
+            ctx.waitUntil(
+              deliverPendingCampaigns(
+                stub,
+                env,
+                (campaign as Record<string, unknown>).id as string,
+              ),
+            )
+          }
+        }
+        if (
+          operatorOperation === 'accelevents.prepare-export' ||
+          operatorOperation === 'accelevents.retry-export'
+        ) {
+          const acceleventsExport = operationData.export
+          if (
+            acceleventsExport &&
+            typeof acceleventsExport === 'object' &&
+            typeof (acceleventsExport as Record<string, unknown>).id === 'string'
+          ) {
+            ctx.waitUntil(
+              deliverPendingAcceleventsExports(
+                stub,
+                env,
+                (acceleventsExport as Record<string, unknown>).id as string,
+              ),
+            )
+          }
+        }
+      }
+      return response
     }
 
     return env.ASSETS.fetch(request)

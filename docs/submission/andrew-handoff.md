@@ -38,9 +38,14 @@ Expected: a clean worktree and green tests, lint, formatting, TypeScript/package
 Cloudflare Worker/client builds, and plugin validation. Stop if dependency resolution changes the
 lockfile or if any generated file is unexpectedly dirty.
 
-## 3. Confirm Cloudflare resources and deploy
+## 3. Confirm Cloudflare resources and provider gates
 
-The checked-in app expects the `programkit-assets` R2 bucket. Inspect first:
+The checked-in app expects the `programkit-assets` R2 bucket and an Email Service binding named
+`EMAIL`. Before deployment, onboard `programkit.dev` to Cloudflare Email Service, complete its DNS
+verification, and confirm `notifications@programkit.dev` is an allowed sender. Do not bypass or
+temporarily weaken sender verification.
+
+Inspect the R2 account first:
 
 ```bash
 pnpm --filter @programkit/app-cloudflare exec wrangler r2 bucket list
@@ -58,9 +63,24 @@ Deploy the verified commit:
 pnpm deploy
 ```
 
-Do not activate outbound email or Accelevents credentials merely to make the demo look connected.
-If those provider boundaries are activated, store secrets in Cloudflare, preserve the durable
-outbox-first contract, and retain one provider-confirmed smoke-test receipt.
+The Accelevents adapter is already implemented and remains inert without its Enterprise key. If a
+controlled target event is available, add the owner-managed key only to Cloudflare's secret store:
+
+```bash
+pnpm --filter @programkit/app-cloudflare exec wrangler secret put ACCELEVENTS_API_KEY
+```
+
+Do not place the value in `.env`, `wrangler.jsonc`, the workspace state, screenshots, or command
+output. Do not activate outbound email or Accelevents merely to make the demo look connected.
+
+For the email smoke test, create a new campaign whose entire audience consists of controlled test
+addresses, include the calendar invite, queue that campaign, and retain both its Cloudflare message
+ID and the received `.ics`. Do not retry the seeded welcome campaign against real delivery.
+
+For the Accelevents smoke test, stage only a controlled event target. Confirm speaker IDs arrive
+before related session IDs; then publish a small changed release and verify known records use update
+rather than duplicate create. Retain the ProgramKit batch evidence and matching provider records.
+Partial failure must remain visible and retryable.
 
 ## 4. Attach DNS and verify TLS
 

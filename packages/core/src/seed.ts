@@ -1,7 +1,9 @@
+import { eventCalendarInvitation } from './calendar.ts'
 import type {
   Asset,
   Campaign,
   CampaignDelivery,
+  Event,
   EvaluationPlan,
   Integration,
   Participation,
@@ -24,10 +26,30 @@ import type {
   SubmissionReceiptDelivery,
   Track,
   WorkspaceState,
+  Workspace,
 } from './types.ts'
 
 const seededAt = '2026-08-07T14:00:00.000Z'
 const eventId = 'evt_nyc_2026'
+const seededWorkspace: Workspace = {
+  id: 'wrk_aie',
+  name: 'AIE Program Team',
+  slug: 'aie',
+  timezone: 'America/New_York',
+}
+const seededEvent: Event = {
+  id: eventId,
+  name: 'AIE NYC 2026',
+  slug: 'aie-nyc-2026',
+  venue: 'Brooklyn Navy Yard',
+  city: 'Brooklyn, New York',
+  startsAt: '2026-10-04T13:00:00.000Z',
+  endsAt: '2026-10-05T22:00:00.000Z',
+  timezone: 'America/New_York',
+  status: 'active',
+  publishedScheduleVersion: 3,
+  version: 1,
+}
 
 const peopleInput = [
   ['Robin', 'Sloan', 'robin@axiom.dev', 'Axiom', 'Founder', 'Austin, TX', 'America/Chicago'],
@@ -1250,6 +1272,18 @@ const campaignDeliveries: CampaignDelivery[] = campaigns[1].recipientParticipati
         provider: null,
         providerMessageId: null,
         attachmentNames: ['aie-nyc-2026-invite.ics'],
+        attachments: [
+          {
+            filename: 'aie-nyc-2026-invite.ics',
+            contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+            content: eventCalendarInvitation(
+              seededWorkspace,
+              seededEvent,
+              person.email,
+              '2026-07-21T16:00:00.000Z',
+            ),
+          },
+        ],
         attemptCount: 0,
         lastError: null,
         createdAt: '2026-07-21T16:00:00.000Z',
@@ -1324,30 +1358,11 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     revision: 1,
-    workspace: {
-      id: 'wrk_aie',
-      name: 'AIE Program Team',
-      slug: 'aie',
-      timezone: 'America/New_York',
-    },
+    workspace: structuredClone(seededWorkspace),
     activeEventId: eventId,
-    events: [
-      {
-        id: eventId,
-        name: 'AIE NYC 2026',
-        slug: 'aie-nyc-2026',
-        venue: 'Brooklyn Navy Yard',
-        city: 'Brooklyn, New York',
-        startsAt: '2026-10-04T13:00:00.000Z',
-        endsAt: '2026-10-05T22:00:00.000Z',
-        timezone: 'America/New_York',
-        status: 'active',
-        publishedScheduleVersion: 3,
-        version: 1,
-      },
-    ],
+    events: [structuredClone(seededEvent)],
     people: structuredClone(people),
     participations: structuredClone(participations),
     requirementDefinitions: structuredClone(requirementDefinitions),

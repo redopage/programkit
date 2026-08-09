@@ -59,6 +59,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const workspaceQuery = useQuery({
     queryKey: workspaceQueryKey,
     queryFn: ({ signal }) => client.readSurface(surface, signal),
+    refetchInterval: surface.kind === 'operator' ? 5_000 : 15_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: 'always',
+    staleTime: 2_000,
   })
   const {
     data: workspacePayload,

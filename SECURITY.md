@@ -81,9 +81,10 @@ reference `x-programkit-workspace-key` header as an authorization decision.
    missing, expired, replayed, or wrong-audience tokens.
 4. Protect browser mutations with secure, HTTP-only, same-site cookies and CSRF validation where
    the chosen session design requires it.
-5. Connect the durable campaign and submission-receipt outboxes to idempotent, retrying workers for
-   outbound email and webhooks. `campaign.send` and `submission.submit` can record jobs as
-   `pending_provider`; neither status means mail was delivered.
+5. Activate and harden the checked-in post-commit campaign email consumer behind a verified sender,
+   controlled smoke recipients, rate limits, and monitoring. Connect the separate submission-
+   receipt outbox and future webhooks to equivalent retrying consumers. `campaign.send` and
+   `submission.submit` record `pending_provider`; neither status means mail was delivered.
 6. Store provider secrets in a managed secret service, never in workspace state, source control,
    browser bundles, or logs.
 7. Replace the reference portal identity with authenticated, per-workspace authorization for the

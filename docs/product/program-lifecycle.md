@@ -93,18 +93,20 @@ scripts and render in an iframe sandbox, so this capability does not become an a
 Organizers can start from an accepted-speaker template, target confirmed speakers, preview rendered
 recipient fields, and attach the event's RFC 5545 invite for Google Calendar, Outlook, or Apple
 Calendar. Approval freezes the submitted recipient set. Queueing creates one durable delivery row
-per recipient, suppresses unavailable or undeliverable contacts, and keeps the campaign visibly in
-the outbox until trusted provider results are recorded.
-
-The reference app does not contact an email provider. Sender-domain verification, the Cloudflare
-Email Service binding, and a retrying consumer are explicit release-enablement work.
+per recipient with the exact rendered message and complete calendar payload, suppresses unavailable
+or undeliverable contacts, and keeps the campaign visibly in the outbox until trusted provider
+results are recorded. After the transaction commits, the Cloudflare host invokes its Email Service
+consumer when the binding and sender exist; provider IDs or concise failures flow back through the
+trusted result operation. Failed rows can be queued again without rebuilding content or losing
+attempt counts. Sender-domain verification remains release enablement owned outside the repository.
 
 ## 7. Build and publish the schedule
 
 Sessions are content; placements are mutable draft room/time assignments. Conflict checks run
 against the draft. Ready sessions without a placement stay in an explicit unscheduled tray.
-Organizers can place or move them through timezone-safe forms, filter by day, room, or track, and
-undo the last accepted change through another version-checked operation.
+Organizers can place or move them through timezone-safe forms, switch among list, day, week, track,
+and room views, filter by day, room, or track, and undo the last accepted change through another
+version-checked operation.
 
 The publish preflight compares the draft with the latest release. It blocks duplicate placements,
 hard conflicts, unscheduled active sessions, empty schedules, and unchanged releases, while
@@ -122,9 +124,11 @@ Draft placements and operator-only records are excluded. Each item carries its o
 attempt count, provider ID, error, and version so partial failures can be retried without rebuilding
 or duplicating the packet.
 
-The reference host does not store an Accelevents API key or claim provider delivery. A credentialed
-consumer runs after the workspace commit and records its outcomes through the trusted result
-operation.
+The reference host never stores an Accelevents API key in workspace state or client code. When the
+owner-managed Worker secret exists, the post-commit consumer uses the official authenticated host
+API to create or update speakers first, resolve their provider IDs into session relationships, and
+then create or update sessions. Each outcome returns through the trusted result operation. Without
+the secret, the same packet remains honestly pending.
 
 ## 9. Share the public program as embeds
 

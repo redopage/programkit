@@ -76,3 +76,43 @@ export function eventCalendar(
   ]
   return `${lines.map(foldCalendarLine).join('\r\n')}\r\n`
 }
+
+export function eventCalendarInvitation(
+  workspace: Workspace,
+  event: Event,
+  attendeeEmail: string,
+  generatedAt: string = new Date().toISOString(),
+  organizerEmail = 'notifications@programkit.dev',
+) {
+  const attendee = attendeeEmail.trim().toLocaleLowerCase()
+  const organizer = organizerEmail.trim().toLocaleLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(attendee)) {
+    throw new Error('A calendar invitation requires a valid attendee email address.')
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(organizer)) {
+    throw new Error('A calendar invitation requires a valid organizer email address.')
+  }
+  const location = [event.venue, event.city].filter(Boolean).join(', ')
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//ProgramKit//Event Invitation//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `UID:${escapeCalendarText(`${event.id}@${workspace.slug}.programkit`)}`,
+    `DTSTAMP:${calendarTimestamp(generatedAt)}`,
+    `DTSTART:${calendarTimestamp(event.startsAt)}`,
+    `DTEND:${calendarTimestamp(event.endsAt)}`,
+    `SUMMARY:${escapeCalendarText(event.name)}`,
+    `DESCRIPTION:${escapeCalendarText(`Join ${workspace.name} for ${event.name}.`)}`,
+    `LOCATION:${escapeCalendarText(location)}`,
+    `ORGANIZER:mailto:${organizer}`,
+    `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${attendee}`,
+    'SEQUENCE:0',
+    'STATUS:CONFIRMED',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ]
+  return `${lines.map(foldCalendarLine).join('\r\n')}\r\n`
+}

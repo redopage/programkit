@@ -13,17 +13,17 @@ is the source of truth for that distinction.
 
 ## Current capability map
 
-| Workflow           | Trustworthy today                                                                                                                                                                                                                                                                                                                    | Still needed for production depth                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Event setup        | Active-event identity, slug, venue, city, dates, timezone, lifecycle status, version checks and schedule-boundary validation                                                                                                                                                                                                         | Multi-event switching, administrator membership, branding and public theme controls                                 |
-| CFP                | Multiple event forms, editable public content, ordered fields, choice options, required fields, explicit speaker/session data mappings, shared publish readiness, conditional visibility, track/category routing into accepted sessions, draft preview, public submission, frozen confirmation receipts, and truthful delivery state | File restrictions, richer validation rules, published-version comparison and branch-coverage tests                  |
-| Review             | Reviewer teams, ordered assignment rounds, guarded and idempotent round advancement, scoped reviewer projection, scorecards, blind-review redaction, active-round summaries, final-round acceptance policy, audit evidence, and accepted-record conversion                                                                           | Conflict-of-interest declarations, saved committee filters, assignment balancing controls                           |
-| Speaker onboarding | Scoped participant projection, profile editing, typed text/form/file requirement submission, private R2 uploads and downloads, due dates, organizer review states, published guides, and sandboxed static HTML cards                                                                                                                 | Shared cross-surface task renderer, release documents, revision conversations, logistics templates, upload scanning |
-| Communications     | Accepted-speaker template, audience preview, approval, frozen personalized messages, truthful recipient outbox, provider-result recording, calendar downloads, and submission-receipt outbox                                                                                                                                         | Provider activation, test sends, scheduling, retry controls, and richer attempt history                             |
-| Scheduling         | Draft placements, unscheduled tray, timezone-safe place/move forms, accessible drag-and-drop, safe undo, day/room/track filters, conflict previews, full draft-versus-published preflight, immutable releases, public projection                                                                                                     | Reusable time-block templates, travel/buffer constraints, track locking, and richer collaborative draft history     |
-| Readiness          | Participant matrix, due dates in the domain, blocker counts, submitted-item approval, speaker detail                                                                                                                                                                                                                                 | Overdue explanations, saved filters, bulk reminders/approval and communication history                              |
-| Integrations       | Versioned API/export, Accelevents published-program mapping preflight, frozen per-item outbox, provider result/retry evidence, and conflict-aware Airtable reconciliation primitive                                                                                                                                                  | Accelevents credentialed consumer and provider smoke test; Airtable runtime delivery and cursor UI                  |
-| Public program     | Immutable agenda, read-only public projection, embeddable mobile speaker gallery, and private-on-device itinerary                                                                                                                                                                                                                    | Host-site theme controls, richer session detail, and production embed/CSP smoke tests                               |
+| Workflow           | Trustworthy today                                                                                                                                                                                                                                                                                                                    | Still needed for production depth                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Event setup        | Active-event identity, slug, venue, city, dates, timezone, lifecycle status, version checks and schedule-boundary validation                                                                                                                                                                                                         | Multi-event switching, administrator membership, branding and public theme controls                                           |
+| CFP                | Multiple event forms, editable public content, ordered fields, choice options, required fields, explicit speaker/session data mappings, shared publish readiness, conditional visibility, track/category routing into accepted sessions, draft preview, public submission, frozen confirmation receipts, and truthful delivery state | File restrictions, richer validation rules, published-version comparison and branch-coverage tests                            |
+| Review             | Reviewer teams, ordered assignment rounds, guarded and idempotent round advancement, scoped reviewer projection, scorecards, blind-review redaction, active-round summaries, final-round acceptance policy, audit evidence, and accepted-record conversion                                                                           | Conflict-of-interest declarations, saved committee filters, assignment balancing controls                                     |
+| Speaker onboarding | Scoped participant projection, profile editing, typed text/form/file requirement submission, private R2 uploads and downloads, due dates, organizer review states, published guides, and sandboxed static HTML cards                                                                                                                 | Shared cross-surface task renderer, release documents, revision conversations, logistics templates, upload scanning           |
+| Communications     | Accepted-speaker template, audience preview, approval, frozen personalized messages and full RFC 5545 attachments, truthful recipient outbox, post-commit Cloudflare Email consumer, provider-result recording, retry control, calendar downloads, and submission-receipt outbox                                                     | Sender-domain activation, controlled test sends, scheduling, submission-receipt delivery consumer, and richer attempt history |
+| Scheduling         | Draft placements, unscheduled tray, timezone-safe place/move forms, accessible drag-and-drop, safe undo, explicit list/day/week/track/room views and filters, conflict previews, full draft-versus-published preflight, immutable releases, public projection                                                                        | Reusable time-block templates, travel/buffer constraints, track locking, and richer collaborative draft history               |
+| Readiness          | Participant matrix, due dates in the domain, blocker counts, submitted-item approval, speaker detail, and foreground five-second operator refresh                                                                                                                                                                                    | Overdue explanations, saved filters, bulk reminders/approval and communication history                                        |
+| Integrations       | Versioned API/export, Accelevents published-program mapping preflight, frozen per-item outbox, authenticated post-commit create/update consumer, retained provider IDs, provider result/retry evidence, and conflict-aware Airtable reconciliation primitive                                                                         | Accelevents Enterprise credential activation and provider smoke test; Airtable runtime delivery and cursor UI                 |
+| Public program     | Immutable agenda, read-only public projection, embeddable mobile speaker gallery, and private-on-device itinerary                                                                                                                                                                                                                    | Host-site theme controls, richer session detail, and production embed/CSP smoke tests                                         |
 
 ## Foundation already in place
 
@@ -82,10 +82,13 @@ membership. See [Security](SECURITY.md).
 - Done: accepted-speaker template, confirmed-speaker audience, field rendering, recipient preview,
   suppression safeguards, durable recipient jobs, provider-result recording, and RFC 5545 calendar
   attachment/download.
+- Done: freeze the full calendar payload per recipient and deliver it as a structured attachment
+  through the post-commit Cloudflare Email consumer; failed rows can be queued again without
+  losing attempt evidence.
 - Done: freeze one submitter-owned confirmation receipt during proposal submission, surface its
   truthful outbox state to submitters and organizers, and record trusted provider outcomes.
-- Next: add operator-triggered test delivery and connect the retrying Cloudflare Email Service
-  consumer after sender-domain verification.
+- Next: activate a verified sender, run a controlled campaign smoke test, add test-send isolation,
+  and connect the separate submission-receipt outbox to the same transport.
 
 Provider calls must run only after the outbox commit. Domain events already preserve queue and
 provider-result history; a richer per-message attempt timeline remains production depth.
@@ -93,6 +96,8 @@ provider-result history; a richer per-message attempt timeline remains productio
 ### 5. Finish the scheduling studio
 
 - Done: add an unscheduled-session tray and day/room/track filters.
+- Done: make list, day, week, track, and room explicit operator view modes while retaining the
+  accessible room/time drag surface.
 - Done: add safe last-change undo and a publication preflight with draft-versus-published evidence.
 - Next: add reusable time-block templates, travel/buffer constraints, track locking, and richer
   collaborative draft history when pilot evidence requires them.
@@ -102,7 +107,10 @@ provider-result history; a richer per-message attempt timeline remains productio
 - Explain every blocker in plain language.
 - Add saved readiness filters and safe bulk actions.
 - Deep-link every work item and proposed change.
-- Add hibernating workspace WebSockets for revision invalidation and durable in-app notifications.
+- Done: refetch active operator projections every five seconds in the foreground and on focus so
+  readiness changes appear without a manual reload.
+- Next: add hibernating workspace WebSockets for lower-latency revision invalidation and durable
+  in-app notifications when scale evidence justifies them.
 
 ### 7. Add the Airtable team mirror
 
@@ -118,8 +126,11 @@ provider-result history; a richer per-message attempt timeline remains productio
 - Done: map only the latest immutable schedule release into stable speaker and session records.
 - Done: freeze versioned per-item delivery state with provider IDs, failure evidence, and retries.
 - Done: expose the preflight, mapping, packet status, and honest credential boundary to operators.
-- Next: connect the owner-managed Enterprise API key in a Cloudflare consumer and retain a
-  provider-confirmed smoke-test receipt.
+- Done: implement the post-commit Cloudflare consumer against Accelevents' authenticated speaker
+  and session create/update endpoints, including speaker-first relationship mapping and provider
+  ID reuse across releases.
+- Next: activate the owner-managed Enterprise API key and retain a provider-confirmed smoke-test
+  receipt.
 
 ### 9. Publish speaker resources and public embeds
 

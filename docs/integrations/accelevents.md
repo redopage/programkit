@@ -11,10 +11,13 @@ batch contains stable speaker and session items with independent status, attempt
 last error, and version. Repeating the operation for the same release and event URL is rejected so a
 retry cannot silently duplicate a batch.
 
-`accelevents.record-result` is reserved for a trusted provider consumer. It records a delivered or
-failed outcome for one item. Failed items remain retryable; delivered items are terminal. The batch
-and integration summaries derive from the item evidence instead of claiming success when a packet
-is merely staged.
+After the workspace commit, the Cloudflare host invokes the checked-in provider consumer only when
+the owner-managed `ACCELEVENTS_API_KEY` secret exists. It processes speakers before sessions, uses
+documented create calls for new records and update calls for retained provider IDs, and resolves
+speaker IDs into each session relationship. `accelevents.record-result` is reserved for that trusted
+consumer. It records a delivered or failed outcome for one item; `accelevents.retry-export` queues
+every undelivered frozen item again. Delivered items are terminal. Batch and integration summaries
+derive from provider evidence instead of claiming success when a packet is merely staged.
 
 ## Mapping contract
 
@@ -27,13 +30,15 @@ Session formats map to Accelevents' documented values: keynotes use `MAIN_STAGE`
 use `BREAKOUT_SESSION`, workshops use `WORKSHOP`, and breaks use `BREAK`. Date/time strings use the
 event timezone and Accelevents' documented `yyyy/MM/dd HH:mm` shape.
 
-The official host-side API documents speaker records at
-[`/rest/host/event/{eventUrl}/speaker`](https://developer.accelevents.com/reference/get-all-speakers)
-and session records at
-[`/rest/host/event/{eventUrl}/session`](https://developer.accelevents.com/reference/get-all-sessions-1).
-The session documentation describes the title, start/end, description, capacity, visibility, and
-format fields used by the packet. The provider consumer must reconcile stable ProgramKit keys with
-provider IDs before choosing create or update calls.
+The consumer follows Accelevents' official host-side
+[create-speaker](https://developer.accelevents.com/reference/create-speaker),
+[update-speaker](https://developer.accelevents.com/reference/update-speaker),
+[create-session](https://developer.accelevents.com/reference/create-session), and
+[update-session](https://developer.accelevents.com/reference/update-session) contracts. Requests use
+the documented `AUTHENTICATION` header. The session documentation describes the title, start/end,
+description, capacity, visibility, and format fields used by the packet. Stable ProgramKit keys are
+audit evidence; returned provider IDs are the create-versus-update key and carry into later release
+batches.
 
 ## Credential and delivery boundary
 
@@ -42,20 +47,23 @@ API is available on Enterprise and White Label plans, and that an enterprise own
 the API key. See the official [API-key guide](https://developer.accelevents.com/docs/getting-started)
 and [API overview](https://developer.accelevents.com/docs/accelevents-api-documentation).
 
-Production activation belongs in a credentialed Cloudflare consumer after the workspace commit:
+Production activation belongs in the checked-in Cloudflare consumer after the workspace commit:
 
-1. claim a pending or failed item with an idempotency key;
-2. look up the external key and create or update the provider record;
-3. record the provider resource ID or a concise failure through `accelevents.record-result`;
-4. retry failed items with backoff without rebuilding the frozen packet.
+1. Andrew stores the Enterprise key with `wrangler secret put ACCELEVENTS_API_KEY`;
+2. an operator stages the latest published release or explicitly retries an existing batch;
+3. the host creates or updates speakers, then creates or updates sessions with those speaker IDs;
+4. it records the provider resource ID or a concise failure through
+   `accelevents.record-result` without exposing the key;
+5. a failed item remains visible and can be queued again without rebuilding the frozen packet.
 
 There is deliberately no delete propagation. Removing a ProgramKit session requires an explicit
 provider-side archive policy; a one-way export must not infer destructive external changes.
 
 ## Honest release state
 
-The reference application proves mapping, versioning, redaction, failure/retry transitions, and
-operator status. It does not include an Accelevents credential or claim a live provider delivery.
-Before production use, configure the enterprise API key and event target outside the repository,
-implement the Cloudflare consumer, exercise provider rate limits and partial failures, and retain a
-provider-confirmed smoke-test receipt.
+The reference application proves mapping, versioning, redaction, executable create/update requests,
+speaker-first relationship resolution, provider-ID reuse, failure/retry transitions, and operator
+status. It does not include an Accelevents credential or claim a live provider delivery. Before
+release, Andrew must configure the Enterprise key outside the repository, use a controlled target
+event, exercise provider rate limits and partial failures, and retain a provider-confirmed smoke-
+test receipt.

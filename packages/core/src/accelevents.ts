@@ -107,6 +107,15 @@ export function buildAcceleventsExportItems(
 ): AcceleventsExportItem[] {
   const plan = acceleventsExportPreflight(state)
   if (!plan.event || !plan.release || !plan.canPrepare) return []
+  const previousProviderId = (resource: AcceleventsExportItem['resource'], externalKey: string) =>
+    state.acceleventsExports
+      .flatMap((entry) => entry.items)
+      .find(
+        (entry) =>
+          entry.resource === resource &&
+          entry.externalKey === externalKey &&
+          Boolean(entry.providerId),
+      )?.providerId ?? null
 
   const speakerItems: AcceleventsExportItem[] = plan.people.map((person) => {
     const participations = plan.participations.filter((entry) => entry.personId === person.id)
@@ -130,7 +139,7 @@ export function buildAcceleventsExportItems(
       externalKey: payload.externalKey,
       payload,
       status: 'pending_provider',
-      providerId: null,
+      providerId: previousProviderId('speaker', payload.externalKey),
       attemptCount: 0,
       lastError: null,
       updatedAt: timestamp,
@@ -167,7 +176,7 @@ export function buildAcceleventsExportItems(
       externalKey: payload.externalKey,
       payload,
       status: 'pending_provider',
-      providerId: null,
+      providerId: previousProviderId('session', payload.externalKey),
       attemptCount: 0,
       lastError: null,
       updatedAt: timestamp,

@@ -54,7 +54,9 @@ and accept it.
 ### 3:05–4:05 — Speaker portal and readiness
 
 Open `/portal/par_003`. Show the public-profile editor, confirmation, outstanding tasks, an allowed
-file, and published resources. Then open `/readiness` and the same speaker.
+file, and published resources. Keep `/readiness` visible in a second window, change one task, and
+show its blocker count refresh within five seconds without a manual reload. Then open the same
+speaker in organizer detail.
 
 > The participant sees only their event-scoped record and private assets. Organizers see the
 > readiness consequence without giving the portal access to internal notes or anyone else's files.
@@ -62,28 +64,35 @@ file, and published resources. Then open `/readiness` and the same speaker.
 ### 4:05–5:00 — Communications and calendar
 
 Open `/communications`. Preview the accepted-speaker reminder, show one personalized recipient,
-submit and approve the campaign, then inspect the frozen outbox. Download the calendar invite.
+submit and approve the campaign, then inspect the frozen outbox and attachment. In the controlled
+provider workspace, show the returned message ID and the received `.ics`; otherwise leave the row
+truthfully pending and identify Andrew's sender-activation gate. Download the portable public
+calendar preview.
 
 > Sending records durable recipient intent before any provider call. The demo truthfully says
-> pending provider; it never turns a queued message into a fake success. The RFC 5545 invite opens
-> in Gmail, Outlook, and iCal-compatible clients.
+> pending provider; it never turns a queued message into a fake success. The post-commit Cloudflare
+> consumer sends the frozen RFC 5545 file as an attachment, which opens in Gmail, Outlook, and
+> iCal-compatible clients.
 
 ### 5:00–6:35 — Schedule, conflict, undo, and immutable publish
 
-Open `/schedule`. Show the unscheduled tray and filters. Place or drag a session into a deliberate
-conflict, show the explanation, fix it, and use undo. Open the publish preflight and publish only a
-valid changed draft. Switch to `/agenda`.
+Open `/schedule`. Switch through Session list, Day, Week, Track, and Room, then show the filters and
+unscheduled tray. Place or drag a session into a deliberate conflict, show the explanation, fix it,
+and use undo. Open the publish preflight and publish only a valid changed draft. Switch to `/agenda`.
 
 > Draft edits stay private. Publication rejects missing sessions, hard conflicts, duplicates, empty
 > schedules, and unchanged drafts. The public agenda reads only the new immutable release.
 
 ### 6:35–7:30 — Accelevents with real retry evidence
 
-Open `/integrations`. Inspect the Accelevents preflight, stage the latest release, expand a speaker
-and session item, record a provider failure, then retry and show the attempt history.
+Use only the controlled Accelevents event Andrew approved for smoke testing. Open `/integrations`,
+inspect the preflight, and stage the latest release. Show speakers receiving provider IDs before
+related sessions, then show a known ID using update on a later release. If a real provider failure
+exists, retry it and show the attempt history; do not manufacture or claim a provider result.
 
-> The packet uses stable keys and only the latest published release. Credentials remain in the
-> owner-managed provider boundary. Staging a packet is not described as delivery.
+> The packet uses stable keys and only the latest published release. The native Worker consumer
+> creates or updates speakers and sessions after commit, while the Enterprise key remains in the
+> owner-managed secret boundary. Staging a packet is never described as delivery.
 
 ### 7:30–8:45 — Resources and attendee embeds
 

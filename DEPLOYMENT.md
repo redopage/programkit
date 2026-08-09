@@ -19,28 +19,29 @@ Cloudflare Worker ── Workers Static Assets (Vite web build)
   │
   ├── workspace Durable Object ── SQLite-backed atomic event state
   ├── R2                      ── private participant uploads
-  ├── Durable Object outbox   ── recipient jobs + calendar attachment metadata
-  └── Queue / alarm + Email   ── provider delivery after sender verification (release enablement)
+  ├── Durable Object outbox   ── frozen messages, calendar payloads, and provider batches
+  └── post-commit consumers   ── Email Service + Accelevents calls when host credentials exist
 ```
 
-The runnable application currently includes the Worker, static assets, one SQLite-backed Durable
-Object per workspace key, and a private R2 binding for participant requirement uploads. Local
-development emulates that bucket. A remote deployment must provision the checked-in
-`programkit-assets` bucket first; it still needs no D1 database, queue, or email binding to run the
-deterministic demo. The demo records honest `pending_provider` campaign jobs and serves real event
-calendar files without making an outbound provider call.
+The runnable application includes the Worker, static assets, one SQLite-backed Durable Object per
+workspace key, a private R2 binding for participant requirement uploads, and a Cloudflare Email
+Service binding. Local development emulates the bucket and email send. A remote deployment must
+provision `programkit-assets` and onboard the configured sending domain first; it needs no D1
+database or queue. The Accelevents consumer remains inert unless the owner supplies its Enterprise
+API key as a Worker secret. Both consumers run only after the outbox transaction commits, and only
+provider IDs can turn `pending_provider` into delivered evidence.
 
 The production additions are intentionally Cloudflare-native:
 
-| Concern                   | Default                                       | Why                                                                                    |
-| ------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Web and API               | Worker + Static Assets                        | One origin, one deploy, no client-side API configuration                               |
-| Operational state         | SQLite-backed Durable Object                  | Atomic conference workflows and strongly consistent workspace reads                    |
-| Files                     | R2                                            | Direct uploads, private objects, lifecycle policies, and no file bytes in domain state |
-| Background delivery       | Durable Object outbox + Queue or object alarm | Durable recipient intent now; retrying provider work after commit                      |
-| Email                     | Cloudflare Email Service binding              | Native Worker delivery; Resend may remain an optional provider                         |
-| Team tables               | Airtable mirror                               | Familiar collaboration without putting Airtable on the request path                    |
-| Cross-workspace analytics | D1 projection, only when needed               | SQL reporting across many workspace objects                                            |
+| Concern                   | Default                                    | Why                                                                                    |
+| ------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Web and API               | Worker + Static Assets                     | One origin, one deploy, no client-side API configuration                               |
+| Operational state         | SQLite-backed Durable Object               | Atomic conference workflows and strongly consistent workspace reads                    |
+| Files                     | R2                                         | Direct uploads, private objects, lifecycle policies, and no file bytes in domain state |
+| Background delivery       | Durable Object outbox + Worker `waitUntil` | Provider work starts after commit; explicit retry operations preserve durable intent   |
+| Email                     | Cloudflare Email Service binding           | Native Worker delivery; Resend may remain an optional provider                         |
+| Team tables               | Airtable mirror                            | Familiar collaboration without putting Airtable on the request path                    |
+| Cross-workspace analytics | D1 projection, only when needed            | SQL reporting across many workspace objects                                            |
 
 ## Why Durable Objects are the default database
 
@@ -150,10 +151,21 @@ curl https://YOUR_HOST/public/agenda.json
 curl -OJ https://YOUR_HOST/public/v1/events/evt_nyc_2026/calendar.ics
 ```
 
-Outbound email is a separate release-enablement step. Onboard the sender domain, complete its DNS
-verification, configure the Email Service binding and retry consumer, then process only durable
-`pending_provider` rows. Until those checks pass, the product intentionally reports campaigns as
-in the outbox rather than sent.
+Outbound email activation is a separate release-enablement step. The binding and consumer are
+checked in. Onboard the sender domain, complete its DNS verification, confirm
+`PROGRAMKIT_EMAIL_FROM` is an allowed address, deploy, and exercise one campaign containing only
+controlled smoke recipients. Until a provider message ID returns, the product intentionally reports
+the row as pending or failed rather than sent.
+
+Accelevents activation is also external to the repository. Store the owner-managed Enterprise key
+only in the Worker secret store:
+
+```bash
+pnpm --filter @programkit/app-cloudflare exec wrangler secret put ACCELEVENTS_API_KEY
+```
+
+Use a controlled Accelevents event for the first staged release and retain its provider IDs and
+ProgramKit batch evidence. Do not put the key in `.env`, `wrangler.jsonc`, screenshots, or logs.
 
 Then open the operator app, public CFP, reviewer workspace, speaker portal, and public program. In
 the speaker portal, verify an allowed file can be uploaded and downloaded only through the owning
@@ -171,8 +183,8 @@ The golden-path production work should land in this sequence:
 2. Evolve the current participant-owned R2 upload and private-download path into authenticated
    upload initiation with progress, retry, cancellation, replacement, scanning, and lifecycle
    cleanup.
-3. Add a transactional delivery outbox and Cloudflare Email Service for submission confirmations
-   and accepted-speaker reminders.
+3. Connect the separate submission-confirmation outbox to the checked-in Email Service transport;
+   accepted-speaker reminders already use it.
 4. Add webhook delivery from the same outbox, with signed payloads, retries, and delivery history.
 5. Add the optional Airtable batch mirror, inbound reconciliation queue, and actual cursor, last
    success, conflict, and error state in the integrations screen.

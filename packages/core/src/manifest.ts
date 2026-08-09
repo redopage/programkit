@@ -316,6 +316,20 @@ export const operationManifest = [
     emits: ['accelevents.item-delivered', 'accelevents.item-failed'],
   },
   {
+    name: 'accelevents.retry-export',
+    title: 'Retry Accelevents export',
+    description:
+      'Queue every undelivered item in a frozen Accelevents export for the credentialed provider consumer.',
+    kind: 'command',
+    scopes: ['integrations:export'],
+    risk: 'administrative',
+    agentPolicy: 'denied',
+    reversible: false,
+    supportsDryRun: false,
+    requiredInput: ['exportId'],
+    emits: ['accelevents.export-retry-queued'],
+  },
+  {
     name: 'campaign.create-draft',
     title: 'Draft campaign',
     description: 'Create a targeted message draft with a calculated audience.',
@@ -381,6 +395,20 @@ export const operationManifest = [
     supportsDryRun: false,
     requiredInput: ['deliveryId', 'status'],
     emits: ['campaign.delivery-succeeded', 'campaign.delivery-failed'],
+  },
+  {
+    name: 'campaign.retry-deliveries',
+    title: 'Retry campaign deliveries',
+    description:
+      'Queue pending and failed frozen campaign deliveries for the credentialed email consumer.',
+    kind: 'command',
+    scopes: ['communications:send'],
+    risk: 'administrative',
+    agentPolicy: 'denied',
+    reversible: false,
+    supportsDryRun: false,
+    requiredInput: ['campaignId'],
+    emits: ['campaign.delivery-retry-queued'],
   },
   {
     name: 'change-set.create',

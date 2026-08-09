@@ -15,8 +15,8 @@ speaker-ready, published program through one dependable workflow.
 
 ProgramKit gives a small conference team one place to build conditional CFPs, route and review
 proposals across multiple rounds, onboard speakers and files, manage readiness and reminders,
-schedule without conflicts, publish an immutable agenda, prepare a one-way Accelevents export, and
-embed a mobile speaker gallery and private-on-device itinerary.
+schedule without conflicts, publish an immutable agenda, deliver that release through a native
+one-way Accelevents adapter, and embed a mobile speaker gallery and private-on-device itinerary.
 
 The core distinction is trustworthiness: browser, API, and agent surfaces use the same scoped,
 versioned, idempotent operations and audit trail. Provider queues remain visibly pending until a
@@ -38,7 +38,8 @@ spine.
    accept it into the program.
 3. Complete a speaker task or private file in the portal and inspect the readiness consequence.
 4. Trigger a schedule conflict, fix it, publish, and compare the immutable public agenda.
-5. Stage an Accelevents packet, record a failure, and retry without duplicating items.
+5. Stage an Accelevents packet, watch the native consumer create or update provider records, and
+   retry a failed item without duplicating the batch.
 6. Search the mobile speaker gallery and save a device-local itinerary.
 
 ## Technology
@@ -48,6 +49,8 @@ spine.
 - Cloudflare Worker and Static Assets
 - SQLite-backed Durable Objects for atomic workspace state
 - Private R2 objects for participant-owned files
+- Cloudflare Email Service delivery with frozen RFC 5545 attachments
+- Native Accelevents speaker/session create-update adapter behind an owner-managed secret
 - Three publishable packages: `@programkit/core`, `@programkit/web`, and `@programkit/agent`
 - Apache-2.0 license
 

@@ -22,13 +22,28 @@ describe('operation HTTP surface', () => {
       delete (campaign as Partial<typeof campaign>).queuedAt
     }
     const state = await new MemoryWorkspaceRepository(legacy).read()
-    expect(state.schemaVersion).toBe(8)
+    expect(state.schemaVersion).toBe(9)
     expect(state.campaignDeliveries).toEqual([])
     expect(state.submissionReceiptDeliveries).toEqual([])
     expect(state.acceleventsExports).toEqual([])
     expect(state.portalResources).toEqual([])
     expect(state.campaigns.every((campaign) => campaign.includeEventInvite === false)).toBe(true)
     expect(state.campaigns.every((campaign) => campaign.queuedAt === null)).toBe(true)
+  })
+
+  it('backfills the frozen calendar payload for a legacy delivery row', async () => {
+    const legacy = createSeedState()
+    legacy.schemaVersion = 8
+    const delivery = legacy.campaignDeliveries[0]!
+    delete (delivery as Partial<typeof delivery>).attachments
+
+    const state = await new MemoryWorkspaceRepository(legacy).read()
+    expect(state.schemaVersion).toBe(9)
+    expect(state.campaignDeliveries[0]?.attachments[0]).toMatchObject({
+      filename: 'aie-nyc-2026-invite.ics',
+      contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+    })
+    expect(state.campaignDeliveries[0]?.attachments[0]?.content).toContain('BEGIN:VCALENDAR\r\n')
   })
 
   it('serves state, manifest, public agenda, and a portable export', async () => {

@@ -322,9 +322,33 @@ export function IntegrationsView() {
                   {latestAcceleventsExport.eventUrl}
                 </p>
               </div>
-              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-sm font-semibold text-zinc-700">
-                {sentenceCase(latestAcceleventsExport.status)}
-              </span>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-sm font-semibold text-zinc-700">
+                  {sentenceCase(latestAcceleventsExport.status)}
+                </span>
+                {latestAcceleventsExport.status !== 'delivered' ? (
+                  <Button
+                    size="compact"
+                    variant="secondary"
+                    disabled={mutating}
+                    onClick={() =>
+                      void execute(
+                        'accelevents.retry-export',
+                        { exportId: latestAcceleventsExport.id },
+                        {
+                          expectedVersions: {
+                            [latestAcceleventsExport.id]: latestAcceleventsExport.version,
+                          },
+                        },
+                        'Undelivered items were queued for the Accelevents consumer.',
+                      )
+                    }
+                  >
+                    <ArrowPathIcon className="size-4 h-lh shrink-0 fill-current" />
+                    Retry undelivered
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <dl className="grid grid-cols-2 divide-x divide-y divide-zinc-950/5 sm:grid-cols-3 lg:grid-cols-6">
               {[

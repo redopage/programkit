@@ -76,11 +76,11 @@ pnpm deploy
 
 The `apps/cloudflare` assembly uses one Worker, static assets, one SQLite-backed Durable Object per
 workspace key, and a private R2 binding for participant requirement files. Local development
-emulates the bucket; before a remote deploy, create the checked-in `programkit-assets` bucket. No D1
-database, queue, or email binding is required for the seeded demo. Campaign queueing and public
-proposal submission create durable delivery records without pretending delivery occurred, and
-accepted-speaker messages can include a downloadable RFC 5545 event invite. Activating outbound
-delivery still requires a verified sender domain and a Cloudflare Email Service consumer.
+emulates the bucket and the checked-in Email Service binding; before a remote deploy, create the
+`programkit-assets` bucket and onboard the sending domain. No D1 database or queue is required.
+Campaign queueing freezes each rendered message and its complete RFC 5545 attachment before the
+Worker starts the post-commit email consumer. Provider message IDs—not queueing—determine delivered
+state. Remote outbound delivery still requires Andrew's verified sender domain.
 
 The Worker maps the `x-programkit-workspace-key` request header to a Durable Object name; a missing or
 invalid key uses `demo`. Inside the object, every operation runs through an atomic repository
@@ -111,9 +111,10 @@ overwrites ProgramKit. See [Deployment](DEPLOYMENT.md#how-the-airtable-integrati
 export is available at `GET /api/v1/export`. Cloudflare is still the only supported deployment;
 clean package boundaries and exportability are not a promise to maintain speculative host adapters.
 
-Before real use, provide real staff and participant identity, OAuth for MCP, outbound email and
-webhook delivery, upload scanning, retention and backup policies, and rate limiting. The complete
-checklist is in [Security](SECURITY.md) and [Operations](OPERATIONS.md).
+Before real use, provide real staff and participant identity, OAuth for MCP, verified sender and
+provider credentials, submission-receipt/webhook delivery, upload scanning, retention and backup
+policies, and rate limiting. The complete checklist is in [Security](SECURITY.md) and
+[Operations](OPERATIONS.md).
 
 ## Documentation
 

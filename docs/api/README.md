@@ -94,9 +94,12 @@ client may retry a request. A successful write appends one or more domain events
 workspace revision atomically.
 
 `campaign.send` is intentionally named for the human intent but records a durable delivery outbox:
-it moves an approved campaign to `queued`, creates per-recipient `pending_provider` rows, and does
-not contact a provider. A trusted consumer records `delivered` or `failed` through
+it moves an approved campaign to `queued` and creates per-recipient `pending_provider` rows with the
+fully rendered message and complete calendar attachment. No provider call occurs inside the domain
+transaction. The Cloudflare host starts the checked-in Email Service consumer after commit when its
+binding and verified sender exist. It records `delivered` or `failed` through
 `campaign.record-delivery`; only terminal recipient outcomes can move the campaign to `sent`.
+`campaign.retry-deliveries` queues pending and failed frozen rows for another consumer attempt.
 
 `submission.submit` commits the proposal, assignments, and one frozen confirmation-receipt row in
 the same workspace mutation. Its public response contains only that receipt's address, content,
@@ -118,9 +121,12 @@ Publication also enforces the shared preflight: every active session is placed, 
 or duplicate placements remain, and the draft differs from the latest release.
 
 One-way program export uses `accelevents.prepare-export` to freeze the latest immutable schedule
-release into speaker and session outbox items. A trusted consumer records each provider outcome with
-`accelevents.record-result`. Failed items remain retryable; delivered items are terminal. The core
-stores no API key and staging a packet does not claim external delivery. See the
+release into speaker and session outbox items. After commit, the Cloudflare host uses the owner-
+managed `ACCELEVENTS_API_KEY` to create or update speakers first and then related sessions through
+the official host API. The consumer records each outcome with `accelevents.record-result`, and
+`accelevents.retry-export` queues every undelivered frozen item again. Provider IDs are carried into
+later releases so known records use updates instead of duplicate creates. The core stores no API
+key and staging a packet does not claim external delivery. See the
 [Accelevents integration guide](../integrations/accelevents.md).
 
 Speaker resource editing uses `portal-resource.save`. The operation is staff-scoped, versioned,

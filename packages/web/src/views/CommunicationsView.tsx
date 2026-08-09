@@ -349,12 +349,28 @@ function CampaignDrawer({
             'campaign.send',
             { campaignId: campaign.id },
             { expectedVersions: { [campaign.id]: campaign.version } },
-            'Added to the delivery outbox. Nothing sends until the email provider is connected and the sender domain is verified.',
+            'Added to the delivery outbox. The provider consumer will run only when its binding and verified sender are available.',
           )
         }
       >
         <PaperAirplaneIcon className="size-4 h-lh shrink-0 fill-current" />
         Add to delivery outbox
+      </Button>
+    ) : campaign.status === 'queued' ? (
+      <Button
+        variant="primary"
+        disabled={mutating}
+        onClick={() =>
+          void execute(
+            'campaign.retry-deliveries',
+            { campaignId: campaign.id },
+            { expectedVersions: { [campaign.id]: campaign.version } },
+            'Pending and failed recipients were queued for the email consumer.',
+          )
+        }
+      >
+        <PaperAirplaneIcon className="size-4 h-lh shrink-0 fill-current" />
+        Retry pending delivery
       </Button>
     ) : undefined
 
@@ -441,8 +457,8 @@ function CampaignDrawer({
                   Event invite (.ics)
                 </span>
                 <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
-                  Date, time, and venue, ready to add in Google Calendar, Outlook, or Apple
-                  Calendar.
+                  Each deliverable recipient gets a personalized calendar request. This portable
+                  preview opens in Google Calendar, Outlook, and Apple Calendar.
                 </span>
               </span>
               <a
@@ -450,7 +466,7 @@ function CampaignDrawer({
                 className="focus-ring inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-white px-3 py-2 text-base font-medium text-zinc-800 shadow-xs ring-1 ring-zinc-950/10 hover:bg-zinc-50 sm:min-h-9 sm:text-sm"
               >
                 <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
-                Download
+                Download preview
               </a>
             </div>
           </section>
@@ -468,7 +484,7 @@ function CampaignDrawer({
           }
           title={
             campaign.status === 'queued'
-              ? 'Delivery is not switched on yet'
+              ? 'Provider confirmation is pending'
               : campaign.status === 'sent'
                 ? 'The provider finished this campaign'
                 : 'How a campaign reaches people'
@@ -476,7 +492,7 @@ function CampaignDrawer({
         >
           <p>
             {campaign.status === 'queued'
-              ? 'Recipients, message, and attachment are recorded in the outbox, and nothing has reached an inbox. Two things are still outstanding: no email provider is connected to pick these up, and the sending domain has not been verified.'
+              ? 'The exact recipient, message, and calendar attachment are frozen in each row. A configured Cloudflare Email binding delivers them in the background and writes its message ID back here. Until that provider result exists, ProgramKit does not call the message delivered.'
               : campaign.status === 'sent'
                 ? 'Every recipient below was either confirmed by the provider or skipped. Nothing is still pending.'
                 : 'Recipients are recalculated when the draft is submitted, then frozen so approval reviews the exact list. Adding an approved campaign to the outbox twice does not duplicate anyone, and recipients without a usable address are skipped rather than retried.'}

@@ -17,10 +17,12 @@ Record the commit, environment, command output, and final URLs in the Obsidian c
 - [ ] Track/category answer becomes the accepted session track.
 - [ ] Committee threshold, idempotent finalist advancement, two scoped finalist scorecards, final acceptance, and session conversion.
 - [ ] Participant-owned profile, status, text/form tasks, private upload/download, organizer review, and published resources.
-- [ ] Campaign preview, approval, frozen recipients, pending-provider truthfulness, provider failure/retry evidence, and calendar download.
-- [ ] Readiness blocker counts agree with speaker detail and portal state.
-- [ ] Schedule place/drag, conflict, filter, undo, publish blockers, immutable release, and public agenda.
-- [ ] Accelevents latest-release mapping, stable keys, duplicate-stage block, failure/retry, and honest credential boundary.
+- [ ] Campaign preview, approval, frozen recipients/message/calendar payload, pending-provider truthfulness, provider failure/retry evidence, and calendar download.
+- [ ] In a controlled host smoke test, the received email contains the same `.ics` payload and its provider message ID returns to the outbox.
+- [ ] Readiness blocker counts agree with speaker detail and portal state and update within five foreground seconds without a manual reload.
+- [ ] Schedule list/day/week/track/room modes, place/drag, conflict, filter, undo, publish blockers, immutable release, and public agenda.
+- [ ] Accelevents latest-release mapping, speaker-first relationship IDs, create/update selection, duplicate-stage block, failure/retry, and honest credential boundary.
+- [ ] In a controlled Accelevents event, create/update results return provider IDs and a second release updates known records.
 - [ ] Unsafe HTML rejection, scriptless portal card, public gallery search, and device-local itinerary persistence.
 
 ## Boundaries and resilience

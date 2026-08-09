@@ -359,6 +359,12 @@ export interface Campaign {
   version: number
 }
 
+export interface CampaignDeliveryAttachment {
+  filename: string
+  contentType: string
+  content: string
+}
+
 export interface CampaignDelivery {
   id: Id
   campaignId: Id
@@ -373,6 +379,7 @@ export interface CampaignDelivery {
   provider: 'cloudflare_email' | null
   providerMessageId: string | null
   attachmentNames: string[]
+  attachments: CampaignDeliveryAttachment[]
   attemptCount: number
   lastError: string | null
   createdAt: ISODateTime
