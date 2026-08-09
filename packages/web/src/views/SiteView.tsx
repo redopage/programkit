@@ -164,7 +164,7 @@ export function SiteView() {
         </section>
 
         <section className="px-3 pb-24 sm:px-6 sm:pb-32 lg:px-8">
-          <div className="mx-auto max-w-[88rem] rounded-t-[2rem] bg-blue-600 px-2 pt-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)] sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
+          <div className="mx-auto max-w-[88rem] overflow-hidden rounded-[2rem] bg-blue-600 px-2 pt-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)] sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
             <div className="min-w-0 overflow-hidden rounded-t-[calc(2rem-0.5rem)] bg-white shadow-xl shadow-blue-950/18 outline outline-white/12">
               <div className="relative aspect-[4/3] overflow-hidden sm:aspect-video">
                 <img
