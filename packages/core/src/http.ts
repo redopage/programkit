@@ -101,6 +101,7 @@ function participantState(state: WorkspaceState, participationId: string) {
   clone.campaignDeliveries = []
   clone.changeSets = []
   clone.integrations = []
+  clone.acceleventsExports = []
   clone.domainEvents = []
   clone.recentCommandResults = []
   return clone
@@ -133,6 +134,7 @@ function projectionBase(state: WorkspaceState) {
   clone.campaignDeliveries = []
   clone.changeSets = []
   clone.integrations = []
+  clone.acceleventsExports = []
   clone.domainEvents = []
   clone.recentCommandResults = []
   return clone

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  acceleventsExportPreflight,
   createSeedState,
   eventCalendar,
   executeOperation,
@@ -20,6 +21,7 @@ import {
 describe('ProgramKit operation engine', () => {
   it('creates a useful deterministic workspace', () => {
     const state = createSeedState()
+    expect(state.schemaVersion).toBe(7)
     expect(state.people).toHaveLength(16)
     expect(state.participations).toHaveLength(16)
     expect(state.sessions).toHaveLength(11)
@@ -32,6 +34,7 @@ describe('ProgramKit operation engine', () => {
     expect(state.submissionForms).toHaveLength(2)
     expect(state.submissions).toHaveLength(6)
     expect(state.submissionReceiptDeliveries).toHaveLength(1)
+    expect(state.acceleventsExports).toHaveLength(0)
     expect(submissionPipelineSummary(state)).toMatchObject({
       total: 6,
       draft: 1,
@@ -885,6 +888,168 @@ describe('ProgramKit operation engine', () => {
       providerMessageId: 'cf-email-receipt-001',
       attemptCount: 1,
       version: 2,
+    })
+  })
+
+  it('freezes the published program into a stable Accelevents export outbox', () => {
+    const state = createSeedState()
+    const preflight = acceleventsExportPreflight(state)
+    expect(preflight).toMatchObject({
+      canPrepare: true,
+      blockers: [],
+      sessions: { length: 10 },
+      people: { length: 16 },
+    })
+
+    const prepared = executeOperation(state, 'accelevents.prepare-export', {
+      input: { eventUrl: 'aie-nyc-2026' },
+      idempotencyKey: 'prepare-accelevents-v3',
+    })
+    expect(prepared.response.ok).toBe(true)
+    expect(prepared.state.scheduleReleases).toHaveLength(1)
+    expect(publicAgenda(prepared.state)).toHaveLength(10)
+    const batch = prepared.state.acceleventsExports[0]
+    expect(batch).toMatchObject({
+      eventUrl: 'aie-nyc-2026',
+      scheduleVersion: 3,
+      status: 'pending_provider',
+      version: 1,
+    })
+    expect(batch.items.filter((item) => item.resource === 'speaker')).toHaveLength(16)
+    expect(batch.items.filter((item) => item.resource === 'session')).toHaveLength(10)
+    expect(
+      batch.items.find((item) => item.resource === 'speaker' && item.sourceId === 'per_001')
+        ?.payload,
+    ).toMatchObject({
+      externalKey: 'programkit:per_001',
+      firstName: 'Robin',
+      lastName: 'Sloan',
+    })
+    expect(
+      batch.items.find((item) => item.resource === 'session' && item.sourceId === 'ses_001')
+        ?.payload,
+    ).toMatchObject({
+      externalKey: 'programkit:ses_001',
+      title: 'Opening the useful frontier',
+      startTime: '2026/10/04 09:00',
+      endTime: '2026/10/04 09:40',
+      location: 'Main stage',
+      format: 'MAIN_STAGE',
+      status: 'VISIBLE',
+      speakerExternalKeys: ['programkit:per_001'],
+    })
+    expect(prepared.state.domainEvents.at(-1)?.type).toBe('accelevents.export-prepared')
+
+    const duplicate = executeOperation(prepared.state, 'accelevents.prepare-export', {
+      input: { eventUrl: 'aie-nyc-2026' },
+    })
+    expect(duplicate.response.error?.code).toBe('NO_CHANGES')
+    expect(duplicate.state).toBe(prepared.state)
+  })
+
+  it('records retryable per-item Accelevents provider evidence and closes a batch', () => {
+    let state = executeOperation(createSeedState(), 'accelevents.prepare-export', {
+      input: { eventUrl: 'aie-nyc-2026' },
+    }).state
+    let batch = state.acceleventsExports[0]
+    let item = batch.items[0]
+
+    const missingError = executeOperation(state, 'accelevents.record-result', {
+      input: { exportId: batch.id, itemId: item.id, status: 'failed' },
+      expectedVersions: { [item.id]: item.version },
+    })
+    expect(missingError.response.error?.code).toBe('INVALID_INPUT')
+
+    const failed = executeOperation(state, 'accelevents.record-result', {
+      input: {
+        exportId: batch.id,
+        itemId: item.id,
+        status: 'failed',
+        lastError: 'Provider rate limit.',
+      },
+      expectedVersions: { [item.id]: item.version },
+    })
+    expect(failed.response.ok).toBe(true)
+    state = failed.state
+    batch = state.acceleventsExports[0]
+    item = batch.items.find((entry) => entry.id === item.id)!
+    expect(batch.status).toBe('partial')
+    expect(item).toMatchObject({
+      status: 'failed',
+      attemptCount: 1,
+      lastError: 'Provider rate limit.',
+      version: 2,
+    })
+
+    const retried = executeOperation(state, 'accelevents.record-result', {
+      input: {
+        exportId: batch.id,
+        itemId: item.id,
+        status: 'delivered',
+        providerId: 'acc-speaker-001',
+      },
+      expectedVersions: { [item.id]: item.version },
+    })
+    expect(retried.response.ok).toBe(true)
+    state = retried.state
+    batch = state.acceleventsExports[0]
+    expect(batch.items.find((entry) => entry.id === item.id)).toMatchObject({
+      status: 'delivered',
+      providerId: 'acc-speaker-001',
+      attemptCount: 2,
+      lastError: null,
+      version: 3,
+    })
+
+    for (const pending of batch.items.filter((entry) => entry.status === 'pending_provider')) {
+      const result = executeOperation(state, 'accelevents.record-result', {
+        input: {
+          exportId: batch.id,
+          itemId: pending.id,
+          status: 'delivered',
+          providerId: `acc-${pending.resource}-${pending.sourceId}`,
+        },
+        expectedVersions: { [pending.id]: pending.version },
+        idempotencyKey: `deliver-${pending.id}`,
+      })
+      expect(result.response.ok).toBe(true)
+      state = result.state
+      batch = state.acceleventsExports[0]
+    }
+    expect(batch.status).toBe('delivered')
+    expect(batch.items.every((entry) => entry.status === 'delivered')).toBe(true)
+    expect(state.integrations.find((entry) => entry.kind === 'accelevents')).toMatchObject({
+      status: 'connected',
+      lastSeenAt: expect.any(String),
+    })
+  })
+
+  it('guards Accelevents export scope, target identifiers, and published-release readiness', () => {
+    const state = createSeedState()
+    const scopedOut = executeOperation(state, 'accelevents.prepare-export', {
+      input: { eventUrl: 'aie-nyc-2026' },
+      actor: { type: 'service', id: 'limited', name: 'Limited', scopes: [] },
+    })
+    expect(scopedOut.response.error?.code).toBe('FORBIDDEN')
+
+    const invalidTarget = executeOperation(state, 'accelevents.prepare-export', {
+      input: { eventUrl: 'https://www.accelevents.com/e/aie-nyc-2026' },
+    })
+    expect(invalidTarget.response.error?.code).toBe('INVALID_INPUT')
+
+    const withoutRelease = { ...state, scheduleReleases: [] }
+    const notReady = executeOperation(withoutRelease, 'accelevents.prepare-export', {
+      input: { eventUrl: 'aie-nyc-2026' },
+    })
+    expect(notReady.response.error?.code).toBe('EXPORT_NOT_READY')
+
+    const missingPublishedSession = {
+      ...state,
+      sessions: state.sessions.filter((session) => session.id !== 'ses_001'),
+    }
+    expect(acceleventsExportPreflight(missingPublishedSession)).toMatchObject({
+      canPrepare: false,
+      blockers: expect.arrayContaining(['Published placement plc_001 has no session.']),
     })
   })
 

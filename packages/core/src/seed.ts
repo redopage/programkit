@@ -1266,6 +1266,15 @@ const integrations: Integration[] = [
     lastSeenAt: null,
   },
   {
+    id: 'int_accelevents',
+    name: 'Accelevents program export',
+    kind: 'accelevents',
+    status: 'not_configured',
+    detail:
+      'The versioned export outbox is ready; an enterprise API key and target event URL are not connected.',
+    lastSeenAt: null,
+  },
+  {
     id: 'int_api',
     name: 'Public API',
     kind: 'api',
@@ -1277,7 +1286,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     revision: 1,
     workspace: {
       id: 'wrk_aie',
@@ -1358,6 +1367,7 @@ export function createSeedState(): WorkspaceState {
       },
     ],
     integrations: structuredClone(integrations),
+    acceleventsExports: [],
     domainEvents: [
       {
         id: 'dev_001',

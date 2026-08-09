@@ -14,10 +14,11 @@ export function normalizeWorkspaceState(state: WorkspaceState) {
   state.scorecards ??= []
   state.reviewDecisions ??= []
   state.campaignDeliveries ??= []
+  state.acceleventsExports ??= []
   for (const campaign of state.campaigns) {
     campaign.includeEventInvite ??= false
     campaign.queuedAt ??= null
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 6)
+  state.schemaVersion = Math.max(state.schemaVersion, 7)
   return state
 }

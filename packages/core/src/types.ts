@@ -366,10 +366,82 @@ export interface CampaignDelivery {
 export interface Integration {
   id: Id
   name: string
-  kind: 'email' | 'webhook' | 'calendar' | 'storage' | 'api' | 'airtable'
+  kind: 'email' | 'webhook' | 'calendar' | 'storage' | 'api' | 'airtable' | 'accelevents'
   status: 'connected' | 'attention' | 'not_configured'
   detail: string
   lastSeenAt: ISODateTime | null
+}
+
+export type AcceleventsExportItemStatus = 'pending_provider' | 'delivered' | 'failed'
+export type AcceleventsExportStatus = 'pending_provider' | 'partial' | 'delivered' | 'failed'
+
+export interface AcceleventsSpeakerPayload {
+  sourceId: Id
+  externalKey: string
+  firstName: string
+  lastName: string
+  email: string
+  title: string
+  company: string
+  bio: string
+  imageUrl: string
+  moderator: boolean
+}
+
+export interface AcceleventsSessionPayload {
+  sourceId: Id
+  externalKey: string
+  title: string
+  description: string
+  startTime: string
+  endTime: string
+  location: string
+  format: 'MAIN_STAGE' | 'BREAKOUT_SESSION' | 'MEET_UP' | 'WORKSHOP' | 'EXPO' | 'BREAK' | 'OTHER'
+  status: 'VISIBLE'
+  capacity: number
+  track: string
+  speakerExternalKeys: string[]
+}
+
+export type AcceleventsExportItem =
+  | {
+      id: Id
+      resource: 'speaker'
+      sourceId: Id
+      externalKey: string
+      payload: AcceleventsSpeakerPayload
+      status: AcceleventsExportItemStatus
+      providerId: string | null
+      attemptCount: number
+      lastError: string | null
+      updatedAt: ISODateTime
+      version: number
+    }
+  | {
+      id: Id
+      resource: 'session'
+      sourceId: Id
+      externalKey: string
+      payload: AcceleventsSessionPayload
+      status: AcceleventsExportItemStatus
+      providerId: string | null
+      attemptCount: number
+      lastError: string | null
+      updatedAt: ISODateTime
+      version: number
+    }
+
+export interface AcceleventsExport {
+  id: Id
+  eventId: Id
+  eventUrl: string
+  scheduleReleaseId: Id
+  scheduleVersion: number
+  status: AcceleventsExportStatus
+  items: AcceleventsExportItem[]
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
 }
 
 export interface Actor {
@@ -463,6 +535,7 @@ export interface WorkspaceState {
   campaignDeliveries: CampaignDelivery[]
   changeSets: ChangeSet[]
   integrations: Integration[]
+  acceleventsExports: AcceleventsExport[]
   domainEvents: DomainEvent[]
   recentCommandResults: StoredCommandResult[]
 }

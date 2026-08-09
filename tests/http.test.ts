@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createSeedState,
+  executeOperation,
   handleCoreRequest,
   MemoryWorkspaceRepository,
   type OperationResponse,
@@ -14,14 +15,16 @@ describe('operation HTTP surface', () => {
     legacy.schemaVersion = 4
     delete (legacy as Partial<WorkspaceState>).campaignDeliveries
     delete (legacy as Partial<WorkspaceState>).submissionReceiptDeliveries
+    delete (legacy as Partial<WorkspaceState>).acceleventsExports
     for (const campaign of legacy.campaigns) {
       delete (campaign as Partial<typeof campaign>).includeEventInvite
       delete (campaign as Partial<typeof campaign>).queuedAt
     }
     const state = await new MemoryWorkspaceRepository(legacy).read()
-    expect(state.schemaVersion).toBe(6)
+    expect(state.schemaVersion).toBe(7)
     expect(state.campaignDeliveries).toEqual([])
     expect(state.submissionReceiptDeliveries).toEqual([])
+    expect(state.acceleventsExports).toEqual([])
     expect(state.campaigns.every((campaign) => campaign.includeEventInvite === false)).toBe(true)
     expect(state.campaigns.every((campaign) => campaign.queuedAt === null)).toBe(true)
   })
@@ -154,7 +157,10 @@ describe('operation HTTP surface', () => {
       storageKey: 'workspaces/wrk_aie/participants/par_003/private/private-headshot.png',
       createdAt: '2026-08-08T12:00:00.000Z',
     })
-    const repository = new MemoryWorkspaceRepository(state)
+    const prepared = executeOperation(state, 'accelevents.prepare-export', {
+      input: { eventUrl: 'aie-nyc-2026' },
+    }).state
+    const repository = new MemoryWorkspaceRepository(prepared)
     const actor = {
       type: 'participant' as const,
       id: 'par_003',
@@ -175,6 +181,7 @@ describe('operation HTTP surface', () => {
     expect(body.state.campaignDeliveries).toHaveLength(0)
     expect(body.state.submissionReceiptDeliveries).toHaveLength(0)
     expect(body.state.integrations).toHaveLength(0)
+    expect(body.state.acceleventsExports).toHaveLength(0)
     expect(body.state.changeSets).toHaveLength(0)
     expect(body.state.domainEvents).toHaveLength(0)
     expect(body.state.submissions).toHaveLength(0)
@@ -188,7 +195,10 @@ describe('operation HTTP surface', () => {
   })
 
   it('serves distinct public and reviewer projections without operator records', async () => {
-    const repository = new MemoryWorkspaceRepository()
+    const prepared = executeOperation(createSeedState(), 'accelevents.prepare-export', {
+      input: { eventUrl: 'aie-nyc-2026' },
+    }).state
+    const repository = new MemoryWorkspaceRepository(prepared)
 
     const formResponse = await handleCoreRequest(
       new Request('http://local/public/v1/submission-forms/aie-nyc-2026-cfp/state'),
@@ -203,6 +213,7 @@ describe('operation HTTP surface', () => {
     expect(formBody.state.submissionReceiptDeliveries).toHaveLength(0)
     expect(formBody.state.reviewerAssignments).toHaveLength(0)
     expect(formBody.state.domainEvents).toHaveLength(0)
+    expect(formBody.state.acceleventsExports).toHaveLength(0)
 
     const programResponse = await handleCoreRequest(
       new Request('http://local/public/v1/program/state'),
@@ -216,6 +227,7 @@ describe('operation HTTP surface', () => {
     expect(programBody.state.campaigns).toHaveLength(0)
     expect(programBody.state.campaignDeliveries).toHaveLength(0)
     expect(programBody.state.submissionReceiptDeliveries).toHaveLength(0)
+    expect(programBody.state.acceleventsExports).toHaveLength(0)
     expect(programBody.state.people.every((entry) => entry.email === '')).toBe(true)
     expect(programBody.state.participations.every((entry) => entry.internalNotes === '')).toBe(true)
 
@@ -243,6 +255,7 @@ describe('operation HTTP surface', () => {
     expect(reviewerBody.state.campaigns).toHaveLength(0)
     expect(reviewerBody.state.campaignDeliveries).toHaveLength(0)
     expect(reviewerBody.state.submissionReceiptDeliveries).toHaveLength(0)
+    expect(reviewerBody.state.acceleventsExports).toHaveLength(0)
     expect(reviewerBody.state.domainEvents).toHaveLength(0)
   })
 

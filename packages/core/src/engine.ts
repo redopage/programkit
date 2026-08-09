@@ -1,5 +1,6 @@
 import { operationDefinition } from './manifest.ts'
 import { eventCalendarFilename } from './calendar.ts'
+import { acceleventsExportPreflight, buildAcceleventsExportItems } from './accelevents.ts'
 import { normalizeWorkspaceState } from './migrations.ts'
 import {
   requiredSubmissionFieldPurposes,
@@ -17,6 +18,7 @@ import {
 import { createSeedState } from './seed.ts'
 import type {
   Actor,
+  AcceleventsExport,
   Asset,
   Campaign,
   CampaignDelivery,
@@ -447,6 +449,8 @@ function allVersionedRecords(state: WorkspaceState) {
     ...state.placements,
     ...state.campaigns,
     ...(state.campaignDeliveries ?? []),
+    ...(state.acceleventsExports ?? []),
+    ...(state.acceleventsExports ?? []).flatMap((entry) => entry.items),
     ...state.changeSets,
   ]
 }
@@ -1839,6 +1843,160 @@ function applyHandler(
         },
       })
       return { release, version, warnings: conflicts }
+    }
+
+    case 'accelevents.prepare-export': {
+      const eventUrl = assertString(input.eventUrl, 'eventUrl').toLowerCase()
+      if (!/^[a-z0-9](?:[a-z0-9_-]{0,98}[a-z0-9])?$/u.test(eventUrl)) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'eventUrl must be the Accelevents event URL identifier, not a full URL.',
+          { eventUrl: 'Use only letters, numbers, hyphens, or underscores.' },
+        )
+      }
+      const preflight = acceleventsExportPreflight(state)
+      if (!preflight.canPrepare || !preflight.release || !preflight.event) {
+        throw new OperationError(
+          'EXPORT_NOT_READY',
+          preflight.blockers[0] ?? 'The published program is not ready to export.',
+        )
+      }
+      const existing = state.acceleventsExports.find(
+        (entry) =>
+          entry.eventId === preflight.event!.id &&
+          entry.scheduleReleaseId === preflight.release!.id &&
+          entry.eventUrl === eventUrl,
+      )
+      if (existing) {
+        throw new OperationError(
+          'NO_CHANGES',
+          'This published schedule already has an Accelevents export. Retry failed items in that batch.',
+        )
+      }
+      const items = buildAcceleventsExportItems(state, timestamp, () => createId('aci'))
+      if (items.length === 0) {
+        throw new OperationError(
+          'EXPORT_NOT_READY',
+          'The published program has no exportable items.',
+        )
+      }
+      const acceleventsExport: AcceleventsExport = {
+        id: createId('acx'),
+        eventId: preflight.event.id,
+        eventUrl,
+        scheduleReleaseId: preflight.release.id,
+        scheduleVersion: preflight.release.version,
+        status: 'pending_provider',
+        items,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      state.acceleventsExports.unshift(acceleventsExport)
+      const integration = state.integrations.find((entry) => entry.kind === 'accelevents')
+      if (integration) {
+        integration.status = 'attention'
+        integration.detail = `${items.length} frozen items await the credentialed Accelevents consumer.`
+      }
+      appendEvent(state, context, {
+        type: 'accelevents.export-prepared',
+        aggregate: {
+          type: 'accelevents-export',
+          id: acceleventsExport.id,
+          version: acceleventsExport.version,
+        },
+        summary: `Prepared Accelevents export for schedule version ${preflight.release.version}.`,
+        data: {
+          eventUrl,
+          scheduleReleaseId: preflight.release.id,
+          speakers: items.filter((item) => item.resource === 'speaker').length,
+          sessions: items.filter((item) => item.resource === 'session').length,
+          warnings: preflight.warnings,
+        },
+      })
+      return { export: acceleventsExport, warnings: preflight.warnings }
+    }
+
+    case 'accelevents.record-result': {
+      const acceleventsExport = findRequired(
+        state.acceleventsExports,
+        input.exportId,
+        'Accelevents export',
+      )
+      if (acceleventsExport.eventId !== state.activeEventId) {
+        throw new OperationError('INVALID_INPUT', 'That export belongs to another event.')
+      }
+      const item = findRequired(acceleventsExport.items, input.itemId, 'Accelevents export item')
+      if (item.status === 'delivered') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'That export item already reached a delivered state.',
+        )
+      }
+      const status = assertOneOf(input.status, 'status', ['delivered', 'failed'] as const)
+      const providerId = optionalString(input.providerId)
+      const lastError = optionalString(input.lastError)
+      if (status === 'delivered' && !providerId) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'A delivered export item requires its Accelevents resource ID.',
+        )
+      }
+      if (status === 'failed' && !lastError) {
+        throw new OperationError('INVALID_INPUT', 'A failed export item requires an error summary.')
+      }
+      item.status = status
+      item.providerId = status === 'delivered' ? providerId : null
+      item.lastError = status === 'failed' ? lastError : null
+      item.attemptCount += 1
+      item.updatedAt = timestamp
+      item.version += 1
+
+      const pending = acceleventsExport.items.filter(
+        (entry) => entry.status === 'pending_provider',
+      ).length
+      const delivered = acceleventsExport.items.filter(
+        (entry) => entry.status === 'delivered',
+      ).length
+      const failed = acceleventsExport.items.filter((entry) => entry.status === 'failed').length
+      acceleventsExport.status =
+        pending > 0
+          ? delivered + failed > 0
+            ? 'partial'
+            : 'pending_provider'
+          : failed === 0
+            ? 'delivered'
+            : delivered > 0
+              ? 'partial'
+              : 'failed'
+      acceleventsExport.updatedAt = timestamp
+      acceleventsExport.version += 1
+
+      const integration = state.integrations.find((entry) => entry.kind === 'accelevents')
+      if (integration) {
+        integration.status = acceleventsExport.status === 'delivered' ? 'connected' : 'attention'
+        integration.detail =
+          acceleventsExport.status === 'delivered'
+            ? `Schedule version ${acceleventsExport.scheduleVersion} is confirmed in Accelevents.`
+            : `${pending} pending, ${delivered} delivered, and ${failed} failed export items.`
+        integration.lastSeenAt = timestamp
+      }
+      appendEvent(state, context, {
+        type: status === 'delivered' ? 'accelevents.item-delivered' : 'accelevents.item-failed',
+        aggregate: { type: 'accelevents-export-item', id: item.id, version: item.version },
+        summary:
+          status === 'delivered'
+            ? `Confirmed ${item.resource} ${item.externalKey} in Accelevents.`
+            : `Accelevents export failed for ${item.resource} ${item.externalKey}.`,
+        data: {
+          exportId: acceleventsExport.id,
+          resource: item.resource,
+          sourceId: item.sourceId,
+          exportStatus: acceleventsExport.status,
+          attemptCount: item.attemptCount,
+        },
+      })
+      return { export: acceleventsExport, item }
     }
 
     case 'campaign.create-draft': {

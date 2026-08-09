@@ -22,6 +22,7 @@ is the source of truth for that distinction.
 | Communications     | Accepted-speaker template, audience preview, approval, frozen personalized messages, truthful recipient outbox, provider-result recording, calendar downloads, and submission-receipt outbox                                                                                          | Provider activation, test sends, scheduling, retry controls, and richer attempt history                              |
 | Scheduling         | Draft placements, unscheduled tray, timezone-safe place/move forms, accessible drag-and-drop, safe undo, day/room/track filters, conflict previews, full draft-versus-published preflight, immutable releases, public projection                                                      | Reusable time-block templates, travel/buffer constraints, track locking, and richer collaborative draft history      |
 | Readiness          | Participant matrix, due dates in the domain, blocker counts, submitted-item approval, speaker detail                                                                                                                                                                                  | Overdue explanations, saved filters, bulk reminders/approval and communication history                               |
+| Integrations       | Versioned API/export, Accelevents published-program mapping preflight, frozen per-item outbox, provider result/retry evidence, and conflict-aware Airtable reconciliation primitive                                                                                                   | Accelevents credentialed consumer and provider smoke test; Airtable runtime delivery and cursor UI                   |
 
 ## Foundation already in place
 
@@ -110,6 +111,14 @@ provider-result history; a richer per-message attempt timeline remains productio
   change sets.
 - Use the tested three-way comparison to surface concurrent field edits without choosing a winner.
 - Show real last-success, lag, attempt, conflict, and error state on the integrations screen.
+
+### 8. Complete the Accelevents provider boundary
+
+- Done: map only the latest immutable schedule release into stable speaker and session records.
+- Done: freeze versioned per-item delivery state with provider IDs, failure evidence, and retries.
+- Done: expose the preflight, mapping, packet status, and honest credential boundary to operators.
+- Next: connect the owner-managed Enterprise API key in a Cloudflare consumer and retain a
+  provider-confirmed smoke-test receipt.
 
 ## Deliberate non-goals for the golden path
 

@@ -28,9 +28,11 @@ not maintain a second version of product or architecture facts.
 4. Use the [HTTP API](api/README.md) for integrations and data sync.
 5. Read the [Airtable integration guide](integrations/airtable.md) before enabling the optional team
    workspace.
-6. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
+6. Read the [Accelevents export guide](integrations/accelevents.md) before activating the one-way
+   provider consumer.
+7. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
    notifications.
-7. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
+8. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
 
 ### I want to contribute
 

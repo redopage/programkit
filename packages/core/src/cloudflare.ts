@@ -70,7 +70,8 @@ class DurableObjectRepository implements WorkspaceRepository {
       const current = await this.#readFrom(transaction)
       if (current) {
         const needsWrite =
-          current.schemaVersion < 6 ||
+          current.schemaVersion < 7 ||
+          !Array.isArray(current.acceleventsExports) ||
           !Array.isArray(current.submissionReceiptDeliveries) ||
           !Array.isArray(current.campaignDeliveries) ||
           current.campaigns.some(

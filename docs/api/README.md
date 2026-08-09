@@ -110,6 +110,12 @@ kept out of the public program until `schedule.publish` creates the next immutab
 Publication also enforces the shared preflight: every active session is placed, no hard conflicts
 or duplicate placements remain, and the draft differs from the latest release.
 
+One-way program export uses `accelevents.prepare-export` to freeze the latest immutable schedule
+release into speaker and session outbox items. A trusted consumer records each provider outcome with
+`accelevents.record-result`. Failed items remain retryable; delivered items are terminal. The core
+stores no API key and staging a packet does not claim external delivery. See the
+[Accelevents integration guide](../integrations/accelevents.md).
+
 ## Domain events and export
 
 | Method | Path                             | Purpose                                           |

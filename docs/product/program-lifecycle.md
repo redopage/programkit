@@ -105,6 +105,18 @@ immutable, versioned `ScheduleRelease` snapshot.
 The public agenda reads only the latest release. Moving a draft session after publication cannot
 quietly rewrite what attendees already saw; another explicit publication is required.
 
+## 8. Stage the published program for Accelevents
+
+The Accelevents preflight reads the latest immutable release, resolves its public speakers, rooms,
+tracks, and event-local times, and freezes stable speaker and session items into a delivery batch.
+Draft placements and operator-only records are excluded. Each item carries its own provider status,
+attempt count, provider ID, error, and version so partial failures can be retried without rebuilding
+or duplicating the packet.
+
+The reference host does not store an Accelevents API key or claim provider delivery. A credentialed
+consumer runs after the workspace commit and records its outcomes through the trusted result
+operation.
+
 ## Cross-cutting rules
 
 - Every mutation uses a named core operation, regardless of whether a human, REST client, or agent

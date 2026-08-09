@@ -1,6 +1,7 @@
 export { executeOperation } from './engine.ts'
 export { eventCalendar, eventCalendarFilename } from './calendar.ts'
 export { reconcileAirtableRecord } from './airtable.ts'
+export { acceleventsExportPreflight, buildAcceleventsExportItems } from './accelevents.ts'
 export type {
   AirtableFieldChange,
   AirtableFieldConflict,
