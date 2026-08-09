@@ -758,6 +758,10 @@ describe('ProgramKit operation engine', () => {
       expect(state.campaigns.find((campaign) => campaign.id === pending.id)?.status).toBe(
         index === deliveries.length - 1 ? 'sent' : 'queued',
       )
+      expect(state.integrations.find((entry) => entry.kind === 'email')).toMatchObject({
+        status: 'connected',
+        lastSeenAt: expect.any(String),
+      })
     }
   })
 
@@ -778,6 +782,10 @@ describe('ProgramKit operation engine', () => {
     }).state
     campaign = state.campaigns.find((entry) => entry.id === pending.id)!
     delivery = state.campaignDeliveries.find((entry) => entry.id === delivery.id)!
+    expect(state.integrations.find((entry) => entry.kind === 'email')).toMatchObject({
+      status: 'attention',
+      lastSeenAt: expect.any(String),
+    })
 
     const retried = executeOperation(state, 'campaign.retry-deliveries', {
       input: { campaignId: campaign.id },
@@ -1074,6 +1082,7 @@ describe('ProgramKit operation engine', () => {
     }).state
     let batch = state.acceleventsExports[0]
     let item = batch.items[0]
+    item.providerId = 'acc-speaker-existing'
 
     const missingError = executeOperation(state, 'accelevents.record-result', {
       input: { exportId: batch.id, itemId: item.id, status: 'failed' },
@@ -1097,6 +1106,7 @@ describe('ProgramKit operation engine', () => {
     expect(batch.status).toBe('partial')
     expect(item).toMatchObject({
       status: 'failed',
+      providerId: 'acc-speaker-existing',
       attemptCount: 1,
       lastError: 'Provider rate limit.',
       version: 2,
@@ -1112,6 +1122,7 @@ describe('ProgramKit operation engine', () => {
     item = batch.items.find((entry) => entry.id === item.id)!
     expect(item).toMatchObject({
       status: 'pending_provider',
+      providerId: 'acc-speaker-existing',
       attemptCount: 1,
       lastError: null,
       version: 3,

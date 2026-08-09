@@ -2178,7 +2178,7 @@ function applyHandler(
         throw new OperationError('INVALID_INPUT', 'A failed export item requires an error summary.')
       }
       item.status = status
-      item.providerId = status === 'delivered' ? providerId : null
+      if (status === 'delivered') item.providerId = providerId
       item.lastError = status === 'failed' ? lastError : null
       item.attemptCount += 1
       item.updatedAt = timestamp
@@ -2484,6 +2484,18 @@ function applyHandler(
         campaign.status = 'sent'
         campaign.sentAt = timestamp
         campaign.version += 1
+      }
+      const integration = state.integrations.find((entry) => entry.kind === 'email')
+      if (integration) {
+        const failedDeliveries = state.campaignDeliveries.filter(
+          (entry) => entry.status === 'failed',
+        ).length
+        integration.status = failedDeliveries === 0 ? 'connected' : 'attention'
+        integration.detail =
+          failedDeliveries === 0
+            ? 'Cloudflare Email Service returned a provider message ID.'
+            : `${failedDeliveries} Cloudflare Email Service delivery ${failedDeliveries === 1 ? 'failure needs' : 'failures need'} review.`
+        integration.lastSeenAt = timestamp
       }
       appendEvent(state, context, {
         type: status === 'delivered' ? 'campaign.delivery-succeeded' : 'campaign.delivery-failed',
