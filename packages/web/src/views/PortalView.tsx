@@ -152,7 +152,7 @@ function PortalWorkspace() {
             }}
           >
             <ArrowLeftIcon className="size-4 h-lh shrink-0 fill-current" />
-            Operator demo
+            Operator workspace
           </button>
         </div>
       </header>
@@ -271,8 +271,11 @@ function PortalWorkspace() {
                 <div>
                   {groups.map((group) => (
                     <div key={group.key} className="pt-5 first:pt-3">
-                      <h3 className="text-base font-medium text-zinc-500 sm:text-sm">
+                      {/* The count sits with the label so the size of each group
+                          is legible before any row is read. */}
+                      <h3 className="flex items-baseline gap-2 text-base font-medium text-zinc-500 sm:text-sm">
                         {group.label}
+                        <span className="tabular-nums text-zinc-500">{group.tasks.length}</span>
                       </h3>
                       <ul role="list" className="divide-y divide-zinc-950/5">
                         {group.tasks.map(({ instance, definition }) => (
@@ -401,8 +404,8 @@ function PortalWorkspace() {
                 Event resources
               </h2>
               <p className="max-w-2xl text-pretty text-base text-zinc-500 sm:text-sm">
-                Published guidance from the program team, plus read-only event tools you can open on
-                any device.
+                Guidance published by the program team, plus two tools built from the published
+                program. Sessions you save to an itinerary stay on the device you save them on.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

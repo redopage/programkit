@@ -15,7 +15,9 @@ export function SpeakerGalleryEmbedView() {
   const publishedPersonIds = new Set(
     publicAgenda(state).flatMap((entry) => entry.speakers.map((speaker) => speaker.id)),
   )
-  const speakers = state.people
+  // The full published roster is kept alongside the filtered list so the page
+  // can tell "nobody matches your search" apart from "nothing is published".
+  const roster = state.people
     .filter((person) => publishedPersonIds.has(person.id))
     .map((person) => {
       const participation = state.participations.find((entry) => entry.personId === person.id)!
@@ -28,12 +30,14 @@ export function SpeakerGalleryEmbedView() {
         avatarUrl: person.avatarUrl,
       }
     })
+  const speakers = roster
     .filter((speaker) =>
       `${speaker.name} ${speaker.title} ${speaker.company}`
         .toLowerCase()
         .includes(query.toLowerCase()),
     )
     .sort((left, right) => left.name.localeCompare(right.name))
+  const rosterLabel = `${roster.length} ${roster.length === 1 ? 'speaker' : 'speakers'}`
 
   return (
     <div className="min-h-dvh bg-white text-zinc-950">
@@ -47,7 +51,7 @@ export function SpeakerGalleryEmbedView() {
             <div>
               <h1 className="text-3xl font-semibold tracking-tight">Speaker gallery</h1>
               <p className="max-w-xl pt-1 text-pretty text-base text-zinc-600 sm:text-sm">
-                Meet the people sharing practical work across the published program.
+                Everyone speaking on the published program.
               </p>
             </div>
             <label className="relative block min-w-0 sm:w-72">
@@ -66,7 +70,21 @@ export function SpeakerGalleryEmbedView() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        {speakers.length === 0 ? (
+        {/* Announced on change so a search that narrows the grid is legible to
+            someone who cannot see it shrink. */}
+        {roster.length > 0 ? (
+          <p aria-live="polite" className="pb-4 text-base text-zinc-500 sm:text-sm">
+            {query
+              ? `Showing ${speakers.length} of ${rosterLabel}`
+              : `${rosterLabel} on the program`}
+          </p>
+        ) : null}
+        {roster.length === 0 ? (
+          <EmptyState
+            title="Speakers are not published yet"
+            description="This gallery fills in once the program team publishes the schedule."
+          />
+        ) : speakers.length === 0 ? (
           <EmptyState title="No speakers match" description="Try a name, title, or company." />
         ) : (
           <ul role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -67,8 +67,8 @@ export function ItineraryEmbedView() {
           </p>
           <h1 className="pt-2 text-3xl font-semibold tracking-tight">Build your itinerary</h1>
           <p className="max-w-2xl pt-1 text-pretty text-base text-zinc-600 sm:text-sm">
-            Save sessions on this device. Your choices stay private and never change the published
-            program.
+            Save the sessions you want to attend. Your picks stay on this device and never change
+            the published program.
           </p>
           <div className="flex flex-wrap items-center gap-2 pt-5">
             <button
@@ -84,7 +84,13 @@ export function ItineraryEmbedView() {
             >
               My itinerary · {savedIds.length}
             </button>
-            <div className="flex min-w-0 gap-2 overflow-x-auto" aria-label="Filter by track">
+            {/* The label only reaches assistive technology if the row is a
+                group; a bare div drops it. */}
+            <div
+              role="group"
+              className="flex min-w-0 gap-2 overflow-x-auto"
+              aria-label="Filter by track"
+            >
               {[{ id: 'all', name: 'All tracks' }, ...state.tracks].map((track) => (
                 <button
                   key={track.id}
@@ -112,7 +118,7 @@ export function ItineraryEmbedView() {
             title={savedOnly ? 'Your itinerary is empty' : 'No sessions match'}
             description={
               savedOnly
-                ? 'Show the full program and save the sessions you want to attend.'
+                ? 'Turn off My itinerary to see the full program, then save the sessions you want.'
                 : 'Choose another track to see more of the published program.'
             }
           />
@@ -138,7 +144,10 @@ export function ItineraryEmbedView() {
                         key={item.placement.id}
                         className="grid gap-3 py-5 sm:grid-cols-[7rem_1fr_auto]"
                       >
-                        <div>
+                        {/* Time and zone share a line on a phone, where the
+                            column is the full width, and stack once the row
+                            gets its own time column. */}
+                        <div className="flex items-baseline gap-2 sm:block">
                           <p className="text-base font-semibold tabular-nums">
                             {eventDateTime(item.placement.startsAt, event.timezone, {
                               hour: 'numeric',
