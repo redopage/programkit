@@ -67,6 +67,22 @@ const workflowStages = [
   },
 ]
 
+const programKitBarGlyphs = {
+  P: ['11111', '10001', '11111', '10000', '10000'],
+  R: ['11110', '10001', '11110', '10100', '10010'],
+  O: ['01110', '10001', '10001', '10001', '01110'],
+  G: ['01110', '10000', '10111', '10001', '01110'],
+  A: ['01110', '10001', '11111', '10001', '10001'],
+  M: ['10001', '11011', '10101', '10001', '10001'],
+  K: ['10001', '10010', '11100', '10010', '10001'],
+  I: ['11111', '00100', '00100', '00100', '11111'],
+  T: ['11111', '00100', '00100', '00100', '00100'],
+} as const
+
+type ProgramKitBarLetter = keyof typeof programKitBarGlyphs
+
+const programKitBarWord: ProgramKitBarLetter[] = ['P', 'R', 'O', 'G', 'R', 'A', 'M', 'K', 'I', 'T']
+
 function BackgroundProgramMark({ active = false }) {
   const surface = active ? 'bg-blue-500/10 ring-blue-400/20' : 'bg-transparent'
 
@@ -98,14 +114,74 @@ function FooterProgramField() {
   )
 }
 
+function ProgramKitBarGlyph({ letter }: { letter: ProgramKitBarLetter }) {
+  const cellSize = 6
+  const cellGap = 2
+  const cellStep = cellSize + cellGap
+  const segments: Array<{ key: string; x: number; y: number; width: number }> = []
+
+  programKitBarGlyphs[letter].forEach((row, rowIndex) => {
+    let runStart = -1
+
+    for (let column = 0; column <= row.length; column += 1) {
+      const filled = row[column] === '1'
+      if (filled && runStart === -1) runStart = column
+
+      if (!filled && runStart !== -1) {
+        const runLength = column - runStart
+        segments.push({
+          key: `${rowIndex}-${runStart}`,
+          x: runStart * cellStep,
+          y: rowIndex * cellStep,
+          width: runLength * cellStep - cellGap,
+        })
+        runStart = -1
+      }
+    }
+  })
+
+  return (
+    <svg
+      viewBox="0 0 38 38"
+      aria-hidden="true"
+      focusable="false"
+      className="size-8 shrink-0 overflow-visible sm:size-9"
+    >
+      {segments.map((segment) => (
+        <rect
+          key={segment.key}
+          x={segment.x}
+          y={segment.y}
+          width={segment.width}
+          height={cellSize}
+          rx="2"
+          fill="currentColor"
+        />
+      ))}
+    </svg>
+  )
+}
+
+function ProgramKitBarWord() {
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      {programKitBarWord.map((letter, index) => (
+        <ProgramKitBarGlyph key={`${letter}-${index}`} letter={letter} />
+      ))}
+    </div>
+  )
+}
+
 function ProgramKitRhythmBand() {
   return (
     <div
       aria-hidden="true"
-      className="select-none overflow-hidden border-y border-zinc-950/8 bg-zinc-50/60 py-4 sm:py-5"
+      className="select-none overflow-hidden border-y border-zinc-950/8 bg-gradient-to-b from-white to-zinc-50/80 py-4"
     >
-      <div className="-ml-4 w-max whitespace-nowrap bg-[repeating-linear-gradient(to_bottom,var(--color-blue-600)_0_3px,transparent_3px_8px)] bg-clip-text text-[clamp(2.75rem,6vw,5rem)] leading-[0.82] font-semibold tracking-[0.08em] text-transparent opacity-20">
-        PROGRAMKIT&nbsp;&nbsp;PROGRAMKIT&nbsp;&nbsp;PROGRAMKIT&nbsp;&nbsp;PROGRAMKIT
+      <div className="flex w-max items-center gap-10 px-5 text-blue-600/18 sm:gap-12 sm:px-8">
+        {Array.from({ length: 5 }, (_, index) => (
+          <ProgramKitBarWord key={index} />
+        ))}
       </div>
     </div>
   )
