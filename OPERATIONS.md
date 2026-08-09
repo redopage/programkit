@@ -27,9 +27,9 @@ workspace.
 - `/agenda` — public agenda using the latest immutable published release
 - `/portal/par_003` — example participant portal using a server-side data projection
 
-The private `/demo/{capability}` link grants edit access to its workspace. The operator has no
-login, and the participant ID in the portal URL acts as identity in this demo. Use sample data
-only. Copy or delete the workspace from the banner. Expiry and early deletion remove local state
+The private `/demo/{capability}` link grants edit access to its workspace. The demo operator has no
+login, and the participant ID in the portal URL acts as identity in this sample surface. Use sample
+data only. Copy or delete the workspace from the sidebar or banner. Expiry and early deletion remove local state
 and authorization but never delete records in a connected Airtable base.
 
 On the official hosted demo, `https://demo.programkit.dev/` is the creation screen. `/demo`
@@ -161,21 +161,24 @@ pnpm deploy
 The ProgramKit-owned hosted environments use named profiles:
 
 ```bash
+pnpm deploy:site
 pnpm deploy:demo
 pnpm deploy:app
 ```
 
-`demo.programkit.dev` and `app.programkit.dev` are separate Workers with separate Durable Object
-namespaces. The demo profile has no outbound email binding. The app profile has a sender-restricted
-Cloudflare Email Service binding, but still uses sample actors and must not hold real participant
-data.
+`programkit.dev`, `demo.programkit.dev`, and `app.programkit.dev` are separate Workers. The public
+site exposes no workspace API. The demo has its own event-object namespace and no outbound email.
+The app has account and event-object namespaces plus a sender-restricted Cloudflare Email Service
+binding. It verifies staff sessions and event membership, but must not hold real participant data
+until the remaining identities and file path are complete.
 
 The configuration declares:
 
 - the `apps/cloudflare/src/worker.ts` entry point;
 - static assets with SPA fallback and Worker-first routing;
 - the `PROGRAMKIT_WORKSPACES` Durable Object binding;
-- the SQLite Durable Object migration;
+- the app-only `PROGRAMKIT_AUTH` Durable Object binding;
+- SQLite Durable Object migrations;
 - Worker observability.
 
 The seeded demonstration needs neither a D1 database ID nor an R2 bucket. Add a custom domain with
@@ -193,10 +196,10 @@ does not affect the agenda until publication creates a new release.
 
 ## Production enablement
 
-The reference deployment is passwordless and uses a fixed staff actor with wildcard scope. Before
-pointing a real domain or real data at it:
+The hosted app verifies staff sessions and event membership. Before pointing real data at it:
 
-- replace demo actor and workspace routing with verified staff and participant identity;
+- add team invitation, administrator roles, revocation, and role-to-scope mapping;
+- add verified participant and reviewer identity plus event-scoped public links;
 - add OAuth and workspace-scoped authorization to `/mcp`;
 - add real outbound email and webhook adapters through a transactional outbox;
 - add private object storage, scanning, signed downloads, and lifecycle policies;

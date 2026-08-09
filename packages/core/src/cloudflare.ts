@@ -11,7 +11,7 @@ import { AirtableWorkspaceStore, type AirtableWebhookRegistration } from './airt
 import { verifyAirtableWebhookMac } from './airtable-webhook.ts'
 import { handleCoreRequest } from './http.ts'
 import type { WorkspaceRepository } from './repository.ts'
-import { createSeedState } from './seed.ts'
+import { createEmptyWorkspaceState, createSeedState } from './seed.ts'
 import type { Actor, WorkspaceState } from './types.ts'
 
 interface DemoMetadata {
@@ -21,7 +21,15 @@ interface DemoMetadata {
   deletedAt?: string
 }
 
+interface EventMetadata {
+  id: string
+  name: string
+  slug: string
+  createdAt: string
+}
+
 const demoMetadataKey = 'programkit-demo:metadata'
+const eventMetadataKey = 'programkit-event:metadata'
 const webhookRefreshAtKey = 'airtable-webhook:refresh-at'
 const webhookRetryAtKey = 'airtable-webhook:retry-at'
 
@@ -45,6 +53,15 @@ function actorFromRequest(request: Request): Actor {
       .split(' ')
       .filter(Boolean),
   }
+}
+
+function initializeEventState(metadata: EventMetadata) {
+  return createEmptyWorkspaceState({
+    eventId: metadata.id,
+    eventName: metadata.name,
+    eventSlug: metadata.slug,
+    createdAt: metadata.createdAt,
+  })
 }
 
 class DurableObjectRepository implements WorkspaceRepository {
@@ -492,6 +509,24 @@ export class WorkspaceDurableObject extends DurableObject {
 
   async fetch(request: Request) {
     const url = new URL(request.url)
+    if (request.method === 'POST' && url.pathname === '/internal/event/initialize') {
+      const input = (await request.json()) as EventMetadata
+      if (!input.id || !input.name || !input.slug || !input.createdAt) {
+        return Response.json({ ok: false, error: 'Invalid event metadata.' }, { status: 400 })
+      }
+      const existing = await this.#ctx.storage.get<EventMetadata>(eventMetadataKey)
+      if (existing) {
+        return existing.id === input.id
+          ? Response.json({ ok: true, event: existing })
+          : Response.json(
+              { ok: false, error: 'This event is already initialized.' },
+              { status: 409 },
+            )
+      }
+      await this.#cache.mutate(() => ({ state: initializeEventState(input), result: undefined }))
+      await this.#ctx.storage.put(eventMetadataKey, input)
+      return Response.json({ ok: true, event: input }, { status: 201 })
+    }
     if (request.method === 'POST' && url.pathname === '/internal/demo/initialize') {
       const input = (await request.json()) as DemoMetadata
       if (

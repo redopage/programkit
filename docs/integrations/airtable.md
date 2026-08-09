@@ -102,9 +102,10 @@ OAuth installation behaves predictably:
 - Disconnecting removes ProgramKit's webhook and stored authorization. The last local cache
   remains available.
 
-A dedicated base is recommended, but it is not mandatory. ProgramKit does not create a new base
-because that would require broader workspace permissions. Create a blank base in Airtable first,
-then grant it during consent.
+A dedicated ProgramKit base is required per event. The base may contain unrelated tables, but the
+same ProgramKit-managed base must not be connected to two events because its state record describes
+one event workspace. ProgramKit does not create the base because that would require broader
+workspace permissions. Create a blank base in Airtable first, then grant it during consent.
 
 ### Self-hosted OAuth
 

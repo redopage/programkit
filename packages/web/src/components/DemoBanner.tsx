@@ -9,7 +9,11 @@ function expiryLabel(expiresAt: string) {
   return `${days} day${days === 1 ? '' : 's'}`
 }
 
-export function DemoBanner({ onActiveChange }: { onActiveChange: (active: boolean) => void }) {
+export function DemoBanner({
+  onStatusChange,
+}: {
+  onStatusChange: (status: DemoStatus | null) => void
+}) {
   const [status, setStatus] = useState<DemoStatus | null>(null)
   const [copied, setCopied] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -20,15 +24,15 @@ export function DemoBanner({ onActiveChange }: { onActiveChange: (active: boolea
     void readCurrentDemo(controller.signal)
       .then((result) => {
         setStatus(result)
-        onActiveChange(result.active)
+        onStatusChange(result)
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return
         setStatus({ active: false })
-        onActiveChange(false)
+        onStatusChange({ active: false })
       })
     return () => controller.abort()
-  }, [onActiveChange])
+  }, [onStatusChange])
 
   if (!status?.active || !status.demo) return null
 
@@ -83,7 +87,7 @@ export function DemoBanner({ onActiveChange }: { onActiveChange: (active: boolea
             <Button
               variant="ghost"
               size="compact"
-              className="text-zinc-300! hover:bg-white/10! hover:text-white!"
+              className="text-zinc-300! hover:bg-white/10! hover:text-white! lg:hidden"
               onClick={() => void copyLink()}
             >
               {copied ? (

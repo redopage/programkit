@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  createEmptyWorkspaceState,
   createSeedState,
   executeOperation,
   nextActions,
@@ -15,6 +16,37 @@ import {
 } from '@programkit/core'
 
 describe('ProgramKit operation engine', () => {
+  it('creates an isolated empty workspace for a new hosted event', () => {
+    const state = createEmptyWorkspaceState({
+      eventId: 'evt_new_event',
+      eventName: 'Open Source Summit',
+      eventSlug: 'open-source-summit',
+      createdAt: '2026-08-09T12:00:00.000Z',
+    })
+
+    expect(state.activeEventId).toBe('evt_new_event')
+    expect(state.workspace).toMatchObject({
+      id: 'wrk_new_event',
+      name: 'Open Source Summit team',
+      slug: 'open-source-summit',
+    })
+    expect(state.events).toEqual([
+      expect.objectContaining({
+        id: 'evt_new_event',
+        name: 'Open Source Summit',
+        status: 'planning',
+        publishedScheduleVersion: null,
+      }),
+    ])
+    expect(state.people).toEqual([])
+    expect(state.submissions).toEqual([])
+    expect(state.sessions).toEqual([])
+    expect(state.changeSets).toEqual([])
+    expect(state.domainEvents).toEqual([
+      expect.objectContaining({ type: 'workspace.created', data: { eventId: 'evt_new_event' } }),
+    ])
+  })
+
   it('creates a useful deterministic workspace', () => {
     const state = createSeedState()
     expect(state.people).toHaveLength(16)

@@ -48,20 +48,25 @@ legacy initialization.
 
 ## Reference request routing
 
-`apps/cloudflare/src/worker.ts` is the Cloudflare host:
+`apps/cloudflare/src/worker.ts` is the Cloudflare host. Its routing depends on the deployment
+profile:
 
-1. It reads `x-programkit-workspace-key` and accepts only lowercase letters, numbers, underscores, and
-   hyphens, up to 64 characters. Missing or invalid values fall back to `demo`.
-2. It resolves that key with `DurableObjectNamespace.idFromName`, producing one strong-consistency
-   boundary per workspace key.
-3. It removes any caller-supplied `x-programkit-internal-actor-*` headers and injects an actor selected by
-   the host.
-4. It forwards API, public, and MCP work to the selected `WorkspaceDurableObject`; other requests go
-   to the static asset binding.
+1. The public-site profile serves the small marketing entry and legal pages. Workspace APIs are
+   not exposed.
+2. The hosted-demo profile exchanges a random capability link for a same-site cookie and maps that
+   capability to one expiring `WorkspaceDurableObject` containing sample data.
+3. The hosted-app profile verifies a passwordless session through an account-sharded
+   `AuthDurableObject`, checks event membership, and maps the selected event to its own
+   `WorkspaceDurableObject`.
+4. The self-hosted development path may read `x-programkit-workspace-key`. This remains routing
+   input for sample workspaces and is never accepted as hosted-app membership.
+5. Every path removes caller-supplied `x-programkit-internal-actor-*` headers and injects an actor
+   selected by the host before forwarding to core.
 
-Both choices are intentionally simple in the demo. The workspace header is not proof of tenancy,
-and the fixed actors are not authentication. A production host must derive workspace membership,
-actor identity, and scopes from a verified session or token.
+The app session and event cookie are HTTP-only, secure in production, and same-site. Magic-link
+and session secrets are stored only as hashes. See
+[Identity, events, and storage ownership](docs/architecture/identity-and-tenancy.md) for the exact
+boundary and current team-membership limitations.
 
 ## Mutation path
 
@@ -137,9 +142,11 @@ previous release.
 
 ## Airtable persistence and Durable Object cache
 
-The Cloudflare host has two modes. The zero-configuration demo stores one logical JSON workspace
-document per SQLite-backed Durable Object. With Airtable variables configured, Airtable becomes the
-durable source of truth and that same document becomes a hot cache.
+Each Cloudflare event has one logical JSON workspace document in its SQLite-backed Durable Object.
+The zero-configuration demo and a new app event use that object as the complete store. When that
+event connects Airtable, Airtable becomes its durable business-record source of truth and the same
+document becomes the serialized hot cache. Account identity, sessions, and event memberships stay
+in the account object and never move to Airtable.
 
 The Airtable version 1 schema stores one non-native workspace snapshot plus native events, people,
 participations, submissions, tasks, reviews, sessions, placements, tracks, and rooms. Native
@@ -160,10 +167,11 @@ journal before the path is production-complete.
 
 ## Cloudflare data services
 
-The recommended metadata source of truth is one Airtable base per installation. One SQLite-backed
-Durable Object per workspace supplies serialized coordination, cached reads, and future live-client
-fan-out. D1 is not a second primary database. If organization-wide search or analytics warrants it,
-D1 receives a rebuildable projection and may lag behind the workspace transaction.
+The recommended business-record source of truth is one Airtable base per event. One
+SQLite-backed Durable Object per event supplies serialized coordination, cached reads, and future
+live-client fan-out. A separate account object owns identity and the small cross-event membership
+index. D1 is not a second primary database. If organization-wide search or analytics warrants it,
+D1 receives a rebuildable projection and may lag behind the event transaction.
 
 The current Airtable adapter creates the schema, batch-upserts changed records, rebuilds the cache,
 and verifies webhook HMACs. The experimental webhook performs a full refresh. Production work must
@@ -193,7 +201,8 @@ condition used in the workspace.
 
 `WorkspaceRepository` is the testable boundary between domain transitions and Durable Object
 storage. Identity, email, webhooks, R2, queues, Airtable credentials, and secret management are
-composed in `apps/cloudflare` and are not provided by the reference demo.
+composed in `apps/cloudflare`. Hosted staff identity and magic-link email are implemented there;
+participant identity, R2, and the product-delivery outbox remain incomplete.
 
 See [Deployment](DEPLOYMENT.md) for the supported Cloudflare stack, D1 decision, Airtable adapter,
 and production binding sequence.

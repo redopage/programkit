@@ -1,19 +1,23 @@
 import {
+  ArrowRightStartOnRectangleIcon,
   ArrowTopRightOnSquareIcon,
   Bars3Icon,
   CalendarDaysIcon,
   ChartBarSquareIcon,
+  CheckIcon,
   ChevronDownIcon,
   CircleStackIcon,
   ClipboardDocumentCheckIcon,
-  CommandLineIcon,
   CpuChipIcon,
   Cog6ToothIcon,
   DocumentTextIcon,
   EnvelopeIcon,
   HomeIcon,
   InboxStackIcon,
+  LinkIcon,
   MagnifyingGlassIcon,
+  PlusIcon,
+  QuestionMarkCircleIcon,
   RectangleStackIcon,
   Squares2X2Icon,
   UserGroupIcon,
@@ -24,6 +28,7 @@ import { createPortal } from 'react-dom'
 
 import { submissionPipelineSummary } from '@programkit/core'
 
+import type { DemoStatus } from '../lib/demo.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 import { CommandCenter, type CommandMode, type ProgramCommand } from './CommandCenter.tsx'
 import { DemoBanner } from './DemoBanner.tsx'
@@ -85,31 +90,6 @@ const navigation = [
         label: 'Communications',
         icon: EnvelopeIcon,
         iconClass: 'fill-indigo-500',
-      },
-    ],
-  },
-  {
-    label: 'Manage',
-    items: [
-      {
-        href: '/settings',
-        label: 'Event settings',
-        icon: Cog6ToothIcon,
-        iconClass: 'fill-zinc-500',
-      },
-      {
-        href: '/changes',
-        label: 'Change review',
-        icon: Squares2X2Icon,
-        iconClass: 'fill-zinc-500',
-        sidebar: false,
-      },
-      {
-        href: '/integrations',
-        label: 'Integrations',
-        icon: CircleStackIcon,
-        iconClass: 'fill-zinc-500',
-        sidebar: false,
       },
     ],
   },
@@ -192,6 +172,100 @@ const commandDetails: Record<
   },
 }
 
+function SidebarUtilities({
+  navigate,
+  onOpenShortcuts,
+  demoUrl,
+  onNavigate,
+}: {
+  navigate: (to: string) => void
+  onOpenShortcuts: () => void
+  demoUrl?: string
+  onNavigate?: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const hostedApp =
+    document.querySelector<HTMLMetaElement>('meta[name="programkit-deployment-profile"]')
+      ?.content === 'hosted-app'
+  const open = (to: string) => {
+    navigate(to)
+    onNavigate?.()
+  }
+  const copyLink = async () => {
+    if (!demoUrl) return
+    await navigator.clipboard.writeText(demoUrl)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1_800)
+  }
+  const signOut = async () => {
+    try {
+      const response = await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+      })
+      if (!response.ok) return
+      window.location.assign('/login')
+    } catch {
+      // Keep the current session visible when sign-out cannot reach the server.
+    }
+  }
+  const items = [
+    {
+      label: demoUrl ? 'View public page' : 'Preview public page',
+      icon: ArrowTopRightOnSquareIcon,
+      action: () => open('/agenda'),
+    },
+    ...(demoUrl
+      ? [
+          {
+            label: copied ? 'Link copied' : 'Copy demo link',
+            icon: copied ? CheckIcon : LinkIcon,
+            action: () => void copyLink(),
+          },
+        ]
+      : []),
+    { label: 'Settings', icon: Cog6ToothIcon, action: () => open('/settings') },
+    {
+      label: 'Keyboard shortcuts',
+      icon: QuestionMarkCircleIcon,
+      action: () => {
+        onOpenShortcuts()
+        onNavigate?.()
+      },
+    },
+    ...(hostedApp
+      ? [
+          {
+            label: 'Sign out',
+            icon: ArrowRightStartOnRectangleIcon,
+            action: () => void signOut(),
+          },
+        ]
+      : []),
+  ]
+  return (
+    <div className="border-t border-zinc-950/6 pt-2">
+      {items.map(({ label, icon: Icon, action }) => (
+        <button
+          key={label}
+          type="button"
+          className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[0.9375rem] font-medium text-zinc-700 hover:bg-zinc-950/4 hover:text-zinc-950 sm:min-h-8 sm:text-sm"
+          onClick={action}
+        >
+          <Icon
+            className={cx(
+              'size-4 shrink-0 fill-zinc-500',
+              copied && label === 'Link copied' && 'fill-emerald-600',
+            )}
+          />
+          <span className="min-w-0 truncate">{label}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function NavigationItems({
   pathname,
   navigate,
@@ -210,42 +284,40 @@ function NavigationItems({
               <p className="px-2 pb-1 text-sm font-medium text-zinc-500">{group.label}</p>
             ) : null}
             <ul role="list" className="flex flex-col gap-px">
-              {group.items
-                .filter((item) => item.sidebar !== false)
-                .map((item) => {
-                  const active =
-                    item.href === '/'
-                      ? pathname === '/'
-                      : pathname === item.href || pathname.startsWith(`${item.href}/`)
-                  const Icon = item.icon
-                  return (
-                    <li key={item.href}>
-                      <a
-                        href={item.href}
-                        aria-current={active ? 'page' : undefined}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          navigate(item.href)
-                          onNavigate?.()
-                        }}
+              {group.items.map((item) => {
+                const active =
+                  item.href === '/'
+                    ? pathname === '/'
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`)
+                const Icon = item.icon
+                return (
+                  <li key={item.href}>
+                    <a
+                      href={item.href}
+                      aria-current={active ? 'page' : undefined}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        navigate(item.href)
+                        onNavigate?.()
+                      }}
+                      className={cx(
+                        'group focus-ring flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-[0.9375rem] font-medium text-zinc-700 sm:min-h-8 sm:text-sm',
+                        active && 'bg-zinc-950/6 text-zinc-950',
+                        !active && 'hover:bg-zinc-950/4 hover:text-zinc-950',
+                      )}
+                    >
+                      <Icon
                         className={cx(
-                          'group focus-ring flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-[0.9375rem] font-medium text-zinc-700 sm:min-h-8 sm:text-sm',
-                          active && 'bg-zinc-950/6 text-zinc-950',
-                          !active && 'hover:bg-zinc-950/4 hover:text-zinc-950',
+                          'size-4 h-lh shrink-0 opacity-80 motion-safe:transition-opacity group-hover:opacity-100',
+                          item.iconClass,
+                          active && 'opacity-100',
                         )}
-                      >
-                        <Icon
-                          className={cx(
-                            'size-4 h-lh shrink-0 opacity-80 motion-safe:transition-opacity group-hover:opacity-100',
-                            item.iconClass,
-                            active && 'opacity-100',
-                          )}
-                        />
-                        <span className="min-w-0 truncate">{item.label}</span>
-                      </a>
-                    </li>
-                  )
-                })}
+                      />
+                      <span className="min-w-0 truncate">{item.label}</span>
+                    </a>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         ))}
@@ -254,23 +326,28 @@ function NavigationItems({
   )
 }
 
-function WorkspaceIdentity({
-  navigate,
-  pendingChanges,
-  onOpenShortcuts,
-  commandOpen,
-  onNavigate,
-}: {
-  navigate: (to: string) => void
-  pendingChanges: number
-  onOpenShortcuts: () => void
-  commandOpen: boolean
-  onNavigate?: () => void
-}) {
+interface AccountEvent {
+  id: string
+  name: string
+  slug: string
+  role: 'owner' | 'admin' | 'member'
+}
+
+interface AccountSummary {
+  events: AccountEvent[]
+  activeEventId: string
+}
+
+function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
   const { payload } = useWorkspace()
   const state = payload?.state
   const event = state?.events.find((entry) => entry.id === state.activeEventId)
   const [open, setOpen] = useState(false)
+  const [account, setAccount] = useState<AccountSummary | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [eventName, setEventName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const popoverId = useId()
@@ -302,17 +379,72 @@ function WorkspaceIdentity({
     if (commandOpen) setOpen(false)
   }, [commandOpen])
 
-  const openPage = (to: string) => {
-    setOpen(false)
-    navigate(to)
-    onNavigate?.()
+  useEffect(() => {
+    if (!open || account) return
+    const controller = new AbortController()
+    void fetch('/api/v1/account', { credentials: 'same-origin', signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return
+        const body = (await response.json()) as { ok?: boolean; account?: AccountSummary }
+        if (body.ok && body.account) setAccount(body.account)
+      })
+      .catch((caught: unknown) => {
+        if (caught instanceof DOMException && caught.name === 'AbortError') return
+      })
+    return () => controller.abort()
+  }, [account, open])
+
+  const selectEvent = async (eventId: string) => {
+    if (!account || eventId === account.activeEventId) return
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/v1/account/active-event', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ eventId }),
+      })
+      if (!response.ok) throw new Error('The event could not be opened.')
+      window.location.assign('/')
+    } catch {
+      setSaving(false)
+      setError('The event could not be opened.')
+    }
   }
 
-  const openShortcuts = () => {
-    setOpen(false)
-    onOpenShortcuts()
-    onNavigate?.()
+  const createEvent = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/v1/events', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: eventName }),
+      })
+      const body = (await response.json()) as { ok?: boolean; error?: string }
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error ?? 'The event could not be created.')
+      }
+      window.location.assign('/')
+    } catch (caught) {
+      setSaving(false)
+      setError(caught instanceof Error ? caught.message : 'The event could not be created.')
+    }
   }
+
+  const events =
+    account?.events ??
+    (event ? [{ id: event.id, name: event.name, slug: event.slug, role: 'owner' as const }] : [])
+  const activeEventId = account?.activeEventId ?? event?.id
+  const initials = (event?.name ?? 'Event')
+    .split(/\s+/u)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toLocaleUpperCase()
 
   return (
     <div className="relative">
@@ -323,18 +455,13 @@ function WorkspaceIdentity({
         aria-expanded={open}
         aria-controls={open ? popoverId : undefined}
         onClick={() => setOpen((current) => !current)}
-        className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
+        className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
       >
         <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
-          AI
+          {initials}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-base font-medium text-zinc-950 sm:text-sm">
-            {state?.workspace.name ?? 'Program team'}
-          </span>
-          <span className="block truncate text-base text-zinc-500 sm:text-sm">
-            {event?.name ?? 'Active event'}
-          </span>
+        <span className="min-w-0 flex-1 truncate text-base font-medium text-zinc-950 sm:text-sm">
+          {event?.name ?? 'Choose an event'}
         </span>
         <ChevronDownIcon
           className={cx(
@@ -349,51 +476,85 @@ function WorkspaceIdentity({
           ref={popoverRef}
           id={popoverId}
           role="dialog"
-          aria-label="Workspace menu"
-          className="absolute top-full left-0 z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-(--popover-radius) bg-zinc-900/90 p-(--popover-padding) shadow-2xl ring-1 ring-white/15 backdrop-blur-xl [--popover-padding:--spacing(1.5)] [--popover-radius:var(--radius-2xl)] motion-safe:animate-rise-in lg:top-0 lg:left-full lg:mt-0 lg:ml-2"
+          aria-label="Choose an event"
+          className="absolute top-full left-0 z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-(--popover-radius) bg-zinc-900/90 p-(--popover-padding) shadow-2xl ring-1 ring-white/15 backdrop-blur-xl [--popover-padding:--spacing(1.5)] [--popover-radius:var(--radius-2xl)] motion-safe:animate-rise-in"
         >
-          <div className="px-2 py-1.5">
-            <p className="truncate text-base font-medium text-white sm:text-sm">
-              {event?.name ?? 'Active event'}
-            </p>
-            <div className="flex items-center gap-2 pt-0.5">
-              <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" />
-              <p className="truncate text-base text-zinc-400 sm:text-sm">Workspace synced</p>
-            </div>
-          </div>
-          <div className="border-t border-white/10 pt-1">
-            {[
-              { href: '/agenda', label: 'View published program', icon: ArrowTopRightOnSquareIcon },
-              { href: '/settings', label: 'Event settings', icon: Cog6ToothIcon },
-              { href: '/changes', label: 'Change review', icon: Squares2X2Icon },
-              { href: '/integrations', label: 'Integrations', icon: CircleStackIcon },
-              { href: '/agent', label: 'Agent workspace', icon: CpuChipIcon },
-            ].map(({ href, label, icon: Icon }) => (
+          <div className="grid gap-1">
+            {events.map((candidate) => (
               <button
-                key={href}
+                key={candidate.id}
                 type="button"
-                className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white sm:min-h-8 sm:text-sm"
-                onClick={() => openPage(href)}
+                className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-200 hover:bg-white/8 hover:text-white disabled:cursor-wait sm:min-h-9 sm:text-sm"
+                onClick={() => void selectEvent(candidate.id)}
+                disabled={saving}
               >
-                <Icon className="size-4 h-lh shrink-0 fill-zinc-500" />
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-                {href === '/agent' && pendingChanges > 0 ? (
-                  <span className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-sm font-medium tabular-nums text-amber-300">
-                    {pendingChanges}
-                  </span>
+                <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-500/20 text-xs font-semibold text-blue-200 ring-1 ring-blue-300/15">
+                  {candidate.name.slice(0, 2).toLocaleUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{candidate.name}</span>
+                {candidate.id === activeEventId ? (
+                  <CheckIcon className="size-4 shrink-0 fill-blue-300" />
                 ) : null}
               </button>
             ))}
-            <button
-              type="button"
-              className="focus-ring flex min-h-11 w-full items-center gap-2 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white sm:min-h-8 sm:text-sm"
-              onClick={openShortcuts}
-            >
-              <CommandLineIcon className="size-4 h-lh shrink-0 fill-zinc-500" />
-              <div className="min-w-0 flex-1 truncate">Keyboard shortcuts</div>
-              <kbd className="shrink-0 font-sans text-zinc-500">?</kbd>
-            </button>
           </div>
+          {account ? (
+            <div className="mt-1 border-t border-white/10 pt-1">
+              {creating ? (
+                <form
+                  className="p-1"
+                  onSubmit={(submitEvent) => {
+                    submitEvent.preventDefault()
+                    void createEvent()
+                  }}
+                >
+                  <label htmlFor="new-event-name" className="sr-only">
+                    Event name
+                  </label>
+                  <input
+                    id="new-event-name"
+                    autoFocus
+                    required
+                    value={eventName}
+                    onChange={(changeEvent) => setEventName(changeEvent.currentTarget.value)}
+                    placeholder="Event name"
+                    className="focus-ring min-h-10 w-full rounded-xl bg-white/8 px-3 text-base text-white ring-1 ring-white/12 placeholder:text-zinc-500 sm:text-sm"
+                  />
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      className="focus-ring min-h-9 flex-1 rounded-lg text-sm font-medium text-zinc-300 hover:bg-white/8 hover:text-white"
+                      onClick={() => {
+                        setCreating(false)
+                        setEventName('')
+                        setError(null)
+                      }}
+                      disabled={saving}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="focus-ring min-h-9 flex-1 rounded-lg bg-white text-sm font-medium text-zinc-950 hover:bg-zinc-100 disabled:opacity-50"
+                      disabled={saving || eventName.trim().length < 2}
+                    >
+                      {saving ? 'Creating…' : 'Create'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white sm:min-h-9 sm:text-sm"
+                  onClick={() => setCreating(true)}
+                >
+                  <PlusIcon className="size-4 shrink-0 fill-zinc-500" />
+                  New event
+                </button>
+              )}
+              {error ? <p className="px-2 py-1 text-sm text-red-300">{error}</p> : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -403,7 +564,9 @@ function WorkspaceIdentity({
 export function Shell({ pathname, navigate, children }: ShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [commandMode, setCommandMode] = useState<CommandMode>(null)
-  const [demoActive, setDemoActive] = useState(false)
+  const [demoStatus, setDemoStatus] = useState<DemoStatus | null>(null)
+  const demoActive = demoStatus?.active === true
+  const demoUrl = demoStatus?.active ? demoStatus.demo?.url : undefined
   const mobilePanelRef = useRef<HTMLDivElement>(null)
   const mobileTitleId = useId()
   const { payload } = useWorkspace()
@@ -468,15 +631,45 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
         }
       }),
     )
-    pageCommands.push({
-      id: 'page-agent',
-      label: 'Agent workspace',
-      description: 'Review agent proposals and available tools.',
-      href: '/agent',
-      section: 'Settings',
-      icon: CpuChipIcon,
-      keywords: ['mcp', 'automation', 'assistant'],
-    })
+    pageCommands.push(
+      {
+        id: 'page-settings',
+        label: 'Event settings',
+        description: commandDetails['/settings'].description,
+        href: '/settings',
+        section: 'Settings',
+        icon: Cog6ToothIcon,
+        keywords: commandDetails['/settings'].keywords,
+      },
+      {
+        id: 'page-changes',
+        label: 'Change review',
+        description: commandDetails['/changes'].description,
+        href: '/changes',
+        section: 'Settings',
+        icon: Squares2X2Icon,
+        keywords: commandDetails['/changes'].keywords,
+        meta: pendingChanges ? `${pendingChanges} pending` : undefined,
+      },
+      {
+        id: 'page-integrations',
+        label: 'Integrations',
+        description: commandDetails['/integrations'].description,
+        href: '/integrations',
+        section: 'Settings',
+        icon: CircleStackIcon,
+        keywords: commandDetails['/integrations'].keywords,
+      },
+      {
+        id: 'page-agent',
+        label: 'Agent workspace',
+        description: 'Review agent proposals and available tools.',
+        href: '/agent',
+        section: 'Settings',
+        icon: CpuChipIcon,
+        keywords: ['mcp', 'automation', 'assistant'],
+      },
+    )
 
     const publicCommands: ProgramCommand[] = [
       {
@@ -562,7 +755,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
 
   return (
     <>
-      <DemoBanner onActiveChange={setDemoActive} />
+      <DemoBanner onStatusChange={setDemoStatus} />
       <div
         className={cx(
           'isolate min-h-dvh antialiased max-lg:bg-white lg:flex lg:bg-canvas',
@@ -578,12 +771,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
         >
           <div className="flex flex-col gap-1.5">
             <div className="min-w-0">
-              <WorkspaceIdentity
-                navigate={navigate}
-                pendingChanges={pendingChanges}
-                onOpenShortcuts={() => setCommandMode('shortcuts')}
-                commandOpen={commandMode !== null}
-              />
+              <WorkspaceIdentity commandOpen={commandMode !== null} />
             </div>
             <div>
               <button
@@ -601,6 +789,11 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
           <div className="min-h-0 flex-1 overflow-y-auto pt-4 pb-2">
             <NavigationItems pathname={pathname} navigate={navigate} />
           </div>
+          <SidebarUtilities
+            navigate={navigate}
+            onOpenShortcuts={() => setCommandMode('shortcuts')}
+            demoUrl={demoUrl}
+          />
         </aside>
 
         <header
@@ -649,13 +842,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                 >
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
-                      <WorkspaceIdentity
-                        navigate={navigate}
-                        pendingChanges={pendingChanges}
-                        onOpenShortcuts={() => setCommandMode('shortcuts')}
-                        commandOpen={commandMode !== null}
-                        onNavigate={() => setMobileOpen(false)}
-                      />
+                      <WorkspaceIdentity commandOpen={commandMode !== null} />
                     </div>
                     <IconButton label="Close navigation" onClick={() => setMobileOpen(false)}>
                       <XMarkIcon className="size-4 shrink-0 fill-current" />
@@ -671,6 +858,12 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                       onNavigate={() => setMobileOpen(false)}
                     />
                   </div>
+                  <SidebarUtilities
+                    navigate={navigate}
+                    onOpenShortcuts={() => setCommandMode('shortcuts')}
+                    demoUrl={demoUrl}
+                    onNavigate={() => setMobileOpen(false)}
+                  />
                 </div>
               </div>,
               document.body,

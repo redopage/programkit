@@ -5,8 +5,27 @@ application. Reads use conventional event-scoped resources. Writes use named ope
 app, API clients, and later agent tools all reach the same validation, authorization, idempotency,
 and audit path.
 
-The reference Worker uses demo actors and is not safe for real participant data. Production API
-tokens, workspace membership, and scopes are still required; see [Security](../../SECURITY.md).
+The hosted app resolves its browser actor and event from a verified staff session and account
+membership. The local sample and hosted demo still use demo actors, and external API tokens are not
+implemented. None of these surfaces are safe for real participant data yet; see
+[Security](../../SECURITY.md).
+
+## Hosted account endpoints
+
+These browser endpoints are available only on the hosted app. Mutations require the same origin.
+
+| Method | Path                           | Purpose                                     |
+| ------ | ------------------------------ | ------------------------------------------- |
+| `POST` | `/api/v1/auth/magic-link`      | Request a one-time staff sign-in link       |
+| `GET`  | `/auth/verify?token=...`       | Exchange the link for a secure session      |
+| `POST` | `/api/v1/auth/logout`          | Revoke the current session                  |
+| `GET`  | `/api/v1/account`              | Read the signed-in user's accessible events |
+| `POST` | `/api/v1/events`               | Create and select an isolated empty event   |
+| `POST` | `/api/v1/account/active-event` | Select an event from verified membership    |
+
+These routes are application session APIs, not the future third-party OAuth API. Token and
+tenancy details are in
+[Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).
 
 ## Resource reads
 

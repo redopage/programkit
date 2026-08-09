@@ -14,7 +14,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       deploymentProfile={
         deploymentProfile === 'hosted-demo' ||
         deploymentProfile === 'hosted-demo-entry' ||
-        deploymentProfile === 'hosted-app'
+        deploymentProfile === 'hosted-site' ||
+        deploymentProfile === 'hosted-site-entry' ||
+        deploymentProfile === 'hosted-app' ||
+        deploymentProfile === 'hosted-app-entry'
           ? deploymentProfile
           : 'single-workspace'
       }

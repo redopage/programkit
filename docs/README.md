@@ -34,8 +34,10 @@ not maintain a second version of product or architecture facts.
    reminders.
 7. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
    notifications.
-8. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
-9. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
+8. Read [Identity, events, and storage ownership](architecture/identity-and-tenancy.md) before
+   changing sign-in, membership, event routing, Airtable ownership, or R2 boundaries.
+9. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
+10. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
 
 ### I want to contribute
 
@@ -51,19 +53,20 @@ Start at [Agent navigation](agents/README.md). Coding agents should also read th
 
 ## Sources of truth
 
-| Question                                           | Canonical document or code                                       |
-| -------------------------------------------------- | ---------------------------------------------------------------- |
-| What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                                    |
-| How do we compare with the full evaluator?         | [`evaluator-gap-analysis.md`](product/evaluator-gap-analysis.md) |
-| Why are the packages and hosts separated?          | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                          |
-| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                              |
-| How is the repository operated?                    | [`OPERATIONS.md`](../OPERATIONS.md)                              |
-| What must change before real data?                 | [`SECURITY.md`](../SECURITY.md)                                  |
-| Which operations exist?                            | `packages/core/src/manifest.ts`                                  |
-| Which HTTP resources exist?                        | [`docs/api/README.md`](api/README.md)                            |
-| What does the domain store?                        | `packages/core/src/types.ts`                                     |
-| Which URLs and surfaces exist?                     | `packages/web/src/routes` and `packages/web/README.md`           |
-| Which MCP tools and resources exist?               | `packages/agent/README.md`                                       |
+| Question                                           | Canonical document or code                                        |
+| -------------------------------------------------- | ----------------------------------------------------------------- |
+| What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                                     |
+| How do we compare with the full evaluator?         | [`evaluator-gap-analysis.md`](product/evaluator-gap-analysis.md)  |
+| Why are the packages and hosts separated?          | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                           |
+| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                               |
+| Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](architecture/identity-and-tenancy.md) |
+| How is the repository operated?                    | [`OPERATIONS.md`](../OPERATIONS.md)                               |
+| What must change before real data?                 | [`SECURITY.md`](../SECURITY.md)                                   |
+| Which operations exist?                            | `packages/core/src/manifest.ts`                                   |
+| Which HTTP resources exist?                        | [`docs/api/README.md`](api/README.md)                             |
+| What does the domain store?                        | `packages/core/src/types.ts`                                      |
+| Which URLs and surfaces exist?                     | `packages/web/src/routes` and `packages/web/README.md`            |
+| Which MCP tools and resources exist?               | `packages/agent/README.md`                                        |
 
 When behavior and prose disagree, verify the executable code and tests, then update the canonical
 document in the same change. Do not solve drift by adding another summary.

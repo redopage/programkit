@@ -59,7 +59,7 @@ export {
   submissionReviewSummary,
   visibleSubmissionFormFields,
 } from './selectors.ts'
-export { createSeedState } from './seed.ts'
+export { createEmptyWorkspaceState, createSeedState } from './seed.ts'
 export {
   requiredSubmissionFieldPurposes,
   submissionFieldPurposeSupportsKind,

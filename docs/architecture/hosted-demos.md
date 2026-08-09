@@ -21,9 +21,9 @@ caller from selecting a hosted demo through the reference workspace-routing head
 ## Routing and deployment shape
 
 The capability token is intentionally not a UUID. It is a bearer secret, not a normal database
-identifier, and its 192 random bits provide more entropy than a UUID v4. A future authenticated
-workspace may use a UUIDv7 or another sortable internal identifier, but that identifier must remain
-separate from the secret used to join a passwordless demo.
+identifier, and its 192 random bits provide more entropy than a UUID v4. Authenticated app events
+use a separate opaque event identifier. That identifier remains separate from the secret used to
+join a passwordless demo.
 
 The canonical hosted creation screen is `https://demo.programkit.dev/`. `/demo` redirects to `/` on
 that host so the route does not repeat the hostname. Private links use `/demo/{capability}` because
@@ -54,13 +54,14 @@ The URL is a bearer capability. Anyone with it can edit, and there is no individ
 revocation. The operator, reviewer, submitter, and speaker identities remain demo conveniences.
 Do not enter personal information, private files, provider credentials, or production data.
 
-Before using real data, replace capability routing and fixed actors with verified sessions,
-workspace membership, role-scoped authorization, abuse protection, and the controls in
+The hosted app has verified staff sessions and event membership, but the demo deliberately keeps
+its capability and fixed actors. Before using real data, add participant and reviewer identity,
+team roles, public event links, abuse protection, and the controls in
 [`SECURITY.md`](../../SECURITY.md).
 
 ## Later hardening
 
 - Rate-limit demo creation and add Turnstile before promoting the route broadly.
-- Add a hosted-account path that can promote a demo into an authenticated workspace.
+- Add a deliberate promotion flow that copies selected demo state into a new authenticated event.
 - Show the expiry notice on public, reviewer, and speaker surfaces when those links are shared.
 - Record lifecycle metrics without logging capability values.

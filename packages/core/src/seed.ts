@@ -1308,3 +1308,84 @@ export function createSeedState(): WorkspaceState {
     recentCommandResults: [],
   }
 }
+
+export function createEmptyWorkspaceState({
+  eventId,
+  eventName,
+  eventSlug,
+  createdAt,
+}: {
+  eventId: string
+  eventName: string
+  eventSlug: string
+  createdAt: string
+}): WorkspaceState {
+  const template = createSeedState()
+  const start = new Date(createdAt)
+  start.setUTCDate(start.getUTCDate() + 90)
+  start.setUTCHours(9, 0, 0, 0)
+  const end = new Date(start)
+  end.setUTCHours(17, 0, 0, 0)
+  return {
+    schemaVersion: template.schemaVersion,
+    revision: 1,
+    workspace: {
+      id: `wrk_${eventId.replace(/^evt_/u, '')}`,
+      name: `${eventName} team`,
+      slug: eventSlug,
+      timezone: 'UTC',
+    },
+    activeEventId: eventId,
+    events: [
+      {
+        id: eventId,
+        name: eventName,
+        slug: eventSlug,
+        venue: '',
+        city: '',
+        startsAt: start.toISOString(),
+        endsAt: end.toISOString(),
+        timezone: 'UTC',
+        status: 'planning',
+        publishedScheduleVersion: null,
+        version: 1,
+      },
+    ],
+    people: [],
+    participations: [],
+    requirementDefinitions: [],
+    requirementInstances: [],
+    submissionForms: [],
+    submissionFormFields: [],
+    submissions: [],
+    assets: [],
+    reviewers: [],
+    reviewerTeams: [],
+    evaluationPlans: [],
+    reviewerAssignments: [],
+    scorecards: [],
+    reviewDecisions: [],
+    tracks: [],
+    rooms: [],
+    sessions: [],
+    placements: [],
+    scheduleReleases: [],
+    campaigns: [],
+    changeSets: [],
+    integrations: structuredClone(template.integrations),
+    domainEvents: [
+      {
+        id: `dev_${eventId.replace(/^evt_/u, '')}_created`,
+        sequence: 1,
+        type: 'workspace.created',
+        occurredAt: createdAt,
+        actor: { type: 'system', id: 'system', name: 'ProgramKit' },
+        aggregate: { type: 'workspace', id: `wrk_${eventId.replace(/^evt_/u, '')}`, version: 1 },
+        operation: 'workspace.create',
+        summary: `Created the ${eventName} workspace.`,
+        data: { eventId },
+      },
+    ],
+    recentCommandResults: [],
+  }
+}

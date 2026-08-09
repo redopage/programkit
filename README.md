@@ -51,10 +51,10 @@ Useful demo routes include:
 - `http://localhost:4173/agenda` — public agenda backed only by the latest published release
 - `http://localhost:4173/portal/par_003` — one participant's projected portal workspace
 
-Every identity in the reference Worker is a passwordless demo convenience. Its separate surface
-projections and operation allowlists are real server boundaries, but its path-derived actors are
-not authentication. Do not use it with real participant data; see
-[Security](SECURITY.md#reference-worker-security-boundary).
+The local sample and hosted demo use path-derived actors so every workflow is easy to inspect. The
+hosted app has real passwordless staff sessions and verified event selection, but participant,
+reviewer, public-link, MCP, and file identity are not complete. Do not use any reference deployment
+with real participant data yet; see [Security](SECURITY.md#deployment-security-boundaries).
 
 ## Build and verify
 
@@ -76,18 +76,20 @@ pnpm deploy
 
 The official hosted environments use the same repository and application assembly:
 
-| Host                                                 | Purpose                                                       | Data boundary                                                                  |
-| ---------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| [`demo.programkit.dev`](https://demo.programkit.dev) | Anonymous seven-day evaluation workspaces                     | Separate Worker and Durable Object namespace, no outbound mail binding         |
-| [`app.programkit.dev`](https://app.programkit.dev)   | Stable application environment for authenticated hosting work | Separate Worker and Durable Object namespace, restricted outbound mail binding |
+| Host                                                 | Purpose                                      | Data boundary                                                                  |
+| ---------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------ |
+| [`programkit.dev`](https://programkit.dev)           | Public project homepage                      | Separate site Worker, no workspace API                                         |
+| [`demo.programkit.dev`](https://demo.programkit.dev) | Anonymous seven-day evaluation workspaces    | Separate Worker and Durable Object namespace, no outbound mail binding         |
+| [`app.programkit.dev`](https://app.programkit.dev)   | Passwordless staff accounts and event stores | Separate Worker and Durable Object namespace, restricted outbound mail binding |
 
-`app.programkit.dev` still uses the reference passwordless actors and sample workspace. It is not
-ready for real participant data until production identity and authorization are implemented.
+`app.programkit.dev` sends one-time magic links, stores only token and session hashes, and derives
+one event Durable Object from verified account membership. It is not ready for real participant
+data until team, participant, reviewer, public-link, MCP, and file authorization are complete.
 
-The `apps/cloudflare` assembly uses one Worker, static assets, and one SQLite-backed Durable Object
-per workspace key. The seeded demo needs no external account. A production installation can add
-Airtable as durable source of truth while keeping the Durable Object as its fast coordination and
-cache layer.
+The `apps/cloudflare` assembly uses one Worker, static assets, an account-sharded identity object
+for hosted users, and one SQLite-backed Durable Object per event. The seeded demo needs no external
+account. A production installation can add Airtable as an event's durable business-record source
+of truth while keeping that event object as its fast coordination and cache layer.
 
 The hosted demo creates one random Durable Object workspace per private capability link. The link
 is exchanged for an HTTP-only seven-day cookie and the object deletes itself when it expires. For
@@ -98,9 +100,9 @@ local development and self-hosting, the Worker also maps a non-demo
 publication creates an immutable release snapshot so later draft edits do not change the public
 agenda.
 
-The workspace header is routing input, not tenant authentication. A production host must derive
-both workspace and actor identity from a verified session or token instead of trusting a caller
-header.
+The workspace header remains sample routing input, not tenant authentication. The hosted app does
+not trust it. It derives both event and staff actor identity from a verified session and account
+membership.
 
 ### Airtable and D1
 
@@ -127,7 +129,7 @@ to the demo outbox until the durable transactional delivery worker is implemente
 export is available at `GET /api/v1/export`. Cloudflare is still the only supported deployment;
 clean package boundaries and exportability are not a promise to maintain speculative host adapters.
 
-Before real use, provide real staff and participant identity, OAuth for MCP, outbound email and
+Before real use, finish team and participant identity, OAuth for MCP, outbound product email and
 webhook delivery, private file storage, retention and backup policies, and rate limiting. The
 complete checklist is in [SECURITY.md](SECURITY.md) and [OPERATIONS.md](OPERATIONS.md).
 
@@ -141,6 +143,7 @@ complete checklist is in [SECURITY.md](SECURITY.md) and [OPERATIONS.md](OPERATIO
 - [Agent navigation](docs/agents/README.md) — help a human from the same canonical sources
 - [Product status and roadmap](ROADMAP.md)
 - [Architecture](ARCHITECTURE.md)
+- [Identity, events, and storage ownership](docs/architecture/identity-and-tenancy.md)
 - [Deployment](DEPLOYMENT.md)
 - [Security](SECURITY.md)
 - [Operations](OPERATIONS.md)

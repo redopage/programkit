@@ -17,37 +17,42 @@ Browser
   ▼
 Cloudflare Worker ── Workers Static Assets (Vite web build)
   │
+  ├── account Durable Object  ── staff sessions and event membership
   ├── Airtable                 ── durable workspace records (recommended production)
-  ├── workspace Durable Object ── serialized mutations, hot cache, live clients
+  ├── event Durable Object     ── serialized mutations, hot cache, live clients
   ├── R2                      ── private uploads and generated files (next)
   ├── Queue / object alarm    ── email, webhooks, and mirrors (next)
   └── Email Service           ── sending domain and app binding (configured)
 ```
 
-The runnable application currently includes the Worker, static assets, and one SQLite-backed
-Durable Object per workspace key. The official demo root creates isolated hosted trials that expire
-after seven days. Local and self-hosted installations expose the same flow at `/demo`. It needs no
-D1 database, R2 bucket, queue, or email binding to run the deterministic demo.
+The runnable application currently includes the Worker, static assets, one account-sharded
+identity object for hosted users, and one SQLite-backed workspace object per event. The official
+demo root creates isolated hosted trials that expire after seven days. Local and self-hosted
+installations need no D1 database, R2 bucket, queue, or email binding to run the deterministic
+sample workspace.
 
 ## Official hosted environments
 
-The project deploys the same assembly into three explicit Wrangler profiles. This keeps product
+The project deploys the same assembly into four explicit Wrangler profiles. This keeps product
 code, migrations, tests, and documentation together while isolating runtime state.
 
-| Profile | Host                                     | Worker            | Durable Objects     | Email                     |
-| ------- | ---------------------------------------- | ----------------- | ------------------- | ------------------------- |
-| default | `programkit.dev` or a self-hosted domain | `programkit`      | Default namespace   | None required             |
-| `demo`  | `demo.programkit.dev`                    | `programkit-demo` | Demo-only namespace | No binding                |
-| `app`   | `app.programkit.dev`                     | `programkit-app`  | App-only namespace  | Restricted sender binding |
+| Profile | Host                  | Worker            | Purpose                         | Email                     |
+| ------- | --------------------- | ----------------- | ------------------------------- | ------------------------- |
+| default | A self-hosted domain  | `programkit`      | Complete zero-config product    | None required             |
+| `site`  | `programkit.dev`      | `programkit-site` | Public site, no workspace API   | No binding                |
+| `demo`  | `demo.programkit.dev` | `programkit-demo` | Seven-day sample workspaces     | No binding                |
+| `app`   | `app.programkit.dev`  | `programkit-app`  | Staff sessions and event stores | Restricted sender binding |
 
-The demo host redirects visitors into the capability demo flow and rejects operator or API access
-until a private demo has been created or opened. The app host does not create anonymous demos. It
-is the future authenticated application surface, but it remains sample-data-only until real
-identity and workspace membership replace the reference actors.
+The site profile serves the small public homepage and rejects workspace APIs. The demo host
+rejects operator or API access until a private demo has been created or opened. The app host uses
+passwordless staff sessions, an account event index, verified event selection, and one empty
+workspace object per new event. Team invitations and participant, reviewer, public-link, MCP, and
+file identities remain incomplete, so real conference data is still out of scope.
 
 Deploy the official profiles with:
 
 ```bash
+pnpm deploy:site
 pnpm deploy:demo
 pnpm deploy:app
 ```
@@ -65,6 +70,7 @@ The production additions are intentionally Cloudflare-native:
 | Files                     | R2                                                   | Direct uploads, private objects, lifecycle policies, and no file bytes in domain state |
 | Background delivery       | Transactional outbox + Queue or Durable Object alarm | Retryable work that does not hold open a user request                                  |
 | Email                     | Cloudflare Email Service binding                     | Native Worker delivery; Resend may remain an optional provider                         |
+| Account event index       | Account Durable Object                               | Verified membership and fast event switching without scanning event objects            |
 | Cross-workspace analytics | D1 projection, only when needed                      | SQL reporting across many workspace objects                                            |
 
 ## Why Durable Objects remain in the write path
@@ -83,9 +89,9 @@ store.
 
 ### Where D1 fits
 
-D1 is not a source of truth. It becomes useful when ProgramKit needs queries that cross
-many workspace objects, such as an organization-wide event index, global search, analytics, or an
-administrative control plane.
+D1 is not a source of truth. The signed-in user's small event index already lives in their account
+object. D1 becomes useful for organization-wide search, analytics, or an administrative control
+plane across many accounts and event objects.
 
 That future D1 database should be a rebuildable read projection. It may lag briefly and must never
 decide whether a domain transition is valid.
@@ -143,6 +149,16 @@ webhook. They never delete a connected Airtable base or any records in it.
 This is an evaluation surface, not production identity. Possession of the capability grants edit
 access to the demo, so it must contain sample data only. See
 [Hosted demos](docs/architecture/hosted-demos.md) for the exact boundary.
+
+## Hosted app identity and events
+
+The app profile sends a short-lived, single-use magic link through the app-only Email Service
+binding. It stores only token and session hashes in an account-sharded Auth Durable Object. A
+successful sign-in sets HTTP-only, secure, same-site cookies for the session and active event.
+
+Each event is a separate workspace object. Creating and switching events goes through verified
+account membership, and a new event starts empty. The complete boundary is documented in
+[Identity, events, and storage ownership](docs/architecture/identity-and-tenancy.md).
 
 ## Local development
 
@@ -202,7 +218,7 @@ uses the dedicated `mail.programkit.dev` sending domain so application reputatio
 normal human mail. Only the `app` profile receives the `EMAIL` binding, and Wrangler restricts it
 to `notifications@mail.programkit.dev`.
 
-This is infrastructure readiness, not a claim that campaign delivery is complete. The current
+Magic-link sign-in now uses this binding. This is not a claim that campaign delivery is complete. The current
 domain operation records a demo outbox event and does not invoke the binding. The next delivery
 slice must persist an outbox entry with the domain transaction, process it asynchronously, retry
 with idempotency, and record provider results. See the [email guide](docs/integrations/email.md).
@@ -211,16 +227,17 @@ with idempotency, and record provider results. See the [email guide](docs/integr
 
 The golden-path production work should land in this sequence:
 
-1. Replace the demo workspace header and fixed actors with verified sessions, API tokens, and
-   workspace membership.
-2. Add R2 upload initiation, direct upload, finalize/scanning, private download, and lifecycle
+1. Add team invitations and role-scoped membership, then add participant and reviewer magic-link
+   sessions and event-scoped public links.
+2. Add OAuth and workspace-scoped authorization to MCP and API tokens.
+3. Add R2 upload initiation, direct upload, finalize/scanning, private download, and lifecycle
    cleanup.
-3. Connect the existing app-only Cloudflare Email Service binding to a transactional delivery
+4. Connect the existing app-only Cloudflare Email Service binding to a transactional delivery
    outbox for submission confirmations and accepted-speaker reminders.
-4. Add webhook delivery from the same outbox, with signed payloads, retries, and delivery history.
-5. Finish Airtable webhook payload cursors, durable partial-write retry, inbound change sets, and
+5. Add webhook delivery from the same outbox, with signed payloads, retries, and delivery history.
+6. Finish Airtable webhook payload cursors, durable partial-write retry, inbound change sets, and
    actual last-success, quota, lag, conflict, and error state in the integrations screen.
-6. Add scheduled encrypted logical exports and test restore into a separate workspace key.
+7. Add scheduled encrypted logical exports and test restore into a separate workspace key.
 
 Do not call email or delivery webhooks while a domain transaction is open. Airtable persistence is
 the exception because its acknowledgement defines whether a source-of-truth write succeeded. Its

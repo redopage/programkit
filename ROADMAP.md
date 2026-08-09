@@ -18,7 +18,7 @@ The [competition evaluator gap analysis](docs/product/evaluator-gap-analysis.md)
 
 | Workflow           | Trustworthy today                                                                                                                                                                                                                                 | Still needed for production depth                                                                                    |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Event setup        | Active-event identity, slug, venue, city, dates, timezone, lifecycle status, version checks and schedule-boundary validation                                                                                                                      | Multi-event switching, administrator membership, branding and public theme controls                                  |
+| Event setup        | Passwordless staff sign-in, account event index, isolated event creation and switching, identity, slug, venue, city, dates, timezone, lifecycle status, version checks and schedule-boundary validation                                           | Team invitations, administrator membership, onboarding, branding and public theme controls                           |
 | CFP                | Multiple event forms, editable public content, ordered fields, choice options, required fields, explicit speaker/session data mappings, shared publish readiness, conditional visibility, draft preview, public submission and confirmation state | File restrictions, richer validation rules, category routing, published-version comparison and branch-coverage tests |
 | Review             | Reviewer teams, assignment rounds, scoped reviewer projection, scorecards, blind-review redaction, decision rules, accepted-record conversion                                                                                                     | Assignment UI, conflicts of interest, saved committee filters, multi-round release policy                            |
 | Speaker onboarding | Scoped participant projection, profile editing, requirements, due dates, organizer review states                                                                                                                                                  | Shared task-form renderer, real uploads, revision conversations, logistics and release templates                     |
@@ -47,9 +47,11 @@ The [competition evaluator gap analysis](docs/product/evaluator-gap-analysis.md)
 - An explicit storage decision: Airtable is the recommended production source of truth, Durable
   Objects serialize operations and cache reads, and D1 is a future cross-workspace projection.
 
-The reference host still uses passwordless, path-derived demo actors. These projections reduce
-data exposure and enforce capability shape, but they do not replace real authentication or tenant
-membership. See [Security](SECURITY.md).
+The hosted app now resolves a verified passwordless staff session, event membership, and one
+workspace object per event. The anonymous demo still uses capability and path-derived actors so
+every sample workflow is easy to inspect. Participant, reviewer, public-link, MCP OAuth, and team
+membership hardening remain before real conference data is appropriate. See
+[Security](SECURITY.md).
 
 ## Convergence milestones
 

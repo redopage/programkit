@@ -6,7 +6,9 @@ import { ProgramKitClientProvider } from './client/context.tsx'
 import { createProgramKitHttpClient } from './client/http.ts'
 import type { ProgramKitClient } from './client/types.ts'
 import { routeTree } from './routeTree.gen.ts'
+import { AuthView } from './views/AuthView.tsx'
 import { DemoView } from './views/DemoView.tsx'
+import { SiteView } from './views/SiteView.tsx'
 
 const defaultClient = createProgramKitHttpClient()
 
@@ -44,12 +46,23 @@ export function ProgramKitApp({
   deploymentProfile = 'single-workspace',
 }: {
   client?: ProgramKitClient
-  deploymentProfile?: 'single-workspace' | 'hosted-demo' | 'hosted-demo-entry' | 'hosted-app'
+  deploymentProfile?:
+    | 'single-workspace'
+    | 'hosted-site'
+    | 'hosted-site-entry'
+    | 'hosted-demo'
+    | 'hosted-demo-entry'
+    | 'hosted-app'
+    | 'hosted-app-entry'
 }) {
   const [queryClient] = useState(createProgramKitQueryClient)
   const [router] = useState(createProgramKitRouter)
   if (deploymentProfile === 'hosted-demo-entry' && window.location.pathname === '/') {
     return <DemoView />
+  }
+  if (deploymentProfile === 'hosted-app-entry') return <AuthView />
+  if (deploymentProfile === 'hosted-site-entry' && window.location.pathname === '/') {
+    return <SiteView />
   }
   return (
     <ProgramKitClientProvider client={client}>

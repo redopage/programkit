@@ -10,6 +10,12 @@ import {
   type WorkspaceState,
 } from '@programkit/core'
 import {
+  AuthDurableObject,
+  normalizeEmail,
+  type AuthAccount,
+  type AuthEventSummary,
+} from './auth.ts'
+import {
   createDemoId,
   demoCookieName,
   demoExpiresAt,
@@ -19,12 +25,15 @@ import {
   isDemoId,
 } from './demo.ts'
 
-export { WorkspaceDurableObject }
+export { AuthDurableObject, WorkspaceDurableObject }
 
 interface Env {
   ASSETS: Fetcher
   PROGRAMKIT_WORKSPACES: DurableObjectNamespace<WorkspaceDurableObject>
-  PROGRAMKIT_DEPLOYMENT_PROFILE?: 'hosted-demo' | 'hosted-app'
+  PROGRAMKIT_AUTH?: DurableObjectNamespace<AuthDurableObject>
+  PROGRAMKIT_DEPLOYMENT_PROFILE?: 'hosted-site' | 'hosted-demo' | 'hosted-app'
+  PROGRAMKIT_APP_ORIGIN?: string
+  PROGRAMKIT_DEMO_ORIGIN?: string
   PROGRAMKIT_EMAIL_FROM?: string
   PROGRAMKIT_SUPPORT_EMAIL?: string
   EMAIL?: {
@@ -45,6 +54,8 @@ interface Env {
 }
 
 const workspaceCookieName = 'programkit_workspace'
+const eventCookieName = 'programkit_event'
+const sessionCookieName = 'programkit_session'
 const workspaceKeyPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u
 const airtableCallbackPath = '/api/v1/integrations/airtable/oauth/callback'
 
@@ -161,6 +172,272 @@ function clearDemoCookie(url: URL) {
   ]
     .filter(Boolean)
     .join('; ')
+}
+
+function authCookie(name: string, value: string, url: URL, maxAge: number) {
+  return [
+    `${name}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAge}`,
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+function clearAuthCookie(name: string, url: URL) {
+  return [
+    `${name}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=0',
+    'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+function authStub(env: Env, shard: string) {
+  if (!env.PROGRAMKIT_AUTH) return null
+  return env.PROGRAMKIT_AUTH.get(env.PROGRAMKIT_AUTH.idFromName(`account_${shard}`))
+}
+
+function eventWorkspaceKey(eventId: string) {
+  return `event_${eventId}`
+}
+
+async function hashValue(value: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return Array.from(new Uint8Array(digest), (entry) => entry.toString(16).padStart(2, '0')).join('')
+}
+
+interface HostedPrincipal {
+  authShard: string
+  sessionToken: string
+  account: AuthAccount
+}
+
+const authShardPattern = /^[a-f0-9]{32}$/u
+const authSecretPattern = /^[a-f0-9]{64}$/u
+
+function scopedAuthToken(shard: string, secret: string) {
+  return `${shard}.${secret}`
+}
+
+function parseScopedAuthToken(value: string | null) {
+  if (!value) return null
+  const [shard, secret, ...rest] = value.split('.')
+  if (rest.length > 0 || !authShardPattern.test(shard) || !authSecretPattern.test(secret)) {
+    return null
+  }
+  return { shard, secret }
+}
+
+async function resolveHostedPrincipal(env: Env, request: Request) {
+  const session = parseScopedAuthToken(cookie(request, sessionCookieName))
+  if (!session) return null
+  const stub = authStub(env, session.shard)
+  if (!stub) return null
+  const response = await stub.fetch(
+    new Request('http://auth.internal/internal/auth/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: session.secret,
+        preferredEventId: cookie(request, eventCookieName),
+      }),
+    }),
+  )
+  if (!response.ok) return null
+  const body = (await response.json()) as { ok: boolean; account?: AuthAccount }
+  return body.ok && body.account
+    ? { authShard: session.shard, sessionToken: session.secret, account: body.account }
+    : null
+}
+
+function hostedStaffActor(principal: HostedPrincipal) {
+  return {
+    type: 'staff' as const,
+    id: principal.account.user.id,
+    name: principal.account.user.email,
+    scopes: ['*'],
+  }
+}
+
+function isHostedPublicPage(pathname: string) {
+  return pathname === '/login' || pathname === '/privacy' || pathname === '/terms'
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function configuredAppOrigin(env: Env, requestUrl: URL) {
+  if (requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1') {
+    return requestUrl.origin
+  }
+  return env.PROGRAMKIT_APP_ORIGIN ?? 'https://app.programkit.dev'
+}
+
+async function initializeHostedEvent(
+  env: Env,
+  event: AuthEventSummary,
+  createdAt = event.createdAt,
+) {
+  const response = await workspaceStub(env, eventWorkspaceKey(event.id)).fetch(
+    new Request('http://workspace.internal/internal/event/initialize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: event.id, name: event.name, slug: event.slug, createdAt }),
+    }),
+  )
+  if (!response.ok && response.status !== 409) {
+    throw new Error('The event workspace could not be initialized.')
+  }
+}
+
+async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
+  if (!env.PROGRAMKIT_AUTH)
+    return Response.json({ ok: false, error: 'Authentication is unavailable.' }, { status: 503 })
+
+  if (request.method === 'POST' && url.pathname === '/api/v1/auth/magic-link') {
+    if (!sameOrigin(request, url)) {
+      return Response.json(
+        { ok: false, error: 'Cross-origin requests are not allowed.' },
+        { status: 403 },
+      )
+    }
+    const input = (await request.json()) as { email?: unknown }
+    const email = normalizeEmail(input.email)
+    if (!email) {
+      return Response.json(
+        { ok: true, message: 'If the address can receive mail, a sign-in link is on its way.' },
+        { status: 202, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const shard = (await hashValue(email)).slice(0, 32)
+    const stub = authStub(env, shard)!
+    const ipHash = await hashValue(request.headers.get('cf-connecting-ip') ?? 'local')
+    const issuedResponse = await stub.fetch(
+      new Request('http://auth.internal/internal/auth/request', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, ipHash }),
+      }),
+    )
+    const issued = (await issuedResponse.json()) as {
+      ok: boolean
+      deliver?: boolean
+      token?: string
+      expiresAt?: string
+      email?: string
+    }
+    if (issued.deliver && issued.token) {
+      if (!env.EMAIL || !env.PROGRAMKIT_EMAIL_FROM) {
+        return Response.json(
+          { ok: false, error: 'Email sign-in is not configured on this deployment.' },
+          { status: 503 },
+        )
+      }
+      const callback = new URL('/auth/verify', configuredAppOrigin(env, url))
+      callback.searchParams.set('token', scopedAuthToken(shard, issued.token))
+      const safeCallback = escapeHtml(callback.toString())
+      try {
+        await env.EMAIL.send({
+          to: issued.email ?? email,
+          from: env.PROGRAMKIT_EMAIL_FROM,
+          replyTo: env.PROGRAMKIT_SUPPORT_EMAIL,
+          subject: 'Sign in to ProgramKit',
+          text: `Sign in to ProgramKit: ${callback.toString()}\n\nThis link expires in 15 minutes and can be used once.`,
+          html: `<div style="font-family:Inter,system-ui,sans-serif;color:#18181b;line-height:1.5"><h1 style="font-size:22px">Sign in to ProgramKit</h1><p>Use this secure link to continue:</p><p><a href="${safeCallback}" style="display:inline-block;border-radius:10px;background:#2563eb;color:white;padding:10px 16px;text-decoration:none">Sign in</a></p><p style="color:#71717a;font-size:14px">This link expires in 15 minutes and can be used once.</p></div>`,
+        })
+      } catch {
+        return Response.json(
+          { ok: false, error: 'The sign-in email could not be sent. Try again.' },
+          { status: 503, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+    }
+    return Response.json(
+      { ok: true, message: 'If the address can receive mail, a sign-in link is on its way.' },
+      { status: 202, headers: { 'cache-control': 'no-store' } },
+    )
+  }
+
+  if (request.method === 'GET' && url.pathname === '/auth/verify') {
+    const token = parseScopedAuthToken(url.searchParams.get('token'))
+    if (!token) return redirect(url, '/login?error=expired')
+    const stub = authStub(env, token.shard)!
+    const consumedResponse = await stub.fetch(
+      new Request('http://auth.internal/internal/auth/consume', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: token.secret }),
+      }),
+    )
+    const consumed = (await consumedResponse.json()) as {
+      ok: boolean
+      sessionToken?: string
+      sessionExpiresAt?: string
+      account?: AuthAccount
+    }
+    if (!consumed.ok || !consumed.sessionToken || !consumed.account) {
+      return redirect(url, '/login?error=expired')
+    }
+    const firstEvent = consumed.account.events.find(
+      (event) => event.id === consumed.account!.activeEventId,
+    )
+    if (!firstEvent) return redirect(url, '/login?error=account')
+    await initializeHostedEvent(env, firstEvent)
+    const maxAge = Math.max(
+      0,
+      Math.floor((Date.parse(consumed.sessionExpiresAt ?? '') - Date.now()) / 1_000),
+    )
+    const headers = new Headers({ location: '/', 'cache-control': 'no-store' })
+    headers.append(
+      'set-cookie',
+      authCookie(
+        sessionCookieName,
+        scopedAuthToken(token.shard, consumed.sessionToken),
+        url,
+        maxAge,
+      ),
+    )
+    headers.append(
+      'set-cookie',
+      authCookie(eventCookieName, consumed.account.activeEventId, url, maxAge),
+    )
+    return new Response(null, { status: 302, headers })
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/v1/auth/logout') {
+    if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+    const session = parseScopedAuthToken(cookie(request, sessionCookieName))
+    if (session) {
+      await authStub(env, session.shard)!.fetch(
+        new Request('http://auth.internal/internal/auth/logout', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ token: session.secret }),
+        }),
+      )
+    }
+    const headers = new Headers({ 'cache-control': 'no-store' })
+    headers.append('set-cookie', clearAuthCookie(sessionCookieName, url))
+    headers.append('set-cookie', clearAuthCookie(eventCookieName, url))
+    return Response.json({ ok: true }, { headers })
+  }
+
+  return null
 }
 
 async function demoStatus(stub: DurableObjectStub<WorkspaceDurableObject>) {
@@ -377,6 +654,66 @@ export default {
   async fetch(request: Request, env: Env, context: ExecutionContext) {
     const url = new URL(request.url)
     const profile = deploymentProfile(env)
+    let hostedPrincipal: HostedPrincipal | null = null
+
+    if (
+      profile === 'hosted-app' &&
+      (url.pathname === '/auth/verify' || url.pathname.startsWith('/api/v1/auth/'))
+    ) {
+      const authResponse = await handleHostedAuthRequest(request, env, url)
+      if (authResponse) return authResponse
+    }
+
+    if (profile === 'hosted-app') {
+      const needsIdentity =
+        (request.method === 'GET' && isDocumentNavigation(request)) ||
+        url.pathname.startsWith('/api/') ||
+        url.pathname === '/mcp'
+      if (needsIdentity) hostedPrincipal = await resolveHostedPrincipal(env, request)
+
+      if (request.method === 'GET' && url.pathname === '/login' && hostedPrincipal) {
+        return redirect(url, '/')
+      }
+      if (
+        request.method === 'GET' &&
+        isDocumentNavigation(request) &&
+        !isHostedPublicPage(url.pathname) &&
+        !hostedPrincipal
+      ) {
+        return redirect(url, '/login')
+      }
+      if (
+        !hostedPrincipal &&
+        (url.pathname.startsWith('/api/') ||
+          url.pathname.startsWith('/public/') ||
+          url.pathname === '/mcp')
+      ) {
+        return Response.json(
+          { ok: false, error: 'Sign in to continue.' },
+          { status: 401, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+    }
+
+    if (profile === 'hosted-site') {
+      if (url.pathname === '/demo') {
+        return Response.redirect(env.PROGRAMKIT_DEMO_ORIGIN ?? new URL('/', url), 302)
+      }
+      if (
+        url.pathname.startsWith('/api/') ||
+        url.pathname.startsWith('/public/') ||
+        url.pathname === '/mcp'
+      ) {
+        return new Response(null, { status: 404 })
+      }
+      if (
+        request.method === 'GET' &&
+        isDocumentNavigation(request) &&
+        !isStaticOrLegalPath(url.pathname)
+      ) {
+        return redirect(url, '/')
+      }
+    }
 
     if (profile === 'hosted-demo' && url.pathname === '/demo') {
       return redirect(url, '/')
@@ -527,6 +864,63 @@ export default {
       return new Response(null, { status: 405, headers: { allow: 'GET, POST' } })
     }
 
+    if (profile === 'hosted-app' && hostedPrincipal) {
+      if (request.method === 'GET' && url.pathname === '/api/v1/account') {
+        return Response.json(
+          { ok: true, account: hostedPrincipal.account },
+          { headers: { 'cache-control': 'no-store' } },
+        )
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/v1/events') {
+        if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+        const input = (await request.json()) as { name?: unknown }
+        const stub = authStub(env, hostedPrincipal.authShard)!
+        const createdResponse = await stub.fetch(
+          new Request('http://auth.internal/internal/events/create', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              token: hostedPrincipal.sessionToken,
+              name: typeof input.name === 'string' ? input.name : '',
+            }),
+          }),
+        )
+        const created = (await createdResponse.json()) as {
+          ok: boolean
+          event?: AuthEventSummary
+          error?: string
+        }
+        if (!createdResponse.ok || !created.event) {
+          return Response.json(
+            { ok: false, error: created.error ?? 'The event could not be created.' },
+            { status: createdResponse.status },
+          )
+        }
+        await initializeHostedEvent(env, created.event)
+        const headers = new Headers({ 'cache-control': 'no-store' })
+        headers.append(
+          'set-cookie',
+          authCookie(eventCookieName, created.event.id, url, 30 * 24 * 60 * 60),
+        )
+        return Response.json({ ok: true, event: created.event }, { status: 201, headers })
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/v1/account/active-event') {
+        if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+        const input = (await request.json()) as { eventId?: unknown }
+        const event = hostedPrincipal.account.events.find(
+          (candidate) => candidate.id === input.eventId,
+        )
+        if (!event) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        const headers = new Headers({ 'cache-control': 'no-store' })
+        headers.append('set-cookie', authCookie(eventCookieName, event.id, url, 30 * 24 * 60 * 60))
+        return Response.json({ ok: true, activeEventId: event.id }, { headers })
+      }
+    }
+
     const oauthWebhookMatch = url.pathname.match(
       /^\/api\/v1\/integrations\/airtable\/webhook\/([^/]+)$/u,
     )
@@ -544,7 +938,9 @@ export default {
         }),
       )
     }
-    let key = workspaceKey(env, request)
+    let key = hostedPrincipal
+      ? eventWorkspaceKey(hostedPrincipal.account.activeEventId)
+      : workspaceKey(env, request)
     let newWorkspaceCookie: string | undefined
     if (
       !env.AIRTABLE_BASE_ID &&
@@ -605,30 +1001,33 @@ export default {
       const publicSubmissionMatch = url.pathname.match(
         /^\/public\/v1\/submission-forms\/([^/]+)\//u,
       )
-      const actor = portalMatch
-        ? ({
-            type: 'participant' as const,
-            id: decodeURIComponent(portalMatch[1]),
-            name: 'Portal participant',
-            scopes: ['participations:write', 'requirements:write', 'portal:write'],
-          } satisfies OperationRequest['actor'])
-        : reviewerMatch
-          ? ({
-              type: 'reviewer' as const,
-              id: decodeURIComponent(reviewerMatch[1]),
-              name: 'Program reviewer',
-              scopes: ['reviews:write'],
-            } satisfies OperationRequest['actor'])
-          : publicSubmissionMatch
+      const actor =
+        profile === 'hosted-app' && hostedPrincipal
+          ? hostedStaffActor(hostedPrincipal)
+          : portalMatch
             ? ({
-                type: 'submitter' as const,
-                id: decodeURIComponent(publicSubmissionMatch[1]),
-                name: 'Public submitter',
-                scopes: ['submissions:write', 'submissions:submit'],
+                type: 'participant' as const,
+                id: decodeURIComponent(portalMatch[1]),
+                name: 'Portal participant',
+                scopes: ['participations:write', 'requirements:write', 'portal:write'],
               } satisfies OperationRequest['actor'])
-            : url.pathname.startsWith('/public/')
-              ? publicReaderActor
-              : demoStaffActor
+            : reviewerMatch
+              ? ({
+                  type: 'reviewer' as const,
+                  id: decodeURIComponent(reviewerMatch[1]),
+                  name: 'Program reviewer',
+                  scopes: ['reviews:write'],
+                } satisfies OperationRequest['actor'])
+              : publicSubmissionMatch
+                ? ({
+                    type: 'submitter' as const,
+                    id: decodeURIComponent(publicSubmissionMatch[1]),
+                    name: 'Public submitter',
+                    scopes: ['submissions:write', 'submissions:submit'],
+                  } satisfies OperationRequest['actor'])
+                : url.pathname.startsWith('/public/')
+                  ? publicReaderActor
+                  : demoStaffActor
       return stub.fetch(withActor(request, actor))
     }
 
@@ -636,9 +1035,13 @@ export default {
     if (!assetResponse.headers.get('content-type')?.includes('text/html')) return assetResponse
 
     const renderedProfile =
-      profile === 'hosted-demo' && !isDemoId(cookie(request, demoCookieName))
-        ? 'hosted-demo-entry'
-        : profile
+      profile === 'hosted-site'
+        ? 'hosted-site-entry'
+        : profile === 'hosted-demo' && !isDemoId(cookie(request, demoCookieName))
+          ? 'hosted-demo-entry'
+          : profile === 'hosted-app' && !hostedPrincipal
+            ? 'hosted-app-entry'
+            : profile
     const headers = new Headers(assetResponse.headers)
     headers.set('cache-control', 'no-store')
     const response = new Response(assetResponse.body, assetResponse)

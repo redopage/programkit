@@ -33,15 +33,14 @@ delivery should not happen inside a domain transaction or become a best-effort s
 
 ## Hosted app sign-in
 
-The recommended identity flow for `app.programkit.dev` is passwordless email sign-in through the
-same app-only Cloudflare Email Service binding. The demo host remains anonymous and never receives
-an outbound mail binding.
+`app.programkit.dev` now uses passwordless email sign-in through the same app-only Cloudflare Email
+Service binding. The demo host remains anonymous and never receives an outbound mail binding.
 
-The production flow must use a short-lived, single-use token, store only a hash of that token, and
-exchange it for an HTTP-only, secure, same-site session cookie. Requests should return the same
-check-your-email response whether or not an address already exists, and both requests and resends
-must be rate-limited. Callback URLs must come from configured canonical origins rather than an
-untrusted request host.
+The Worker creates a 256-bit, 15-minute, single-use token and stores only its hash. A successful
+callback exchanges it for a 30-day HTTP-only, secure, same-site session cookie whose secret is also
+stored only as a hash. Requests return the same check-your-email response whether or not an
+address already exists. Resends have a 45-second cooldown and an hourly account limit. Callback
+URLs come from the configured canonical application origin rather than an untrusted request host.
 
 Cloudflare provides official [magic-link](https://developers.cloudflare.com/email-service/examples/email-sending/magic-link/)
 and [signup](https://developers.cloudflare.com/email-service/examples/email-sending/signup-flow/)
@@ -50,8 +49,11 @@ examples. Those examples demonstrate delivery, not the complete security boundar
 and [session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
 guidance for token handling, enumeration resistance, session rotation, logout, and expiry.
 
-The hosted app sign-in screen and session system are not implemented yet. Until they are,
-`app.programkit.dev` remains a sample-data environment and must not accept real participant data.
+The hosted app sign-in screen, delivery, one-time exchange, session validation, event membership,
+event creation, switching, and logout are implemented. Team invitations and participant,
+reviewer, public-link, MCP, and file authorization remain incomplete, so the hosted app must not
+accept real participant data yet. See
+[Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).
 
 ## Required delivery path
 
@@ -90,6 +92,7 @@ Cloudflare's official documentation covers [Email Sending](https://developers.cl
 
 ## Safety boundary
 
-Outbound mail must remain disabled for anonymous demos. A real application must add verified
-identity, workspace-scoped authorization, rate limits, abuse controls, unsubscribe and suppression
-handling where applicable, and auditable delivery history before sending to real participants.
+Outbound mail remains disabled for anonymous demos. The hosted staff sign-in has verified identity,
+workspace-scoped event selection, and application resend limits. Edge abuse controls, participant
+identity, unsubscribe and suppression handling where applicable, and auditable product-delivery
+history are still required before sending to real participants.
