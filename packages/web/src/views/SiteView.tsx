@@ -8,7 +8,7 @@ import {
   UserGroupIcon,
 } from '@heroicons/react/16/solid'
 
-import { ProgramKitMark } from '../components/brand.tsx'
+import { ProgramKitMark, ProgramKitMarkBars } from '../components/brand.tsx'
 
 const programJobs = [
   {
@@ -131,19 +131,95 @@ function ProgramFeatureCard({ feature }: { feature: (typeof programFeatures)[num
   )
 }
 
-const programKitBarGlyphs = {
-  P: ['11111', '10001', '11111', '10000', '10000'],
-  R: ['11110', '10001', '11110', '10100', '10010'],
-  O: ['01110', '10001', '10001', '10001', '01110'],
-  G: ['01110', '10000', '10111', '10001', '01110'],
-  A: ['01110', '10001', '11111', '10001', '10001'],
-  M: ['10001', '11011', '10101', '10001', '10001'],
-  K: ['10001', '10010', '11100', '10010', '10001'],
-  I: ['11111', '00100', '00100', '00100', '11111'],
-  T: ['11111', '00100', '00100', '00100', '00100'],
-} as const
+type ProgramKitBarTone = 'primary' | 'accent'
+type ProgramKitBar = {
+  x?: number
+  y: number
+  width: number
+  tone?: ProgramKitBarTone
+}
 
-type ProgramKitBarLetter = keyof typeof programKitBarGlyphs
+const programKitLetterBars = {
+  R: [
+    { y: 0, width: 56 },
+    { y: 12, width: 20 },
+    { x: 36, y: 12, width: 20, tone: 'accent' },
+    { y: 24, width: 56 },
+    { y: 36, width: 20 },
+    { x: 28, y: 36, width: 28 },
+    { y: 48, width: 20 },
+    { x: 36, y: 48, width: 20 },
+  ],
+  O: [
+    { y: 0, width: 56 },
+    { y: 12, width: 20 },
+    { x: 36, y: 12, width: 20, tone: 'accent' },
+    { y: 24, width: 20 },
+    { x: 36, y: 24, width: 20 },
+    { y: 36, width: 20 },
+    { x: 36, y: 36, width: 20 },
+    { y: 48, width: 56 },
+  ],
+  G: [
+    { y: 0, width: 56 },
+    { y: 12, width: 20 },
+    { x: 36, y: 12, width: 20 },
+    { y: 24, width: 20 },
+    { x: 24, y: 24, width: 32, tone: 'accent' },
+    { y: 36, width: 20 },
+    { x: 36, y: 36, width: 20 },
+    { y: 48, width: 56 },
+  ],
+  A: [
+    { y: 0, width: 56 },
+    { y: 12, width: 20 },
+    { x: 36, y: 12, width: 20, tone: 'accent' },
+    { y: 24, width: 56 },
+    { y: 36, width: 20 },
+    { x: 36, y: 36, width: 20 },
+    { y: 48, width: 20 },
+    { x: 36, y: 48, width: 20 },
+  ],
+  M: [
+    { y: 0, width: 20 },
+    { x: 36, y: 0, width: 20 },
+    { y: 12, width: 56 },
+    { y: 24, width: 20 },
+    { x: 18, y: 24, width: 20, tone: 'accent' },
+    { x: 36, y: 24, width: 20 },
+    { y: 36, width: 20 },
+    { x: 36, y: 36, width: 20 },
+    { y: 48, width: 20 },
+    { x: 36, y: 48, width: 20 },
+  ],
+  K: [
+    { y: 0, width: 20 },
+    { x: 36, y: 0, width: 20 },
+    { y: 12, width: 20 },
+    { x: 28, y: 12, width: 20, tone: 'accent' },
+    { y: 24, width: 56 },
+    { y: 36, width: 20 },
+    { x: 28, y: 36, width: 20 },
+    { y: 48, width: 20 },
+    { x: 36, y: 48, width: 20 },
+  ],
+  I: [
+    { y: 0, width: 56 },
+    { x: 18, y: 12, width: 20, tone: 'accent' },
+    { x: 18, y: 24, width: 20 },
+    { x: 18, y: 36, width: 20 },
+    { y: 48, width: 56 },
+  ],
+  T: [
+    { y: 0, width: 56 },
+    { x: 18, y: 12, width: 20, tone: 'accent' },
+    { x: 18, y: 24, width: 20 },
+    { x: 18, y: 36, width: 20 },
+    { x: 18, y: 48, width: 20 },
+  ],
+} satisfies Record<string, ProgramKitBar[]>
+
+type ProgramKitBarLetter = 'P' | keyof typeof programKitLetterBars
 
 const programKitBarWord: ProgramKitBarLetter[] = ['P', 'R', 'O', 'G', 'R', 'A', 'M', 'K', 'I', 'T']
 
@@ -178,61 +254,34 @@ function FooterProgramField() {
   )
 }
 
-function ProgramKitBarGlyph({ letter }: { letter: ProgramKitBarLetter }) {
-  const cellSize = 6
-  const cellGap = 2
-  const cellStep = cellSize + cellGap
-  const segments: Array<{ key: string; x: number; y: number; width: number }> = []
-
-  programKitBarGlyphs[letter].forEach((row, rowIndex) => {
-    let runStart = -1
-
-    for (let column = 0; column <= row.length; column += 1) {
-      const filled = row[column] === '1'
-      if (filled && runStart === -1) runStart = column
-
-      if (!filled && runStart !== -1) {
-        const runLength = column - runStart
-        segments.push({
-          key: `${rowIndex}-${runStart}`,
-          x: runStart * cellStep,
-          y: rowIndex * cellStep,
-          width: runLength * cellStep - cellGap,
-        })
-        runStart = -1
-      }
-    }
-  })
-
-  return (
-    <svg
-      viewBox="0 0 38 38"
-      aria-hidden="true"
-      focusable="false"
-      className="size-8 shrink-0 overflow-visible sm:size-9"
-    >
-      {segments.map((segment) => (
-        <rect
-          key={segment.key}
-          x={segment.x}
-          y={segment.y}
-          width={segment.width}
-          height={cellSize}
-          rx="2"
-          fill="currentColor"
-        />
-      ))}
-    </svg>
-  )
-}
-
 function ProgramKitBarWord() {
   return (
-    <div className="flex shrink-0 items-center gap-1">
+    <svg
+      viewBox="0 0 632 58"
+      aria-hidden="true"
+      focusable="false"
+      className="h-9 w-auto shrink-0 sm:h-10"
+    >
       {programKitBarWord.map((letter, index) => (
-        <ProgramKitBarGlyph key={`${letter}-${index}`} letter={letter} />
+        <g key={`${letter}-${index}`} transform={`translate(${index * 64} 0)`}>
+          {letter === 'P' ? (
+            <ProgramKitMarkBars />
+          ) : (
+            programKitLetterBars[letter].map((bar, barIndex) => (
+              <rect
+                key={`${bar.y}-${bar.x ?? 0}-${barIndex}`}
+                className={bar.tone === 'accent' ? 'fill-blue-300' : 'fill-blue-600'}
+                x={bar.x ?? 0}
+                y={bar.y}
+                width={bar.width}
+                height="10"
+                rx="3"
+              />
+            ))
+          )}
+        </g>
       ))}
-    </div>
+    </svg>
   )
 }
 
@@ -240,10 +289,10 @@ function ProgramKitRhythmBand() {
   return (
     <div
       aria-hidden="true"
-      className="select-none overflow-hidden border-y border-zinc-950/8 bg-gradient-to-b from-white to-zinc-50/80 py-4"
+      className="select-none overflow-hidden border-y border-zinc-950/8 bg-blue-50/50 py-4"
     >
-      <div className="flex w-max items-center gap-10 px-5 text-blue-600/18 sm:gap-12 sm:px-8">
-        {Array.from({ length: 5 }, (_, index) => (
+      <div className="flex w-max items-center gap-12 px-5 sm:gap-16 sm:px-8">
+        {Array.from({ length: 4 }, (_, index) => (
           <ProgramKitBarWord key={index} />
         ))}
       </div>
