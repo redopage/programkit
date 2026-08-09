@@ -364,7 +364,7 @@ const submissionFormFields: SubmissionFormField[] = [
     formId: 'frm_cfp_2026',
     key: 'email',
     label: 'Email',
-    description: 'We will use this address for proposal and speaker updates.',
+    description: 'We use this to identify your submission in our records.',
     kind: 'email',
     purpose: 'email',
     required: true,

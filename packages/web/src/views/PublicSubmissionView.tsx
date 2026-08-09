@@ -99,7 +99,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
         <main className="mx-auto flex max-w-3xl flex-col items-center px-4 py-20 text-center sm:px-6 sm:py-28">
           <CheckCircleIcon className="size-12 shrink-0 fill-emerald-600" />
           <h1 className="max-w-[22ch] pt-6 text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
-            Thank you for sharing your work
+            Proposal submitted
           </h1>
           <p className="max-w-[62ch] pt-4 text-pretty text-base text-zinc-600">
             {form.confirmationMessage}
@@ -108,9 +108,8 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
             <p className="text-base font-medium text-zinc-950 sm:text-sm">What happens next</p>
             <ol role="list" className="flex flex-col gap-3 pt-3">
               {[
-                'Your email is saved with the proposal for program updates.',
-                'The program committee reviews submissions after the call closes.',
-                'You will receive a decision and portal link by email.',
+                'Your proposal and contact details are saved for the program committee.',
+                'The committee reviews proposals after the call for proposals closes.',
               ].map((step, index) => (
                 <li key={step} className="flex items-start gap-3">
                   <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-mono text-sm tabular-nums text-zinc-500 ring-1 ring-zinc-950/10">
@@ -120,6 +119,10 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
                 </li>
               ))}
             </ol>
+            <p className="mt-4 border-t border-zinc-950/5 pt-4 text-pretty text-base text-zinc-500 sm:text-sm">
+              This demo doesn't send email. Save your reference number to follow up with the event
+              team.
+            </p>
           </div>
           <p className="pt-6 font-mono text-sm text-zinc-400">Reference {confirmationId}</p>
         </main>
@@ -242,7 +245,8 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
 
             <div className="flex flex-col gap-3 border-t border-zinc-950/5 pt-6 sm:flex-row sm:items-center sm:justify-between">
               <p className="max-w-[52ch] text-pretty text-base text-zinc-500 sm:text-sm">
-                You can update your profile and materials through the speaker portal if accepted.
+                The details you share become part of your proposal and, if it's accepted, your
+                speaker record.
               </p>
               <Button type="submit" variant="primary" disabled={mutating}>
                 Submit proposal

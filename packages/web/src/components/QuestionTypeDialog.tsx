@@ -131,7 +131,7 @@ export function QuestionTypeDialog({
       open={open}
       onClose={close}
       title="Add a question"
-      description="Choose a structured answer type. You can change its wording, choices, rules, and requirement status next."
+      description="Pick an answer type. You can rename it and set its rules after adding it."
       size="wide"
       initialFocusRef={searchRef}
       footer={<Button onClick={close}>Cancel</Button>}
