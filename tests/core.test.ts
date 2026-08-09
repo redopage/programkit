@@ -56,6 +56,9 @@ describe('ProgramKit operation engine', () => {
     expect(state.events[0].publishedScheduleVersion).toBe(3)
     expect(state.events[0].version).toBe(1)
     expect(publicAgenda(state)).toHaveLength(10)
+    expect(
+      new Set(publicAgenda(state).map((item) => item.placement.startsAt.slice(0, 10))),
+    ).toEqual(new Set(['2026-10-04', '2026-10-05']))
     expect(readinessSummary(state).blockers).toBeGreaterThan(0)
     expect(state.submissionForms).toHaveLength(2)
     expect(state.submissions).toHaveLength(6)

@@ -1,4 +1,10 @@
-import { ChevronUpDownIcon, ExclamationTriangleIcon, GlobeAltIcon } from '@heroicons/react/16/solid'
+import {
+  ChevronUpDownIcon,
+  CodeBracketIcon,
+  ExclamationTriangleIcon,
+  GlobeAltIcon,
+  LinkIcon,
+} from '@heroicons/react/16/solid'
 import {
   Fragment,
   useEffect,
@@ -16,7 +22,9 @@ import { publicProgramPath } from '../lib/public-links.ts'
 import {
   Button,
   Callout,
+  Dialog,
   Drawer,
+  Field,
   FilterTabs,
   PageHeader,
   Toolbar,
@@ -26,6 +34,23 @@ import {
 } from '../components/ui.tsx'
 
 type ScheduleMode = 'grid' | 'list'
+type SharedProgramView = 'agenda' | 'sessions' | 'speakers' | 'itinerary' | 'gallery'
+
+const sharedProgramViews: Array<{ id: SharedProgramView; label: string }> = [
+  { id: 'agenda', label: 'Agenda' },
+  { id: 'sessions', label: 'Sessions list' },
+  { id: 'speakers', label: 'Speakers list' },
+  { id: 'itinerary', label: 'Schedule itinerary' },
+  { id: 'gallery', label: 'Speaker gallery' },
+]
+
+function escapeHtmlAttribute(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+}
 
 interface DropTarget {
   roomId: string
@@ -64,6 +89,11 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const [draggedPlacementId, setDraggedPlacementId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
   const [moveFeedback, setMoveFeedback] = useState<MoveFeedback | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [sharedView, setSharedView] = useState<SharedProgramView>('agenda')
+  const [sharedTrackId, setSharedTrackId] = useState('all')
+  const [sharedRoomId, setSharedRoomId] = useState('all')
+  const [copied, setCopied] = useState<'link' | 'embed' | null>(null)
   if (!payload) return null
   const { state } = payload
   const conflicts = scheduleConflicts(state)
@@ -84,6 +114,31 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       ? previewPlacementMove(state, draggedPlacementId, dropTarget.roomId, dropTarget.startsAt)
       : []
   const targetHardConflicts = targetConflicts.filter((conflict) => conflict.severity === 'error')
+  const publicUrl = new URL(
+    publicProgramPath(state.activeEventId),
+    typeof window === 'undefined' ? 'https://app.programkit.dev' : window.location.origin,
+  )
+  publicUrl.searchParams.set('view', sharedView)
+  if (sharedTrackId !== 'all') publicUrl.searchParams.set('track', sharedTrackId)
+  if (sharedRoomId !== 'all') publicUrl.searchParams.set('room', sharedRoomId)
+  const publicUrlText = publicUrl.toString()
+  const embedCode = `<iframe src="${escapeHtmlAttribute(publicUrlText)}" title="${escapeHtmlAttribute(`${event.name} public program`)}" loading="lazy" style="width:100%;min-height:720px;border:0"></iframe>`
+
+  async function copyShareValue(value: string, kind: 'link' | 'embed') {
+    try {
+      await navigator.clipboard.writeText(value)
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = value
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      textarea.remove()
+    }
+    setCopied(kind)
+  }
 
   function startDragging(event: DragEvent<HTMLButtonElement>, placementId: string) {
     event.dataTransfer.effectAllowed = 'move'
@@ -148,6 +203,16 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         title="Schedule studio"
         actions={
           <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setCopied(null)
+                setShareOpen(true)
+              }}
+            >
+              <LinkIcon className="size-4 h-lh shrink-0 fill-current" />
+              Share program
+            </Button>
             <Button
               variant="secondary"
               onClick={() => navigate(publicProgramPath(state.activeEventId))}
@@ -391,6 +456,104 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         open={Boolean(selectedId)}
         onClose={() => setSelectedId(null)}
       />
+      <Dialog
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title="Share the public program"
+        description="Choose a published view, then copy a link or an embed snippet."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => void copyShareValue(publicUrlText, 'link')}>
+              <LinkIcon className="size-4" />
+              {copied === 'link' ? 'Link copied' : 'Copy link'}
+            </Button>
+            <Button variant="primary" onClick={() => void copyShareValue(embedCode, 'embed')}>
+              <CodeBracketIcon className="size-4" />
+              {copied === 'embed' ? 'Embed copied' : 'Copy embed'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          <div className="grid min-w-0 gap-4 sm:grid-cols-3">
+            <Field label="Program view" htmlFor="shared-program-view">
+              <select
+                id="shared-program-view"
+                value={sharedView}
+                onChange={(interaction) => {
+                  setSharedView(interaction.target.value as SharedProgramView)
+                  setCopied(null)
+                }}
+                className="focus-ring-control min-h-11 rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+              >
+                {sharedProgramViews.map((view) => (
+                  <option key={view.id} value={view.id}>
+                    {view.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Track filter" htmlFor="shared-program-track">
+              <select
+                id="shared-program-track"
+                value={sharedTrackId}
+                onChange={(interaction) => {
+                  setSharedTrackId(interaction.target.value)
+                  setCopied(null)
+                }}
+                className="focus-ring-control min-h-11 rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+              >
+                <option value="all">All tracks</option>
+                {state.tracks.map((track) => (
+                  <option key={track.id} value={track.id}>
+                    {track.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Room filter" htmlFor="shared-program-room">
+              <select
+                id="shared-program-room"
+                value={sharedRoomId}
+                onChange={(interaction) => {
+                  setSharedRoomId(interaction.target.value)
+                  setCopied(null)
+                }}
+                className="focus-ring-control min-h-11 rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+              >
+                <option value="all">All rooms</option>
+                {state.rooms.map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {room.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Shareable URL" htmlFor="shared-program-url">
+            <input
+              id="shared-program-url"
+              readOnly
+              value={publicUrlText}
+              className={cx(textControl, 'w-full font-mono text-sm')}
+              onFocus={(interaction) => interaction.currentTarget.select()}
+            />
+          </Field>
+
+          <div>
+            <p className="text-base font-medium text-zinc-950 sm:text-sm">Embed snippet</p>
+            <pre className="mt-1.5 max-h-36 overflow-auto whitespace-pre-wrap rounded-2xl bg-zinc-950 p-4 text-sm text-zinc-200">
+              <code>{embedCode}</code>
+            </pre>
+          </div>
+
+          <Callout tone="info" title="One published source">
+            The link and embed read the same immutable schedule release as every public program
+            view.
+          </Callout>
+        </div>
+      </Dialog>
       <p className="text-base text-zinc-500 sm:text-sm">
         Times shown in {event.timezone}. Every accepted move is versioned and added to the audit
         trail.

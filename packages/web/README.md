@@ -73,7 +73,7 @@ not authorization.
 - `/changes` — proposed changes and human review
 - `/integrations` — integration status and demo reset
 - `/agent` — agent tasks and guardrails
-- `/agenda` — public agenda from the latest immutable schedule release
+- `/agenda` — public agenda, sessions, speakers, itinerary, and gallery from one immutable release
 - `/submit/{formSlug}` — public submission form
 - `/reviewer/{reviewerId}` — scoped reviewer scorecard workspace
 - `/portal/{participationId}` — scoped participant profile and requirements
@@ -93,7 +93,8 @@ fresh idempotency key. Identity and scopes must come from the host. A successful
 the workspace; errors remain visible in the current view and in a toast.
 
 Draft schedule edits do not alter `/agenda`. Only a successful publication operation creates the
-immutable release read by the public view.
+immutable release read by all five public views. Organizers can create view-specific, track-filtered
+links and iframe snippets from the schedule studio.
 
 ## Build
 

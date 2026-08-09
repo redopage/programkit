@@ -33,10 +33,14 @@ not verified evidence of a transition.
 | Submitter | `/submit/{formSlug}`           | One public form and its allowed submission operations |
 | Reviewer  | `/reviewer/{reviewerId}`       | Assigned proposals and scorecard operations only      |
 | Speaker   | `/portal/{participationId}`    | One accepted participation and eligible tasks only    |
-| Attendee  | `/agenda`                      | Latest immutable published program only               |
+| Attendee  | `/agenda?view={view}`          | Five public views of one immutable published program  |
 
 The demo derives scoped actors from these sample IDs. That is useful for deterministic evaluation,
 but it is not production identity. Hosted participant and reviewer sessions remain separate work.
+
+Public program views use `agenda`, `sessions`, `speakers`, `itinerary`, and `gallery`. Add
+`track={trackId}` to verify filtered links and embeds. The itinerary selection must survive a reload,
+and its calendar export must contain the selected session's title, time, and room.
 
 ## Recommended scenario order
 

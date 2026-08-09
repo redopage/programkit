@@ -1071,11 +1071,11 @@ const placementInput = [
   ['ses_003', 'rom_main', '2026-10-04T14:00:00.000Z'],
   ['ses_004', 'rom_workshop', '2026-10-04T15:00:00.000Z'],
   ['ses_005', 'rom_studio', '2026-10-04T15:00:00.000Z'],
-  ['ses_006', 'rom_main', '2026-10-04T15:00:00.000Z'],
-  ['ses_007', 'rom_studio', '2026-10-04T16:15:00.000Z'],
-  ['ses_008', 'rom_main', '2026-10-04T16:15:00.000Z'],
-  ['ses_009', 'rom_workshop', '2026-10-04T17:00:00.000Z'],
-  ['ses_010', 'rom_main', '2026-10-04T18:15:00.000Z'],
+  ['ses_006', 'rom_main', '2026-10-05T13:00:00.000Z'],
+  ['ses_007', 'rom_studio', '2026-10-05T14:00:00.000Z'],
+  ['ses_008', 'rom_main', '2026-10-05T14:00:00.000Z'],
+  ['ses_009', 'rom_workshop', '2026-10-05T15:00:00.000Z'],
+  ['ses_010', 'rom_main', '2026-10-05T16:15:00.000Z'],
 ] as const
 
 const placements: Placement[] = placementInput.map((placement, index) => {

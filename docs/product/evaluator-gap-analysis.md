@@ -9,15 +9,15 @@ still needs scenario evidence before it should be counted.
 
 ## Where ProgramKit stands
 
-| Evaluator area             | Current fit          | Working evidence                                                                                                                                       | Largest gaps                                                                                                                         |
-| -------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Call for papers            | Strong foundation    | Form builder, required fields, conditional visibility, public form, submission, reviewer workspace, scorecard, decisions, accepted proposal conversion | Real submitter accounts, draft resume and editing, category routing, real confirmation and decision email, precise post-close policy |
-| Abstract management        | Partial              | Reviewer teams, plans, rounds in the domain, weighted criteria, blind projection, assignments, aggregate review state                                  | Assignment administration, exact and bulk assignment flows, round release, recusal, coauthors, exports, AI-assisted review           |
-| Speaker management         | Partial              | Searchable people roster, lifecycle state, profiles, readiness tasks, scoped speaker portal, linked sessions                                           | CSV import, real invites, headshot and file upload, logistics, bulk communication, automated reminders, message history              |
-| Content management         | Early                | Asset metadata and requirement concepts exist                                                                                                          | R2 uploads, file constraints, private download, versions, comments, approval gate, deliverables dashboard, files library, bulk ZIP   |
-| AI agenda                  | Partial              | Draft placements, conflict detection, room and list views, validated moves, immutable publish, public release                                          | Unscheduled tray, multi-day views, track filters, configurable inventory UI, clear and undo, auto-schedule                           |
-| Public program and widgets | Early                | Published public agenda reads only from an immutable release                                                                                           | Session and speaker galleries, detail pages, itinerary, personal calendar, embeds, share links, widget consistency                   |
-| CRM extra credit           | Deliberately limited | People records, search, detail, tags in the domain                                                                                                     | Organizations, notes, custom fields, CSV import, merge, kanban, segments, history, bulk email, dashboard                             |
+| Evaluator area             | Current fit          | Working evidence                                                                                                                                                               | Largest gaps                                                                                                                         |
+| -------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Call for papers            | Strong foundation    | Form builder, required fields, conditional visibility, public form, submission, reviewer workspace, scorecard, decisions, accepted proposal conversion                         | Real submitter accounts, draft resume and editing, category routing, real confirmation and decision email, precise post-close policy |
+| Abstract management        | Partial              | Reviewer teams, plans, rounds in the domain, weighted criteria, blind projection, assignments, aggregate review state                                                          | Assignment administration, exact and bulk assignment flows, round release, recusal, coauthors, exports, AI-assisted review           |
+| Speaker management         | Partial              | Searchable people roster, lifecycle state, profiles, readiness tasks, scoped speaker portal, linked sessions                                                                   | CSV import, real invites, headshot and file upload, logistics, bulk communication, automated reminders, message history              |
+| Content management         | Early                | Asset metadata and requirement concepts exist                                                                                                                                  | R2 uploads, file constraints, private download, versions, comments, approval gate, deliverables dashboard, files library, bulk ZIP   |
+| AI agenda                  | Partial              | Draft placements, conflict detection, room and list views, validated moves, immutable publish, public release                                                                  | Unscheduled tray, multi-day views, track filters, configurable inventory UI, clear and undo, auto-schedule                           |
+| Public program and widgets | Strong foundation    | Five public views share one immutable release: searchable sessions and speakers, details, multi-day agenda, gallery, persistent itinerary, ICS export, share links, and embeds | Account-synced itineraries, richer embed appearance controls, and recorded evaluator evidence                                        |
+| CRM extra credit           | Deliberately limited | People records, search, detail, tags in the domain                                                                                                                             | Organizations, notes, custom fields, CSV import, merge, kanban, segments, history, bulk email, dashboard                             |
 
 ## Important evaluator lesson
 
@@ -44,9 +44,11 @@ evaluation deployment:
 - scenario fixtures and role transitions must be repeatable without asking the evaluator to open an
   email inbox or leave the product.
 
-The hosted app now emits event-specific public CFP and agenda links on `app.programkit.dev`. The
+The hosted app now emits event-specific public CFP and program links on `app.programkit.dev`. The
 event ID is validated before the public page loads and is exchanged for an HTTP-only routing cookie.
 That cookie selects only the event's public projections and does not grant organizer access. The
+program exposes agenda, session, speaker, itinerary, and gallery views on the same `/agenda` route.
+Each view reads the same immutable release and can be linked or embedded with query parameters. The
 seven-day demo remains the preferred evaluator target until deterministic role sessions exist.
 
 Airtable, the Cloudflare runtime, API breadth, repository hosting, and performance are not scored by
@@ -68,8 +70,9 @@ required end-to-end scenario.
 5. **Real delivery.** Ship submission confirmation and accepted-speaker reminder first. Include a
    transactional outbox, test send, provider result, history, and an ICS attachment compatible with
    Gmail, Outlook, and Apple Calendar.
-6. **Public program suite.** Add session and speaker listings and details, then personal itinerary,
-   calendar export, and embeddable views backed by the same published release.
+6. **Public program evidence and hardening.** Record the five public views, itinerary persistence,
+   calendar export, shared links, and embed builder against a fresh published fixture. Add an
+   account-backed itinerary only after attendee identity exists.
 7. **CRM extras last.** Add only the organization and relationship capabilities that improve the
    program workflow after all required areas are dependable.
 

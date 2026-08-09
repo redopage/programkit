@@ -52,17 +52,17 @@ SQLite-backed Durable Object together. The deterministic AIE NYC sample is creat
 
 Useful routes:
 
-| Route                      | What it demonstrates                            |
-| -------------------------- | ----------------------------------------------- |
-| `/forms`                   | Call-for-proposals builder and live preview     |
-| `/submit/aie-nyc-2026-cfp` | Public proposal form                            |
-| `/submissions`             | Submission pipeline and decisions               |
-| `/reviews`                 | Reviewer assignments and evaluation progress    |
-| `/reviewer/rev_001`        | One reviewer's scorecard workspace              |
-| `/readiness`               | Outstanding speaker onboarding work             |
-| `/schedule`                | Draft schedule and publication workflow         |
-| `/portal/par_003`          | Accepted-speaker portal                         |
-| `/agenda`                  | Public agenda from the latest immutable release |
+| Route                      | What it demonstrates                                                |
+| -------------------------- | ------------------------------------------------------------------- |
+| `/forms`                   | Call-for-proposals builder and live preview                         |
+| `/submit/aie-nyc-2026-cfp` | Public proposal form                                                |
+| `/submissions`             | Submission pipeline and decisions                                   |
+| `/reviews`                 | Reviewer assignments and evaluation progress                        |
+| `/reviewer/rev_001`        | One reviewer's scorecard workspace                                  |
+| `/readiness`               | Outstanding speaker onboarding work                                 |
+| `/schedule`                | Draft schedule and publication workflow                             |
+| `/portal/par_003`          | Accepted-speaker portal                                             |
+| `/agenda`                  | Agenda, sessions, speakers, itinerary, and gallery from one release |
 
 For a guided first workflow, use [Build and publish a CFP](docs/guides/build-and-publish-a-cfp.md).
 The complete setup and reset instructions are in
