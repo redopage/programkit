@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { createSeedState, createWorkspaceExportArchive, recordsToCsv } from '@programkit/core'
+import {
+  createReviewResultsCsv,
+  createSeedState,
+  createWorkspaceExportArchive,
+  recordsToCsv,
+} from '@programkit/core'
 
 function storedZipFiles(archive: Uint8Array) {
   const decoder = new TextDecoder()
@@ -59,5 +64,15 @@ describe('workspace export archive', () => {
     )
     expect(csv).toContain('"\'=HYPERLINK(""https://example.com"")"')
     expect(csv).toContain('"Line one\nLine two"')
+  })
+
+  it('exports one review-results row per assigned submission with weighted aggregates', () => {
+    const csv = createReviewResultsCsv(createSeedState())
+
+    expect(csv).toContain('"weightedAggregate"')
+    expect(csv).toContain('"criterionAverages.Attendee value"')
+    expect(csv).toContain('"The boring parts of trustworthy agents"')
+    expect(csv).toContain('"4.7"')
+    expect(csv).toContain('"recommendations.accept"')
   })
 })

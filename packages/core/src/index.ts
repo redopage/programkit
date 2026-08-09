@@ -1,6 +1,7 @@
 export { executeOperation } from './engine.ts'
 export {
   createStoredZip,
+  createReviewResultsCsv,
   createWorkspaceExportArchive,
   recordsToCsv,
   workspaceExportFilename,

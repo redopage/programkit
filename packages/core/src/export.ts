@@ -1,4 +1,6 @@
 import type { WorkspaceState } from './types.ts'
+import { evaluationCriterionKind, evaluationRoundCriteria } from './reviews.ts'
+import { submissionAnswerByPurpose, submissionReviewSummary } from './selectors.ts'
 
 const csvCollectionKeys = [
   'events',
@@ -334,6 +336,77 @@ export function recordsToCsv(
     ...rows.map((row) => columns.map((column) => csvCell(row[column])).join(',')),
   ]
   return `\uFEFF${lines.join('\r\n')}\r\n`
+}
+
+export function createReviewResultsCsv(state: WorkspaceState) {
+  const activeAssignments = state.reviewerAssignments.filter(
+    (assignment) => assignment.eventId === state.activeEventId && assignment.status !== 'recused',
+  )
+  const submissionIds = new Set(activeAssignments.map((assignment) => assignment.submissionId))
+  const numericCriteria = [
+    ...new Map(
+      state.evaluationPlans
+        .filter((plan) => plan.eventId === state.activeEventId)
+        .flatMap((plan) =>
+          plan.rounds.flatMap((round) =>
+            evaluationRoundCriteria(plan, round.id).filter(
+              (criterion) => evaluationCriterionKind(criterion) === 'numeric',
+            ),
+          ),
+        )
+        .map((criterion) => [criterion.id, criterion]),
+    ).values(),
+  ]
+  const rows = state.submissions
+    .filter(
+      (submission) =>
+        submission.eventId === state.activeEventId && submissionIds.has(submission.id),
+    )
+    .map((submission) => {
+      const review = submissionReviewSummary(state, submission.id)
+      const assignments = activeAssignments.filter(
+        (assignment) => assignment.submissionId === submission.id,
+      )
+      const assignmentIds = new Set(assignments.map((assignment) => assignment.id))
+      const scorecards = state.scorecards.filter((scorecard) =>
+        assignmentIds.has(scorecard.assignmentId),
+      )
+      const criterionAverages = Object.fromEntries(
+        numericCriteria.map((criterion) => [
+          criterion.label,
+          review.criterionAverages[criterion.id] ?? '',
+        ]),
+      )
+      return {
+        submissionId: submission.id,
+        title: submissionAnswerByPurpose(state, submission, 'proposal_title') ?? '',
+        speakerFirstName: submissionAnswerByPurpose(state, submission, 'first_name') ?? '',
+        speakerLastName: submissionAnswerByPurpose(state, submission, 'last_name') ?? '',
+        track: submissionAnswerByPurpose(state, submission, 'track') ?? '',
+        status: submission.status,
+        assignedReviews: review.assigned,
+        completedReviews: review.completed,
+        weightedAggregate: review.averageScore ?? '',
+        criterionAverages,
+        recommendations: review.recommendations,
+        reviewComments: scorecards
+          .map((scorecard) => scorecard.comments)
+          .filter((comment): comment is string => Boolean(comment))
+          .join(' | '),
+      }
+    })
+
+  return recordsToCsv(rows, [
+    'submissionId',
+    'title',
+    'speakerFirstName',
+    'speakerLastName',
+    'track',
+    'status',
+    'assignedReviews',
+    'completedReviews',
+    'weightedAggregate',
+  ])
 }
 
 function crc32(bytes: Uint8Array) {

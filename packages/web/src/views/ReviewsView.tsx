@@ -1,6 +1,9 @@
 import {
   AdjustmentsHorizontalIcon,
+  ArrowDownTrayIcon,
   ArrowRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   ClockIcon,
   EnvelopeIcon,
   UserPlusIcon,
@@ -12,12 +15,20 @@ import {
   evaluationRoundCriteria,
   evaluationRoundIsBlind,
   evaluationRoundReviewerTeamId,
+  createReviewResultsCsv,
   submissionAnswerByPurpose,
   submissionReviewSummary,
   type SubmissionAnswerValue,
 } from '@programkit/core'
 
-import { Button, PageHeader, ProgressBar, cx, sentenceCase } from '../components/ui.tsx'
+import {
+  Button,
+  PageHeader,
+  ProgressBar,
+  StatusBadge,
+  cx,
+  sentenceCase,
+} from '../components/ui.tsx'
 import { ReviewAssignmentsDrawer } from '../components/ReviewAssignmentsDrawer.tsx'
 import { ReviewSetupDrawer } from '../components/ReviewSetupDrawer.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -52,6 +63,8 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   const [setupOpen, setSetupOpen] = useState(false)
   const [assignmentsOpen, setAssignmentsOpen] = useState(false)
   const [reminderReviewerIds, setReminderReviewerIds] = useState<string[]>([])
+  const [scoreOrder, setScoreOrder] = useState<'descending' | 'ascending'>('descending')
+  const [exported, setExported] = useState(false)
   const { payload, execute, mutating } = useWorkspace()
   if (!payload) return null
   const { state } = payload
@@ -100,6 +113,30 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
     )
     .map((submission) => ({ submission, review: submissionReviewSummary(state, submission.id) }))
     .sort((left, right) => right.review.completed - left.review.completed)
+  const assignedSubmissionIds = new Set(
+    activeAssignments.map((assignment) => assignment.submissionId),
+  )
+  const resultRows = (state.submissions ?? [])
+    .filter(
+      (submission) =>
+        submission.eventId === state.activeEventId && assignedSubmissionIds.has(submission.id),
+    )
+    .map((submission) => ({ submission, review: submissionReviewSummary(state, submission.id) }))
+    .sort((left, right) => {
+      if (left.review.averageScore == null || right.review.averageScore == null) {
+        if (left.review.averageScore == null && right.review.averageScore == null) {
+          return answerText(
+            submissionAnswerByPurpose(state, left.submission, 'proposal_title'),
+          ).localeCompare(
+            answerText(submissionAnswerByPurpose(state, right.submission, 'proposal_title')),
+          )
+        }
+        return left.review.averageScore == null ? 1 : -1
+      }
+      return scoreOrder === 'descending'
+        ? right.review.averageScore - left.review.averageScore
+        : left.review.averageScore - right.review.averageScore
+    })
 
   async function remindReviewers() {
     const response = await execute(
@@ -109,6 +146,20 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
       `Reminder${reminderReviewerIds.length === 1 ? '' : 's'} sent.`,
     )
     if (response.ok) setReminderReviewerIds([])
+  }
+
+  function downloadReviewResults() {
+    const event = state.events.find((entry) => entry.id === state.activeEventId)
+    const blob = new Blob([createReviewResultsCsv(state)], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${event?.slug ?? 'programkit'}-review-results.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    setExported(true)
   }
 
   return (
@@ -274,6 +325,102 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                               day: 'numeric',
                             }).format(new Date(reviewer.lastRemindedAt))
                           : 'Never'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="review-results-heading" className="min-w-0">
+        <div className="flex flex-col gap-3 border-b border-zinc-950/5 pb-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2
+              id="review-results-heading"
+              className="text-base font-medium text-zinc-950 sm:text-sm"
+            >
+              Review results
+            </h2>
+            <p className="text-base text-zinc-500 sm:text-sm">
+              Weighted committee scores across every active evaluation round.
+            </p>
+          </div>
+          <Button onClick={downloadReviewResults}>
+            <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
+            {exported ? 'Downloaded' : 'Export CSV'}
+          </Button>
+        </div>
+        <div className="-mx-4 overflow-x-auto sm:-mx-6">
+          <div className="inline-block min-w-full px-4 align-middle sm:px-6">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-zinc-950/5 text-left">
+                  <th scope="col" className="py-3 pr-4 text-sm font-medium text-zinc-500">
+                    Proposal
+                  </th>
+                  <th scope="col" className="py-3 pr-4 text-sm font-medium text-zinc-500">
+                    Reviews
+                  </th>
+                  <th scope="col" className="py-3 pr-4 text-sm font-medium text-zinc-500">
+                    <button
+                      type="button"
+                      className="focus-ring inline-flex items-center gap-1 rounded-md text-left hover:text-zinc-950"
+                      aria-label={`Weighted score, ${scoreOrder}`}
+                      onClick={() =>
+                        setScoreOrder((current) =>
+                          current === 'descending' ? 'ascending' : 'descending',
+                        )
+                      }
+                    >
+                      Weighted score
+                      {scoreOrder === 'descending' ? (
+                        <ChevronDownIcon className="size-4 fill-current" />
+                      ) : (
+                        <ChevronUpIcon className="size-4 fill-current" />
+                      )}
+                    </button>
+                  </th>
+                  <th scope="col" className="py-3 pr-4 text-sm font-medium text-zinc-500">
+                    Recommendations
+                  </th>
+                  <th scope="col" className="py-3 text-sm font-medium text-zinc-500">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-950/5">
+                {resultRows.map(({ submission, review }) => {
+                  const recommendation = Object.entries(review.recommendations)
+                    .sort((left, right) => right[1] - left[1])
+                    .map(([label, count]) => `${count} ${sentenceCase(label)}`)
+                    .join(' · ')
+                  return (
+                    <tr key={submission.id}>
+                      <td className="max-w-md py-3 pr-4">
+                        <button
+                          type="button"
+                          className="focus-ring max-w-full truncate rounded-md text-left text-sm font-medium text-zinc-950 hover:text-blue-600"
+                          onClick={() => navigate(`/submissions?submission=${submission.id}`)}
+                        >
+                          {answerText(
+                            submissionAnswerByPurpose(state, submission, 'proposal_title'),
+                          )}
+                        </button>
+                      </td>
+                      <td className="whitespace-nowrap py-3 pr-4 text-sm tabular-nums text-zinc-600">
+                        {review.completed}/{review.assigned}
+                      </td>
+                      <td className="whitespace-nowrap py-3 pr-4 text-sm font-medium tabular-nums text-zinc-950">
+                        {review.averageScore?.toFixed(2) ?? '—'}
+                      </td>
+                      <td className="whitespace-nowrap py-3 pr-4 text-sm text-zinc-600">
+                        {recommendation || 'No recommendations'}
+                      </td>
+                      <td className="py-3">
+                        <StatusBadge status={submission.status} />
                       </td>
                     </tr>
                   )
