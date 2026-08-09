@@ -995,6 +995,76 @@ describe('ProgramKit operation engine', () => {
       error: { code: 'INVALID_INPUT' },
     })
   })
+
+  it('lets a reviewer recuse from one proposal and undo the conflict', () => {
+    const state = createSeedState()
+    const assignment = state.reviewerAssignments.find((entry) => entry.id === 'rva_007')!
+    const reviewerActor = {
+      type: 'reviewer' as const,
+      id: assignment.reviewerId,
+      name: 'Elena Vasquez',
+      scopes: ['reviews:write'],
+    }
+
+    const recused = executeOperation(state, 'review.recuse', {
+      input: {
+        assignmentId: assignment.id,
+        reason: 'I collaborate directly with the submitter.',
+      },
+      expectedVersions: { [assignment.id]: assignment.version },
+      actor: reviewerActor,
+    })
+
+    expect(recused.response.ok).toBe(true)
+    expect(
+      recused.state.reviewerAssignments.find((entry) => entry.id === assignment.id),
+    ).toMatchObject({
+      status: 'recused',
+      conflictReason: 'I collaborate directly with the submitter.',
+      recusedAt: expect.any(String),
+      version: assignment.version + 1,
+    })
+    expect(submissionReviewSummary(recused.state, assignment.submissionId)).toMatchObject({
+      assigned: 1,
+      completed: 0,
+    })
+    expect(recused.state.domainEvents.at(-1)).toMatchObject({
+      type: 'reviewer-assignment.recused',
+      data: {
+        reviewerId: assignment.reviewerId,
+        submissionId: assignment.submissionId,
+        reason: 'I collaborate directly with the submitter.',
+      },
+    })
+
+    const whileRecused = executeOperation(recused.state, 'review.submit-scorecard', {
+      input: { assignmentId: assignment.id, answers: {} },
+      actor: reviewerActor,
+    })
+    expect(whileRecused.response).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_TRANSITION' },
+    })
+
+    const recusedAssignment = recused.state.reviewerAssignments.find(
+      (entry) => entry.id === assignment.id,
+    )!
+    const restored = executeOperation(recused.state, 'review.restore-recusal', {
+      input: { assignmentId: assignment.id },
+      expectedVersions: { [assignment.id]: recusedAssignment.version },
+      actor: reviewerActor,
+    })
+    expect(restored.response.ok).toBe(true)
+    expect(
+      restored.state.reviewerAssignments.find((entry) => entry.id === assignment.id),
+    ).toMatchObject({
+      status: 'assigned',
+      conflictReason: null,
+      recusedAt: null,
+      version: recusedAssignment.version + 1,
+    })
+    expect(restored.state.domainEvents.at(-1)?.type).toBe('reviewer-assignment.recusal-restored')
+  })
 })
 
 describe('next actions', () => {

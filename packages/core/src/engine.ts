@@ -1332,7 +1332,8 @@ function applyHandler(
           (assignment) =>
             assignment.eventId === state.activeEventId &&
             assignment.reviewerId === reviewer.id &&
-            assignment.status !== 'completed',
+            assignment.status !== 'completed' &&
+            assignment.status !== 'recused',
         )
         if (outstanding.length === 0) {
           throw new OperationError(
@@ -1365,6 +1366,92 @@ function applyHandler(
       }
     }
 
+    case 'review.recuse': {
+      const assignment = findRequired(
+        state.reviewerAssignments,
+        input.assignmentId,
+        'reviewer assignment',
+      )
+      if (assignment.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'Only active-event reviews can be recused.')
+      }
+      if (context.actor.type === 'reviewer' && assignment.reviewerId !== context.actor.id) {
+        throw new OperationError('FORBIDDEN', 'This review is assigned to another reviewer.')
+      }
+      if (assignment.status === 'completed') {
+        throw new OperationError('INVALID_TRANSITION', 'A completed review cannot be recused.')
+      }
+      if (assignment.status === 'recused') {
+        throw new OperationError('INVALID_TRANSITION', 'This conflict has already been declared.')
+      }
+      const reviewer = findRequired(state.reviewers, assignment.reviewerId, 'reviewer')
+      const submission = findRequired(state.submissions, assignment.submissionId, 'submission')
+      const reason =
+        typeof input.reason === 'string' && input.reason.trim()
+          ? input.reason.trim()
+          : 'Reviewer declared a conflict of interest.'
+      assignment.status = 'recused'
+      assignment.conflictReason = reason
+      assignment.recusedAt = timestamp
+      assignment.updatedAt = timestamp
+      assignment.version += 1
+      appendEvent(state, context, {
+        type: 'reviewer-assignment.recused',
+        aggregate: {
+          type: 'reviewer-assignment',
+          id: assignment.id,
+          version: assignment.version,
+        },
+        summary: `${reviewer.name} declared a conflict with “${stringAnswer(state, submission, 'proposal_title')}”.`,
+        data: {
+          reviewerId: reviewer.id,
+          submissionId: submission.id,
+          roundId: assignment.roundId,
+          reason,
+        },
+      })
+      return { assignment }
+    }
+
+    case 'review.restore-recusal': {
+      const assignment = findRequired(
+        state.reviewerAssignments,
+        input.assignmentId,
+        'reviewer assignment',
+      )
+      if (assignment.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'Only active-event reviews can be restored.')
+      }
+      if (context.actor.type === 'reviewer' && assignment.reviewerId !== context.actor.id) {
+        throw new OperationError('FORBIDDEN', 'This review is assigned to another reviewer.')
+      }
+      if (assignment.status !== 'recused') {
+        throw new OperationError('INVALID_TRANSITION', 'Only a recused review can be restored.')
+      }
+      const reviewer = findRequired(state.reviewers, assignment.reviewerId, 'reviewer')
+      const submission = findRequired(state.submissions, assignment.submissionId, 'submission')
+      assignment.status = 'assigned'
+      assignment.conflictReason = null
+      assignment.recusedAt = null
+      assignment.updatedAt = timestamp
+      assignment.version += 1
+      appendEvent(state, context, {
+        type: 'reviewer-assignment.recusal-restored',
+        aggregate: {
+          type: 'reviewer-assignment',
+          id: assignment.id,
+          version: assignment.version,
+        },
+        summary: `${reviewer.name} restored “${stringAnswer(state, submission, 'proposal_title')}” to their review queue.`,
+        data: {
+          reviewerId: reviewer.id,
+          submissionId: submission.id,
+          roundId: assignment.roundId,
+        },
+      })
+      return { assignment }
+    }
+
     case 'review.submit-scorecard': {
       const assignment = findRequired(
         state.reviewerAssignments,
@@ -1373,6 +1460,12 @@ function applyHandler(
       )
       if (context.actor.type === 'reviewer' && assignment.reviewerId !== context.actor.id) {
         throw new OperationError('FORBIDDEN', 'This scorecard is assigned to another reviewer.')
+      }
+      if (assignment.status === 'recused') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Restore this review before submitting a scorecard.',
+        )
       }
       const plan = findRequired(
         state.evaluationPlans,

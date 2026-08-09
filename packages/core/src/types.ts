@@ -237,8 +237,10 @@ export interface ReviewerAssignment {
   roundId: Id
   submissionId: Id
   reviewerId: Id
-  status: 'assigned' | 'in_progress' | 'completed'
+  status: 'assigned' | 'in_progress' | 'completed' | 'recused'
   dueAt: ISODateTime | null
+  recusedAt?: ISODateTime | null
+  conflictReason?: string | null
   updatedAt: ISODateTime
   version: number
 }

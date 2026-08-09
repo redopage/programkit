@@ -1,4 +1,10 @@
-import { ArrowLeftIcon, CheckCircleIcon, ChevronUpDownIcon } from '@heroicons/react/16/solid'
+import {
+  ArrowLeftIcon,
+  ArrowUturnLeftIcon,
+  CheckCircleIcon,
+  ChevronUpDownIcon,
+  ShieldExclamationIcon,
+} from '@heroicons/react/16/solid'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import {
@@ -12,7 +18,14 @@ import {
 } from '@programkit/core'
 
 import { ProgramKitMark } from '../components/brand.tsx'
-import { Button, cx, selectControl, sentenceCase, textAreaControl } from '../components/ui.tsx'
+import {
+  Button,
+  Dialog,
+  cx,
+  selectControl,
+  sentenceCase,
+  textAreaControl,
+} from '../components/ui.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 
 function answerText(value: SubmissionAnswerValue | undefined) {
@@ -58,9 +71,13 @@ function ReviewerWorkspace({
   const [answers, setAnswers] = useState<Record<string, number | string>>({})
   const [recommendation, setRecommendation] = useState<ReviewRecommendation>('accept')
   const [comments, setComments] = useState('')
+  const [recusalOpen, setRecusalOpen] = useState(false)
+  const [conflictReason, setConflictReason] = useState('')
   const selected =
     queue.find((entry) => entry.assignment.id === selectedAssignmentId) ??
-    queue.find((entry) => entry.assignment.status !== 'completed') ??
+    queue.find(
+      (entry) => entry.assignment.status !== 'completed' && entry.assignment.status !== 'recused',
+    ) ??
     queue[0]
   const plan = state.evaluationPlans.find(
     (entry) => entry.id === selected?.assignment.evaluationPlanId,
@@ -135,12 +152,38 @@ function ReviewerWorkspace({
     if (!response.ok) return
     const next = queue.find(
       (entry) =>
-        entry.assignment.id !== selected.assignment.id && entry.assignment.status !== 'completed',
+        entry.assignment.id !== selected.assignment.id &&
+        entry.assignment.status !== 'completed' &&
+        entry.assignment.status !== 'recused',
     )
     if (next) onSelectionChange(next.assignment.id)
   }
 
+  async function recuse() {
+    if (!selected) return
+    const response = await execute(
+      'review.recuse',
+      { assignmentId: selected.assignment.id, reason: conflictReason },
+      { expectedVersions: { [selected.assignment.id]: selected.assignment.version } },
+      'Conflict declared. This proposal is no longer awaiting your review.',
+    )
+    if (!response.ok) return
+    setRecusalOpen(false)
+    setConflictReason('')
+  }
+
+  async function restoreRecusal() {
+    if (!selected) return
+    await execute(
+      'review.restore-recusal',
+      { assignmentId: selected.assignment.id },
+      { expectedVersions: { [selected.assignment.id]: selected.assignment.version } },
+      'Review restored to your queue.',
+    )
+  }
+
   const complete = queue.filter((entry) => entry.assignment.status === 'completed').length
+  const assigned = queue.filter((entry) => entry.assignment.status !== 'recused').length
 
   return (
     <div className="min-h-dvh bg-white">
@@ -167,7 +210,7 @@ function ReviewerWorkspace({
         <div className="flex flex-col gap-4 border-b border-zinc-950/5 pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-base text-zinc-500 sm:text-sm">
-              {complete} of {queue.length} assignments complete
+              {complete} of {assigned} assignments complete
             </p>
             <h1 className="text-balance text-2xl font-semibold tracking-tight text-zinc-950">
               Review workspace
@@ -225,11 +268,15 @@ function ReviewerWorkspace({
                             <span className="block text-sm text-zinc-500">
                               {entry.assignment.status === 'completed'
                                 ? 'Complete'
-                                : 'Needs review'}
+                                : entry.assignment.status === 'recused'
+                                  ? 'Conflict declared'
+                                  : 'Needs review'}
                             </span>
                           </span>
                           {entry.assignment.status === 'completed' ? (
                             <CheckCircleIcon className="size-4 h-lh shrink-0 fill-emerald-600" />
+                          ) : entry.assignment.status === 'recused' ? (
+                            <ShieldExclamationIcon className="size-4 h-lh shrink-0 fill-rose-600" />
                           ) : null}
                         </button>
                       </li>
@@ -273,6 +320,15 @@ function ReviewerWorkspace({
                   </dd>
                 </div>
               </dl>
+              {selected.assignment.status !== 'completed' &&
+              selected.assignment.status !== 'recused' ? (
+                <div className="pt-4">
+                  <Button size="compact" onClick={() => setRecusalOpen(true)}>
+                    <ShieldExclamationIcon className="size-4 h-lh shrink-0 fill-current" />
+                    Declare a conflict
+                  </Button>
+                </div>
+              ) : null}
               {!blindReview ? (
                 <section aria-labelledby="submitter-heading" className="pt-6">
                   <h3 id="submitter-heading" className="text-lg font-semibold text-zinc-950">
@@ -305,146 +361,172 @@ function ReviewerWorkspace({
               ) : null}
             </article>
 
-            <form
-              className="min-w-0 border-t border-zinc-950/5 pt-6 lg:col-start-2 xl:col-start-auto xl:border-t-0 xl:pt-0"
-              onSubmit={(event) => void submit(event)}
-            >
-              <div className="xl:sticky xl:top-6">
-                <h2 className="text-lg font-semibold text-zinc-950">Scorecard</h2>
-                <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-                  Complete every required field for this round.
-                </p>
-                <div className="flex flex-col gap-4 pt-5">
-                  {criteria.map((criterion) => {
-                    const kind = evaluationCriterionKind(criterion)
-                    return (
-                      <label
-                        key={criterion.id}
-                        className={cx(
-                          'gap-4',
-                          kind === 'numeric'
-                            ? 'grid grid-cols-[minmax(0,1fr)_5rem] items-end'
-                            : 'flex flex-col gap-1.5',
-                        )}
-                      >
-                        <span className="min-w-0">
-                          <span className="block text-base font-medium text-zinc-950 sm:text-sm">
-                            {criterion.label}
-                          </span>
-                          {criterion.description ? (
-                            <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
-                              {criterion.description}
+            {selected.assignment.status === 'recused' ? (
+              <aside className="min-w-0 border-t border-zinc-950/5 pt-6 lg:col-start-2 xl:col-start-auto xl:border-t-0 xl:pt-0">
+                <div className="rounded-2xl bg-rose-50 p-5 ring-1 ring-rose-700/10">
+                  <ShieldExclamationIcon className="size-5 fill-rose-600" />
+                  <h2 className="pt-3 text-lg font-semibold text-zinc-950">Conflict declared</h2>
+                  <p className="pt-1 text-pretty text-base text-zinc-600 sm:text-sm">
+                    This proposal is no longer awaiting your review. The program chair can reassign
+                    it to another reviewer.
+                  </p>
+                  {selected.assignment.conflictReason ? (
+                    <p className="pt-3 text-pretty text-base text-zinc-500 sm:text-sm">
+                      {selected.assignment.conflictReason}
+                    </p>
+                  ) : null}
+                  <div className="pt-4">
+                    <Button disabled={mutating} onClick={() => void restoreRecusal()}>
+                      <ArrowUturnLeftIcon className="size-4 h-lh shrink-0 fill-current" />
+                      Undo recusal
+                    </Button>
+                  </div>
+                </div>
+              </aside>
+            ) : (
+              <form
+                className="min-w-0 border-t border-zinc-950/5 pt-6 lg:col-start-2 xl:col-start-auto xl:border-t-0 xl:pt-0"
+                onSubmit={(event) => void submit(event)}
+              >
+                <div className="xl:sticky xl:top-6">
+                  <h2 className="text-lg font-semibold text-zinc-950">Scorecard</h2>
+                  <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                    Complete every required field for this round.
+                  </p>
+                  <div className="flex flex-col gap-4 pt-5">
+                    {criteria.map((criterion) => {
+                      const kind = evaluationCriterionKind(criterion)
+                      return (
+                        <label
+                          key={criterion.id}
+                          className={cx(
+                            'gap-4',
+                            kind === 'numeric'
+                              ? 'grid grid-cols-[minmax(0,1fr)_5rem] items-end'
+                              : 'flex flex-col gap-1.5',
+                          )}
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-base font-medium text-zinc-950 sm:text-sm">
+                              {criterion.label}
                             </span>
-                          ) : null}
-                        </span>
-                        {kind === 'long_text' ? (
-                          <textarea
-                            name={`answer-${criterion.id}`}
-                            rows={5}
-                            required={criterion.required ?? true}
-                            value={String(answers[criterion.id] ?? '')}
-                            onChange={(event) =>
-                              setAnswers((current) => ({
-                                ...current,
-                                [criterion.id]: event.target.value,
-                              }))
-                            }
-                            className={textAreaControl}
-                          />
-                        ) : (
-                          <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
-                            <select
+                            {criterion.description ? (
+                              <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
+                                {criterion.description}
+                              </span>
+                            ) : null}
+                          </span>
+                          {kind === 'long_text' ? (
+                            <textarea
                               name={`answer-${criterion.id}`}
+                              rows={5}
                               required={criterion.required ?? true}
-                              aria-label={criterion.label}
-                              value={answers[criterion.id] ?? ''}
+                              value={String(answers[criterion.id] ?? '')}
                               onChange={(event) =>
                                 setAnswers((current) => ({
                                   ...current,
-                                  [criterion.id]:
-                                    kind === 'numeric'
-                                      ? Number(event.target.value)
-                                      : event.target.value,
+                                  [criterion.id]: event.target.value,
                                 }))
                               }
-                              className={selectControl}
-                            >
-                              {kind === 'numeric'
-                                ? Array.from(
-                                    {
-                                      length:
-                                        (criterion.maximum ?? 5) - (criterion.minimum ?? 1) + 1,
-                                    },
-                                    (_, index) => (criterion.minimum ?? 1) + index,
-                                  ).map((score) => (
-                                    <option key={score} value={score}>
-                                      {score}
-                                    </option>
-                                  ))
-                                : (criterion.options ?? []).map((option) => (
-                                    <option key={option} value={option}>
-                                      {option}
-                                    </option>
-                                  ))}
-                            </select>
-                            <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
-                          </span>
-                        )}
+                              className={textAreaControl}
+                            />
+                          ) : (
+                            <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
+                              <select
+                                name={`answer-${criterion.id}`}
+                                required={criterion.required ?? true}
+                                aria-label={criterion.label}
+                                value={answers[criterion.id] ?? ''}
+                                onChange={(event) =>
+                                  setAnswers((current) => ({
+                                    ...current,
+                                    [criterion.id]:
+                                      kind === 'numeric'
+                                        ? Number(event.target.value)
+                                        : event.target.value,
+                                  }))
+                                }
+                                className={selectControl}
+                              >
+                                {kind === 'numeric'
+                                  ? Array.from(
+                                      {
+                                        length:
+                                          (criterion.maximum ?? 5) - (criterion.minimum ?? 1) + 1,
+                                      },
+                                      (_, index) => (criterion.minimum ?? 1) + index,
+                                    ).map((score) => (
+                                      <option key={score} value={score}>
+                                        {score}
+                                      </option>
+                                    ))
+                                  : (criterion.options ?? []).map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                              </select>
+                              <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
+                            </span>
+                          )}
+                        </label>
+                      )
+                    })}
+                    {!hasRecommendationCriterion ? (
+                      <label className="flex flex-col gap-1.5 border-t border-zinc-950/5 pt-4">
+                        <span className="text-base font-medium text-zinc-950 sm:text-sm">
+                          Recommendation
+                        </span>
+                        <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
+                          <select
+                            name="recommendation"
+                            value={recommendation}
+                            onChange={(event) =>
+                              setRecommendation(event.target.value as ReviewRecommendation)
+                            }
+                            className={selectControl}
+                          >
+                            {(
+                              [
+                                'strong_accept',
+                                'accept',
+                                'borderline',
+                                'reject',
+                                'strong_reject',
+                              ] as const
+                            ).map((value) => (
+                              <option key={value} value={value}>
+                                {sentenceCase(value)}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
+                        </span>
                       </label>
-                    )
-                  })}
-                  {!hasRecommendationCriterion ? (
-                    <label className="flex flex-col gap-1.5 border-t border-zinc-950/5 pt-4">
-                      <span className="text-base font-medium text-zinc-950 sm:text-sm">
-                        Recommendation
-                      </span>
-                      <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
-                        <select
-                          name="recommendation"
-                          value={recommendation}
-                          onChange={(event) =>
-                            setRecommendation(event.target.value as ReviewRecommendation)
-                          }
-                          className={selectControl}
-                        >
-                          {(
-                            [
-                              'strong_accept',
-                              'accept',
-                              'borderline',
-                              'reject',
-                              'strong_reject',
-                            ] as const
-                          ).map((value) => (
-                            <option key={value} value={value}>
-                              {sentenceCase(value)}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
-                      </span>
-                    </label>
-                  ) : null}
-                  {!hasCommentsCriterion ? (
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-base font-medium text-zinc-950 sm:text-sm">
-                        Committee notes
-                      </span>
-                      <textarea
-                        name="comments"
-                        rows={5}
-                        value={comments}
-                        onChange={(event) => setComments(event.target.value)}
-                        className={textAreaControl}
-                      />
-                    </label>
-                  ) : null}
-                  <Button type="submit" variant="primary" disabled={mutating}>
-                    {selected.assignment.status === 'completed' ? 'Update review' : 'Submit review'}
-                  </Button>
+                    ) : null}
+                    {!hasCommentsCriterion ? (
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-base font-medium text-zinc-950 sm:text-sm">
+                          Committee notes
+                        </span>
+                        <textarea
+                          name="comments"
+                          rows={5}
+                          value={comments}
+                          onChange={(event) => setComments(event.target.value)}
+                          className={textAreaControl}
+                        />
+                      </label>
+                    ) : null}
+                    <Button type="submit" variant="primary" disabled={mutating}>
+                      {selected.assignment.status === 'completed'
+                        ? 'Update review'
+                        : 'Submit review'}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </form>
+              </form>
+            )}
           </div>
         ) : (
           <div className="py-20 text-center">
@@ -456,6 +538,35 @@ function ReviewerWorkspace({
           </div>
         )}
       </main>
+      <Dialog
+        open={recusalOpen}
+        onClose={() => setRecusalOpen(false)}
+        title="Declare a conflict?"
+        description="This removes only this proposal from your actionable queue. You can undo it afterward."
+        footer={
+          <div className="flex w-full flex-col gap-2 sm:flex-row">
+            <Button onClick={() => setRecusalOpen(false)} disabled={mutating}>
+              Keep assignment
+            </Button>
+            <Button variant="danger" onClick={() => void recuse()} disabled={mutating}>
+              Recuse from proposal
+            </Button>
+          </div>
+        }
+      >
+        <label className="flex flex-col gap-1.5">
+          <span className="text-base font-medium text-zinc-950 sm:text-sm">
+            Note for the program chair <span className="font-normal text-zinc-500">(optional)</span>
+          </span>
+          <textarea
+            rows={3}
+            value={conflictReason}
+            onChange={(event) => setConflictReason(event.target.value)}
+            placeholder="For example, I work closely with the submitter."
+            className={textAreaControl}
+          />
+        </label>
+      </Dialog>
     </div>
   )
 }

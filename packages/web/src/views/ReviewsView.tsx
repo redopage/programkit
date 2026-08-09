@@ -28,7 +28,11 @@ function answerText(value: SubmissionAnswerValue | undefined) {
   return String(value)
 }
 
-function AssignmentStatus({ status }: { status: 'assigned' | 'in_progress' | 'completed' }) {
+function AssignmentStatus({
+  status,
+}: {
+  status: 'assigned' | 'in_progress' | 'completed' | 'recused'
+}) {
   return (
     <span
       className={cx(
@@ -36,6 +40,7 @@ function AssignmentStatus({ status }: { status: 'assigned' | 'in_progress' | 'co
         status === 'completed' && 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-700/10',
         status === 'in_progress' && 'bg-amber-50 text-amber-700 ring-1 ring-amber-700/10',
         status === 'assigned' && 'bg-zinc-100 text-zinc-700 ring-1 ring-zinc-950/5',
+        status === 'recused' && 'bg-rose-50 text-rose-700 ring-1 ring-rose-700/10',
       )}
     >
       {sentenceCase(status)}
@@ -53,9 +58,10 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   const assignments = (state.reviewerAssignments ?? []).filter(
     (entry) => entry.eventId === state.activeEventId,
   )
-  const completed = assignments.filter((entry) => entry.status === 'completed').length
+  const activeAssignments = assignments.filter((entry) => entry.status !== 'recused')
+  const completed = activeAssignments.filter((entry) => entry.status === 'completed').length
   const completion =
-    assignments.length === 0 ? 0 : Math.round((completed / assignments.length) * 100)
+    activeAssignments.length === 0 ? 0 : Math.round((completed / activeAssignments.length) * 100)
   const plan = (state.evaluationPlans ?? []).find((entry) => entry.eventId === state.activeEventId)
   const reviewerTeamIds = new Set(
     plan?.rounds.map((round) => evaluationRoundReviewerTeamId(plan, round.id)) ?? [],
@@ -69,7 +75,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   const reviewerProgress = reviewers
     .map((reviewer) => {
       const reviewerAssignments = assignments.filter(
-        (assignment) => assignment.reviewerId === reviewer.id,
+        (assignment) => assignment.reviewerId === reviewer.id && assignment.status !== 'recused',
       )
       const reviewerCompleted = reviewerAssignments.filter(
         (assignment) => assignment.status === 'completed',
@@ -138,7 +144,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
               Committee progress
             </h2>
             <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-              {completed} of {assignments.length} assigned reviews are complete.
+              {completed} of {activeAssignments.length} assigned reviews are complete.
             </p>
           </div>
           <p className="text-base font-medium tabular-nums text-zinc-950 sm:text-sm">
@@ -150,8 +156,8 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
         </div>
         <dl className="grid grid-cols-2 pt-5 @3xl:grid-cols-4">
           {[
-            ['Assigned reviews', assignments.length],
-            ['Outstanding', assignments.length - completed],
+            ['Assigned reviews', activeAssignments.length],
+            ['Outstanding', activeAssignments.length - completed],
             [
               'Active reviewers',
               reviewers.filter((reviewer) => reviewer.status === 'active').length,

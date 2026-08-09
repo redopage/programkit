@@ -106,7 +106,7 @@ export function submissionReviewSummary(
   submissionId: string,
 ): SubmissionReviewSummary {
   const assignments = (state.reviewerAssignments ?? []).filter(
-    (entry) => entry.submissionId === submissionId,
+    (entry) => entry.submissionId === submissionId && entry.status !== 'recused',
   )
   const assignmentIds = new Set(assignments.map((entry) => entry.id))
   const scorecards = (state.scorecards ?? []).filter((entry) =>
@@ -555,6 +555,7 @@ export function nextActions(state: WorkspaceState, now: ISODateTime = nowIso()):
     (assignment) =>
       assignment.eventId === state.activeEventId &&
       assignment.status !== 'completed' &&
+      assignment.status !== 'recused' &&
       !completedAssignmentIds.has(assignment.id),
   )
   if (openAssignments.length > 0) {
