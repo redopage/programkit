@@ -537,6 +537,7 @@ export function publicAgenda(state: WorkspaceState) {
         speakers: speakers.filter((speaker) => speaker !== null),
       }
     })
+    .filter((entry) => entry.session?.status === 'ready')
 }
 
 /**

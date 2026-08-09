@@ -202,6 +202,101 @@ describe('ProgramKit operation engine', () => {
     expect(updateResult.state.domainEvents.at(-1)?.type).toBe('session.updated')
   })
 
+  it('records attributed session revisions, restores one, and publishes only approved content', () => {
+    let state = createEmptyWorkspaceState({
+      eventId: 'evt_content',
+      eventName: 'Content Test',
+      eventSlug: 'content-test',
+      createdAt: '2026-08-09T12:00:00.000Z',
+    })
+    state = executeOperation(state, 'track.create', { input: { name: 'Platform' } }).state
+    state = executeOperation(state, 'room.create', {
+      input: { name: 'Main stage', capacity: 200 },
+    }).state
+    const jordan = {
+      type: 'staff' as const,
+      id: 'usr_jordan',
+      name: 'Jordan Alvarez',
+      scopes: ['*'],
+    }
+    for (const [title, status] of [
+      ['Taming 40-Minute CI', 'ready'],
+      ['Lightning: Agents in Production Q&A', 'draft'],
+    ] as const) {
+      state = executeOperation(state, 'session.create', {
+        input: {
+          title,
+          summary: `${title} original abstract.`,
+          format: status === 'ready' ? 'talk' : 'lightning',
+          trackId: state.tracks[0].id,
+          durationMinutes: status === 'ready' ? 40 : 10,
+          expectedAttendance: 100,
+          status,
+        },
+        actor: jordan,
+      }).state
+    }
+    const approvedSession = state.sessions[0]
+    const firstEdit = executeOperation(state, 'session.update', {
+      input: {
+        sessionId: approvedSession.id,
+        summary: `${approvedSession.summary} This session now includes a live demo of remote build caching.`,
+      },
+      expectedVersions: { [approvedSession.id]: approvedSession.version },
+      actor: jordan,
+    })
+    expect(firstEdit.response.ok).toBe(true)
+    state = firstEdit.state
+    const afterFirstEdit = state.sessions[0]
+    const secondEdit = executeOperation(state, 'session.update', {
+      input: {
+        sessionId: afterFirstEdit.id,
+        summary: `${afterFirstEdit.summary} Attendees should bring a laptop.`,
+      },
+      expectedVersions: { [afterFirstEdit.id]: afterFirstEdit.version },
+      actor: jordan,
+    })
+    expect(secondEdit.response.ok).toBe(true)
+    state = secondEdit.state
+    const secondEditEvent = state.domainEvents.at(-1)!
+    expect(secondEditEvent).toMatchObject({
+      type: 'session.updated',
+      actor: { name: 'Jordan Alvarez' },
+    })
+    const restored = executeOperation(state, 'session.restore', {
+      input: { sessionId: approvedSession.id, eventId: secondEditEvent.id },
+      expectedVersions: { [approvedSession.id]: state.sessions[0].version },
+      actor: jordan,
+    })
+    expect(restored.response.ok).toBe(true)
+    expect(restored.state.sessions[0].summary).toContain('live demo of remote build caching')
+    expect(restored.state.sessions[0].summary).not.toContain('bring a laptop')
+    expect(restored.state.domainEvents.at(-1)).toMatchObject({
+      type: 'session.restored',
+      actor: { name: 'Jordan Alvarez' },
+    })
+    state = restored.state
+
+    for (let index = 0; index < state.sessions.length; index += 1) {
+      state = executeOperation(state, 'schedule.place-session', {
+        input: {
+          sessionId: state.sessions[index].id,
+          roomId: state.rooms[0].id,
+          startsAt: new Date(
+            Date.parse(state.events[0].startsAt) + index * 60 * 60_000,
+          ).toISOString(),
+        },
+        actor: jordan,
+      }).state
+    }
+    const published = executeOperation(state, 'schedule.publish', { input: {}, actor: jordan })
+    expect(published.response.ok).toBe(true)
+    expect(published.state.scheduleReleases.at(-1)?.placements).toHaveLength(1)
+    expect(publicAgenda(published.state).map((entry) => entry.session?.title)).toEqual([
+      'Taming 40-Minute CI',
+    ])
+  })
+
   it('places unscheduled sessions, reports speaker conflicts, and blocks room overlaps', () => {
     let state = createEmptyWorkspaceState({
       eventId: 'evt_agenda',

@@ -1,4 +1,9 @@
-import { CalendarDaysIcon, PencilSquareIcon, PlusIcon } from '@heroicons/react/16/solid'
+import {
+  ArrowUturnLeftIcon,
+  CalendarDaysIcon,
+  PencilSquareIcon,
+  PlusIcon,
+} from '@heroicons/react/16/solid'
 import { useEffect, useState, type FormEvent } from 'react'
 
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -84,17 +89,23 @@ export function SessionsView({ navigate }: { navigate: (to: string) => void }) {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-zinc-950/10">
-                      {['Session', 'Track', 'Format', 'People', 'Duration', 'Expected'].map(
-                        (heading) => (
-                          <th
-                            key={heading}
-                            scope="col"
-                            className="whitespace-nowrap py-2.5 pr-4 text-left text-sm font-medium text-zinc-500"
-                          >
-                            {heading}
-                          </th>
-                        ),
-                      )}
+                      {[
+                        'Session',
+                        'Status',
+                        'Track',
+                        'Format',
+                        'People',
+                        'Duration',
+                        'Expected',
+                      ].map((heading) => (
+                        <th
+                          key={heading}
+                          scope="col"
+                          className="whitespace-nowrap py-2.5 pr-4 text-left text-sm font-medium text-zinc-500"
+                        >
+                          {heading}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-950/5">
@@ -122,6 +133,13 @@ export function SessionsView({ navigate }: { navigate: (to: string) => void }) {
                                 {session.summary}
                               </span>
                             </button>
+                          </td>
+                          <td className="py-3 pr-4">
+                            <span className="rounded-full bg-zinc-950/5 px-2 py-0.5 text-sm text-zinc-600">
+                              {session.status === 'ready'
+                                ? 'Approved'
+                                : sentenceCase(session.status)}
+                            </span>
                           </td>
                           <td className="py-3 pr-4">
                             <TrackBadge name={track.name} color={track.color} />
@@ -180,6 +198,9 @@ export function SessionsView({ navigate }: { navigate: (to: string) => void }) {
                         <span className="block text-base text-zinc-500">
                           {sentenceCase(session.format)} · {session.durationMinutes} min
                         </span>
+                        <span className="mt-1 block text-sm text-zinc-500">
+                          {session.status === 'ready' ? 'Approved' : sentenceCase(session.status)}
+                        </span>
                       </span>
                       <TrackBadge name={track.name} color={track.color} />
                     </span>
@@ -222,13 +243,30 @@ function SessionDrawer({
   onClose: () => void
   onEdit: () => void
 }) {
-  const { payload } = useWorkspace()
+  const { payload, execute, mutating } = useWorkspace()
   if (!payload || !sessionId) return null
   const { state } = payload
   const session = state.sessions.find((entry) => entry.id === sessionId)!
   const track = state.tracks.find((entry) => entry.id === session.trackId)!
   const placement = state.placements.find((entry) => entry.sessionId === session.id)
   const event = state.events.find((entry) => entry.id === state.activeEventId)!
+  const history = state.domainEvents
+    .filter(
+      (entry) =>
+        entry.aggregate.type === 'session' &&
+        entry.aggregate.id === session.id &&
+        ['session.updated', 'session.restored'].includes(entry.type),
+    )
+    .sort((left, right) => right.sequence - left.sequence)
+
+  async function restore(eventId: string) {
+    await execute(
+      'session.restore',
+      { sessionId: session.id, eventId },
+      { expectedVersions: { [session.id]: session.version } },
+      'Earlier session version restored.',
+    )
+  }
   return (
     <Drawer open={open} onClose={onClose} title={session.title}>
       <div className="flex flex-col gap-6">
@@ -292,6 +330,60 @@ function SessionDrawer({
               )
             })}
           </ul>
+        </div>
+        <div>
+          <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Change history</h3>
+          {history.length === 0 ? (
+            <p className="pt-2 text-base text-zinc-500 sm:text-sm">
+              Edits to this session will appear here.
+            </p>
+          ) : (
+            <ol className="divide-y divide-zinc-950/5 pt-2">
+              {history.map((entry) => {
+                const previous =
+                  entry.data.previous &&
+                  typeof entry.data.previous === 'object' &&
+                  !Array.isArray(entry.data.previous)
+                    ? (entry.data.previous as Record<string, unknown>)
+                    : null
+                return (
+                  <li key={entry.id} className="py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-base font-medium text-zinc-950 sm:text-sm">
+                          {entry.type === 'session.restored'
+                            ? 'Version restored'
+                            : 'Session edited'}
+                        </p>
+                        <p className="text-sm text-zinc-500">
+                          {entry.actor.name} ·{' '}
+                          {eventDateTime(entry.occurredAt, event.timezone, {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                        {typeof previous?.summary === 'string' ? (
+                          <p className="mt-2 line-clamp-2 text-sm text-zinc-500">
+                            {previous.summary}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Button
+                        size="compact"
+                        disabled={mutating || !previous}
+                        onClick={() => void restore(entry.id)}
+                      >
+                        <ArrowUturnLeftIcon className="size-4 shrink-0 fill-current" />
+                        Restore
+                      </Button>
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          )}
         </div>
       </div>
     </Drawer>

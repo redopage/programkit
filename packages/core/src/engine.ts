@@ -1040,6 +1040,84 @@ function applyHandler(
       return { session, conflicts: scheduleConflicts(state) }
     }
 
+    case 'session.restore': {
+      const session = findRequired(state.sessions, input.sessionId, 'session')
+      if (session.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The session does not belong to the active event.')
+      }
+      const sourceEvent = findRequired(state.domainEvents, input.eventId, 'event')
+      if (
+        sourceEvent.aggregate.type !== 'session' ||
+        sourceEvent.aggregate.id !== session.id ||
+        !['session.updated', 'session.restored'].includes(sourceEvent.type)
+      ) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'Choose a recorded content change for this session.',
+        )
+      }
+      const snapshot = assertRecord(sourceEvent.data.previous, 'previous')
+      const track = findRequired(state.tracks, snapshot.trackId, 'track')
+      if (track.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The recorded track does not belong to this event.')
+      }
+      const participantIds = sessionParticipantIds(state, snapshot.participantIds)
+      const previous = {
+        title: session.title,
+        summary: session.summary,
+        format: session.format,
+        trackId: session.trackId,
+        participantIds: [...session.participantIds],
+        durationMinutes: session.durationMinutes,
+        expectedAttendance: session.expectedAttendance,
+        status: session.status,
+      }
+      session.title = assertString(snapshot.title, 'title')
+      session.summary = assertString(snapshot.summary, 'summary')
+      session.format = assertOneOf(snapshot.format, 'format', sessionFormats)
+      session.trackId = track.id
+      session.durationMinutes = boundedInteger(snapshot.durationMinutes, 'durationMinutes', 5, 480)
+      session.expectedAttendance = boundedInteger(
+        snapshot.expectedAttendance,
+        'expectedAttendance',
+        1,
+        100_000,
+      )
+      session.status = assertOneOf(snapshot.status, 'status', [
+        'draft',
+        'ready',
+        'cancelled',
+      ] as const)
+      const nextParticipantIds = new Set(participantIds)
+      for (const participation of state.participations) {
+        if (participation.eventId !== session.eventId) continue
+        const hadSession = participation.sessionIds.includes(session.id)
+        const hasSession = nextParticipantIds.has(participation.id)
+        if (hadSession === hasSession) continue
+        participation.sessionIds = hasSession
+          ? [...participation.sessionIds, session.id]
+          : participation.sessionIds.filter((sessionId) => sessionId !== session.id)
+        participation.updatedAt = timestamp
+        participation.version += 1
+      }
+      session.participantIds = participantIds
+      const placement = state.placements.find((entry) => entry.sessionId === session.id)
+      if (placement && session.durationMinutes !== previous.durationMinutes) {
+        placement.endsAt = addMinutes(placement.startsAt, session.durationMinutes)
+        placement.published = false
+        placement.version += 1
+      }
+      session.updatedAt = timestamp
+      session.version += 1
+      appendEvent(state, context, {
+        type: 'session.restored',
+        aggregate: { type: 'session', id: session.id, version: session.version },
+        summary: `Restored an earlier version of “${session.title}”.`,
+        data: { previous, restoredFromEventId: sourceEvent.id },
+      })
+      return { session, restoredFromEventId: sourceEvent.id, conflicts: scheduleConflicts(state) }
+    }
+
     case 'submission-form.create': {
       const name = assertString(input.name, 'name')
       const slug = assertString(input.slug, 'slug').toLowerCase()
@@ -3054,7 +3132,31 @@ function applyHandler(
     }
 
     case 'schedule.publish': {
-      const conflicts = scheduleConflicts(state)
+      const approvedSessionIds = new Set(
+        state.sessions
+          .filter(
+            (session) => session.eventId === state.activeEventId && session.status === 'ready',
+          )
+          .map((session) => session.id),
+      )
+      const approvedPlacementIds = new Set(
+        state.placements
+          .filter(
+            (placement) =>
+              placement.eventId === state.activeEventId &&
+              approvedSessionIds.has(placement.sessionId),
+          )
+          .map((placement) => placement.id),
+      )
+      if (approvedPlacementIds.size === 0) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'Approve and schedule at least one session before publishing.',
+        )
+      }
+      const conflicts = scheduleConflicts(state).filter((conflict) =>
+        conflict.placementIds.every((placementId) => approvedPlacementIds.has(placementId)),
+      )
       const hardConflicts = conflicts.filter((conflict) => conflict.severity === 'error')
       if (hardConflicts.length > 0) {
         throw new OperationError(
@@ -3071,7 +3173,9 @@ function applyHandler(
           event.publishedScheduleVersion ?? 0,
           ...existingReleases.map((release) => release.version),
         ) + 1
-      const draftPlacements = state.placements.filter((entry) => entry.eventId === event.id)
+      const draftPlacements = state.placements.filter(
+        (entry) => entry.eventId === event.id && approvedSessionIds.has(entry.sessionId),
+      )
       const release = {
         id: createId('sch'),
         eventId: event.id,
