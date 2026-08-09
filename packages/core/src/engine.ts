@@ -9,6 +9,7 @@ import {
   audienceForCampaign,
   renderCampaignMessage,
   scheduleConflicts,
+  schedulePublishPreflight,
   submissionAnswerByPurpose,
   submissionReviewSummary,
   visibleSubmissionFormFields,
@@ -27,6 +28,7 @@ import type {
   OperationResponse,
   Participation,
   ParticipationStatus,
+  Placement,
   Person,
   RequirementStatus,
   Session,
@@ -1674,9 +1676,61 @@ function applyHandler(
       return { person, participation, changed }
     }
 
+    case 'schedule.place-session': {
+      const session = findRequired(state.sessions, input.sessionId, 'session')
+      if (session.eventId !== state.activeEventId) {
+        throw new OperationError('INVALID_INPUT', 'That session belongs to another event.')
+      }
+      if (session.status === 'cancelled') {
+        throw new OperationError('INVALID_TRANSITION', 'A cancelled session cannot be scheduled.')
+      }
+      if (state.placements.some((placement) => placement.sessionId === session.id)) {
+        throw new OperationError('INVALID_TRANSITION', 'That session is already on the schedule.')
+      }
+      const room = findRequired(state.rooms, input.roomId, 'room')
+      if (room.eventId !== session.eventId) {
+        throw new OperationError('INVALID_INPUT', 'That room belongs to another event.')
+      }
+      const startsAt = assertString(input.startsAt, 'startsAt')
+      if (Number.isNaN(new Date(startsAt).getTime())) {
+        throw new OperationError('INVALID_INPUT', 'startsAt must be an ISO date and time.')
+      }
+      const event = findRequired(state.events, state.activeEventId, 'event')
+      const placement: Placement = {
+        id: createId('plc'),
+        eventId: event.id,
+        sessionId: session.id,
+        roomId: room.id,
+        startsAt: new Date(startsAt).toISOString(),
+        endsAt: addMinutes(new Date(startsAt).toISOString(), session.durationMinutes),
+        scheduleVersion: event.publishedScheduleVersion ?? 0,
+        published: false,
+        version: 1,
+      }
+      state.placements.push(placement)
+      appendEvent(state, context, {
+        type: 'schedule.session-placed',
+        aggregate: { type: 'placement', id: placement.id, version: placement.version },
+        summary: `Placed ${session.title} in ${room.name}.`,
+        data: { sessionId: session.id, roomId: room.id, startsAt: placement.startsAt },
+      })
+      return {
+        placement,
+        conflicts: scheduleConflicts(state).filter((conflict) =>
+          conflict.placementIds.includes(placement.id),
+        ),
+      }
+    }
+
     case 'schedule.move-session': {
       const placement = findRequired(state.placements, input.placementId, 'placement')
+      if (placement.eventId !== state.activeEventId) {
+        throw new OperationError('INVALID_INPUT', 'That placement belongs to another event.')
+      }
       const room = findRequired(state.rooms, input.roomId, 'room')
+      if (room.eventId !== placement.eventId) {
+        throw new OperationError('INVALID_INPUT', 'That room belongs to another event.')
+      }
       const startsAt = assertString(input.startsAt, 'startsAt')
       if (Number.isNaN(new Date(startsAt).getTime())) {
         throw new OperationError('INVALID_INPUT', 'startsAt must be an ISO date and time.')
@@ -1697,15 +1751,47 @@ function applyHandler(
       return { placement, conflicts: scheduleConflicts(state) }
     }
 
+    case 'schedule.unplace-session': {
+      const placement = findRequired(state.placements, input.placementId, 'placement')
+      if (placement.eventId !== state.activeEventId) {
+        throw new OperationError('INVALID_INPUT', 'That placement belongs to another event.')
+      }
+      const session = findRequired(state.sessions, placement.sessionId, 'session')
+      const previous = cloneState(placement)
+      state.placements = state.placements.filter((entry) => entry.id !== placement.id)
+      appendEvent(state, context, {
+        type: 'schedule.session-unplaced',
+        aggregate: { type: 'placement', id: placement.id, version: placement.version + 1 },
+        summary: `Returned ${session.title} to the unscheduled tray.`,
+        data: { sessionId: session.id, previous },
+      })
+      return { session, placementId: placement.id, previous }
+    }
+
     case 'schedule.publish': {
-      const conflicts = scheduleConflicts(state)
-      const hardConflicts = conflicts.filter((conflict) => conflict.severity === 'error')
-      if (hardConflicts.length > 0) {
+      const preflight = schedulePublishPreflight(state)
+      if (preflight.hardConflicts.length > 0) {
         throw new OperationError(
           'SCHEDULE_CONFLICTS',
-          `Resolve ${hardConflicts.length} schedule conflict${hardConflicts.length === 1 ? '' : 's'} before publishing.`,
+          `Resolve ${preflight.hardConflicts.length} schedule conflict${preflight.hardConflicts.length === 1 ? '' : 's'} before publishing.`,
         )
       }
+      if (preflight.unscheduledSessions.length > 0) {
+        throw new OperationError(
+          'SCHEDULE_INCOMPLETE',
+          `Place ${preflight.unscheduledSessions.length} unscheduled session${preflight.unscheduledSessions.length === 1 ? '' : 's'} before publishing.`,
+        )
+      }
+      if (preflight.placementCount === 0) {
+        throw new OperationError(
+          'SCHEDULE_INCOMPLETE',
+          'Place at least one session before publishing.',
+        )
+      }
+      if (preflight.changeCount === 0) {
+        throw new OperationError('NO_CHANGES', 'The draft already matches the published schedule.')
+      }
+      const conflicts = preflight.conflicts
       const event = findRequired(state.events, state.activeEventId, 'event')
       const existingReleases = (state.scheduleReleases ?? []).filter(
         (release) => release.eventId === event.id,

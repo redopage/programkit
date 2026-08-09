@@ -93,7 +93,14 @@ Email Service binding, and a retrying consumer are explicit release-enablement w
 ## 7. Build and publish the schedule
 
 Sessions are content; placements are mutable draft room/time assignments. Conflict checks run
-against the draft. Publishing creates an immutable, versioned `ScheduleRelease` snapshot.
+against the draft. Ready sessions without a placement stay in an explicit unscheduled tray.
+Organizers can place or move them through timezone-safe forms, filter by day, room, or track, and
+undo the last accepted change through another version-checked operation.
+
+The publish preflight compares the draft with the latest release. It blocks duplicate placements,
+hard conflicts, unscheduled active sessions, empty schedules, and unchanged releases, while
+showing non-blocking capacity warnings and added, moved, or removed sessions. Publishing creates an
+immutable, versioned `ScheduleRelease` snapshot.
 
 The public agenda reads only the latest release. Moving a draft session after publication cannot
 quietly rewrite what attendees already saw; another explicit publication is required.

@@ -9,6 +9,7 @@ import {
   readinessSummary,
   reviewerQueue,
   scheduleConflicts,
+  schedulePublishPreflight,
   submissionPipelineSummary,
   submissionFormPublishReadiness,
   submissionReviewSummary,
@@ -21,7 +22,7 @@ describe('ProgramKit operation engine', () => {
     const state = createSeedState()
     expect(state.people).toHaveLength(16)
     expect(state.participations).toHaveLength(16)
-    expect(state.sessions).toHaveLength(10)
+    expect(state.sessions).toHaveLength(11)
     expect(state.scheduleReleases).toHaveLength(1)
     expect(state.campaignDeliveries).toHaveLength(6)
     expect(state.events[0].publishedScheduleVersion).toBe(3)
@@ -53,6 +54,14 @@ describe('ProgramKit operation engine', () => {
     expect(
       scheduleConflicts(state).filter((conflict) => conflict.severity === 'error'),
     ).toHaveLength(0)
+    expect(schedulePublishPreflight(state)).toMatchObject({
+      placementCount: 10,
+      changeCount: 0,
+      canPublish: false,
+    })
+    expect(schedulePublishPreflight(state).unscheduledSessions.map((entry) => entry.id)).toEqual([
+      'ses_011',
+    ])
   })
 
   it('updates event settings with validation and version checks', () => {
@@ -112,6 +121,19 @@ describe('ProgramKit operation engine', () => {
     expect(types).toContain('missing_room')
     expect(types).toContain('missing_track')
     expect(types).toContain('missing_participant')
+  })
+
+  it('detects duplicate draft placements for one session', () => {
+    const state = createSeedState()
+    state.placements.push({
+      ...structuredClone(state.placements[0]),
+      id: 'plc_duplicate',
+      roomId: 'rom_studio',
+      startsAt: '2026-10-05T16:00:00.000Z',
+      endsAt: '2026-10-05T16:40:00.000Z',
+    })
+    expect(scheduleConflicts(state).map((conflict) => conflict.type)).toContain('duplicate_session')
+    expect(schedulePublishPreflight(state).canPublish).toBe(false)
   })
 
   it('enforces idempotency keys', () => {
@@ -348,12 +370,81 @@ describe('ProgramKit operation engine', () => {
     expect(proposed.state.changeSets[0].status).toBe('awaiting_approval')
   })
 
+  it('places and unplaces sessions with versioned audit evidence', () => {
+    const state = createSeedState()
+    const forbidden = executeOperation(state, 'schedule.place-session', {
+      input: {
+        sessionId: 'ses_011',
+        roomId: 'rom_studio',
+        startsAt: '2026-10-05T15:00:00.000Z',
+      },
+      actor: { type: 'participant', id: 'par_001', name: 'Participant', scopes: [] },
+    })
+    expect(forbidden.response.error?.code).toBe('FORBIDDEN')
+
+    const incomplete = executeOperation(state, 'schedule.publish', { input: {} })
+    expect(incomplete.response.error?.code).toBe('SCHEDULE_INCOMPLETE')
+
+    const placed = executeOperation(state, 'schedule.place-session', {
+      input: {
+        sessionId: 'ses_011',
+        roomId: 'rom_studio',
+        startsAt: '2026-10-05T15:00:00.000Z',
+      },
+      expectedVersions: { ses_011: 1 },
+      idempotencyKey: 'place-session-eleven',
+    })
+    expect(placed.response.ok).toBe(true)
+    const placement = placed.state.placements.find((entry) => entry.sessionId === 'ses_011')!
+    expect(placement).toMatchObject({
+      roomId: 'rom_studio',
+      startsAt: '2026-10-05T15:00:00.000Z',
+      published: false,
+      version: 1,
+    })
+    expect(schedulePublishPreflight(placed.state)).toMatchObject({
+      changeCount: 1,
+      canPublish: true,
+    })
+    expect(placed.state.domainEvents.at(-1)?.type).toBe('schedule.session-placed')
+
+    const duplicate = executeOperation(placed.state, 'schedule.place-session', {
+      input: {
+        sessionId: 'ses_011',
+        roomId: 'rom_main',
+        startsAt: '2026-10-05T16:00:00.000Z',
+      },
+      expectedVersions: { ses_011: 1 },
+    })
+    expect(duplicate.response.error?.code).toBe('INVALID_TRANSITION')
+
+    const unplaced = executeOperation(placed.state, 'schedule.unplace-session', {
+      input: { placementId: placement.id },
+      expectedVersions: { [placement.id]: placement.version },
+    })
+    expect(unplaced.response.ok).toBe(true)
+    expect(unplaced.state.placements.some((entry) => entry.id === placement.id)).toBe(false)
+    expect(unplaced.state.domainEvents.at(-1)?.type).toBe('schedule.session-unplaced')
+  })
+
   it('keeps draft schedule moves private and published releases immutable', () => {
     let state = createSeedState()
     const initialRelease = structuredClone(state.scheduleReleases[0])
     const initialPublicPlacement = publicAgenda(state).find(
       (entry) => entry.placement.id === 'plc_007',
     )!.placement
+
+    const placed = executeOperation(state, 'schedule.place-session', {
+      input: {
+        sessionId: 'ses_011',
+        roomId: 'rom_studio',
+        startsAt: '2026-10-05T15:00:00.000Z',
+      },
+      expectedVersions: { ses_011: 1 },
+    })
+    expect(placed.response.ok).toBe(true)
+    state = placed.state
+    expect(publicAgenda(state)).toHaveLength(10)
 
     const moved = executeOperation(state, 'schedule.move-session', {
       input: {
@@ -387,6 +478,10 @@ describe('ProgramKit operation engine', () => {
       published: true,
     })
     expect(state.scheduleReleases[0]).toEqual(initialRelease)
+    expect(schedulePublishPreflight(state)).toMatchObject({ changeCount: 0, canPublish: false })
+
+    const unchanged = executeOperation(state, 'schedule.publish', { input: {} })
+    expect(unchanged.response.error?.code).toBe('NO_CHANGES')
 
     const latestRelease = structuredClone(state.scheduleReleases[1])
     const redrafted = executeOperation(state, 'schedule.move-session', {

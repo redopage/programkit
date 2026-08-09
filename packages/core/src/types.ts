@@ -532,6 +532,7 @@ export interface ScheduleConflict {
     | 'event_boundary'
     | 'duration_mismatch'
     | 'cancelled_session'
+    | 'duplicate_session'
   message: string
   placementIds: Id[]
 }

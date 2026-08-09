@@ -104,6 +104,12 @@ reference, and truthful delivery state. `pending_provider` means prepared in the
 A trusted consumer records `delivered` or `failed` through
 `submission.record-receipt-delivery`.
 
+Schedule drafting uses `schedule.place-session`, `schedule.move-session`, and
+`schedule.unplace-session`. Each accepted change is event-scoped, version-checked, audited, and
+kept out of the public program until `schedule.publish` creates the next immutable release.
+Publication also enforces the shared preflight: every active session is placed, no hard conflicts
+or duplicate placements remain, and the draft differs from the latest release.
+
 ## Domain events and export
 
 | Method | Path                             | Purpose                                           |

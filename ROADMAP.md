@@ -20,7 +20,7 @@ is the source of truth for that distinction.
 | Review             | Reviewer teams, assignment rounds, scoped reviewer projection, scorecards, blind-review redaction, decision rules, accepted-record conversion                                                                                                                                         | Assignment UI, conflicts of interest, saved committee filters, multi-round release policy                            |
 | Speaker onboarding | Scoped participant projection, profile editing, typed text/form/file requirement submission, private R2 uploads and downloads, due dates, organizer review states                                                                                                                     | Shared cross-surface task renderer, release documents, revision conversations, logistics templates, upload scanning  |
 | Communications     | Accepted-speaker template, audience preview, approval, frozen personalized messages, truthful recipient outbox, provider-result recording, calendar downloads, and submission-receipt outbox                                                                                          | Provider activation, test sends, scheduling, retry controls, and richer attempt history                              |
-| Scheduling         | Draft placements, timezone-safe editing, accessible drag-and-drop over an explicit move form, conflict previews, room/list views, immutable releases, public projection                                                                                                               | Unscheduled tray, undo, day/track filters and fuller publish preflight                                               |
+| Scheduling         | Draft placements, unscheduled tray, timezone-safe place/move forms, accessible drag-and-drop, safe undo, day/room/track filters, conflict previews, full draft-versus-published preflight, immutable releases, public projection                                                      | Reusable time-block templates, travel/buffer constraints, track locking, and richer collaborative draft history      |
 | Readiness          | Participant matrix, due dates in the domain, blocker counts, submitted-item approval, speaker detail                                                                                                                                                                                  | Overdue explanations, saved filters, bulk reminders/approval and communication history                               |
 
 ## Foundation already in place
@@ -90,8 +90,10 @@ provider-result history; a richer per-message attempt timeline remains productio
 
 ### 5. Finish the scheduling studio
 
-- Add an unscheduled-session tray and day/room/track filters.
-- Add undo and a complete publication preflight with draft-versus-published evidence.
+- Done: add an unscheduled-session tray and day/room/track filters.
+- Done: add safe last-change undo and a publication preflight with draft-versus-published evidence.
+- Next: add reusable time-block templates, travel/buffer constraints, track locking, and richer
+  collaborative draft history when pilot evidence requires them.
 
 ### 6. Polish the operating queue
 

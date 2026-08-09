@@ -1072,6 +1072,16 @@ const sessionInputs = [
     340,
     'The threads that ran through both days, and the open problems worth carrying into next year.',
   ],
+  [
+    'ses_011',
+    'Ask me anything: operating trustworthy AI',
+    'panel',
+    'trk_operate',
+    [12, 14],
+    45,
+    130,
+    'A candid closing conversation about the operational decisions teams still disagree on.',
+  ],
 ] as const
 
 const sessionRecords: Session[] = sessionInputs.map((session) => ({
