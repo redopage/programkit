@@ -40,6 +40,8 @@ The following controls remain useful after a real identity adapter is added:
 - Submitter, reviewer, and participant route-to-actor matching with data-minimized projections and
   surface-specific operation allowlists
 - Blind-review identity redaction for reviewer projections
+- Submitter-owned confirmation receipt responses, with receipt records omitted from participant,
+  reviewer, and unrelated public projections
 - A public-program projection backed only by an immutable published release
 - Participant transition rules limited to self-service confirmation, withdrawal, profile updates,
   and eligible requirement submission
@@ -79,8 +81,9 @@ reference `x-programkit-workspace-key` header as an authorization decision.
    missing, expired, replayed, or wrong-audience tokens.
 4. Protect browser mutations with secure, HTTP-only, same-site cookies and CSRF validation where
    the chosen session design requires it.
-5. Connect the durable campaign outbox to idempotent, retrying workers for outbound email and
-   webhooks. `campaign.send` records recipient jobs as `pending_provider`; it does not deliver mail.
+5. Connect the durable campaign and submission-receipt outboxes to idempotent, retrying workers for
+   outbound email and webhooks. `campaign.send` and `submission.submit` can record jobs as
+   `pending_provider`; neither status means mail was delivered.
 6. Store provider secrets in a managed secret service, never in workspace state, source control,
    browser bundles, or logs.
 7. Replace the reference portal identity with authenticated, per-workspace authorization for the

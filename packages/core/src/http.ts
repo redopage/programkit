@@ -76,6 +76,7 @@ function participantState(state: WorkspaceState, participationId: string) {
   clone.submissionFormFields = (state.submissionFormFields ?? []).filter((entry) =>
     formIds.has(entry.formId),
   )
+  clone.submissionReceiptDeliveries = []
   const submissionIds = new Set(clone.submissions.map((entry) => entry.id))
   clone.assets = (state.assets ?? [])
     .filter(
@@ -115,6 +116,7 @@ function projectionBase(state: WorkspaceState) {
   clone.submissionForms = []
   clone.submissionFormFields = []
   clone.submissions = []
+  clone.submissionReceiptDeliveries = []
   clone.assets = []
   clone.reviewers = []
   clone.reviewerTeams = []

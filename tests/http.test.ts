@@ -13,13 +13,15 @@ describe('operation HTTP surface', () => {
     const legacy = createSeedState()
     legacy.schemaVersion = 4
     delete (legacy as Partial<WorkspaceState>).campaignDeliveries
+    delete (legacy as Partial<WorkspaceState>).submissionReceiptDeliveries
     for (const campaign of legacy.campaigns) {
       delete (campaign as Partial<typeof campaign>).includeEventInvite
       delete (campaign as Partial<typeof campaign>).queuedAt
     }
     const state = await new MemoryWorkspaceRepository(legacy).read()
-    expect(state.schemaVersion).toBe(5)
+    expect(state.schemaVersion).toBe(6)
     expect(state.campaignDeliveries).toEqual([])
+    expect(state.submissionReceiptDeliveries).toEqual([])
     expect(state.campaigns.every((campaign) => campaign.includeEventInvite === false)).toBe(true)
     expect(state.campaigns.every((campaign) => campaign.queuedAt === null)).toBe(true)
   })
@@ -171,6 +173,7 @@ describe('operation HTTP surface', () => {
     expect(body.state.participations[0].internalNotes).toBe('')
     expect(body.state.campaigns).toHaveLength(0)
     expect(body.state.campaignDeliveries).toHaveLength(0)
+    expect(body.state.submissionReceiptDeliveries).toHaveLength(0)
     expect(body.state.integrations).toHaveLength(0)
     expect(body.state.changeSets).toHaveLength(0)
     expect(body.state.domainEvents).toHaveLength(0)
@@ -197,6 +200,7 @@ describe('operation HTTP surface', () => {
     expect(formBody.state.submissionFormFields.length).toBeGreaterThan(5)
     expect(formBody.state.people).toHaveLength(0)
     expect(formBody.state.submissions).toHaveLength(0)
+    expect(formBody.state.submissionReceiptDeliveries).toHaveLength(0)
     expect(formBody.state.reviewerAssignments).toHaveLength(0)
     expect(formBody.state.domainEvents).toHaveLength(0)
 
@@ -211,6 +215,7 @@ describe('operation HTTP surface', () => {
     expect(programBody.state.submissions).toHaveLength(0)
     expect(programBody.state.campaigns).toHaveLength(0)
     expect(programBody.state.campaignDeliveries).toHaveLength(0)
+    expect(programBody.state.submissionReceiptDeliveries).toHaveLength(0)
     expect(programBody.state.people.every((entry) => entry.email === '')).toBe(true)
     expect(programBody.state.participations.every((entry) => entry.internalNotes === '')).toBe(true)
 
@@ -237,6 +242,7 @@ describe('operation HTTP surface', () => {
     expect(reviewerBody.state.reviewDecisions).toHaveLength(0)
     expect(reviewerBody.state.campaigns).toHaveLength(0)
     expect(reviewerBody.state.campaignDeliveries).toHaveLength(0)
+    expect(reviewerBody.state.submissionReceiptDeliveries).toHaveLength(0)
     expect(reviewerBody.state.domainEvents).toHaveLength(0)
   })
 
@@ -269,6 +275,71 @@ describe('operation HTTP surface', () => {
       expect(submission.answers.biography).toBeUndefined()
       expect(submission.answers.proposal_title).toBeTruthy()
     }
+  })
+
+  it('returns the submitter-owned frozen receipt created with a public submission', async () => {
+    const repository = new MemoryWorkspaceRepository()
+    const submitter = {
+      type: 'submitter' as const,
+      id: 'aie-nyc-2026-cfp',
+      name: 'Public submitter',
+      scopes: ['submissions:write', 'submissions:submit'],
+    }
+    const operationUrl = 'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations'
+    const answers = {
+      first_name: 'Ada',
+      last_name: 'Lovelace',
+      email: 'ada@example.com',
+      company: 'Analytical Engines',
+      job_title: 'Programmer',
+      biography: 'Ada writes precise notes about programmable systems.',
+      proposal_title: 'Useful engines',
+      abstract: 'A practical session about systems people can inspect and understand.',
+      session_format: 'talk',
+      track: 'trk_build',
+    }
+    const createResponse = await handleCoreRequest(
+      new Request(`${operationUrl}/submission.create`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ input: { formId: 'frm_cfp_2026', kind: 'abstract', answers } }),
+      }),
+      repository,
+      { actor: submitter },
+    )
+    const createBody = (await createResponse?.json()) as OperationResponse<{
+      submission: { id: string }
+    }>
+    expect(createBody.ok).toBe(true)
+
+    const submitResponse = await handleCoreRequest(
+      new Request(`${operationUrl}/submission.submit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ input: { submissionId: createBody.data?.submission.id } }),
+      }),
+      repository,
+      { actor: submitter },
+    )
+    const submitBody = (await submitResponse?.json()) as OperationResponse<{
+      receiptDelivery: {
+        id: string
+        submissionId: string
+        recipientEmail: string
+        status: string
+        body: string
+      }
+    }>
+    expect(submitBody.ok).toBe(true)
+    expect(submitBody.data?.receiptDelivery).toMatchObject({
+      submissionId: createBody.data?.submission.id,
+      recipientEmail: 'ada@example.com',
+      status: 'pending_provider',
+    })
+    expect(submitBody.data?.receiptDelivery.body).toContain(
+      `Reference: ${createBody.data?.submission.id}`,
+    )
+    expect((await repository.read()).submissionReceiptDeliveries).toHaveLength(2)
   })
 
   it('enforces public-form and reviewer operation boundaries', async () => {

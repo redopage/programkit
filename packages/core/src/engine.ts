@@ -34,6 +34,7 @@ import type {
   SubmissionAnswers,
   SubmissionForm,
   SubmissionFormField,
+  SubmissionReceiptDelivery,
   WorkspaceState,
 } from './types.ts'
 import {
@@ -433,6 +434,7 @@ function allVersionedRecords(state: WorkspaceState) {
     ...state.requirementInstances,
     ...(state.submissionForms ?? []),
     ...(state.submissions ?? []),
+    ...(state.submissionReceiptDeliveries ?? []),
     ...(state.reviewers ?? []),
     ...(state.reviewerTeams ?? []),
     ...(state.evaluationPlans ?? []),
@@ -842,13 +844,122 @@ function applyHandler(
           createdAssignments.push(assignment)
         }
       }
+
+      const event = findRequired(state.events, submission.eventId, 'event')
+      const firstName = stringAnswer(state, submission, 'first_name')
+      const lastName = stringAnswer(state, submission, 'last_name')
+      const recipientEmail = stringAnswer(state, submission, 'email').toLowerCase()
+      const proposalTitle = stringAnswer(state, submission, 'proposal_title')
+      const deliverable = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(recipientEmail)
+      const receiptDelivery: SubmissionReceiptDelivery = {
+        id: createId('rcp'),
+        submissionId: submission.id,
+        eventId: submission.eventId,
+        formId: form.id,
+        recipientName: `${firstName} ${lastName}`.trim() || 'Submitter',
+        recipientEmail,
+        subject: `We received your proposal for ${event.name}`,
+        body: [
+          `Hi ${firstName || 'there'},`,
+          '',
+          `We received “${proposalTitle || 'your proposal'}” for ${event.name}.`,
+          form.confirmationMessage,
+          '',
+          `Reference: ${submission.id}`,
+          '',
+          'Keep this reference if you need to follow up with the program team.',
+        ].join('\n'),
+        status: deliverable ? 'pending_provider' : 'suppressed',
+        provider: null,
+        providerMessageId: null,
+        attemptCount: 0,
+        lastError: deliverable ? null : 'The submission has no deliverable email address.',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      state.submissionReceiptDeliveries.push(receiptDelivery)
       appendEvent(state, context, {
         type: 'submission.submitted',
         aggregate: { type: 'submission', id: submission.id, version: submission.version },
         summary: `Submitted “${stringAnswer(state, submission, 'proposal_title')}” for review.`,
-        data: { formId: form.id, assignmentIds: createdAssignments.map((entry) => entry.id) },
+        data: {
+          formId: form.id,
+          assignmentIds: createdAssignments.map((entry) => entry.id),
+          receiptDeliveryId: receiptDelivery.id,
+        },
       })
-      return { submission, assignments: createdAssignments }
+      appendEvent(state, context, {
+        type: 'submission.receipt-queued',
+        aggregate: {
+          type: 'submission-receipt-delivery',
+          id: receiptDelivery.id,
+          version: receiptDelivery.version,
+        },
+        summary: `Prepared a submission receipt for ${receiptDelivery.recipientName}.`,
+        data: {
+          submissionId: submission.id,
+          receiptStatus: receiptDelivery.status,
+        },
+      })
+      return { submission, assignments: createdAssignments, receiptDelivery }
+    }
+
+    case 'submission.record-receipt-delivery': {
+      const delivery = findRequired(
+        state.submissionReceiptDeliveries,
+        input.deliveryId,
+        'submission receipt delivery',
+      )
+      if (delivery.status === 'delivered' || delivery.status === 'suppressed') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'That submission receipt already reached a terminal state.',
+        )
+      }
+      const status = assertOneOf(input.status, 'status', ['delivered', 'failed'] as const)
+      const providerMessageId = optionalString(input.providerMessageId)
+      const lastError = optionalString(input.lastError)
+      if (status === 'delivered' && !providerMessageId) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'A delivered submission receipt requires its provider message ID.',
+        )
+      }
+      if (status === 'failed' && !lastError) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'A failed submission receipt requires an error summary.',
+        )
+      }
+      delivery.status = status
+      delivery.provider = 'cloudflare_email'
+      delivery.providerMessageId = providerMessageId || null
+      delivery.lastError = lastError || null
+      delivery.attemptCount += 1
+      delivery.updatedAt = timestamp
+      delivery.version += 1
+      appendEvent(state, context, {
+        type:
+          status === 'delivered'
+            ? 'submission.receipt-delivered'
+            : 'submission.receipt-delivery-failed',
+        aggregate: {
+          type: 'submission-receipt-delivery',
+          id: delivery.id,
+          version: delivery.version,
+        },
+        summary:
+          status === 'delivered'
+            ? `Delivered the submission receipt to ${delivery.recipientName}.`
+            : `Submission receipt delivery to ${delivery.recipientName} failed.`,
+        data: {
+          submissionId: delivery.submissionId,
+          deliveryStatus: status,
+          attemptCount: delivery.attemptCount,
+        },
+      })
+      return { delivery }
     }
 
     case 'review.submit-scorecard': {

@@ -10,6 +10,8 @@ export type CampaignStatus = 'draft' | 'awaiting_approval' | 'approved' | 'queue
 export type CampaignAudience =
   'all_active' | 'confirmed' | 'unconfirmed' | 'missing_requirements' | 'custom'
 export type CampaignDeliveryStatus = 'pending_provider' | 'delivered' | 'failed' | 'suppressed'
+export type SubmissionReceiptDeliveryStatus =
+  'pending_provider' | 'delivered' | 'failed' | 'suppressed'
 export type ChangeSetStatus =
   'draft' | 'awaiting_approval' | 'approved' | 'rejected' | 'committed' | 'stale'
 
@@ -159,6 +161,25 @@ export interface Submission {
   decidedAt: ISODateTime | null
   convertedParticipationId: Id | null
   convertedSessionId: Id | null
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
+}
+
+export interface SubmissionReceiptDelivery {
+  id: Id
+  submissionId: Id
+  eventId: Id
+  formId: Id
+  recipientName: string
+  recipientEmail: string
+  subject: string
+  body: string
+  status: SubmissionReceiptDeliveryStatus
+  provider: 'cloudflare_email' | null
+  providerMessageId: string | null
+  attemptCount: number
+  lastError: string | null
   createdAt: ISODateTime
   updatedAt: ISODateTime
   version: number
@@ -425,6 +446,7 @@ export interface WorkspaceState {
   submissionForms: SubmissionForm[]
   submissionFormFields: SubmissionFormField[]
   submissions: Submission[]
+  submissionReceiptDeliveries: SubmissionReceiptDelivery[]
   assets: Asset[]
   reviewers: Reviewer[]
   reviewerTeams: ReviewerTeam[]

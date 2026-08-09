@@ -74,10 +74,10 @@ pnpm deploy
 The `apps/cloudflare` assembly uses one Worker, static assets, one SQLite-backed Durable Object per
 workspace key, and a private R2 binding for participant requirement files. Local development
 emulates the bucket; before a remote deploy, create the checked-in `programkit-assets` bucket. No D1
-database, queue, or email binding is required for the seeded demo. Campaign approval creates a
-durable per-recipient outbox without pretending delivery occurred, and accepted-speaker messages
-can include a downloadable RFC 5545 event invite. Activating outbound delivery still requires a
-verified sender domain and a Cloudflare Email Service consumer.
+database, queue, or email binding is required for the seeded demo. Campaign queueing and public
+proposal submission create durable delivery records without pretending delivery occurred, and
+accepted-speaker messages can include a downloadable RFC 5545 event invite. Activating outbound
+delivery still requires a verified sender domain and a Cloudflare Email Service consumer.
 
 The Worker maps the `x-programkit-workspace-key` request header to a Durable Object name; a missing or
 invalid key uses `demo`. Inside the object, every operation runs through an atomic repository

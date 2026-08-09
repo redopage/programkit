@@ -17,6 +17,7 @@ import {
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Button,
+  Callout,
   Drawer,
   EmptyState,
   FilterTabs,
@@ -321,6 +322,22 @@ function SubmissionDrawer({
   if (!payload || !submission) return null
 
   const { state } = payload
+  const receiptDelivery = state.submissionReceiptDeliveries.find(
+    (entry) => entry.submissionId === submission.id,
+  )
+  const receiptRows: Array<[string, string]> = receiptDelivery
+    ? [
+        ['Recipient', receiptDelivery.recipientEmail || 'No deliverable email'],
+        ['Subject', receiptDelivery.subject],
+        ['Attempts', String(receiptDelivery.attemptCount)],
+        ...(receiptDelivery.provider
+          ? ([['Provider', sentenceCase(receiptDelivery.provider)]] as Array<[string, string]>)
+          : []),
+        ...(receiptDelivery.providerMessageId
+          ? ([['Provider reference', receiptDelivery.providerMessageId]] as Array<[string, string]>)
+          : []),
+      ]
+    : []
   const title = answerText(submissionAnswerByPurpose(state, submission, 'proposal_title'))
   const review = submissionReviewSummary(state, submission.id)
   const assignmentIds = new Set(
@@ -439,6 +456,59 @@ function SubmissionDrawer({
             </p>
           </div>
         </section>
+
+        {receiptDelivery ? (
+          <section
+            aria-labelledby="submission-receipt-heading"
+            className="border-t border-zinc-950/5 pt-6"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <h3
+                id="submission-receipt-heading"
+                className="text-base font-medium text-zinc-950 sm:text-sm"
+              >
+                Submission receipt
+              </h3>
+              <StatusBadge status={receiptDelivery.status} />
+            </div>
+            <p className="pt-1 text-pretty text-base text-zinc-500 sm:text-sm">
+              {receiptDelivery.status === 'pending_provider'
+                ? 'Prepared and frozen in the outbox when the proposal was submitted. It has not been delivered.'
+                : receiptDelivery.status === 'delivered'
+                  ? 'The email provider confirmed delivery of this receipt.'
+                  : receiptDelivery.status === 'failed'
+                    ? 'The provider returned a failure. A retry reuses this same frozen receipt rather than creating a second one.'
+                    : 'Skipped: the submission had no deliverable address, so no receipt will be sent.'}
+            </p>
+            <dl className="divide-y divide-zinc-950/5 pt-3">
+              {receiptRows.map(([term, detail]) => (
+                <div
+                  key={term}
+                  className="grid gap-1 py-2.5 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4"
+                >
+                  <dt className="text-base font-medium text-zinc-950 sm:text-sm">{term}</dt>
+                  <dd className="break-words text-base text-zinc-500 sm:text-sm">{detail}</dd>
+                </div>
+              ))}
+            </dl>
+            {receiptDelivery.status === 'pending_provider' ? (
+              <div className="pt-3">
+                <Callout tone="info" title="Delivery is gated">
+                  Nothing leaves until an email provider is connected and the sending domain is
+                  verified. Both are required. Until then the submitter relies on the reference
+                  shown on their confirmation.
+                </Callout>
+              </div>
+            ) : null}
+            {receiptDelivery.lastError ? (
+              <div className="pt-3">
+                <Callout tone="danger" title="Last provider error">
+                  {receiptDelivery.lastError}
+                </Callout>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <section
           aria-labelledby="review-summary-heading"

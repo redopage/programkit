@@ -20,6 +20,7 @@ import type {
   Submission,
   SubmissionForm,
   SubmissionFormField,
+  SubmissionReceiptDelivery,
   Track,
   WorkspaceState,
 } from './types.ts'
@@ -745,6 +746,36 @@ const submissions: Submission[] = [
   },
 ]
 
+const submissionReceiptDeliveries: SubmissionReceiptDelivery[] = [
+  {
+    id: 'rcp_001',
+    submissionId: 'sub_005',
+    eventId,
+    formId: 'frm_cfp_2026',
+    recipientName: 'Priya Raman',
+    recipientEmail: 'priya@craftwork.dev',
+    subject: 'We received your proposal for AIE NYC 2026',
+    body: [
+      'Hi Priya,',
+      '',
+      'We received “Designing the human handoff” for AIE NYC 2026.',
+      'Your proposal is in. The program team will contact you after committee review.',
+      '',
+      'Reference: sub_005',
+      '',
+      'Keep this reference if you need to follow up with the program team.',
+    ].join('\n'),
+    status: 'pending_provider',
+    provider: null,
+    providerMessageId: null,
+    attemptCount: 0,
+    lastError: null,
+    createdAt: '2026-08-07T12:10:00.000Z',
+    updatedAt: '2026-08-07T12:10:00.000Z',
+    version: 1,
+  },
+]
+
 const assets: Asset[] = [
   {
     id: 'ast_001',
@@ -1236,7 +1267,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     revision: 1,
     workspace: {
       id: 'wrk_aie',
@@ -1267,6 +1298,7 @@ export function createSeedState(): WorkspaceState {
     submissionForms: structuredClone(submissionForms),
     submissionFormFields: structuredClone(submissionFormFields),
     submissions: structuredClone(submissions),
+    submissionReceiptDeliveries: structuredClone(submissionReceiptDeliveries),
     assets: structuredClone(assets),
     reviewers: structuredClone(reviewers),
     reviewerTeams: structuredClone(reviewerTeams),

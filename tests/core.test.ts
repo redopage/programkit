@@ -30,6 +30,7 @@ describe('ProgramKit operation engine', () => {
     expect(readinessSummary(state).blockers).toBeGreaterThan(0)
     expect(state.submissionForms).toHaveLength(2)
     expect(state.submissions).toHaveLength(6)
+    expect(state.submissionReceiptDeliveries).toHaveLength(1)
     expect(submissionPipelineSummary(state)).toMatchObject({
       total: 6,
       draft: 1,
@@ -732,6 +733,64 @@ describe('ProgramKit operation engine', () => {
     expect(
       submitted.state.reviewerAssignments.filter((entry) => entry.submissionId === submission.id),
     ).toHaveLength(2)
+    const receipt = submitted.state.submissionReceiptDeliveries.find(
+      (entry) => entry.submissionId === submission.id,
+    )
+    expect(receipt).toMatchObject({
+      recipientName: 'Nia Rivera',
+      recipientEmail: 'nia@example.com',
+      status: 'pending_provider',
+      provider: null,
+      attemptCount: 0,
+    })
+    expect(receipt?.subject).toBe('We received your proposal for AIE NYC 2026')
+    expect(receipt?.body).toContain(`Reference: ${submission.id}`)
+    expect(submitted.response.data).toMatchObject({
+      receiptDelivery: { id: receipt?.id, status: 'pending_provider' },
+    })
+
+    const frozenBody = receipt?.body
+    submitted.state.submissions.find((entry) => entry.id === submission.id)!.answers.first_name =
+      'Changed'
+    expect(
+      submitted.state.submissionReceiptDeliveries.find((entry) => entry.id === receipt?.id)?.body,
+    ).toBe(frozenBody)
+  })
+
+  it('records trusted submission-receipt provider outcomes without duplicating retries', () => {
+    const state = createSeedState()
+    const delivery = state.submissionReceiptDeliveries[0]
+    const missingProviderId = executeOperation(state, 'submission.record-receipt-delivery', {
+      input: { deliveryId: delivery.id, status: 'delivered' },
+      expectedVersions: { [delivery.id]: delivery.version },
+    })
+    expect(missingProviderId.response.error?.code).toBe('INVALID_INPUT')
+
+    const request = {
+      input: {
+        deliveryId: delivery.id,
+        status: 'delivered',
+        providerMessageId: 'cf-email-receipt-001',
+      },
+      expectedVersions: { [delivery.id]: delivery.version },
+      idempotencyKey: 'receipt-delivered-once',
+    }
+    const delivered = executeOperation(state, 'submission.record-receipt-delivery', request)
+    const replayed = executeOperation(
+      delivered.state,
+      'submission.record-receipt-delivery',
+      request,
+    )
+    expect(delivered.response.ok).toBe(true)
+    expect(replayed.response).toEqual(delivered.response)
+    expect(replayed.state.submissionReceiptDeliveries).toHaveLength(1)
+    expect(replayed.state.submissionReceiptDeliveries[0]).toMatchObject({
+      status: 'delivered',
+      provider: 'cloudflare_email',
+      providerMessageId: 'cf-email-receipt-001',
+      attemptCount: 1,
+      version: 2,
+    })
   })
 
   it('scores reviews and atomically converts an accepted abstract into the program', () => {

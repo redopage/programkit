@@ -45,6 +45,10 @@ ProgramKit currently models asset references, but the reference host does not ye
 private upload pipeline. File restrictions, scanning, signed download, and lifecycle policy are a
 production milestone, not an implied capability.
 
+Submission also freezes one confirmation receipt in the same atomic mutation. The submitter sees
+the destination address, reference, and actual delivery state. The reference app leaves the
+receipt in `pending_provider`; it does not claim delivery before a trusted provider result exists.
+
 ## 3. Review consistently
 
 Evaluation plans define criteria, reviewer teams, blind-review policy, and assignment behavior.

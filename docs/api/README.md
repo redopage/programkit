@@ -98,6 +98,12 @@ it moves an approved campaign to `queued`, creates per-recipient `pending_provid
 not contact a provider. A trusted consumer records `delivered` or `failed` through
 `campaign.record-delivery`; only terminal recipient outcomes can move the campaign to `sent`.
 
+`submission.submit` commits the proposal, assignments, and one frozen confirmation-receipt row in
+the same workspace mutation. Its public response contains only that receipt's address, content,
+reference, and truthful delivery state. `pending_provider` means prepared in the outbox, not sent.
+A trusted consumer records `delivered` or `failed` through
+`submission.record-receipt-delivery`.
+
 ## Domain events and export
 
 | Method | Path                             | Purpose                                           |

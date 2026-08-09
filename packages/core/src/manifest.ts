@@ -70,7 +70,8 @@ export const operationManifest = [
   {
     name: 'submission.submit',
     title: 'Submit proposal',
-    description: 'Validate a draft, submit it, and assign its first evaluation round.',
+    description:
+      'Validate a draft, submit it, assign its first evaluation round, and prepare a durable confirmation receipt.',
     kind: 'command',
     scopes: ['submissions:submit'],
     risk: 'internal',
@@ -78,7 +79,21 @@ export const operationManifest = [
     reversible: true,
     supportsDryRun: true,
     requiredInput: ['submissionId'],
-    emits: ['submission.submitted'],
+    emits: ['submission.submitted', 'submission.receipt-queued'],
+  },
+  {
+    name: 'submission.record-receipt-delivery',
+    title: 'Record submission receipt delivery result',
+    description:
+      'Record a trusted email-provider result for a frozen submission confirmation receipt.',
+    kind: 'command',
+    scopes: ['communications:deliver'],
+    risk: 'administrative',
+    agentPolicy: 'denied',
+    reversible: false,
+    supportsDryRun: false,
+    requiredInput: ['deliveryId', 'status'],
+    emits: ['submission.receipt-delivered', 'submission.receipt-delivery-failed'],
   },
   {
     name: 'review.submit-scorecard',

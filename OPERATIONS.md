@@ -150,7 +150,8 @@ pointing a real domain or real data at it:
 
 - replace demo actor and workspace routing with verified staff and participant identity;
 - add OAuth and workspace-scoped authorization to `/mcp`;
-- connect the existing campaign outbox to retrying email and webhook delivery consumers;
+- connect the existing campaign and submission-receipt outboxes to retrying email and webhook
+  delivery consumers;
 - add private object storage, scanning, signed downloads, and lifecycle policies;
 - remove wildcard scopes and restrict administrative operations;
 - configure rate limits, alerts, structured logs, and incident procedures;
@@ -164,6 +165,13 @@ campaign only after every recipient is delivered or suppressed. Configure sender
 verification, the Cloudflare Email Service binding, retries, and the consumer before processing
 `pending_provider` rows. The Airtable row describes the planned mirror and must not be shown as
 connected until a real cursor and delivery state exist.
+
+`submission.submit` atomically freezes one confirmation receipt alongside the accepted proposal.
+The public response exposes only that submitter-owned receipt; organizer projections retain the
+delivery evidence, while participant, reviewer, and unrelated public projections omit it. A
+receipt in `pending_provider` is prepared, not delivered. A trusted consumer records `delivered`
+or `failed` through `submission.record-receipt-delivery` after the same sender-domain and provider
+requirements are met.
 
 ## Backup, restore, and departure
 
