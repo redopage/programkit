@@ -105,6 +105,9 @@ describe('ProgramKit web client', () => {
     expect(client.assetUrl({ kind: 'speaker', participationId: 'par_003' }, 'ast_123')).toBe(
       '/api/v1/portal/par_003/assets/ast_123/content',
     )
+    expect(client.eventCalendarUrl('evt_nyc_2026')).toBe(
+      '/public/v1/events/evt_nyc_2026/calendar.ics',
+    )
 
     await expect(
       client.uploadRequirementFile({ kind: 'operator' }, 'rqi_3_3', file),

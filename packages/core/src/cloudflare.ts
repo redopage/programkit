@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers'
 
 import { handleCoreRequest } from './http.ts'
+import { normalizeWorkspaceState } from './migrations.ts'
 import type { WorkspaceRepository } from './repository.ts'
 import { createSeedState } from './seed.ts'
 import type { Actor, WorkspaceState } from './types.ts'
@@ -67,7 +68,18 @@ class DurableObjectRepository implements WorkspaceRepository {
   async read() {
     return this.storage.transaction(async (transaction) => {
       const current = await this.#readFrom(transaction)
-      if (current) return current
+      if (current) {
+        const needsWrite =
+          current.schemaVersion < 5 ||
+          !Array.isArray(current.campaignDeliveries) ||
+          current.campaigns.some(
+            (campaign) =>
+              campaign.includeEventInvite === undefined || campaign.queuedAt === undefined,
+          )
+        normalizeWorkspaceState(current)
+        if (needsWrite) await this.#writeTo(transaction, current)
+        return current
+      }
       const seeded = createSeedState()
       await this.#writeTo(transaction, seeded)
       return seeded
@@ -76,7 +88,9 @@ class DurableObjectRepository implements WorkspaceRepository {
 
   async mutate<T>(mutation: (state: WorkspaceState) => { state: WorkspaceState; result: T }) {
     return this.storage.transaction(async (transaction) => {
-      const current = (await this.#readFrom(transaction)) ?? createSeedState()
+      const current = normalizeWorkspaceState(
+        (await this.#readFrom(transaction)) ?? createSeedState(),
+      )
       const next = mutation(current)
       if (next.state !== current) await this.#writeTo(transaction, next.state)
       return next.result

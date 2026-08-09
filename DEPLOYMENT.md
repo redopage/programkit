@@ -19,27 +19,28 @@ Cloudflare Worker ── Workers Static Assets (Vite web build)
   │
   ├── workspace Durable Object ── SQLite-backed atomic event state
   ├── R2                      ── private participant uploads
-  ├── Queue / object alarm    ── email, webhooks, and mirrors (next)
-  └── Email Service           ── confirmations and reminders (next)
+  ├── Durable Object outbox   ── recipient jobs + calendar attachment metadata
+  └── Queue / alarm + Email   ── provider delivery after sender verification (release enablement)
 ```
 
 The runnable application currently includes the Worker, static assets, one SQLite-backed Durable
 Object per workspace key, and a private R2 binding for participant requirement uploads. Local
 development emulates that bucket. A remote deployment must provision the checked-in
 `programkit-assets` bucket first; it still needs no D1 database, queue, or email binding to run the
-deterministic demo.
+deterministic demo. The demo records honest `pending_provider` campaign jobs and serves real event
+calendar files without making an outbound provider call.
 
 The production additions are intentionally Cloudflare-native:
 
-| Concern                   | Default                                              | Why                                                                                    |
-| ------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Web and API               | Worker + Static Assets                               | One origin, one deploy, no client-side API configuration                               |
-| Operational state         | SQLite-backed Durable Object                         | Atomic conference workflows and strongly consistent workspace reads                    |
-| Files                     | R2                                                   | Direct uploads, private objects, lifecycle policies, and no file bytes in domain state |
-| Background delivery       | Transactional outbox + Queue or Durable Object alarm | Retryable work that does not hold open a user request                                  |
-| Email                     | Cloudflare Email Service binding                     | Native Worker delivery; Resend may remain an optional provider                         |
-| Team tables               | Airtable mirror                                      | Familiar collaboration without putting Airtable on the request path                    |
-| Cross-workspace analytics | D1 projection, only when needed                      | SQL reporting across many workspace objects                                            |
+| Concern                   | Default                                       | Why                                                                                    |
+| ------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Web and API               | Worker + Static Assets                        | One origin, one deploy, no client-side API configuration                               |
+| Operational state         | SQLite-backed Durable Object                  | Atomic conference workflows and strongly consistent workspace reads                    |
+| Files                     | R2                                            | Direct uploads, private objects, lifecycle policies, and no file bytes in domain state |
+| Background delivery       | Durable Object outbox + Queue or object alarm | Durable recipient intent now; retrying provider work after commit                      |
+| Email                     | Cloudflare Email Service binding              | Native Worker delivery; Resend may remain an optional provider                         |
+| Team tables               | Airtable mirror                               | Familiar collaboration without putting Airtable on the request path                    |
+| Cross-workspace analytics | D1 projection, only when needed               | SQL reporting across many workspace objects                                            |
 
 ## Why Durable Objects are the default database
 
@@ -146,7 +147,13 @@ After deploying, verify:
 curl https://YOUR_HOST/api/v1/health
 curl https://YOUR_HOST/api/v1/events
 curl https://YOUR_HOST/public/agenda.json
+curl -OJ https://YOUR_HOST/public/v1/events/evt_nyc_2026/calendar.ics
 ```
+
+Outbound email is a separate release-enablement step. Onboard the sender domain, complete its DNS
+verification, configure the Email Service binding and retry consumer, then process only durable
+`pending_provider` rows. Until those checks pass, the product intentionally reports campaigns as
+in the outbox rather than sent.
 
 Then open the operator app, public CFP, reviewer workspace, speaker portal, and public program. In
 the speaker portal, verify an allowed file can be uploaded and downloaded only through the owning

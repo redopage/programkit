@@ -409,6 +409,10 @@ export function audienceForCampaign(state: WorkspaceState, campaign: Campaign) {
   )
 
   if (campaign.audience === 'all_active') return active.map((participation) => participation.id)
+  if (campaign.audience === 'confirmed')
+    return active
+      .filter((participation) => participation.status === 'confirmed')
+      .map((participation) => participation.id)
   if (campaign.audience === 'unconfirmed')
     return active
       .filter((participation) => participation.status === 'invited')
@@ -418,6 +422,43 @@ export function audienceForCampaign(state: WorkspaceState, campaign: Campaign) {
       .filter((row) => row.blockers > 0 && row.status !== 'prospect')
       .map((row) => row.participationId)
   return campaign.recipientParticipationIds
+}
+
+export function renderCampaignMessage(
+  state: WorkspaceState,
+  campaign: Campaign,
+  participationId: string,
+) {
+  const participation = state.participations.find((entry) => entry.id === participationId)
+  const person = participation
+    ? state.people.find((entry) => entry.id === participation.personId)
+    : undefined
+  const event = state.events.find((entry) => entry.id === campaign.eventId)
+  if (!participation || !person || !event) return null
+
+  const eventDate = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: event.timezone,
+  }).format(new Date(event.startsAt))
+  const values: Record<string, string> = {
+    first_name: person.firstName,
+    last_name: person.lastName,
+    event_name: event.name,
+    event_date: eventDate,
+    event_venue: [event.venue, event.city].filter(Boolean).join(', '),
+    portal_url: `/portal/${participation.id}`,
+  }
+  const render = (template: string) =>
+    template.replace(/\{\{([a-z_]+)\}\}/gu, (token, key: string) => values[key] ?? token)
+
+  return {
+    participation,
+    person,
+    subject: render(campaign.subject),
+    body: render(campaign.body),
+  }
 }
 
 export function publicAgenda(state: WorkspaceState) {

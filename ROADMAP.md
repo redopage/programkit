@@ -77,12 +77,15 @@ membership. See [Security](SECURITY.md).
 
 ### 4. Complete two communication automations
 
-- Submission confirmation.
-- Accepted-speaker reminder with calendar preview.
+- Done: accepted-speaker template, confirmed-speaker audience, field rendering, recipient preview,
+  suppression safeguards, durable recipient jobs, provider-result recording, and RFC 5545 calendar
+  attachment/download.
+- Next: route the submission confirmation through the same outbox, add operator-triggered test
+  delivery, and connect the retrying Cloudflare Email Service consumer after sender-domain
+  verification.
 
-Both must have recipient preview, suppression handling, test delivery, durable job state, provider
-result, and message history before broader automation work. Cloudflare Email Service is the default
-provider; provider calls run after a transactional outbox commit.
+Provider calls must run only after the outbox commit. Domain events already preserve queue and
+provider-result history; a richer per-message attempt timeline remains production depth.
 
 ### 5. Finish the scheduling studio
 

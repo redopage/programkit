@@ -1,4 +1,5 @@
 import { executeOperation } from './engine.ts'
+import { eventCalendar, eventCalendarFilename } from './calendar.ts'
 import { operationManifest } from './manifest.ts'
 import { publicAgenda, readinessSummary, scheduleConflicts } from './selectors.ts'
 import { defaultActor } from './utils.ts'
@@ -96,6 +97,7 @@ function participantState(state: WorkspaceState, participationId: string) {
   clone.placements = []
   clone.scheduleReleases = []
   clone.campaigns = []
+  clone.campaignDeliveries = []
   clone.changeSets = []
   clone.integrations = []
   clone.domainEvents = []
@@ -126,6 +128,7 @@ function projectionBase(state: WorkspaceState) {
   clone.placements = []
   clone.scheduleReleases = []
   clone.campaigns = []
+  clone.campaignDeliveries = []
   clone.changeSets = []
   clone.integrations = []
   clone.domainEvents = []
@@ -464,6 +467,24 @@ export async function handleCoreRequest(
     const state = await repository.read()
     return json(projectionPayload(publicProgramState(state)), {
       headers: { 'cache-control': 'public, max-age=60' },
+    })
+  }
+
+  const publicEventCalendarMatch = path.match(/^\/public\/v1\/events\/([^/]+)\/calendar\.ics$/u)
+  if (request.method === 'GET' && publicEventCalendarMatch) {
+    const eventId = decodeURIComponent(publicEventCalendarMatch[1])
+    const state = await repository.read()
+    const event = state.events.find(
+      (entry) => entry.id === eventId && entry.id === state.activeEventId,
+    )
+    if (!event) return json({ error: 'Event not found.' }, { status: 404 })
+    return new Response(eventCalendar(state.workspace, event), {
+      headers: {
+        'cache-control': 'public, max-age=60',
+        'content-disposition': `attachment; filename="${eventCalendarFilename(event)}"`,
+        'content-type': 'text/calendar; charset=utf-8',
+        'x-content-type-options': 'nosniff',
+      },
     })
   }
 

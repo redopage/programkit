@@ -1,10 +1,13 @@
 import { operationDefinition } from './manifest.ts'
+import { eventCalendarFilename } from './calendar.ts'
+import { normalizeWorkspaceState } from './migrations.ts'
 import {
   requiredSubmissionFieldPurposes,
   submissionFieldPurposeSupportsKind,
 } from './submission-forms.ts'
 import {
   audienceForCampaign,
+  renderCampaignMessage,
   scheduleConflicts,
   submissionAnswerByPurpose,
   submissionReviewSummary,
@@ -15,6 +18,7 @@ import type {
   Actor,
   Asset,
   Campaign,
+  CampaignDelivery,
   ChangeOperation,
   ChangeSet,
   DomainEvent,
@@ -54,21 +58,6 @@ interface ApplyContext {
   actor: Actor
   operation: string
   emittedEventIds: string[]
-}
-
-function initializeProgramCollections(state: WorkspaceState) {
-  for (const event of state.events) event.version ??= 1
-  state.submissionForms ??= []
-  state.submissionFormFields ??= []
-  state.submissions ??= []
-  state.assets ??= []
-  state.reviewers ??= []
-  state.reviewerTeams ??= []
-  state.evaluationPlans ??= []
-  state.reviewerAssignments ??= []
-  state.scorecards ??= []
-  state.reviewDecisions ??= []
-  state.schemaVersion = Math.max(state.schemaVersion, 4)
 }
 
 function assertRecord(value: unknown, field: string) {
@@ -453,6 +442,7 @@ function allVersionedRecords(state: WorkspaceState) {
     ...state.sessions,
     ...state.placements,
     ...state.campaigns,
+    ...(state.campaignDeliveries ?? []),
     ...state.changeSets,
   ]
 }
@@ -1657,6 +1647,7 @@ function applyHandler(
     case 'campaign.create-draft': {
       const audience = assertOneOf(input.audience, 'audience', [
         'all_active',
+        'confirmed',
         'unconfirmed',
         'missing_requirements',
         'custom',
@@ -1681,9 +1672,11 @@ function applyHandler(
           audience === 'custom'
             ? assertStringArray(input.recipientParticipationIds ?? [], 'recipientParticipationIds')
             : [],
+        includeEventInvite: input.includeEventInvite === true,
         status: 'draft',
         createdAt: timestamp,
         approvedAt: null,
+        queuedAt: null,
         sentAt: null,
         createdBy: context.actor.name,
         version: 1,
@@ -1738,19 +1731,134 @@ function applyHandler(
       if (campaign.status !== 'approved') {
         throw new OperationError('INVALID_TRANSITION', 'Only an approved campaign can be sent.')
       }
-      campaign.status = 'sent'
-      campaign.sentAt = timestamp
+      if (campaign.recipientParticipationIds.length === 0) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'The approved campaign has no recipients to place in the delivery outbox.',
+        )
+      }
+      const event = findRequired(state.events, campaign.eventId, 'event')
+      const attachmentNames = campaign.includeEventInvite ? [eventCalendarFilename(event)] : []
+      const deliveries: CampaignDelivery[] = []
+      for (const participationId of new Set(campaign.recipientParticipationIds)) {
+        const participation = findRequired(state.participations, participationId, 'participation')
+        const person = findRequired(state.people, participation.personId, 'person')
+        const rendered = renderCampaignMessage(state, campaign, participationId)
+        if (!rendered) {
+          throw new OperationError(
+            'INVALID_INPUT',
+            'A campaign recipient could not be rendered from the approved event and profile.',
+          )
+        }
+        const email = person.email.trim().toLocaleLowerCase()
+        const suppressed =
+          participation.status === 'declined' ||
+          participation.status === 'withdrawn' ||
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)
+        deliveries.push({
+          id: createId('dlv'),
+          campaignId: campaign.id,
+          eventId: campaign.eventId,
+          participationId,
+          personId: person.id,
+          recipientName: `${person.firstName} ${person.lastName}`.trim(),
+          recipientEmail: email,
+          subject: rendered.subject,
+          body: rendered.body,
+          status: suppressed ? 'suppressed' : 'pending_provider',
+          provider: null,
+          providerMessageId: null,
+          attachmentNames: [...attachmentNames],
+          attemptCount: 0,
+          lastError: suppressed ? 'Recipient is unavailable or has no deliverable email.' : null,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          version: 1,
+        })
+      }
+      if (deliveries.every((delivery) => delivery.status === 'suppressed')) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'Every approved recipient is unavailable or has an undeliverable email.',
+        )
+      }
+      state.campaignDeliveries.push(...deliveries)
+      campaign.status = 'queued'
+      campaign.queuedAt = timestamp
+      campaign.sentAt = null
       campaign.version += 1
       appendEvent(state, context, {
-        type: 'campaign.sent',
+        type: 'campaign.queued',
         aggregate: { type: 'campaign', id: campaign.id, version: campaign.version },
-        summary: `Queued ${campaign.name} for ${campaign.recipientParticipationIds.length} recipients.`,
+        summary: `Added ${campaign.name} to the delivery outbox for ${deliveries.length} recipients.`,
         data: {
-          recipientCount: campaign.recipientParticipationIds.length,
-          deliveryMode: 'demo-outbox',
+          recipientCount: deliveries.length,
+          pendingProvider: deliveries.filter((entry) => entry.status === 'pending_provider').length,
+          suppressed: deliveries.filter((entry) => entry.status === 'suppressed').length,
+          includesEventInvite: campaign.includeEventInvite,
+          deliveryIds: deliveries.map((entry) => entry.id),
         },
       })
-      return { campaign }
+      return { campaign, deliveries }
+    }
+
+    case 'campaign.record-delivery': {
+      const delivery = findRequired(state.campaignDeliveries, input.deliveryId, 'campaign delivery')
+      if (delivery.status === 'delivered' || delivery.status === 'suppressed') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'That delivery already reached a terminal state.',
+        )
+      }
+      const status = assertOneOf(input.status, 'status', ['delivered', 'failed'] as const)
+      const providerMessageId = optionalString(input.providerMessageId)
+      const lastError = optionalString(input.lastError)
+      if (status === 'delivered' && !providerMessageId) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'A delivered message requires its provider message ID.',
+        )
+      }
+      if (status === 'failed' && !lastError) {
+        throw new OperationError('INVALID_INPUT', 'A failed message requires an error summary.')
+      }
+      delivery.status = status
+      delivery.provider = 'cloudflare_email'
+      delivery.providerMessageId = providerMessageId || null
+      delivery.lastError = lastError || null
+      delivery.attemptCount += 1
+      delivery.updatedAt = timestamp
+      delivery.version += 1
+
+      const campaign = findRequired(state.campaigns, delivery.campaignId, 'campaign')
+      const campaignDeliveries = state.campaignDeliveries.filter(
+        (entry) => entry.campaignId === campaign.id,
+      )
+      if (
+        campaignDeliveries.length > 0 &&
+        campaignDeliveries.every(
+          (entry) => entry.status === 'delivered' || entry.status === 'suppressed',
+        )
+      ) {
+        campaign.status = 'sent'
+        campaign.sentAt = timestamp
+        campaign.version += 1
+      }
+      appendEvent(state, context, {
+        type: status === 'delivered' ? 'campaign.delivery-succeeded' : 'campaign.delivery-failed',
+        aggregate: { type: 'campaign-delivery', id: delivery.id, version: delivery.version },
+        summary:
+          status === 'delivered'
+            ? `Delivered ${campaign.name} to ${delivery.recipientName}.`
+            : `Delivery of ${campaign.name} to ${delivery.recipientName} failed.`,
+        data: {
+          campaignId: campaign.id,
+          deliveryStatus: status,
+          attemptCount: delivery.attemptCount,
+          campaignStatus: campaign.status,
+        },
+      })
+      return { campaign, delivery }
     }
 
     case 'change-set.create': {
@@ -1927,7 +2035,6 @@ export function executeOperation(
   try {
     assertScopes(actor, definition.scopes)
     assertRequiredInput(definition, request.input)
-    assertExpectedVersions(currentState, request.expectedVersions)
 
     if (actor.type === 'agent') {
       if (definition.agentPolicy === 'denied') {
@@ -1966,6 +2073,8 @@ export function executeOperation(
       }
     }
 
+    assertExpectedVersions(currentState, request.expectedVersions)
+
     if (operation === 'workspace.reset-demo') {
       const reset = createSeedState()
       reset.revision = currentState.revision + 1
@@ -1982,7 +2091,7 @@ export function executeOperation(
     }
 
     const working = cloneState(currentState)
-    initializeProgramCollections(working)
+    normalizeWorkspaceState(working)
     const warnings: Array<{ code: string; message: string }> = []
     let data: unknown
     let approvalRequired = false

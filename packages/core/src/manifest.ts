@@ -258,8 +258,9 @@ export const operationManifest = [
   },
   {
     name: 'campaign.send',
-    title: 'Send campaign',
-    description: 'Record and enqueue an approved campaign for delivery.',
+    title: 'Queue campaign delivery',
+    description:
+      'Create a durable per-recipient outbox for an approved campaign without claiming provider delivery.',
     kind: 'command',
     scopes: ['communications:send'],
     risk: 'external',
@@ -267,7 +268,21 @@ export const operationManifest = [
     reversible: false,
     supportsDryRun: true,
     requiredInput: ['campaignId'],
-    emits: ['campaign.sent'],
+    emits: ['campaign.queued'],
+  },
+  {
+    name: 'campaign.record-delivery',
+    title: 'Record campaign delivery result',
+    description:
+      'Record a trusted email-provider delivery result and close the campaign when every recipient is terminal.',
+    kind: 'command',
+    scopes: ['communications:deliver'],
+    risk: 'administrative',
+    agentPolicy: 'denied',
+    reversible: false,
+    supportsDryRun: false,
+    requiredInput: ['deliveryId', 'status'],
+    emits: ['campaign.delivery-succeeded', 'campaign.delivery-failed'],
   },
   {
     name: 'change-set.create',

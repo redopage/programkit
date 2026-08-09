@@ -42,6 +42,7 @@ export interface ProgramKitClient {
     file: File,
   ): Promise<OperationResponse>
   assetUrl(surface: ProgramKitSurface, assetId: string): string
+  eventCalendarUrl(eventId: string): string
 }
 
 export interface ProgramKitHttpClientOptions {

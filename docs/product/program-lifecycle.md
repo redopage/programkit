@@ -75,7 +75,18 @@ ownership checks. Release approval remains deliberately unavailable until the ev
 an actual document and response contract. The next production-depth milestone is a shared
 cross-surface task renderer plus revision conversations, upload scanning, and lifecycle cleanup.
 
-## 6. Build and publish the schedule
+## 6. Communicate with accepted speakers
+
+Organizers can start from an accepted-speaker template, target confirmed speakers, preview rendered
+recipient fields, and attach the event's RFC 5545 invite for Google Calendar, Outlook, or Apple
+Calendar. Approval freezes the submitted recipient set. Queueing creates one durable delivery row
+per recipient, suppresses unavailable or undeliverable contacts, and keeps the campaign visibly in
+the outbox until trusted provider results are recorded.
+
+The reference app does not contact an email provider. Sender-domain verification, the Cloudflare
+Email Service binding, and a retrying consumer are explicit release-enablement work.
+
+## 7. Build and publish the schedule
 
 Sessions are content; placements are mutable draft room/time assignments. Conflict checks run
 against the draft. Publishing creates an immutable, versioned `ScheduleRelease` snapshot.

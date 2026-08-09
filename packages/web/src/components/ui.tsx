@@ -134,6 +134,7 @@ const statusLabels: Record<string, string> = {
   waived: 'Waived',
   draft: 'Draft',
   awaiting_approval: 'Awaiting approval',
+  queued: 'In outbox',
   sent: 'Sent',
   rejected: 'Rejected',
   accepted: 'Accepted',
@@ -178,6 +179,7 @@ export function StatusBadge({
           'bg-zinc-100 text-zinc-500 ring-1 ring-zinc-950/5',
         status === 'waived' && 'bg-sky-50 text-sky-700 ring-1 ring-sky-700/10',
         status === 'sent' && 'bg-violet-50 text-violet-700 ring-1 ring-violet-700/10',
+        status === 'queued' && 'bg-sky-50 text-sky-700 ring-1 ring-sky-700/10',
       )}
     >
       {label ?? statusLabels[status] ?? status}

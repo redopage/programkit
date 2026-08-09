@@ -9,6 +9,21 @@ import {
 } from '@programkit/core'
 
 describe('operation HTTP surface', () => {
+  it('normalizes a persisted pre-outbox workspace before serving it', async () => {
+    const legacy = createSeedState()
+    legacy.schemaVersion = 4
+    delete (legacy as Partial<WorkspaceState>).campaignDeliveries
+    for (const campaign of legacy.campaigns) {
+      delete (campaign as Partial<typeof campaign>).includeEventInvite
+      delete (campaign as Partial<typeof campaign>).queuedAt
+    }
+    const state = await new MemoryWorkspaceRepository(legacy).read()
+    expect(state.schemaVersion).toBe(5)
+    expect(state.campaignDeliveries).toEqual([])
+    expect(state.campaigns.every((campaign) => campaign.includeEventInvite === false)).toBe(true)
+    expect(state.campaigns.every((campaign) => campaign.queuedAt === null)).toBe(true)
+  })
+
   it('serves state, manifest, public agenda, and a portable export', async () => {
     const repository = new MemoryWorkspaceRepository()
     const stateResponse = await handleCoreRequest(
@@ -32,6 +47,17 @@ describe('operation HTTP surface', () => {
     )
     const agendaBody = (await agendaResponse?.json()) as { agenda: unknown[] }
     expect(agendaBody.agenda).toHaveLength(10)
+
+    const calendarResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/events/evt_nyc_2026/calendar.ics'),
+      repository,
+    )
+    expect(calendarResponse?.status).toBe(200)
+    expect(calendarResponse?.headers.get('content-type')).toBe('text/calendar; charset=utf-8')
+    expect(calendarResponse?.headers.get('content-disposition')).toContain(
+      'aie-nyc-2026-invite.ics',
+    )
+    expect(await calendarResponse?.text()).toContain('BEGIN:VEVENT\r\n')
 
     const exportResponse = await handleCoreRequest(
       new Request('http://local/api/v1/export'),
@@ -144,6 +170,7 @@ describe('operation HTTP surface', () => {
     expect(body.state.participations).toHaveLength(1)
     expect(body.state.participations[0].internalNotes).toBe('')
     expect(body.state.campaigns).toHaveLength(0)
+    expect(body.state.campaignDeliveries).toHaveLength(0)
     expect(body.state.integrations).toHaveLength(0)
     expect(body.state.changeSets).toHaveLength(0)
     expect(body.state.domainEvents).toHaveLength(0)
@@ -183,6 +210,7 @@ describe('operation HTTP surface', () => {
     expect(programBody.state.placements).toHaveLength(0)
     expect(programBody.state.submissions).toHaveLength(0)
     expect(programBody.state.campaigns).toHaveLength(0)
+    expect(programBody.state.campaignDeliveries).toHaveLength(0)
     expect(programBody.state.people.every((entry) => entry.email === '')).toBe(true)
     expect(programBody.state.participations.every((entry) => entry.internalNotes === '')).toBe(true)
 
@@ -208,6 +236,7 @@ describe('operation HTTP surface', () => {
     expect(reviewerBody.state.participations).toHaveLength(0)
     expect(reviewerBody.state.reviewDecisions).toHaveLength(0)
     expect(reviewerBody.state.campaigns).toHaveLength(0)
+    expect(reviewerBody.state.campaignDeliveries).toHaveLength(0)
     expect(reviewerBody.state.domainEvents).toHaveLength(0)
   })
 

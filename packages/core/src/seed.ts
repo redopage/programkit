@@ -1,6 +1,7 @@
 import type {
   Asset,
   Campaign,
+  CampaignDelivery,
   EvaluationPlan,
   Integration,
   Participation,
@@ -1114,9 +1115,11 @@ const campaigns: Campaign[] = [
     recipientParticipationIds: participations
       .filter((participation) => participation.status === 'invited')
       .map((participation) => participation.id),
+    includeEventInvite: true,
     status: 'awaiting_approval',
     createdAt: seededAt,
     approvedAt: null,
+    queuedAt: null,
     sentAt: null,
     createdBy: 'Alex Morgan',
     version: 1,
@@ -1126,17 +1129,57 @@ const campaigns: Campaign[] = [
     eventId,
     name: 'Welcome confirmed speakers',
     subject: 'Your AIE NYC speaker workspace is ready',
-    body: 'Hi {{first_name}},\n\nYour speaker workspace is ready. Start with your profile and recording release.',
+    body: 'Hi {{first_name}},\n\nWe’re delighted to confirm you as a speaker at {{event_name}}. Your speaker workspace is ready for your bio, headshot, and session materials.\n\nThe event is {{event_date}} at {{event_venue}}. We’ve included a calendar invite.\n\nOpen your workspace: {{portal_url}}\n\nThank you,\nThe program team',
     audience: 'custom',
-    recipientParticipationIds: participations.slice(0, 6).map((participation) => participation.id),
-    status: 'sent',
+    recipientParticipationIds: participations
+      .filter((participation) => participation.status === 'confirmed')
+      .slice(0, 6)
+      .map((participation) => participation.id),
+    includeEventInvite: true,
+    status: 'queued',
     createdAt: '2026-07-21T15:00:00.000Z',
     approvedAt: '2026-07-21T15:30:00.000Z',
-    sentAt: '2026-07-21T16:00:00.000Z',
+    queuedAt: '2026-07-21T16:00:00.000Z',
+    sentAt: null,
     createdBy: 'Alex Morgan',
     version: 3,
   },
 ]
+
+const campaignDeliveries: CampaignDelivery[] = campaigns[1].recipientParticipationIds.flatMap(
+  (participationId, index) => {
+    const participation = participations.find((entry) => entry.id === participationId)
+    const person = people.find((entry) => entry.id === participation?.personId)
+    if (!participation || !person) return []
+    return [
+      {
+        id: `dlv_welcome_${String(index + 1).padStart(2, '0')}`,
+        campaignId: campaigns[1].id,
+        eventId,
+        participationId,
+        personId: person.id,
+        recipientName: `${person.firstName} ${person.lastName}`,
+        recipientEmail: person.email,
+        subject: campaigns[1].subject,
+        body: campaigns[1].body
+          .replaceAll('{{first_name}}', person.firstName)
+          .replaceAll('{{event_name}}', 'AIE NYC 2026')
+          .replaceAll('{{event_date}}', 'October 4, 2026')
+          .replaceAll('{{event_venue}}', 'Brooklyn Navy Yard, Brooklyn, New York')
+          .replaceAll('{{portal_url}}', `/portal/${participationId}`),
+        status: 'pending_provider' as const,
+        provider: null,
+        providerMessageId: null,
+        attachmentNames: ['aie-nyc-2026-invite.ics'],
+        attemptCount: 0,
+        lastError: null,
+        createdAt: '2026-07-21T16:00:00.000Z',
+        updatedAt: '2026-07-21T16:00:00.000Z',
+        version: 1,
+      },
+    ]
+  },
+)
 
 const integrations: Integration[] = [
   {
@@ -1144,7 +1187,8 @@ const integrations: Integration[] = [
     name: 'Transactional email',
     kind: 'email',
     status: 'not_configured',
-    detail: 'Demo campaign state only. Add Cloudflare Email Service before real delivery.',
+    detail:
+      'The durable outbox is ready. Cloudflare Email Service awaits sender-domain verification.',
     lastSeenAt: null,
   },
   {
@@ -1159,16 +1203,17 @@ const integrations: Integration[] = [
     id: 'int_calendar',
     name: 'Calendar sync',
     kind: 'calendar',
-    status: 'not_configured',
-    detail: 'Calendar export and availability sync are not configured.',
-    lastSeenAt: null,
+    status: 'connected',
+    detail: 'RFC 5545 event invites are available for campaign attachments and direct download.',
+    lastSeenAt: seededAt,
   },
   {
     id: 'int_storage',
     name: 'Asset storage',
     kind: 'storage',
-    status: 'not_configured',
-    detail: 'Using demo file metadata. Connect object storage before production.',
+    status: 'attention',
+    detail:
+      'Private R2 upload and download are wired; create the production bucket before release.',
     lastSeenAt: null,
   },
   {
@@ -1191,7 +1236,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     revision: 1,
     workspace: {
       id: 'wrk_aie',
@@ -1235,6 +1280,7 @@ export function createSeedState(): WorkspaceState {
     placements: structuredClone(placements),
     scheduleReleases: [structuredClone(initialScheduleRelease)],
     campaigns: structuredClone(campaigns),
+    campaignDeliveries: structuredClone(campaignDeliveries),
     changeSets: [
       {
         id: 'chg_agent_001',

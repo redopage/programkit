@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createSeedState,
+  eventCalendar,
   executeOperation,
   nextActions,
   publicAgenda,
@@ -11,6 +12,7 @@ import {
   submissionPipelineSummary,
   submissionFormPublishReadiness,
   submissionReviewSummary,
+  renderCampaignMessage,
   visibleSubmissionFormFields,
 } from '@programkit/core'
 
@@ -21,6 +23,7 @@ describe('ProgramKit operation engine', () => {
     expect(state.participations).toHaveLength(16)
     expect(state.sessions).toHaveLength(10)
     expect(state.scheduleReleases).toHaveLength(1)
+    expect(state.campaignDeliveries).toHaveLength(6)
     expect(state.events[0].publishedScheduleVersion).toBe(3)
     expect(state.events[0].version).toBe(1)
     expect(publicAgenda(state)).toHaveLength(10)
@@ -441,12 +444,134 @@ describe('ProgramKit operation engine', () => {
     })
     state = approved.state
     const current = state.campaigns.find((campaign) => campaign.id === pending.id)!
-    const sent = executeOperation(state, 'campaign.send', {
+    const sendRequest = {
       input: { campaignId: current.id },
       expectedVersions: { [current.id]: current.version },
+      idempotencyKey: 'queue-campaign-once',
+    }
+    const queued = executeOperation(state, 'campaign.send', sendRequest)
+    expect(queued.response.ok).toBe(true)
+    expect(queued.state.campaigns.find((campaign) => campaign.id === pending.id)?.status).toBe(
+      'queued',
+    )
+    const deliveries = queued.state.campaignDeliveries.filter(
+      (delivery) => delivery.campaignId === pending.id,
+    )
+    expect(deliveries).toHaveLength(pending.recipientParticipationIds.length)
+    expect(deliveries.every((delivery) => delivery.status === 'pending_provider')).toBe(true)
+    expect(deliveries.every((delivery) => delivery.attachmentNames.length === 1)).toBe(true)
+    expect(deliveries.every((delivery) => !delivery.body.includes('{{'))).toBe(true)
+    expect(deliveries.every((delivery) => !delivery.subject.includes('{{'))).toBe(true)
+
+    const firstDelivery = deliveries[0]
+    const renamed = executeOperation(queued.state, 'person.update', {
+      input: { personId: firstDelivery.personId, firstName: 'Changed after approval' },
     })
-    expect(sent.response.ok).toBe(true)
-    expect(sent.state.campaigns.find((campaign) => campaign.id === pending.id)?.status).toBe('sent')
+    expect(
+      renamed.state.campaignDeliveries.find((delivery) => delivery.id === firstDelivery.id)?.body,
+    ).toBe(firstDelivery.body)
+
+    const replayed = executeOperation(queued.state, 'campaign.send', sendRequest)
+    expect(replayed.response).toEqual(queued.response)
+    expect(
+      replayed.state.campaignDeliveries.filter((delivery) => delivery.campaignId === pending.id),
+    ).toHaveLength(deliveries.length)
+  })
+
+  it('suppresses an unavailable recipient and refuses an entirely undeliverable audience', () => {
+    let state = createSeedState()
+    const pending = state.campaigns.find((campaign) => campaign.status === 'awaiting_approval')!
+    const firstParticipation = state.participations.find(
+      (participation) => participation.id === pending.recipientParticipationIds[0],
+    )!
+    const firstPerson = state.people.find((person) => person.id === firstParticipation.personId)!
+    firstPerson.email = 'not-an-email'
+    state = executeOperation(state, 'campaign.approve', {
+      input: { campaignId: pending.id },
+    }).state
+    const approved = state.campaigns.find((campaign) => campaign.id === pending.id)!
+    const partlySuppressed = executeOperation(state, 'campaign.send', {
+      input: { campaignId: approved.id },
+    })
+    expect(partlySuppressed.response.ok).toBe(true)
+    expect(
+      partlySuppressed.state.campaignDeliveries.filter(
+        (delivery) => delivery.campaignId === pending.id && delivery.status === 'suppressed',
+      ),
+    ).toHaveLength(1)
+
+    const undeliverable = createSeedState()
+    const undeliverableCampaign = undeliverable.campaigns.find(
+      (campaign) => campaign.status === 'awaiting_approval',
+    )!
+    for (const participationId of undeliverableCampaign.recipientParticipationIds) {
+      const participation = undeliverable.participations.find(
+        (entry) => entry.id === participationId,
+      )!
+      undeliverable.people.find((person) => person.id === participation.personId)!.email = ''
+    }
+    const approvedUndeliverable = executeOperation(undeliverable, 'campaign.approve', {
+      input: { campaignId: undeliverableCampaign.id },
+    }).state
+    const failed = executeOperation(approvedUndeliverable, 'campaign.send', {
+      input: { campaignId: undeliverableCampaign.id },
+    })
+    expect(failed.response.error?.code).toBe('INVALID_INPUT')
+    expect(failed.state).toBe(approvedUndeliverable)
+  })
+
+  it('renders campaign fields and creates a portable RFC 5545 event invite', () => {
+    const state = createSeedState()
+    const campaign = state.campaigns.find((entry) => entry.id === 'cam_002')!
+    const message = renderCampaignMessage(state, campaign, campaign.recipientParticipationIds[0])!
+    expect(message.subject).not.toContain('{{')
+    expect(message.body).toContain(message.person.firstName)
+    expect(message.body).toContain('October 4, 2026')
+    expect(message.body).toContain(`/portal/${message.participation.id}`)
+
+    const event = { ...state.events[0], name: 'A very long, useful event; with ünicode' }
+    const calendar = eventCalendar(state.workspace, event, '2026-08-09T02:00:00.000Z')
+    expect(calendar).toContain('BEGIN:VCALENDAR\r\n')
+    expect(calendar).toContain('DTSTART:20261004T130000Z\r\n')
+    expect(calendar).toContain('SUMMARY:A very long\\, useful event\\; with ünicode\r\n')
+    expect(calendar).toContain('LOCATION:Brooklyn Navy Yard\\, Brooklyn\\, New York\r\n')
+    expect(calendar.endsWith('END:VCALENDAR\r\n')).toBe(true)
+    expect(
+      calendar
+        .split('\r\n')
+        .filter(Boolean)
+        .every((line) => new TextEncoder().encode(line).byteLength <= 75),
+    ).toBe(true)
+  })
+
+  it('records trusted provider outcomes without closing a campaign early', () => {
+    let state = createSeedState()
+    const pending = state.campaigns.find((campaign) => campaign.status === 'awaiting_approval')!
+    state = executeOperation(state, 'campaign.approve', {
+      input: { campaignId: pending.id },
+    }).state
+    const approved = state.campaigns.find((campaign) => campaign.id === pending.id)!
+    state = executeOperation(state, 'campaign.send', {
+      input: { campaignId: approved.id },
+    }).state
+    const deliveries = state.campaignDeliveries.filter(
+      (delivery) => delivery.campaignId === pending.id,
+    )
+
+    for (const [index, delivery] of deliveries.entries()) {
+      const result = executeOperation(state, 'campaign.record-delivery', {
+        input: {
+          deliveryId: delivery.id,
+          status: 'delivered',
+          providerMessageId: `cloudflare-message-${index + 1}`,
+        },
+      })
+      expect(result.response.ok).toBe(true)
+      state = result.state
+      expect(state.campaigns.find((campaign) => campaign.id === pending.id)?.status).toBe(
+        index === deliveries.length - 1 ? 'sent' : 'queued',
+      )
+    }
   })
 
   it('evaluates conditional CFP fields from canonical answers', () => {

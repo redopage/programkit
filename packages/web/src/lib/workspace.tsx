@@ -41,6 +41,7 @@ interface WorkspaceContextValue {
     successMessage?: string,
   ) => Promise<OperationResponse>
   assetUrl: (assetId: string) => string
+  eventCalendarUrl: (eventId: string) => string
   dismissToast: () => void
 }
 
@@ -171,6 +172,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     (assetId: string) => client.assetUrl(surface, assetId),
     [client, surface],
   )
+  const eventCalendarUrl = useCallback(
+    (eventId: string) => client.eventCalendarUrl(eventId),
+    [client],
+  )
 
   const error = workspaceError
     ? workspaceError instanceof Error
@@ -189,6 +194,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       execute,
       uploadRequirementFile,
       assetUrl,
+      eventCalendarUrl,
       dismissToast: () => setToast(null),
     }),
     [
@@ -203,6 +209,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       execute,
       uploadRequirementFile,
       assetUrl,
+      eventCalendarUrl,
     ],
   )
 

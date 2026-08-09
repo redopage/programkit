@@ -79,13 +79,14 @@ reference `x-programkit-workspace-key` header as an authorization decision.
    missing, expired, replayed, or wrong-audience tokens.
 4. Protect browser mutations with secure, HTTP-only, same-site cookies and CSRF validation where
    the chosen session design requires it.
-5. Supply a transactional outbox and idempotent workers for outbound email and webhooks. The demo's
-   `campaign.send` only records a `demo-outbox` transition; it does not deliver mail.
+5. Connect the durable campaign outbox to idempotent, retrying workers for outbound email and
+   webhooks. `campaign.send` records recipient jobs as `pending_provider`; it does not deliver mail.
 6. Store provider secrets in a managed secret service, never in workspace state, source control,
    browser bundles, or logs.
-7. Add private object storage with per-workspace authorization, signed short-lived download URLs,
-   content-type and size limits, malware scanning, and deletion handling. The demo has no file
-   storage implementation.
+7. Replace the reference portal identity with authenticated, per-workspace authorization for the
+   existing private R2 path, then add signed short-lived URLs where needed, malware scanning,
+   retention, replacement, and deletion handling. Type, size, ownership, and private download
+   checks are already enforced.
 8. Define data classification, consent, retention, anonymization, deletion, legal-hold, export, and
    workspace offboarding policies.
 9. Add encrypted backups or logical exports outside the primary runtime and regularly test restore

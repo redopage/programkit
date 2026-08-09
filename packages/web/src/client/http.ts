@@ -129,5 +129,9 @@ export function createProgramKitHttpClient(
     assetUrl(surface, assetId) {
       return resolveUrl(assetEndpoint(surface, assetId))
     },
+
+    eventCalendarUrl(eventId) {
+      return resolveUrl(`/public/v1/events/${encodeURIComponent(eventId)}/calendar.ics`)
+    },
   }
 }

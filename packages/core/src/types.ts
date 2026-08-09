@@ -6,7 +6,10 @@ export type ParticipationStatus = 'prospect' | 'invited' | 'confirmed' | 'declin
 export type RequirementStatus =
   'not_started' | 'submitted' | 'revision_requested' | 'approved' | 'waived'
 
-export type CampaignStatus = 'draft' | 'awaiting_approval' | 'approved' | 'sent'
+export type CampaignStatus = 'draft' | 'awaiting_approval' | 'approved' | 'queued' | 'sent'
+export type CampaignAudience =
+  'all_active' | 'confirmed' | 'unconfirmed' | 'missing_requirements' | 'custom'
+export type CampaignDeliveryStatus = 'pending_provider' | 'delivered' | 'failed' | 'suppressed'
 export type ChangeSetStatus =
   'draft' | 'awaiting_approval' | 'approved' | 'rejected' | 'committed' | 'stale'
 
@@ -306,13 +309,36 @@ export interface Campaign {
   name: string
   subject: string
   body: string
-  audience: 'all_active' | 'unconfirmed' | 'missing_requirements' | 'custom'
+  audience: CampaignAudience
   recipientParticipationIds: Id[]
+  includeEventInvite: boolean
   status: CampaignStatus
   createdAt: ISODateTime
   approvedAt: ISODateTime | null
+  queuedAt: ISODateTime | null
   sentAt: ISODateTime | null
   createdBy: string
+  version: number
+}
+
+export interface CampaignDelivery {
+  id: Id
+  campaignId: Id
+  eventId: Id
+  participationId: Id
+  personId: Id
+  recipientName: string
+  recipientEmail: string
+  subject: string
+  body: string
+  status: CampaignDeliveryStatus
+  provider: 'cloudflare_email' | null
+  providerMessageId: string | null
+  attachmentNames: string[]
+  attemptCount: number
+  lastError: string | null
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
   version: number
 }
 
@@ -412,6 +438,7 @@ export interface WorkspaceState {
   placements: Placement[]
   scheduleReleases: ScheduleRelease[]
   campaigns: Campaign[]
+  campaignDeliveries: CampaignDelivery[]
   changeSets: ChangeSet[]
   integrations: Integration[]
   domainEvents: DomainEvent[]

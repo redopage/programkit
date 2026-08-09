@@ -93,6 +93,11 @@ Use `expectedVersions` when updating records fetched earlier. Use an idempotency
 client may retry a request. A successful write appends one or more domain events and increments the
 workspace revision atomically.
 
+`campaign.send` is intentionally named for the human intent but records a durable delivery outbox:
+it moves an approved campaign to `queued`, creates per-recipient `pending_provider` rows, and does
+not contact a provider. A trusted consumer records `delivered` or `failed` through
+`campaign.record-delivery`; only terminal recipient outcomes can move the campaign to `sent`.
+
 ## Domain events and export
 
 | Method | Path                             | Purpose                                           |
@@ -100,6 +105,14 @@ workspace revision atomically.
 | `GET`  | `/api/v1/domain-events?limit=50` | Read the newest accepted domain events            |
 | `GET`  | `/api/v1/export`                 | Download the versioned logical workspace document |
 | `GET`  | `/api/v1/health`                 | Check schema and workspace revision               |
+
+The active event also exposes a public, standards-based calendar download:
+
+```text
+GET /public/v1/events/{eventId}/calendar.ics
+```
+
+The response is `text/calendar` with a safe attachment filename and RFC 5545 line folding.
 
 The domain-event route is an operator feed, not a delivery guarantee. Production webhooks and the
 Airtable mirror will use a transactional outbox with independent attempt and cursor records so a

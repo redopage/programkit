@@ -150,17 +150,20 @@ pointing a real domain or real data at it:
 
 - replace demo actor and workspace routing with verified staff and participant identity;
 - add OAuth and workspace-scoped authorization to `/mcp`;
-- add real outbound email and webhook adapters through a transactional outbox;
+- connect the existing campaign outbox to retrying email and webhook delivery consumers;
 - add private object storage, scanning, signed downloads, and lifecycle policies;
 - remove wildcard scopes and restrict administrative operations;
 - configure rate limits, alerts, structured logs, and incident procedures;
 - establish retention, deletion, legal-hold, backup, and restore policies;
 - complete every item in `SECURITY.md`.
 
-`campaign.send` currently records a demo outbox event and marks the campaign sent; no external
-email is delivered. Integration rows are demonstrative status records, not provider connections.
-The Airtable row describes the planned one-way mirror and must not be shown as connected until a
-real cursor and delivery state exist.
+`campaign.send` creates durable, per-recipient delivery records and marks the campaign `queued`; it
+does not mark the message sent or contact an external provider. Calendar attachments are real RFC
+5545 downloads. `campaign.record-delivery` is the trusted provider-result boundary and closes a
+campaign only after every recipient is delivered or suppressed. Configure sender-domain
+verification, the Cloudflare Email Service binding, retries, and the consumer before processing
+`pending_provider` rows. The Airtable row describes the planned mirror and must not be shown as
+connected until a real cursor and delivery state exist.
 
 ## Backup, restore, and departure
 
@@ -169,5 +172,5 @@ idempotency response caches are omitted. A production system should schedule enc
 outside the primary Durable Object, record their workspace and schema version, and test restoration
 into a separate environment.
 
-File objects are not part of this demo. The R2 implementation must export and restore them alongside
-their logical record IDs. D1 and Airtable projections are rebuildable and are not backup sources.
+Private participant file objects live in R2 and must be exported and restored alongside their
+logical asset records. D1 and Airtable projections are rebuildable and are not backup sources.

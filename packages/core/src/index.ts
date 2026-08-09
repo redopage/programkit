@@ -1,4 +1,5 @@
 export { executeOperation } from './engine.ts'
+export { eventCalendar, eventCalendarFilename } from './calendar.ts'
 export { reconcileAirtableRecord } from './airtable.ts'
 export type {
   AirtableFieldChange,
@@ -9,6 +10,7 @@ export type {
 } from './airtable.ts'
 export { handleCoreRequest } from './http.ts'
 export { operationDefinition, operationManifest } from './manifest.ts'
+export { normalizeWorkspaceState } from './migrations.ts'
 export { MemoryWorkspaceRepository } from './repository.ts'
 export {
   activeEvent,
@@ -20,6 +22,7 @@ export {
   nextActions,
   readinessRows,
   readinessSummary,
+  renderCampaignMessage,
   reviewerQueue,
   scheduleConflicts,
   submissionAnswerByPurpose,
