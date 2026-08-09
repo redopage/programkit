@@ -224,10 +224,18 @@ export class WorkspaceDurableObject extends DurableObject {
     if (!connection) return null
     if (Date.parse(connection.expiresAt) > Date.now() + 60_000) return connection
     if (Date.parse(connection.refreshExpiresAt) <= Date.now()) {
-      throw new Error('The Airtable authorization expired. Reconnect Airtable to continue.')
+      await this.#ctx.storage.put('airtable-oauth:connection', {
+        ...connection,
+        webhookError: 'The Airtable authorization expired. Reconnect Airtable to continue.',
+      } satisfies StoredAirtableConnection)
+      return null
     }
     if (!this.#env.AIRTABLE_OAUTH_CLIENT_ID) {
-      throw new Error('The Airtable OAuth client is not configured on this deployment.')
+      await this.#ctx.storage.put('airtable-oauth:connection', {
+        ...connection,
+        webhookError: 'The Airtable OAuth client is not configured on this deployment.',
+      } satisfies StoredAirtableConnection)
+      return null
     }
     this.#refreshingToken ??= refreshAirtableOAuthToken(connection.refreshToken, {
       clientId: this.#env.AIRTABLE_OAUTH_CLIENT_ID,
@@ -243,7 +251,16 @@ export class WorkspaceDurableObject extends DurableObject {
       .finally(() => {
         this.#refreshingToken = null
       })
-    return this.#refreshingToken
+    try {
+      return await this.#refreshingToken
+    } catch (error) {
+      await this.#ctx.storage.put('airtable-oauth:connection', {
+        ...connection,
+        webhookError:
+          error instanceof Error ? error.message : 'Airtable authorization could not be refreshed.',
+      } satisfies StoredAirtableConnection)
+      return null
+    }
   }
 
   async #repository() {
