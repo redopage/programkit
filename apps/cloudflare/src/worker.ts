@@ -2,6 +2,7 @@ import { handleMcpRequest } from '@programkit/agent'
 import { WorkspaceDurableObject } from '@programkit/core/cloudflare'
 import {
   createAirtableOAuthAuthorization,
+  createStoredZip,
   exchangeAirtableAuthorizationCode,
   listAirtableBases,
   verifyAirtableWebhookMac,
@@ -1006,10 +1007,13 @@ async function uploadSpeakerHeadshot(
       personId: participation.personId,
     },
   })
+  const portalPerson = state.people.find((entry) => entry.id === participation.personId)
   const actor = {
     type: 'participant' as const,
     id: participation.id,
-    name: 'Portal participant',
+    name: portalPerson
+      ? `${portalPerson.firstName} ${portalPerson.lastName}`
+      : 'Portal participant',
     scopes: ['assets:write'],
   }
   const operation = await executePortalOperation(
@@ -1036,6 +1040,198 @@ async function uploadSpeakerHeadshot(
     return Response.json(operation, { status: 400 })
   }
   return Response.json(operation, { status: 201 })
+}
+
+async function uploadSpeakerDeliverable(
+  request: Request,
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  participationId: string,
+  requirementInstanceId: string,
+) {
+  if (!env.PROGRAMKIT_FILES) {
+    return Response.json({ ok: false, error: 'File storage is not configured.' }, { status: 503 })
+  }
+  const state = await readWorkspace(stub)
+  const participation = state.participations.find(
+    (entry) =>
+      entry.id === participationId &&
+      entry.eventId === state.activeEventId &&
+      entry.portalAccessKey === request.headers.get('x-programkit-portal-key'),
+  )
+  const instance = state.requirementInstances.find(
+    (entry) => entry.id === requirementInstanceId && entry.participationId === participation?.id,
+  )
+  const definition = instance
+    ? state.requirementDefinitions.find(
+        (entry) => entry.id === instance.definitionId && entry.kind === 'file',
+      )
+    : null
+  if (!participation || !instance || !definition) {
+    return Response.json({ ok: false, error: 'This file task is unavailable.' }, { status: 403 })
+  }
+  const form = await request.formData()
+  const value = form.get('file')
+  if (!(value instanceof File)) {
+    return Response.json({ ok: false, error: 'Choose a file to upload.' }, { status: 400 })
+  }
+  const acceptedTypes = definition.acceptedContentTypes ?? []
+  if (acceptedTypes.length > 0 && !acceptedTypes.includes(value.type)) {
+    return Response.json(
+      { ok: false, error: 'This file type is not accepted for the task.' },
+      { status: 415 },
+    )
+  }
+  const maximum = definition.maxSizeBytes ?? 50_000_000
+  if (value.size < 1 || value.size > maximum) {
+    return Response.json(
+      {
+        ok: false,
+        error: `Choose a non-empty file smaller than ${Math.round(maximum / 1_000_000)} MB.`,
+      },
+      { status: 413 },
+    )
+  }
+  const filename = safeAssetFilename(value.name)
+  const nonce = crypto.randomUUID().replaceAll('-', '')
+  const storageKey = `${state.activeEventId}/deliverables/${instance.id}/${nonce}-${filename}`
+  await env.PROGRAMKIT_FILES.put(storageKey, value.stream(), {
+    httpMetadata: { contentType: value.type },
+    customMetadata: {
+      eventId: state.activeEventId,
+      participationId,
+      requirementInstanceId: instance.id,
+      definitionId: definition.id,
+    },
+  })
+  const person = state.people.find((entry) => entry.id === participation.personId)
+  const operation = await executePortalOperation(
+    stub,
+    participation.id,
+    participation.portalAccessKey,
+    'asset.register',
+    {
+      input: {
+        ownerType: 'requirement',
+        ownerId: instance.id,
+        kind:
+          definition.systemKey === 'final_slides' ||
+          /slides|deck|presentation/iu.test(definition.label)
+            ? 'slides'
+            : 'supporting_document',
+        filename,
+        contentType: value.type,
+        sizeBytes: value.size,
+        storageKey,
+      },
+      actor: {
+        type: 'participant' as const,
+        id: participation.id,
+        name: person ? `${person.firstName} ${person.lastName}` : 'Portal participant',
+        scopes: ['assets:write'],
+      },
+      idempotencyKey: `deliverable:${storageKey}`,
+    },
+  )
+  if (!operation.ok) {
+    await env.PROGRAMKIT_FILES.delete(storageKey)
+    return Response.json(operation, { status: 400 })
+  }
+  return Response.json(operation, { status: 201 })
+}
+
+async function downloadStoredAsset(
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  assetId: string,
+  allowed: (state: Awaited<ReturnType<typeof readWorkspace>>, assetId: string) => boolean,
+) {
+  if (!env.PROGRAMKIT_FILES) return new Response(null, { status: 404 })
+  const state = await readWorkspace(stub)
+  if (!allowed(state, assetId)) return new Response(null, { status: 404 })
+  const asset = state.assets.find(
+    (entry) => entry.id === assetId && entry.eventId === state.activeEventId,
+  )
+  if (!asset) return new Response(null, { status: 404 })
+  const object = await env.PROGRAMKIT_FILES.get(asset.storageKey)
+  if (!object) return new Response(null, { status: 404 })
+  const headers = new Headers({
+    'cache-control': 'private, no-store',
+    'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(asset.filename)}`,
+  })
+  object.writeHttpMetadata(headers)
+  headers.set('etag', object.httpEtag)
+  return new Response(object.body, { headers })
+}
+
+async function exportStoredAssets(
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  requestedIds: ReadonlySet<string>,
+) {
+  if (!env.PROGRAMKIT_FILES) {
+    return Response.json({ ok: false, error: 'File storage is not configured.' }, { status: 503 })
+  }
+  const state = await readWorkspace(stub)
+  const candidates = state.assets.filter(
+    (asset) =>
+      asset.eventId === state.activeEventId &&
+      asset.owner.type === 'requirement' &&
+      (requestedIds.size > 0 ? requestedIds.has(asset.id) : asset.isLatest),
+  )
+  if (candidates.length === 0) {
+    return Response.json(
+      { ok: false, error: 'Choose at least one uploaded file.' },
+      { status: 400 },
+    )
+  }
+  let totalBytes = 0
+  const files: Array<{ name: string; data: Uint8Array }> = []
+  for (const asset of candidates) {
+    const object = await env.PROGRAMKIT_FILES.get(asset.storageKey)
+    if (!object) continue
+    totalBytes += object.size
+    if (totalBytes > 100_000_000) {
+      return Response.json(
+        { ok: false, error: 'The selected files exceed the 100 MB export limit.' },
+        { status: 413 },
+      )
+    }
+    const instance = state.requirementInstances.find((entry) => entry.id === asset.owner.id)
+    const definition = instance
+      ? state.requirementDefinitions.find((entry) => entry.id === instance.definitionId)
+      : null
+    const participation = instance
+      ? state.participations.find((entry) => entry.id === instance.participationId)
+      : null
+    const person = participation
+      ? state.people.find((entry) => entry.id === participation.personId)
+      : null
+    const prefix = safeAssetFilename(
+      [person ? `${person.firstName}-${person.lastName}` : 'speaker', definition?.label ?? 'file']
+        .filter(Boolean)
+        .join('-'),
+    )
+    files.push({
+      name: `${prefix}/${safeAssetFilename(asset.filename)}`,
+      data: new Uint8Array(await object.arrayBuffer()),
+    })
+  }
+  if (files.length === 0) {
+    return Response.json(
+      { ok: false, error: 'The selected files are no longer available.' },
+      { status: 404 },
+    )
+  }
+  const archive = createStoredZip(files, new Date())
+  return new Response(archive, {
+    headers: {
+      'cache-control': 'private, no-store',
+      'content-disposition': `attachment; filename="programkit-latest-files-${new Date().toISOString().slice(0, 10)}.zip"`,
+      'content-length': String(archive.byteLength),
+      'content-type': 'application/zip',
+    },
+  })
 }
 
 async function publicHeadshot(
@@ -1691,6 +1887,69 @@ export default {
       return new Response(null, { status: 204 })
     }
 
+    const speakerDeliverableMatch = url.pathname.match(
+      /^\/public\/v1\/portal\/([^/]+)\/requirements\/([^/]+)\/assets$/u,
+    )
+    if (request.method === 'POST' && speakerDeliverableMatch) {
+      if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+      return uploadSpeakerDeliverable(
+        request,
+        env,
+        stub,
+        decodeURIComponent(speakerDeliverableMatch[1]),
+        decodeURIComponent(speakerDeliverableMatch[2]),
+      )
+    }
+
+    const speakerAssetMatch = url.pathname.match(
+      /^\/public\/v1\/portal\/([^/]+)\/assets\/([^/]+)$/u,
+    )
+    if (request.method === 'GET' && speakerAssetMatch) {
+      const participationId = decodeURIComponent(speakerAssetMatch[1])
+      const portalKey = request.headers.get('x-programkit-portal-key')
+      return downloadStoredAsset(
+        env,
+        stub,
+        decodeURIComponent(speakerAssetMatch[2]),
+        (state, assetId) => {
+          const participation = state.participations.find(
+            (entry) => entry.id === participationId && entry.portalAccessKey === portalKey,
+          )
+          const asset = state.assets.find((entry) => entry.id === assetId)
+          if (!participation || !asset) return false
+          if (asset.owner.type === 'person') return asset.owner.id === participation.personId
+          if (asset.owner.type === 'participation') return asset.owner.id === participation.id
+          if (asset.owner.type !== 'requirement') return false
+          return state.requirementInstances.some(
+            (entry) => entry.id === asset.owner.id && entry.participationId === participation.id,
+          )
+        },
+      )
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/v1/assets/export') {
+      const requestedIds = new Set(
+        (url.searchParams.get('ids') ?? '')
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean),
+      )
+      return exportStoredAssets(env, stub, requestedIds)
+    }
+
+    const operatorAssetMatch = url.pathname.match(/^\/api\/v1\/assets\/([^/]+)$/u)
+    if (request.method === 'GET' && operatorAssetMatch) {
+      return downloadStoredAsset(
+        env,
+        stub,
+        decodeURIComponent(operatorAssetMatch[1]),
+        (state, assetId) =>
+          state.assets.some(
+            (entry) => entry.id === assetId && entry.eventId === state.activeEventId,
+          ),
+      )
+    }
+
     const speakerHeadshotMatch = url.pathname.match(
       /^\/public\/v1\/portal\/([^/]+)\/assets\/headshot$/u,
     )
@@ -1724,11 +1983,22 @@ export default {
       const publicSubmissionMatch = url.pathname.match(
         /^\/public\/v1\/submission-forms\/([^/]+)\//u,
       )
+      const portalActorName = portalMatch
+        ? await readWorkspace(stub).then((state) => {
+            const participation = state.participations.find(
+              (entry) => entry.id === decodeURIComponent(portalMatch[1]),
+            )
+            const person = participation
+              ? state.people.find((entry) => entry.id === participation.personId)
+              : null
+            return person ? `${person.firstName} ${person.lastName}` : 'Portal participant'
+          })
+        : null
       const actor = portalMatch
         ? ({
             type: 'participant' as const,
             id: decodeURIComponent(portalMatch[1]),
-            name: 'Portal participant',
+            name: portalActorName ?? 'Portal participant',
             scopes: ['participations:write', 'requirements:write', 'portal:write', 'assets:write'],
           } satisfies OperationRequest['actor'])
         : reviewerMatch

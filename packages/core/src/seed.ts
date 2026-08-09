@@ -1230,7 +1230,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     revision: 1,
     workspace: {
       id: 'wrk_aie',
@@ -1262,6 +1262,7 @@ export function createSeedState(): WorkspaceState {
     submissionFormFields: structuredClone(submissionFormFields),
     submissions: structuredClone(submissions),
     assets: structuredClone(assets),
+    assetComments: [],
     reviewers: structuredClone(reviewers),
     reviewerTeams: structuredClone(reviewerTeams),
     evaluationPlans: structuredClone(evaluationPlans),
@@ -1398,6 +1399,7 @@ export function createEmptyWorkspaceState({
     submissionFormFields: [],
     submissions: [],
     assets: [],
+    assetComments: [],
     reviewers: [],
     reviewerTeams: [],
     evaluationPlans: [],

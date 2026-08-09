@@ -16,6 +16,7 @@ import {
   InboxStackIcon,
   LinkIcon,
   MagnifyingGlassIcon,
+  PaperClipIcon,
   PlusIcon,
   QuestionMarkCircleIcon,
   RectangleStackIcon,
@@ -87,6 +88,12 @@ const navigation = [
         iconClass: 'fill-teal-500',
       },
       {
+        href: '/files',
+        label: 'Files',
+        icon: PaperClipIcon,
+        iconClass: 'fill-orange-500',
+      },
+      {
         href: '/communications',
         label: 'Communications',
         icon: EnvelopeIcon,
@@ -151,6 +158,10 @@ const commandDetails: Record<
     description: 'Follow speaker tasks and requirements.',
     keywords: ['readiness', 'requirements', 'blockers'],
     shortcut: ['G', 'T'],
+  },
+  '/files': {
+    description: 'Review speaker uploads and version history.',
+    keywords: ['deliverables', 'slides', 'documents', 'assets'],
   },
   '/communications': {
     description: 'Draft confirmations and reminders.',

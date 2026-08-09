@@ -79,6 +79,9 @@ export interface RequirementDefinition {
   systemKey:
     'participation_confirmation' | 'profile_bio' | 'profile_headshot' | 'final_slides' | null
   selfCompletable: boolean
+  sessionId?: Id | null
+  acceptedContentTypes?: string[]
+  maxSizeBytes?: number | null
   dueAt: ISODateTime
   required: boolean
 }
@@ -183,12 +186,25 @@ export interface Submission {
 export interface Asset {
   id: Id
   eventId: Id
-  owner: { type: 'submission' | 'participation' | 'person'; id: Id }
+  owner: { type: 'submission' | 'participation' | 'person' | 'requirement'; id: Id }
   kind: 'headshot' | 'slides' | 'video' | 'supporting_document' | 'other'
   filename: string
   contentType: string
   sizeBytes: number
   storageKey: string
+  version?: number
+  isLatest?: boolean
+  sessionId?: Id | null
+  uploadedBy?: { type: 'participant' | 'staff'; id: Id; name: string }
+  createdAt: ISODateTime
+}
+
+export interface AssetComment {
+  id: Id
+  eventId: Id
+  assetId: Id
+  body: string
+  author: { type: 'participant' | 'staff'; id: Id; name: string }
   createdAt: ISODateTime
 }
 
@@ -432,6 +448,7 @@ export interface WorkspaceState {
   submissionFormFields: SubmissionFormField[]
   submissions: Submission[]
   assets: Asset[]
+  assetComments: AssetComment[]
   reviewers: Reviewer[]
   reviewerTeams: ReviewerTeam[]
   evaluationPlans: EvaluationPlan[]

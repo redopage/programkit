@@ -6,7 +6,7 @@ export {
   recordsToCsv,
   workspaceExportFilename,
 } from './export.ts'
-export type { WorkspaceExportFile } from './export.ts'
+export type { WorkspaceExportFile, ZipFile } from './export.ts'
 export { reconcileAirtableRecord } from './airtable.ts'
 export {
   AIRTABLE_SCHEMA_VERSION,

@@ -20,6 +20,7 @@ import { createSeedState } from './seed.ts'
 import type {
   Actor,
   Asset,
+  AssetComment,
   Campaign,
   ChangeOperation,
   ChangeSet,
@@ -73,6 +74,7 @@ function initializeProgramCollections(state: WorkspaceState) {
   state.submissionFormFields ??= []
   state.submissions ??= []
   state.assets ??= []
+  state.assetComments ??= []
   state.reviewers ??= []
   state.reviewerTeams ??= []
   state.evaluationPlans ??= []
@@ -99,8 +101,24 @@ function initializeProgramCollections(state: WorkspaceState) {
               ? 'final_slides'
               : null
     definition.selfCompletable ??= false
+    definition.sessionId ??= null
+    definition.acceptedContentTypes ??=
+      definition.kind === 'file'
+        ? [
+            'application/pdf',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          ]
+        : []
+    definition.maxSizeBytes ??= definition.kind === 'file' ? 50_000_000 : null
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 8)
+  for (const asset of state.assets) {
+    asset.version ??= 1
+    asset.isLatest ??= true
+    asset.sessionId ??= null
+    asset.uploadedBy ??= { type: 'staff', id: 'system', name: 'ProgramKit' }
+  }
+  state.schemaVersion = Math.max(state.schemaVersion, 9)
 }
 
 function assertRecord(value: unknown, field: string) {
@@ -2536,6 +2554,7 @@ function applyHandler(
         'submission',
         'participation',
         'person',
+        'requirement',
       ] as const)
       const ownerId = assertString(input.ownerId, 'ownerId')
       const kind = assertOneOf(input.kind, 'kind', [
@@ -2568,8 +2587,24 @@ function applyHandler(
       if (participant) {
         const ownsPerson = ownerType === 'person' && ownerId === participant.personId
         const ownsParticipation = ownerType === 'participation' && ownerId === participant.id
-        if ((!ownsPerson && !ownsParticipation) || kind !== 'headshot') {
-          throw new OperationError('FORBIDDEN', 'A speaker can only upload their own headshot.')
+        const requirement =
+          ownerType === 'requirement'
+            ? state.requirementInstances.find(
+                (entry) => entry.id === ownerId && entry.participationId === participant.id,
+              )
+            : null
+        const definition = requirement
+          ? state.requirementDefinitions.find((entry) => entry.id === requirement.definitionId)
+          : null
+        const ownsFileRequirement = Boolean(requirement && definition?.kind === 'file')
+        if (
+          (!ownsPerson && !ownsParticipation && !ownsFileRequirement) ||
+          (kind !== 'headshot' && !ownsFileRequirement)
+        ) {
+          throw new OperationError(
+            'FORBIDDEN',
+            'A speaker can only upload their own headshot or assigned deliverables.',
+          )
         }
       }
       const ownerBelongsToEvent =
@@ -2581,12 +2616,53 @@ function applyHandler(
             ? state.participations.some(
                 (entry) => entry.eventId === state.activeEventId && entry.id === ownerId,
               )
-            : state.submissions.some(
-                (entry) => entry.eventId === state.activeEventId && entry.id === ownerId,
-              )
+            : ownerType === 'submission'
+              ? state.submissions.some(
+                  (entry) => entry.eventId === state.activeEventId && entry.id === ownerId,
+                )
+              : state.requirementInstances.some((instance) => {
+                  if (instance.id !== ownerId) return false
+                  const participation = state.participations.find(
+                    (entry) => entry.id === instance.participationId,
+                  )
+                  return participation?.eventId === state.activeEventId
+                })
       if (!ownerBelongsToEvent) {
         throw new OperationError('FORBIDDEN', 'The asset owner is outside the active event.')
       }
+      const requirementInstance =
+        ownerType === 'requirement'
+          ? findRequired(state.requirementInstances, ownerId, 'requirement instance')
+          : null
+      const requirementDefinition = requirementInstance
+        ? findRequired(
+            state.requirementDefinitions,
+            requirementInstance.definitionId,
+            'requirement definition',
+          )
+        : null
+      if (requirementDefinition?.kind === 'file') {
+        const acceptedTypes = requirementDefinition.acceptedContentTypes ?? []
+        if (acceptedTypes.length > 0 && !acceptedTypes.includes(contentType)) {
+          throw new OperationError(
+            'INVALID_INPUT',
+            'This file type is not accepted for the task.',
+            {
+              contentType: `Accepted types: ${acceptedTypes.join(', ')}.`,
+            },
+          )
+        }
+        const maximum = requirementDefinition.maxSizeBytes ?? 50_000_000
+        if ((sizeBytes as number) > maximum) {
+          throw new OperationError('INVALID_INPUT', 'This file is larger than the task allows.', {
+            sizeBytes: `Choose a file smaller than ${Math.round(maximum / 1_000_000)} MB.`,
+          })
+        }
+      }
+      const previousVersions = state.assets.filter(
+        (entry) => entry.owner.type === ownerType && entry.owner.id === ownerId,
+      )
+      for (const entry of previousVersions) entry.isLatest = false
       const asset: Asset = {
         id: createId('ast'),
         eventId: state.activeEventId,
@@ -2596,6 +2672,14 @@ function applyHandler(
         contentType,
         sizeBytes: sizeBytes as number,
         storageKey,
+        version: previousVersions.length + 1,
+        isLatest: true,
+        sessionId: requirementDefinition?.sessionId ?? null,
+        uploadedBy: {
+          type: context.actor.type === 'participant' ? 'participant' : 'staff',
+          id: context.actor.id,
+          name: context.actor.name,
+        },
         createdAt: timestamp,
       }
       state.assets.push(asset)
@@ -2641,7 +2725,73 @@ function applyHandler(
           })
         }
       }
+      if (requirementInstance && requirementDefinition) {
+        const previous = requirementInstance.status
+        requirementInstance.status = 'submitted'
+        requirementInstance.value = asset.id
+        requirementInstance.submittedAt = timestamp
+        requirementInstance.reviewedAt = null
+        requirementInstance.updatedAt = timestamp
+        requirementInstance.version += 1
+        appendEvent(state, context, {
+          type: 'requirement.status-changed',
+          aggregate: {
+            type: 'requirement',
+            id: requirementInstance.id,
+            version: requirementInstance.version,
+          },
+          summary: `${requirementDefinition.label} was submitted for review.`,
+          data: {
+            participationId: requirementInstance.participationId,
+            previous,
+            next: 'submitted',
+            assetId: asset.id,
+          },
+        })
+      }
       return { asset }
+    }
+
+    case 'asset.comment': {
+      const asset = findRequired(state.assets, input.assetId, 'asset')
+      if (asset.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The file is outside the active event.')
+      }
+      if (context.actor.type === 'participant') {
+        if (asset.owner.type !== 'requirement') {
+          throw new OperationError('FORBIDDEN', 'Comments are only available on assigned files.')
+        }
+        const instance = findRequired(state.requirementInstances, asset.owner.id, 'requirement')
+        if (instance.participationId !== context.actor.id) {
+          throw new OperationError('FORBIDDEN', 'A speaker can only comment on their own files.')
+        }
+      }
+      const body = assertString(input.body, 'body')
+      if (body.length > 2_000) {
+        throw new OperationError('INVALID_INPUT', 'Comments must be 2,000 characters or fewer.', {
+          body: 'Shorten this comment.',
+        })
+      }
+      const comment: AssetComment = {
+        id: createId('acm'),
+        eventId: state.activeEventId,
+        assetId: asset.id,
+        body,
+        author: {
+          type: context.actor.type === 'participant' ? 'participant' : 'staff',
+          id: context.actor.id,
+          name: context.actor.name,
+        },
+        createdAt: timestamp,
+      }
+      state.assetComments.push(comment)
+      appendEvent(state, context, {
+        type: 'asset.commented',
+        aggregate: { type: 'asset', id: asset.id, version: asset.version ?? 1 },
+        summary: `Commented on ${asset.filename}.`,
+        data: { assetId: asset.id, commentId: comment.id },
+      })
+      return { comment }
     }
 
     case 'participation.set-status': {
@@ -2797,14 +2947,59 @@ function applyHandler(
         }
         return participation
       })
+      const kind = input.kind === 'file' ? ('file' as const) : ('confirmation' as const)
+      const sessionId =
+        typeof input.sessionId === 'string' && input.sessionId.length > 0
+          ? findRequired(state.sessions, input.sessionId, 'session').id
+          : null
+      if (
+        sessionId &&
+        !participations.every((participation) => participation.sessionIds.includes(sessionId))
+      ) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'A session-scoped task can only be assigned to speakers on that session.',
+          { sessionId: 'Choose a session shared by every selected speaker.' },
+        )
+      }
+      const acceptedContentTypes =
+        kind === 'file'
+          ? input.acceptedContentTypes === undefined
+            ? [
+                'application/pdf',
+                'application/vnd.ms-powerpoint',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+              ]
+            : assertStringArray(input.acceptedContentTypes, 'acceptedContentTypes')
+          : []
+      const maximumInput = input.maxSizeBytes
+      const maxSizeBytes =
+        kind === 'file'
+          ? maximumInput === undefined
+            ? 50_000_000
+            : Number.isInteger(maximumInput) &&
+                (maximumInput as number) >= 1_000_000 &&
+                (maximumInput as number) <= 50_000_000
+              ? (maximumInput as number)
+              : (() => {
+                  throw new OperationError(
+                    'INVALID_INPUT',
+                    'File tasks must allow between 1 MB and 50 MB.',
+                    { maxSizeBytes: 'Choose a limit from 1 MB to 50 MB.' },
+                  )
+                })()
+          : null
       const definition = {
         id: createId('req'),
         eventId: state.activeEventId,
         label,
         description,
-        kind: 'confirmation' as const,
+        kind,
         systemKey: null,
-        selfCompletable: true,
+        selfCompletable: kind !== 'file',
+        sessionId,
+        acceptedContentTypes,
+        maxSizeBytes,
         dueAt: new Date(dueAt).toISOString(),
         required: input.required !== false,
       }

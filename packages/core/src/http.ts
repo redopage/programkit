@@ -80,12 +80,16 @@ function participantState(state: WorkspaceState, participationId: string, portal
     formIds.has(entry.formId),
   )
   const submissionIds = new Set(clone.submissions.map((entry) => entry.id))
+  const requirementIds = new Set(clone.requirementInstances.map((entry) => entry.id))
   clone.assets = (state.assets ?? []).filter(
     (entry) =>
       (entry.owner.type === 'submission' && submissionIds.has(entry.owner.id)) ||
       (entry.owner.type === 'participation' && entry.owner.id === participationId) ||
-      (entry.owner.type === 'person' && entry.owner.id === person.id),
+      (entry.owner.type === 'person' && entry.owner.id === person.id) ||
+      (entry.owner.type === 'requirement' && requirementIds.has(entry.owner.id)),
   )
+  const assetIds = new Set(clone.assets.map((entry) => entry.id))
+  clone.assetComments = (state.assetComments ?? []).filter((entry) => assetIds.has(entry.assetId))
   clone.reviewers = []
   clone.reviewerTeams = []
   clone.evaluationPlans = []
@@ -125,6 +129,7 @@ function projectionBase(state: WorkspaceState) {
   clone.submissionFormFields = []
   clone.submissions = []
   clone.assets = []
+  clone.assetComments = []
   clone.reviewers = []
   clone.reviewerTeams = []
   clone.evaluationPlans = []

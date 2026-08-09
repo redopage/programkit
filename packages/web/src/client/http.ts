@@ -11,7 +11,12 @@ const surfaceOperationAllowlist: Record<ProgramKitSurface['kind'], ReadonlySet<s
   operator: null,
   submission: new Set(['submission.create', 'submission.submit', 'submission.update']),
   reviewer: new Set(['review.submit-scorecard', 'review.recuse', 'review.restore-recusal']),
-  speaker: new Set(['participation.set-status', 'requirement.set-status', 'portal.update-profile']),
+  speaker: new Set([
+    'participation.set-status',
+    'requirement.set-status',
+    'portal.update-profile',
+    'asset.comment',
+  ]),
   'public-program': new Set(),
 }
 

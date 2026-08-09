@@ -16,6 +16,7 @@ const csvCollectionKeys = [
   'submissionFormFields',
   'submissions',
   'assets',
+  'assetComments',
   'reviewers',
   'reviewerTeams',
   'evaluationPlans',
@@ -149,6 +150,22 @@ const fallbackColumns: Record<CsvCollectionKey, readonly string[]> = {
     'contentType',
     'sizeBytes',
     'storageKey',
+    'version',
+    'isLatest',
+    'sessionId',
+    'uploadedBy.type',
+    'uploadedBy.id',
+    'uploadedBy.name',
+    'createdAt',
+  ],
+  assetComments: [
+    'id',
+    'eventId',
+    'assetId',
+    'body',
+    'author.type',
+    'author.id',
+    'author.name',
     'createdAt',
   ],
   reviewers: ['id', 'eventId', 'name', 'email', 'status', 'createdAt', 'version'],
@@ -449,12 +466,13 @@ function concatenate(chunks: readonly Uint8Array[]) {
   return combined
 }
 
-interface ZipTextFile {
+export interface ZipFile {
   name: string
-  text: string
+  text?: string
+  data?: Uint8Array
 }
 
-export function createStoredZip(files: readonly ZipTextFile[], modifiedAt: Date) {
+export function createStoredZip(files: readonly ZipFile[], modifiedAt: Date) {
   const encoder = new TextEncoder()
   const localChunks: Uint8Array[] = []
   const centralChunks: Uint8Array[] = []
@@ -463,7 +481,7 @@ export function createStoredZip(files: readonly ZipTextFile[], modifiedAt: Date)
 
   for (const file of files) {
     const name = encoder.encode(file.name)
-    const data = encoder.encode(file.text)
+    const data = file.data ?? encoder.encode(file.text ?? '')
     const checksum = crc32(data)
     const local = new Uint8Array(30 + name.byteLength)
     const localView = new DataView(local.buffer)
@@ -602,7 +620,7 @@ export function createWorkspaceExportArchive(state: WorkspaceState, exportedAt: 
     'Binary headshots, slides, and documents will be bundled after R2 file storage ships.',
     '',
   ].join('\r\n')
-  const files: ZipTextFile[] = [
+  const files: ZipFile[] = [
     { name: 'README.txt', text: readme },
     { name: 'manifest.json', text: `${JSON.stringify(manifest, null, 2)}\n` },
     { name: 'workspace.json', text: `${JSON.stringify(jsonDocument, null, 2)}\n` },

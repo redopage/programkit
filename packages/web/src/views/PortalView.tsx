@@ -1,13 +1,22 @@
 import {
+  ArrowDownTrayIcon,
   CalendarDaysIcon,
+  ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ClockIcon,
   DocumentArrowUpIcon,
   MapPinIcon,
+  PaperClipIcon,
 } from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
 
-import { readinessRows } from '@programkit/core'
+import {
+  readinessRows,
+  type Asset,
+  type AssetComment,
+  type RequirementDefinition,
+  type RequirementInstance,
+} from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
@@ -40,6 +49,9 @@ function PortalWorkspace() {
   })
   const [uploadingHeadshot, setUploadingHeadshot] = useState(false)
   const [headshotError, setHeadshotError] = useState<string | null>(null)
+  const [uploadingRequirementId, setUploadingRequirementId] = useState<string | null>(null)
+  const [deliverableErrors, setDeliverableErrors] = useState<Record<string, string>>({})
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
   const headshots = state.assets
     .filter(
       (asset) =>
@@ -79,6 +91,76 @@ function PortalWorkspace() {
     } finally {
       setUploadingHeadshot(false)
     }
+  }
+  async function uploadDeliverable(
+    event: FormEvent<HTMLFormElement>,
+    instance: RequirementInstance,
+  ) {
+    event.preventDefault()
+    const formElement = event.currentTarget
+    const file = new FormData(formElement).get('file')
+    if (!(file instanceof File) || file.size < 1) {
+      setDeliverableErrors((current) => ({ ...current, [instance.id]: 'Choose a file first.' }))
+      return
+    }
+    setUploadingRequirementId(instance.id)
+    setDeliverableErrors((current) => ({ ...current, [instance.id]: '' }))
+    try {
+      const body = new FormData()
+      body.set('file', file)
+      const response = await fetch(
+        `/public/v1/portal/${encodeURIComponent(participation.id)}/requirements/${encodeURIComponent(instance.id)}/assets`,
+        {
+          method: 'POST',
+          headers: { 'x-programkit-portal-key': participation.portalAccessKey },
+          body,
+        },
+      )
+      const result = (await response.json()) as { error?: string }
+      if (!response.ok) throw new Error(result.error ?? 'The file could not be uploaded.')
+      formElement.reset()
+      await refresh()
+    } catch (caught) {
+      setDeliverableErrors((current) => ({
+        ...current,
+        [instance.id]: caught instanceof Error ? caught.message : 'The file could not be uploaded.',
+      }))
+    } finally {
+      setUploadingRequirementId(null)
+    }
+  }
+
+  async function downloadDeliverable(asset: Asset) {
+    const response = await fetch(
+      `/public/v1/portal/${encodeURIComponent(participation.id)}/assets/${encodeURIComponent(asset.id)}`,
+      { headers: { 'x-programkit-portal-key': participation.portalAccessKey } },
+    )
+    if (!response.ok) {
+      setDeliverableErrors((current) => ({
+        ...current,
+        [asset.owner.id]: 'The file could not be downloaded.',
+      }))
+      return
+    }
+    const url = URL.createObjectURL(await response.blob())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = asset.filename
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function addFileComment(event: FormEvent<HTMLFormElement>, asset: Asset) {
+    event.preventDefault()
+    const body = commentDrafts[asset.id]?.trim() ?? ''
+    if (!body) return
+    const response = await execute(
+      'asset.comment',
+      { assetId: asset.id, body },
+      undefined,
+      'Comment added.',
+    )
+    if (response.ok) setCommentDrafts((current) => ({ ...current, [asset.id]: '' }))
   }
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -237,75 +319,113 @@ function PortalWorkspace() {
                   const definition = state.requirementDefinitions.find(
                     (entry) => entry.id === instance.definitionId,
                   )!
+                  const deliverables = state.assets
+                    .filter(
+                      (asset) =>
+                        asset.owner.type === 'requirement' && asset.owner.id === instance.id,
+                    )
+                    .sort((left, right) => (right.version ?? 1) - (left.version ?? 1))
+                  const latest = deliverables.find((asset) => asset.isLatest) ?? deliverables[0]
+                  const deliverableIds = new Set(deliverables.map((asset) => asset.id))
+                  const comments = (state.assetComments ?? [])
+                    .filter((comment) => deliverableIds.has(comment.assetId))
+                    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
                   return (
-                    <li
-                      key={instance.id}
-                      className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start gap-2">
-                          {instance.status === 'approved' ? (
-                            <CheckCircleIcon className="size-4 h-lh shrink-0 fill-emerald-600" />
-                          ) : (
-                            <ClockIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
-                          )}
-                          <div className="min-w-0">
-                            <p className="text-base font-medium text-zinc-950 sm:text-sm">
-                              {definition.label}
-                            </p>
-                            <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-                              {definition.description}
-                            </p>
-                            <p className="pt-1 text-base text-zinc-500 sm:text-sm">
-                              Due{' '}
-                              {new Intl.DateTimeFormat('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              }).format(new Date(definition.dueAt))}
-                            </p>
+                    <li key={instance.id} className="flex flex-col gap-4 py-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start gap-2">
+                            {instance.status === 'approved' ? (
+                              <CheckCircleIcon className="size-4 h-lh shrink-0 fill-emerald-600" />
+                            ) : (
+                              <ClockIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-base font-medium text-zinc-950 sm:text-sm">
+                                {definition.label}
+                              </p>
+                              <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                                {definition.description}
+                              </p>
+                              <p className="pt-1 text-base text-zinc-500 sm:text-sm">
+                                Due{' '}
+                                {new Intl.DateTimeFormat('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                }).format(new Date(definition.dueAt))}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
-                        <span className="flex sm:w-32">
-                          <StatusBadge status={instance.status} />
-                        </span>
-                        <span className="flex sm:w-24 sm:justify-end">
-                          {(instance.status === 'not_started' ||
-                            instance.status === 'revision_requested') &&
-                          definition.systemKey !== 'participation_confirmation' &&
-                          definition.systemKey !== 'profile_bio' ? (
-                            <Button
-                              size="compact"
-                              disabled={mutating}
-                              onClick={() =>
-                                void execute(
-                                  'requirement.set-status',
-                                  {
-                                    requirementInstanceId: instance.id,
-                                    status: definition.selfCompletable ? 'approved' : 'submitted',
-                                    value: definition.selfCompletable
-                                      ? 'Completed through participant portal.'
-                                      : 'Submitted through participant portal.',
-                                  },
-                                  { expectedVersions: { [instance.id]: instance.version } },
-                                  definition.selfCompletable
-                                    ? `${definition.label} completed.`
-                                    : `${definition.label} submitted for review.`,
-                                )
-                              }
-                            >
-                              {definition.selfCompletable ? (
-                                <CheckCircleIcon className="size-4 h-lh shrink-0 fill-current" />
-                              ) : (
-                                <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
-                              )}
-                              {definition.selfCompletable ? 'Mark complete' : 'Submit'}
-                            </Button>
+                        <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
+                          <span className="flex sm:w-32">
+                            <StatusBadge status={instance.status} />
+                          </span>
+                          {definition.kind !== 'file' ? (
+                            <span className="flex sm:w-24 sm:justify-end">
+                              {(instance.status === 'not_started' ||
+                                instance.status === 'revision_requested') &&
+                              definition.systemKey !== 'participation_confirmation' &&
+                              definition.systemKey !== 'profile_bio' ? (
+                                <Button
+                                  size="compact"
+                                  disabled={mutating}
+                                  onClick={() =>
+                                    void execute(
+                                      'requirement.set-status',
+                                      {
+                                        requirementInstanceId: instance.id,
+                                        status: definition.selfCompletable
+                                          ? 'approved'
+                                          : 'submitted',
+                                        value: definition.selfCompletable
+                                          ? 'Completed through participant portal.'
+                                          : 'Submitted through participant portal.',
+                                      },
+                                      { expectedVersions: { [instance.id]: instance.version } },
+                                      definition.selfCompletable
+                                        ? `${definition.label} completed.`
+                                        : `${definition.label} submitted for review.`,
+                                    )
+                                  }
+                                >
+                                  {definition.selfCompletable ? (
+                                    <CheckCircleIcon className="size-4 h-lh shrink-0 fill-current" />
+                                  ) : (
+                                    <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
+                                  )}
+                                  {definition.selfCompletable ? 'Mark complete' : 'Submit'}
+                                </Button>
+                              ) : null}
+                            </span>
                           ) : null}
-                        </span>
+                        </div>
                       </div>
+                      {definition.kind === 'file' ? (
+                        <div className="flex items-start gap-2">
+                          <FileRequirement
+                            definition={definition}
+                            instance={instance}
+                            deliverables={deliverables}
+                            latest={latest}
+                            comments={comments}
+                            uploading={uploadingRequirementId === instance.id}
+                            error={deliverableErrors[instance.id]}
+                            commentDraft={latest ? (commentDrafts[latest.id] ?? '') : ''}
+                            onCommentDraftChange={(value) =>
+                              latest &&
+                              setCommentDrafts((current) => ({
+                                ...current,
+                                [latest.id]: value,
+                              }))
+                            }
+                            onUpload={uploadDeliverable}
+                            onDownload={downloadDeliverable}
+                            onComment={addFileComment}
+                          />
+                        </div>
+                      ) : null}
                     </li>
                   )
                 })}
@@ -436,6 +556,160 @@ function PortalWorkspace() {
           </section>
         </div>
       </main>
+    </div>
+  )
+}
+
+function FileRequirement({
+  definition,
+  instance,
+  deliverables,
+  latest,
+  comments,
+  uploading,
+  error,
+  commentDraft,
+  onCommentDraftChange,
+  onUpload,
+  onDownload,
+  onComment,
+}: {
+  definition: RequirementDefinition
+  instance: RequirementInstance
+  deliverables: Asset[]
+  latest: Asset | undefined
+  comments: AssetComment[]
+  uploading: boolean
+  error?: string
+  commentDraft: string
+  onCommentDraftChange: (value: string) => void
+  onUpload: (event: FormEvent<HTMLFormElement>, instance: RequirementInstance) => Promise<void>
+  onDownload: (asset: Asset) => Promise<void>
+  onComment: (event: FormEvent<HTMLFormElement>, asset: Asset) => Promise<void>
+}) {
+  const accepted = definition.acceptedContentTypes ?? []
+  const maximumMb = Math.round((definition.maxSizeBytes ?? 50_000_000) / 1_000_000)
+  const constraints = `${accepted.some((type) => type === 'application/pdf') ? 'PDF' : 'Document'}${
+    accepted.some((type) => type.includes('powerpoint')) ? ' or PowerPoint' : ''
+  }, up to ${maximumMb} MB`
+  return (
+    <div className="ml-6 flex w-full min-w-0 flex-col gap-3 rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-800">
+          <PaperClipIcon className="size-4 fill-zinc-400" />
+          {constraints}
+        </p>
+        {deliverables.length > 0 ? (
+          <p className="text-sm tabular-nums text-zinc-500">
+            {deliverables.length} {deliverables.length === 1 ? 'version' : 'versions'}
+          </p>
+        ) : null}
+      </div>
+      <form
+        className="flex flex-col gap-2 sm:flex-row sm:items-center"
+        onSubmit={(event) => void onUpload(event, instance)}
+      >
+        <input
+          type="file"
+          name="file"
+          required
+          accept={accepted.join(',')}
+          className="focus-ring min-h-10 min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-sm text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-zinc-800"
+        />
+        <Button type="submit" size="compact" disabled={uploading}>
+          <DocumentArrowUpIcon className="size-4 fill-current" />
+          {uploading ? 'Uploading…' : latest ? 'Upload new version' : 'Upload file'}
+        </Button>
+      </form>
+      {error ? (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
+        </p>
+      ) : null}
+      {deliverables.length > 0 ? (
+        <ul className="divide-y divide-zinc-950/5 overflow-hidden rounded-xl bg-white ring-1 ring-zinc-950/5">
+          {deliverables.map((asset) => (
+            <li key={asset.id} className="flex items-center gap-3 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-zinc-800">
+                  {asset.filename}{' '}
+                  {asset.isLatest ? (
+                    <span className="ml-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      Latest
+                    </span>
+                  ) : null}
+                </p>
+                <p className="text-sm text-zinc-500">
+                  Version {asset.version ?? 1} · {(asset.sizeBytes / 1_000_000).toFixed(1)} MB ·{' '}
+                  {new Intl.DateTimeFormat('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  }).format(new Date(asset.createdAt))}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="compact"
+                variant="ghost"
+                aria-label={`Download ${asset.filename} version ${asset.version ?? 1}`}
+                onClick={() => void onDownload(asset)}
+              >
+                <ArrowDownTrayIcon className="size-4 fill-current" />
+                Download
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {latest ? (
+        <div className="flex flex-col gap-2 border-t border-zinc-950/5 pt-3">
+          <p className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-800">
+            <ChatBubbleLeftRightIcon className="size-4 fill-zinc-400" />
+            Comments
+          </p>
+          {comments.length > 0 ? (
+            <ul className="flex flex-col gap-2">
+              {comments.map((comment) => (
+                <li
+                  key={comment.id}
+                  className="rounded-xl bg-white px-3 py-2 ring-1 ring-zinc-950/5"
+                >
+                  <p className="text-sm text-zinc-700">{comment.body}</p>
+                  <p className="pt-1 text-xs text-zinc-500">
+                    {comment.author.name} ·{' '}
+                    {new Intl.DateTimeFormat('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    }).format(new Date(comment.createdAt))}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <form className="flex gap-2" onSubmit={(event) => void onComment(event, latest)}>
+            <input
+              type="text"
+              aria-label="Add a file comment"
+              placeholder="Add a note about this file"
+              value={commentDraft}
+              onChange={(event) => onCommentDraftChange(event.target.value)}
+              className={textControl}
+            />
+            <Button
+              type="submit"
+              size="compact"
+              variant="secondary"
+              disabled={!commentDraft.trim()}
+            >
+              Comment
+            </Button>
+          </form>
+        </div>
+      ) : null}
     </div>
   )
 }

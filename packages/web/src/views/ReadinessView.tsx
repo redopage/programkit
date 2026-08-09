@@ -75,8 +75,8 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
   })
   const selected =
     state.participations.find((entry) => entry.id === selectedParticipationId) ?? null
-  const actionTasks = state.requirementDefinitions.filter(
-    (definition) => definition.eventId === state.activeEventId && definition.selfCompletable,
+  const speakerTasks = state.requirementDefinitions.filter(
+    (definition) => definition.eventId === state.activeEventId && definition.systemKey === null,
   )
 
   return (
@@ -106,7 +106,7 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
         ]}
       />
 
-      {actionTasks.length > 0 ? (
+      {speakerTasks.length > 0 ? (
         <section aria-labelledby="speaker-tasks-heading">
           <div className="flex items-end justify-between gap-4 border-b border-zinc-950/10 pb-3">
             <div>
@@ -114,7 +114,7 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
                 Speaker tasks
               </h2>
               <p className="text-base text-zinc-500 sm:text-sm">
-                Plain action items speakers can complete in their portal.
+                Assign action items or files, then follow every speaker’s progress.
               </p>
             </div>
           </div>
@@ -134,7 +134,7 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-950/5">
-                {actionTasks.map((definition) => {
+                {speakerTasks.map((definition) => {
                   const instances = state.requirementInstances.filter(
                     (instance) => instance.definitionId === definition.id,
                   )
@@ -349,6 +349,9 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
     label: '',
     description: '',
     dueDate: '',
+    kind: 'confirmation' as 'confirmation' | 'file',
+    sessionId: '',
+    maxSizeMb: '20',
     participationIds: [] as string[],
   })
   if (!payload) return null
@@ -376,6 +379,17 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
       {
         label: form.label,
         description: form.description,
+        kind: form.kind,
+        sessionId: form.sessionId || undefined,
+        acceptedContentTypes:
+          form.kind === 'file'
+            ? [
+                'application/pdf',
+                'application/vnd.ms-powerpoint',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+              ]
+            : undefined,
+        maxSizeBytes: form.kind === 'file' ? Number(form.maxSizeMb) * 1_000_000 : undefined,
         dueAt: `${form.dueDate}T23:59:59.000Z`,
         participationIds: form.participationIds,
       },
@@ -385,7 +399,15 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
       }.`,
     )
     if (!response.ok) return
-    setForm({ label: '', description: '', dueDate: '', participationIds: [] })
+    setForm({
+      label: '',
+      description: '',
+      dueDate: '',
+      kind: 'confirmation',
+      sessionId: '',
+      maxSizeMb: '20',
+      participationIds: [],
+    })
     onClose()
   }
 
@@ -415,6 +437,32 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
         className="flex flex-col gap-5"
         onSubmit={(event) => void submit(event)}
       >
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-base font-medium text-zinc-950 sm:text-sm">Task type</legend>
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-zinc-100 p-1">
+            {(
+              [
+                ['confirmation', 'Action item'],
+                ['file', 'File request'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={form.kind === value}
+                className={cx(
+                  'focus-ring rounded-xl px-3 py-2 text-sm font-medium transition',
+                  form.kind === value
+                    ? 'bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-950/5'
+                    : 'text-zinc-600 hover:text-zinc-950',
+                )}
+                onClick={() => setForm((current) => ({ ...current, kind: value }))}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <label className="flex flex-col gap-1.5">
           <span className="text-base font-medium text-zinc-950 sm:text-sm">Task</span>
           <input
@@ -427,6 +475,58 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
             className={textControl}
           />
         </label>
+        {form.kind === 'file' ? (
+          <>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-base font-medium text-zinc-950 sm:text-sm">
+                Session <span className="font-normal text-zinc-500">(optional)</span>
+              </span>
+              <select
+                name="sessionId"
+                value={form.sessionId}
+                onChange={(event) => {
+                  const sessionId = event.target.value
+                  const eligibleIds = new Set(
+                    sessionId
+                      ? state.participations
+                          .filter((participation) => participation.sessionIds.includes(sessionId))
+                          .map((participation) => participation.id)
+                      : state.participations.map((participation) => participation.id),
+                  )
+                  setForm((current) => ({
+                    ...current,
+                    sessionId,
+                    participationIds: current.participationIds.filter((id) => eligibleIds.has(id)),
+                  }))
+                }}
+                className={textControl}
+              >
+                <option value="">General event task</option>
+                {state.sessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {session.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-base font-medium text-zinc-950 sm:text-sm">Maximum size</span>
+              <select
+                name="maxSizeMb"
+                value={form.maxSizeMb}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, maxSizeMb: event.target.value }))
+                }
+                className={textControl}
+              >
+                <option value="10">10 MB</option>
+                <option value="20">20 MB</option>
+                <option value="50">50 MB</option>
+              </select>
+              <span className="text-sm text-zinc-500">Accepts PDF and PowerPoint files.</span>
+            </label>
+          </>
+        ) : null}
         <label className="flex flex-col gap-1.5">
           <span className="text-base font-medium text-zinc-950 sm:text-sm">Due date</span>
           <input
@@ -457,34 +557,39 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
         <fieldset className="flex flex-col gap-2">
           <legend className="text-base font-medium text-zinc-950 sm:text-sm">Assign to</legend>
           <div className="overflow-hidden rounded-2xl ring-1 ring-zinc-950/10">
-            {people.map(({ participation, person }) => (
-              <label
-                key={participation.id}
-                className="flex min-h-12 cursor-pointer items-center gap-3 border-b border-zinc-950/5 px-4 py-2.5 last:border-b-0 hover:bg-zinc-950/2"
-              >
-                <input
-                  type="checkbox"
-                  name="participationIds"
-                  value={participation.id}
-                  checked={form.participationIds.includes(participation.id)}
-                  onChange={() => toggleParticipant(participation.id)}
-                  className="focus-ring size-4 rounded border-zinc-300 text-blue-600"
-                />
-                <Avatar
-                  src={person.avatarUrl}
-                  name={`${person.firstName} ${person.lastName}`}
-                  size="small"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-base font-medium text-zinc-950 sm:text-sm">
-                    {person.firstName} {person.lastName}
+            {people
+              .filter(
+                ({ participation }) =>
+                  !form.sessionId || participation.sessionIds.includes(form.sessionId),
+              )
+              .map(({ participation, person }) => (
+                <label
+                  key={participation.id}
+                  className="flex min-h-12 cursor-pointer items-center gap-3 border-b border-zinc-950/5 px-4 py-2.5 last:border-b-0 hover:bg-zinc-950/2"
+                >
+                  <input
+                    type="checkbox"
+                    name="participationIds"
+                    value={participation.id}
+                    checked={form.participationIds.includes(participation.id)}
+                    onChange={() => toggleParticipant(participation.id)}
+                    className="focus-ring size-4 rounded border-zinc-300 text-blue-600"
+                  />
+                  <Avatar
+                    src={person.avatarUrl}
+                    name={`${person.firstName} ${person.lastName}`}
+                    size="small"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-base font-medium text-zinc-950 sm:text-sm">
+                      {person.firstName} {person.lastName}
+                    </span>
+                    <span className="block truncate text-base text-zinc-500 sm:text-sm">
+                      {person.email}
+                    </span>
                   </span>
-                  <span className="block truncate text-base text-zinc-500 sm:text-sm">
-                    {person.email}
-                  </span>
-                </span>
-              </label>
-            ))}
+                </label>
+              ))}
           </div>
           <p className="text-base text-zinc-500 sm:text-sm">
             {form.participationIds.length === 0

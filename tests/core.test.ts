@@ -656,6 +656,85 @@ describe('ProgramKit operation engine', () => {
     expect(denied.response.error?.code).toBe('FORBIDDEN')
   })
 
+  it('versions speaker deliverables and keeps an attributed comment thread', () => {
+    const state = createSeedState()
+    const participant = state.participations.find((entry) => entry.id === 'par_003')!
+    const sessionId = participant.sessionIds[0]
+    const created = executeOperation(state, 'requirement.create', {
+      input: {
+        label: 'Upload final slides',
+        description: 'PDF or PowerPoint, 20 MB maximum.',
+        kind: 'file',
+        sessionId,
+        acceptedContentTypes: ['application/pdf'],
+        maxSizeBytes: 20_000_000,
+        dueAt: '2026-09-25T23:59:59.000Z',
+        participationIds: [participant.id],
+      },
+    })
+    expect(created.response.ok).toBe(true)
+    const instance = created.state.requirementInstances.find(
+      (entry) =>
+        entry.participationId === participant.id &&
+        created.state.requirementDefinitions.find(
+          (definition) => definition.id === entry.definitionId,
+        )?.label === 'Upload final slides',
+    )!
+    const speaker = {
+      type: 'participant' as const,
+      id: participant.id,
+      name: 'Jordan Bell',
+      scopes: ['assets:write'],
+    }
+    const first = executeOperation(created.state, 'asset.register', {
+      input: {
+        ownerType: 'requirement',
+        ownerId: instance.id,
+        kind: 'slides',
+        filename: 'slides.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 1_000_000,
+        storageKey: `${instance.id}/slides-v1.pdf`,
+      },
+      actor: speaker,
+    })
+    expect(first.response.ok).toBe(true)
+    const second = executeOperation(first.state, 'asset.register', {
+      input: {
+        ownerType: 'requirement',
+        ownerId: instance.id,
+        kind: 'slides',
+        filename: 'slides.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 1_100_000,
+        storageKey: `${instance.id}/slides-v2.pdf`,
+      },
+      actor: speaker,
+    })
+    expect(second.response.ok).toBe(true)
+    expect(second.state.assets.filter((asset) => asset.owner.id === instance.id)).toEqual([
+      expect.objectContaining({ version: 1, isLatest: false, sessionId }),
+      expect.objectContaining({ version: 2, isLatest: true, sessionId }),
+    ])
+    expect(
+      second.state.requirementInstances.find((entry) => entry.id === instance.id),
+    ).toMatchObject({ status: 'submitted', value: second.state.assets.at(-1)?.id })
+
+    const latest = second.state.assets.at(-1)!
+    const commented = executeOperation(second.state, 'asset.comment', {
+      input: { assetId: latest.id, body: 'Updated the diagrams and speaker notes.' },
+      actor: speaker,
+    })
+    expect(commented.response.ok).toBe(true)
+    expect(commented.state.assetComments).toContainEqual(
+      expect.objectContaining({
+        assetId: latest.id,
+        body: 'Updated the diagrams and speaker notes.',
+        author: { type: 'participant', id: participant.id, name: 'Jordan Bell' },
+      }),
+    )
+  })
+
   it('keeps event-specific public identity separate from the global person record', () => {
     const state = createSeedState()
     const participation = state.participations.find((entry) => entry.id === 'par_003')!
