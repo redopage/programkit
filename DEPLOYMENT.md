@@ -40,7 +40,7 @@ The production additions are intentionally Cloudflare-native:
 | Files                     | R2                                         | Direct uploads, private objects, lifecycle policies, and no file bytes in domain state |
 | Background delivery       | Durable Object outbox + Worker `waitUntil` | Provider work starts after commit; explicit retry operations preserve durable intent   |
 | Email                     | Cloudflare Email Service binding           | Native Worker delivery; Resend may remain an optional provider                         |
-| Team tables               | Airtable mirror                            | Familiar collaboration without putting Airtable on the request path                    |
+| Team tables               | Airtable mirror — planned design only      | Familiar collaboration without putting Airtable on the request path                    |
 | Cross-workspace analytics | D1 projection, only when needed            | SQL reporting across many workspace objects                                            |
 
 ## Why Durable Objects are the default database
@@ -65,12 +65,22 @@ That future D1 database should be a rebuildable read projection fed by domain ev
 still commit in the workspace object; the projection may lag briefly and must never decide whether
 a domain transition is valid.
 
-## How the Airtable integration works
+<a id="how-the-airtable-integration-works"></a>
 
-Airtable is an optional, conflict-aware operational workspace. It is valuable because program and
-review teams already know how to filter, group, comment on, and edit an Airtable base. It is not
-ProgramKit's live application database: every page load and accepted proposal must not depend on a
-third-party API limit or retry window.
+## Planned Airtable integration design
+
+Airtable is not part of the supported deployment. The repository ships no Airtable client,
+credential path, mirror, cursor, webhook, poller, or reconciliation screen, and there is nothing for
+an operator to install or turn on. Everything in this section is a proposed design for an optional
+future bonus; the only Airtable code that exists today is the tested `reconcileAirtableRecord`
+comparison primitive in `@programkit/core`.
+
+The design is worth recording because program and review teams already know how to filter, group,
+comment on, and edit an Airtable base. Even if it is built, Airtable would not become ProgramKit's
+live application database: no page load or accepted proposal may depend on a third-party API limit
+or retry window.
+
+The proposed delivery and reconciliation flow:
 
 ```text
 named operation
@@ -89,25 +99,27 @@ Durable Object transaction ── domain event + outbox intent
                               three-way reconciliation preview
 ```
 
-The first mirror should create four tables:
+A first mirror would create four tables:
 
-| Airtable table | Stable key      | Useful mirrored fields                                                            |
+| Airtable table | Stable key      | Fields the design would mirror                                                    |
 | -------------- | --------------- | --------------------------------------------------------------------------------- |
 | Submissions    | `ProgramKit ID` | title, kind, status, speaker, track, review score, updated time, ProgramKit link  |
 | Speakers       | `ProgramKit ID` | name, email, company, confirmation, readiness, session links, portal link         |
 | Sessions       | `ProgramKit ID` | title, format, track, duration, status, speakers, scheduled time, ProgramKit link |
 | Tasks          | `ProgramKit ID` | speaker, requirement, status, due time, review state, ProgramKit link             |
 
-Every mirrored row also carries `ProgramKit Revision` and `Last Synced At`. Sync uses Airtable batch
-requests, exponential backoff, and a per-workspace cursor. Secrets stay in Worker secrets. File
-bytes stay in R2; Airtable receives only authorized ProgramKit links or safe metadata.
+Every mirrored row would also carry `ProgramKit Revision` and `Last Synced At`. Sync would use
+Airtable batch requests, exponential backoff, and a per-workspace cursor. Secrets would stay in
+Worker secrets. File bytes would stay in R2; Airtable would receive only authorized ProgramKit links
+or safe metadata.
 
-Inbound edits use an explicit field allowlist and a saved last-synced baseline. A safe Airtable-only
-edit becomes a named operation or previewable change set. A ProgramKit-only edit is exported. If a
-field changed differently on both sides, neither side silently wins: the integration creates a
-reconciliation item for a human. Protected fields are repaired from ProgramKit, and row deletion
-never hard-deletes domain data. See [the Airtable integration guide](docs/integrations/airtable.md)
-for the field policy, loop prevention, and tested comparison primitive.
+Inbound edits would use an explicit field allowlist and a saved last-synced baseline. A safe
+Airtable-only edit would become a named operation or previewable change set. A ProgramKit-only edit
+would be exported. If a field changed differently on both sides, neither side would silently win:
+the integration would create a reconciliation item for a human. Protected fields would be repaired
+from ProgramKit, and row deletion would never hard-delete domain data. See
+[the Airtable integration guide](docs/integrations/airtable.md) for the proposed field policy and
+loop prevention, and for what the tested comparison primitive does and does not cover.
 
 ## Local development
 

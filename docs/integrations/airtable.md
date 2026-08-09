@@ -1,15 +1,25 @@
-# Airtable as a conflict-aware team workspace
+# Airtable as a conflict-aware team workspace (design only)
 
-ProgramKit's recommended installation has one source of truth: the SQLite-backed Durable Object
-for an event workspace. Airtable is an optional collaboration surface for teams that prefer its
-tables, views, comments, and lightweight editing. It is never required to render a ProgramKit page
-or accept an organizer action.
+**Status: design only. Not implemented.** ProgramKit ships no Airtable mirror, API client, provider
+credential path, delivery outbox or cursor, webhook, poller, or reconciliation queue screen. There
+is nothing here for an operator to install, connect, configure, or enable, and no live sync evidence
+exists. This document is a proposal for an optional future bonus.
 
-Two-way is useful, but it does not mean that both systems silently win writes. ProgramKit treats an
-inbound Airtable edit as a proposed domain change. The proposal is validated through the same named
-operations as the web application, and risky or conflicting edits wait for human approval.
+The one exception is `reconcileAirtableRecord` in `@programkit/core`: a real, unit-tested comparison
+function. It is a pure primitive with no transport, no Airtable SDK import, and no user interface —
+described separately in [The one part that exists today](#the-one-part-that-exists-today).
 
-## Recommended behavior
+ProgramKit's supported installation has one source of truth: the SQLite-backed Durable Object for
+an event workspace. That is authoritative today and would remain authoritative if this design were
+built. Airtable is proposed as an optional collaboration surface for teams that prefer its tables,
+views, comments, and lightweight editing. It would never be required to render a ProgramKit page or
+accept an organizer action.
+
+Two-way is useful, but it would not mean that both systems silently win writes. The design treats an
+inbound Airtable edit as a proposed domain change: validated through the same named operations as
+the web application, with risky or conflicting edits waiting for human approval.
+
+## Proposed behavior
 
 ```text
 ProgramKit operation
@@ -30,7 +40,7 @@ ProgramKit operation
               or change set                     and human decision
 ```
 
-Each mirrored row stores these protected columns:
+Each mirrored row would store these protected columns:
 
 - `ProgramKit ID` — stable record identity; never inferred from a row name.
 - `ProgramKit Revision` — the source revision included in the last successful export.
@@ -38,14 +48,27 @@ Each mirrored row stores these protected columns:
 - `Last Synced At` — time the complete baseline was acknowledged.
 - `ProgramKit URL` — deep link to the canonical record.
 
-The integration also keeps the exact last-synced field values in ProgramKit's integration state.
-That baseline enables a three-way comparison between the last acknowledged copy, current
-ProgramKit state, and current Airtable state. `reconcileAirtableRecord` in `@programkit/core`
-implements and tests that comparison without importing the Airtable SDK.
+The integration would also keep the exact last-synced field values in ProgramKit's integration
+state. That baseline is what makes a three-way comparison possible between the last acknowledged
+copy, current ProgramKit state, and current Airtable state.
 
-## Editable and protected fields
+## The one part that exists today
 
-Start with a small allowlist of low-risk editable fields:
+`reconcileAirtableRecord` in `@programkit/core` implements that three-way comparison and is covered
+by unit tests in `tests/airtable.test.ts`. Given a last-synced baseline, the current ProgramKit
+values, the current Airtable values, and an editable-field allowlist, it returns four lists: fields
+to push to Airtable, safe inbound edits to propose to ProgramKit, conflicts carrying all three
+values, and fields both sides changed to the same value. Structured values compare independently of
+object key order.
+
+That is the whole of it. The function does not import the Airtable SDK, hold credentials, make
+network calls, schedule work, or render anything. The mirror, outbox, cursor, webhook or poller,
+and reconciliation queue described in the rest of this document are unbuilt; the primitive is the
+decision logic they would call, written and tested ahead of the transport.
+
+## Proposed editable and protected fields
+
+The design would start with a small allowlist of low-risk editable fields:
 
 | Table       | Reasonable inbound edits                      | Protected ProgramKit fields                                       |
 | ----------- | --------------------------------------------- | ----------------------------------------------------------------- |
@@ -54,34 +77,38 @@ Start with a small allowlist of low-risk editable fields:
 | Sessions    | summary, suggested track, expected attendance | ID, accepted submission link, placement, published version        |
 | Tasks       | organizer note, suggested due date            | ID, owner, approval state, submitted asset, audit fields          |
 
-Changing a protected field in Airtable causes an outbound repair. A safe editable field that only
-changed in Airtable becomes a proposed ProgramKit operation. If the same field changed differently
-on both sides, neither value wins: the integration records a conflict with the baseline and both
-candidate values.
+Changing a protected field in Airtable would cause an outbound repair. A safe editable field that
+only changed in Airtable would become a proposed ProgramKit operation. If the same field changed
+differently on both sides, neither value would win: the integration would record a conflict with the
+baseline and both candidate values.
 
-Deletes never cascade. Deleting an Airtable row creates an archive proposal or causes the mirror
-to restore the row, depending on policy. ProgramKit does not hard-delete a submission, speaker,
-session, or task because a row disappeared from a third-party view.
+Deletes would never cascade. Deleting an Airtable row would create an archive proposal or cause the
+mirror to restore the row, depending on policy. ProgramKit would not hard-delete a submission,
+speaker, session, or task because a row disappeared from a third-party view.
 
-## Delivery and loop prevention
+## Proposed delivery and loop prevention
 
-The Cloudflare host owns credentials, Airtable webhooks or cursor polling, batching, retry policy,
-and the durable outbox. Every job carries an origin, workspace key, record ID, source revision, and
-idempotency key. When an inbound edit is applied, the resulting ProgramKit event keeps its Airtable
-origin so the exporter can acknowledge the new revision without bouncing the same edit forever.
+None of this transport exists. In the design, the Cloudflare host would own credentials, Airtable
+webhooks or cursor polling, batching, retry policy, and the durable outbox. Every job would carry an
+origin, workspace key, record ID, source revision, and idempotency key. When an inbound edit was
+applied, the resulting ProgramKit event would keep its Airtable origin so the exporter could
+acknowledge the new revision without bouncing the same edit forever.
 
-No external request runs inside the Durable Object state transaction. The transaction commits the
-domain change and outbox intent together; a Queue consumer or object alarm performs the Airtable
-request afterward. The integrations screen must show the real last success, cursor lag, pending
-conflict count, attempts, and latest error.
+No external request would run inside the Durable Object state transaction. The transaction would
+commit the domain change and outbox intent together; a Queue consumer or object alarm would perform
+the Airtable request afterward. If an Airtable panel is ever added to the integrations screen, it
+must show the real last success, cursor lag, pending conflict count, attempts, and latest error —
+today there is no such panel because there is nothing to report.
 
-## Installation policy
+## Proposed installation policy
 
-The default quick start and production deployment do not require Airtable. An operator opts in by
-providing one base ID, a scoped personal access token through Worker secrets, and an explicit field
-policy. ProgramKit should ship one versioned base template rather than asking each installation to
-invent table names and protected columns.
+Airtable cannot be installed or enabled today; there is no base ID input, no credential binding, and
+no consumer to receive one. The design's intent is that the default quick start and production
+deployment would still not require Airtable. An operator would opt in by providing one base ID, a
+scoped personal access token through Worker secrets, and an explicit field policy, and ProgramKit
+would ship one versioned base template rather than asking each installation to invent table names
+and protected columns.
 
-This gives the project one simple deployment path while preserving a high-quality Airtable bonus:
-teams can work in Airtable, ProgramKit remains fast and live, and concurrent edits are visible
-instead of destructive.
+Written down this way, the project keeps one simple deployment path — Durable Object SQLite is and
+stays authoritative — while leaving room for a well-behaved Airtable bonus later. Until that work is
+built, teams cannot work in Airtable through ProgramKit.

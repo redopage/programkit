@@ -30,8 +30,8 @@ not maintain a second version of product or architecture facts.
    end-to-end product workflow.
 3. Read [Deployment](../DEPLOYMENT.md) before deploying the Cloudflare application.
 4. Use the [HTTP API](api/README.md) for integrations and data sync.
-5. Read the [Airtable integration guide](integrations/airtable.md) before enabling the optional team
-   workspace.
+5. Read the [Airtable integration guide](integrations/airtable.md) to review the planned, not yet
+   implemented, optional team workspace design.
 6. Read the [Accelevents export guide](integrations/accelevents.md) before activating the one-way
    provider consumer.
 7. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable

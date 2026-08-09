@@ -47,9 +47,9 @@ Example:
 curl 'http://localhost:4173/api/v1/events/evt_nyc_2026/sessions?status=ready&pageSize=25'
 ```
 
-These resources are designed for websites, Airtable mirrors, and narrow integrations. The operator
-application currently reads its richer projection from `/api/v1/state`; that endpoint is an
-application bootstrap payload, not the preferred public integration contract.
+These resources are designed for websites, a future Airtable or similar mirror, and narrow
+integrations. The operator application currently reads its richer projection from `/api/v1/state`;
+that endpoint is an application bootstrap payload, not the preferred public integration contract.
 
 ## Named writes
 
@@ -150,9 +150,11 @@ GET /public/v1/events/{eventId}/calendar.ics
 
 The response is `text/calendar` with a safe attachment filename and RFC 5545 line folding.
 
-The domain-event route is an operator feed, not a delivery guarantee. Production webhooks and the
-Airtable mirror will use a transactional outbox with independent attempt and cursor records so a
-temporary provider failure cannot lose accepted work.
+The domain-event route is an operator feed, not a delivery guarantee. Neither production webhooks
+nor an Airtable mirror is implemented. When either is built, the plan is for it to use a
+transactional outbox with independent attempt and cursor records so a temporary provider failure
+cannot lose accepted work. The Airtable mirror in particular is a
+[planned design only](../integrations/airtable.md).
 
 ## Public and scoped projections
 
