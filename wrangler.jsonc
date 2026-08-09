@@ -10,6 +10,12 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": true,
   },
+  "r2_buckets": [
+    {
+      "binding": "PROGRAMKIT_FILES",
+      "bucket_name": "programkit-assets",
+    },
+  ],
   "durable_objects": {
     "bindings": [
       {
@@ -66,6 +72,12 @@
       "vars": {
         "PROGRAMKIT_DEPLOYMENT_PROFILE": "hosted-demo",
       },
+      "r2_buckets": [
+        {
+          "binding": "PROGRAMKIT_FILES",
+          "bucket_name": "programkit-assets",
+        },
+      ],
       "durable_objects": {
         "bindings": [
           {
@@ -88,6 +100,12 @@
         "PROGRAMKIT_EMAIL_FROM": "notifications@mail.programkit.dev",
         "PROGRAMKIT_SUPPORT_EMAIL": "support@programkit.dev",
       },
+      "r2_buckets": [
+        {
+          "binding": "PROGRAMKIT_FILES",
+          "bucket_name": "programkit-assets",
+        },
+      ],
       "send_email": [
         {
           "name": "EMAIL",

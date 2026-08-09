@@ -357,6 +357,56 @@ describe('ProgramKit operation engine', () => {
     ).toMatchObject({ status: 'not_started' })
   })
 
+  it('registers a speaker headshot against their own profile and completes readiness', () => {
+    const state = createSeedState()
+    const participant = {
+      type: 'participant' as const,
+      id: 'par_003',
+      name: 'Jordan Bell',
+      scopes: ['assets:write'],
+    }
+    const result = executeOperation(state, 'asset.register', {
+      input: {
+        ownerType: 'person',
+        ownerId: 'per_003',
+        kind: 'headshot',
+        filename: 'jordan-headshot.png',
+        contentType: 'image/png',
+        sizeBytes: 42_000,
+        storageKey: 'evt_aie_2026/people/per_003/jordan-headshot.png',
+      },
+      actor: participant,
+    })
+    expect(result.response.ok).toBe(true)
+    const asset = (result.response.data as { asset: { id: string } }).asset
+    expect(result.state.people.find((entry) => entry.id === 'per_003')?.avatarUrl).toBe(
+      `/public/v1/assets/${asset.id}`,
+    )
+    const headshotDefinition = result.state.requirementDefinitions.find(
+      (entry) => entry.systemKey === 'profile_headshot',
+    )!
+    expect(
+      result.state.requirementInstances.find(
+        (entry) =>
+          entry.participationId === 'par_003' && entry.definitionId === headshotDefinition.id,
+      ),
+    ).toMatchObject({ status: 'approved', value: asset.id })
+
+    const denied = executeOperation(state, 'asset.register', {
+      input: {
+        ownerType: 'person',
+        ownerId: 'per_004',
+        kind: 'headshot',
+        filename: 'wrong-person.png',
+        contentType: 'image/png',
+        sizeBytes: 10,
+        storageKey: 'wrong-person.png',
+      },
+      actor: participant,
+    })
+    expect(denied.response.error?.code).toBe('FORBIDDEN')
+  })
+
   it('keeps event-specific public identity separate from the global person record', () => {
     const state = createSeedState()
     const participation = state.participations.find((entry) => entry.id === 'par_003')!

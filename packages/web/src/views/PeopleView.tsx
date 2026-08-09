@@ -291,6 +291,12 @@ function PersonDrawer({
   const instances = state.requirementInstances.filter(
     (entry) => entry.participationId === participation.id,
   )
+  const headshots = state.assets
+    .filter(
+      (asset) =>
+        asset.kind === 'headshot' && asset.owner.type === 'person' && asset.owner.id === person.id,
+    )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   const events = state.domainEvents
     .filter(
       (event) =>
@@ -564,6 +570,40 @@ function PersonDrawer({
                   <p className="pt-1 text-pretty text-base text-zinc-500 sm:text-sm">
                     {person.bio || 'No bio yet.'}
                   </p>
+                </div>
+                <div>
+                  <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Speaker files</h3>
+                  {headshots.length > 0 ? (
+                    <ul role="list" className="divide-y divide-zinc-950/5 pt-1">
+                      {headshots.map((asset) => (
+                        <li key={asset.id} className="flex items-center justify-between gap-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-base text-zinc-700 sm:text-sm">
+                              {asset.filename}
+                            </p>
+                            <p className="text-sm text-zinc-500">
+                              Headshot · {(asset.sizeBytes / 1_000).toFixed(0)} KB ·{' '}
+                              {new Intl.DateTimeFormat('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              }).format(new Date(asset.createdAt))}
+                            </p>
+                          </div>
+                          <a
+                            href={`/public/v1/assets/${encodeURIComponent(asset.id)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="focus-ring rounded-full px-3 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/10 hover:bg-zinc-50"
+                          >
+                            View
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="pt-1 text-base text-zinc-500 sm:text-sm">No files yet.</p>
+                  )}
                 </div>
                 <div>
                   <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Sessions</h3>

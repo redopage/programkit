@@ -37,6 +37,7 @@ export { AuthDurableObject, EventAccessDurableObject, WorkspaceDurableObject }
 
 interface Env {
   ASSETS: Fetcher
+  PROGRAMKIT_FILES?: R2Bucket
   PROGRAMKIT_WORKSPACES: DurableObjectNamespace<WorkspaceDurableObject>
   PROGRAMKIT_AUTH?: DurableObjectNamespace<AuthDurableObject>
   PROGRAMKIT_EVENT_ACCESS?: DurableObjectNamespace<EventAccessDurableObject>
@@ -925,6 +926,141 @@ async function executeWorkspaceOperation(
   return (await response.json()) as OperationResponse
 }
 
+async function executePortalOperation(
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  participationId: string,
+  portalAccessKey: string,
+  operation: string,
+  request: OperationRequest,
+) {
+  const { actor, ...publicRequest } = request
+  const response = await stub.fetch(
+    withActor(
+      new Request(
+        `http://workspace.internal/public/v1/portal/${encodeURIComponent(participationId)}/operations/${encodeURIComponent(operation)}`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-programkit-portal-key': portalAccessKey,
+          },
+          body: JSON.stringify(publicRequest),
+        },
+      ),
+      actor,
+    ),
+  )
+  return (await response.json()) as OperationResponse
+}
+
+function safeAssetFilename(value: string) {
+  const normalized = value.normalize('NFKC').replace(/[^a-zA-Z0-9._-]+/gu, '-')
+  return normalized.replace(/^-+|-+$/gu, '').slice(0, 120) || 'upload'
+}
+
+async function uploadSpeakerHeadshot(
+  request: Request,
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  participationId: string,
+) {
+  if (!env.PROGRAMKIT_FILES) {
+    return Response.json({ ok: false, error: 'File storage is not configured.' }, { status: 503 })
+  }
+  const state = await readWorkspace(stub)
+  const participation = state.participations.find(
+    (entry) =>
+      entry.id === participationId &&
+      entry.eventId === state.activeEventId &&
+      entry.portalAccessKey === request.headers.get('x-programkit-portal-key'),
+  )
+  if (!participation) {
+    return Response.json({ ok: false, error: 'This speaker link is unavailable.' }, { status: 403 })
+  }
+  const form = await request.formData()
+  const value = form.get('file')
+  if (!(value instanceof File)) {
+    return Response.json({ ok: false, error: 'Choose an image to upload.' }, { status: 400 })
+  }
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  if (!allowedTypes.has(value.type)) {
+    return Response.json(
+      { ok: false, error: 'Headshots must be JPEG, PNG, or WebP images.' },
+      { status: 415 },
+    )
+  }
+  if (value.size < 1 || value.size > 8_000_000) {
+    return Response.json(
+      { ok: false, error: 'Choose a non-empty image smaller than 8 MB.' },
+      { status: 413 },
+    )
+  }
+  const filename = safeAssetFilename(value.name)
+  const nonce = crypto.randomUUID().replaceAll('-', '')
+  const storageKey = `${state.activeEventId}/people/${participation.personId}/${nonce}-${filename}`
+  await env.PROGRAMKIT_FILES.put(storageKey, value.stream(), {
+    httpMetadata: { contentType: value.type },
+    customMetadata: {
+      eventId: state.activeEventId,
+      participationId,
+      personId: participation.personId,
+    },
+  })
+  const actor = {
+    type: 'participant' as const,
+    id: participation.id,
+    name: 'Portal participant',
+    scopes: ['assets:write'],
+  }
+  const operation = await executePortalOperation(
+    stub,
+    participation.id,
+    participation.portalAccessKey,
+    'asset.register',
+    {
+      input: {
+        ownerType: 'person',
+        ownerId: participation.personId,
+        kind: 'headshot',
+        filename,
+        contentType: value.type,
+        sizeBytes: value.size,
+        storageKey,
+      },
+      actor,
+      idempotencyKey: `headshot:${storageKey}`,
+    },
+  )
+  if (!operation.ok) {
+    await env.PROGRAMKIT_FILES.delete(storageKey)
+    return Response.json(operation, { status: 400 })
+  }
+  return Response.json(operation, { status: 201 })
+}
+
+async function publicHeadshot(
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  assetId: string,
+) {
+  if (!env.PROGRAMKIT_FILES) return new Response(null, { status: 404 })
+  const state = await readWorkspace(stub)
+  const asset = state.assets.find(
+    (entry) =>
+      entry.id === assetId && entry.eventId === state.activeEventId && entry.kind === 'headshot',
+  )
+  if (!asset) return new Response(null, { status: 404 })
+  const object = await env.PROGRAMKIT_FILES.get(asset.storageKey)
+  if (!object) return new Response(null, { status: 404 })
+  const headers = new Headers({
+    'cache-control': 'public, max-age=31536000, immutable',
+    'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(asset.filename)}`,
+  })
+  object.writeHttpMetadata(headers)
+  headers.set('etag', object.httpEtag)
+  return new Response(object.body, { headers })
+}
+
 export default {
   async fetch(request: Request, env: Env, context: ExecutionContext) {
     const url = new URL(request.url)
@@ -1555,6 +1691,19 @@ export default {
       return new Response(null, { status: 204 })
     }
 
+    const speakerHeadshotMatch = url.pathname.match(
+      /^\/public\/v1\/portal\/([^/]+)\/assets\/headshot$/u,
+    )
+    if (request.method === 'POST' && speakerHeadshotMatch) {
+      if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+      return uploadSpeakerHeadshot(request, env, stub, decodeURIComponent(speakerHeadshotMatch[1]))
+    }
+
+    const publicHeadshotMatch = url.pathname.match(/^\/public\/v1\/assets\/([^/]+)$/u)
+    if (request.method === 'GET' && publicHeadshotMatch) {
+      return publicHeadshot(env, stub, decodeURIComponent(publicHeadshotMatch[1]))
+    }
+
     if (url.pathname === '/mcp') {
       if (profile === 'hosted-app' && hostedPrincipal && !hostedPrincipal.scopes.includes('*')) {
         return Response.json(
@@ -1580,7 +1729,7 @@ export default {
             type: 'participant' as const,
             id: decodeURIComponent(portalMatch[1]),
             name: 'Portal participant',
-            scopes: ['participations:write', 'requirements:write', 'portal:write'],
+            scopes: ['participations:write', 'requirements:write', 'portal:write', 'assets:write'],
           } satisfies OperationRequest['actor'])
         : reviewerMatch
           ? ({

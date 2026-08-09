@@ -19,6 +19,7 @@ import {
 import { createSeedState } from './seed.ts'
 import type {
   Actor,
+  Asset,
   Campaign,
   ChangeOperation,
   ChangeSet,
@@ -2238,6 +2239,119 @@ function applyHandler(
         data: { changedFields: changed },
       })
       return { person, changed }
+    }
+
+    case 'asset.register': {
+      const ownerType = assertOneOf(input.ownerType, 'ownerType', [
+        'submission',
+        'participation',
+        'person',
+      ] as const)
+      const ownerId = assertString(input.ownerId, 'ownerId')
+      const kind = assertOneOf(input.kind, 'kind', [
+        'headshot',
+        'slides',
+        'video',
+        'supporting_document',
+        'other',
+      ] as const)
+      const filename = assertString(input.filename, 'filename')
+      const contentType = assertString(input.contentType, 'contentType')
+      const storageKey = assertString(input.storageKey, 'storageKey')
+      const sizeBytes = input.sizeBytes
+      if (
+        !Number.isInteger(sizeBytes) ||
+        (sizeBytes as number) < 1 ||
+        (sizeBytes as number) > 50_000_000
+      ) {
+        throw new OperationError('INVALID_INPUT', 'Asset size must be between 1 byte and 50 MB.', {
+          sizeBytes: 'Choose a non-empty file smaller than 50 MB.',
+        })
+      }
+      if (filename.length > 255 || contentType.length > 200 || storageKey.length > 1_000) {
+        throw new OperationError('INVALID_INPUT', 'Asset metadata exceeds the supported size.')
+      }
+      const participant =
+        context.actor.type === 'participant'
+          ? findRequired(state.participations, context.actor.id, 'participation')
+          : null
+      if (participant) {
+        const ownsPerson = ownerType === 'person' && ownerId === participant.personId
+        const ownsParticipation = ownerType === 'participation' && ownerId === participant.id
+        if ((!ownsPerson && !ownsParticipation) || kind !== 'headshot') {
+          throw new OperationError('FORBIDDEN', 'A speaker can only upload their own headshot.')
+        }
+      }
+      const ownerBelongsToEvent =
+        ownerType === 'person'
+          ? state.participations.some(
+              (entry) => entry.eventId === state.activeEventId && entry.personId === ownerId,
+            )
+          : ownerType === 'participation'
+            ? state.participations.some(
+                (entry) => entry.eventId === state.activeEventId && entry.id === ownerId,
+              )
+            : state.submissions.some(
+                (entry) => entry.eventId === state.activeEventId && entry.id === ownerId,
+              )
+      if (!ownerBelongsToEvent) {
+        throw new OperationError('FORBIDDEN', 'The asset owner is outside the active event.')
+      }
+      const asset: Asset = {
+        id: createId('ast'),
+        eventId: state.activeEventId,
+        owner: { type: ownerType, id: ownerId },
+        kind,
+        filename,
+        contentType,
+        sizeBytes: sizeBytes as number,
+        storageKey,
+        createdAt: timestamp,
+      }
+      state.assets.push(asset)
+      appendEvent(state, context, {
+        type: 'asset.registered',
+        aggregate: { type: 'asset', id: asset.id, version: 1 },
+        summary: `Uploaded ${asset.filename}.`,
+        data: { ownerType, ownerId, kind, sizeBytes: asset.sizeBytes },
+      })
+      if (kind === 'headshot' && ownerType === 'person') {
+        const person = findRequired(state.people, ownerId, 'person')
+        person.avatarUrl = `/public/v1/assets/${encodeURIComponent(asset.id)}`
+        person.updatedAt = timestamp
+        person.version += 1
+        const participation = state.participations.find(
+          (entry) => entry.eventId === state.activeEventId && entry.personId === person.id,
+        )
+        const definition = state.requirementDefinitions.find(
+          (entry) =>
+            entry.eventId === state.activeEventId && entry.systemKey === 'profile_headshot',
+        )
+        const instance =
+          participation && definition
+            ? state.requirementInstances.find(
+                (entry) =>
+                  entry.participationId === participation.id &&
+                  entry.definitionId === definition.id,
+              )
+            : null
+        if (instance && definition && instance.status !== 'approved') {
+          const previous = instance.status
+          instance.status = 'approved'
+          instance.value = asset.id
+          instance.submittedAt = timestamp
+          instance.reviewedAt = timestamp
+          instance.updatedAt = timestamp
+          instance.version += 1
+          appendEvent(state, context, {
+            type: 'requirement.status-changed',
+            aggregate: { type: 'requirementInstance', id: instance.id, version: instance.version },
+            summary: `${person.firstName} ${person.lastName} completed ${definition.label}.`,
+            data: { participationId: participation?.id, previous, next: 'approved' },
+          })
+        }
+      }
+      return { asset }
     }
 
     case 'participation.set-status': {

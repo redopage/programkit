@@ -27,7 +27,7 @@ export function PortalView() {
 }
 
 function PortalWorkspace() {
-  const { payload, execute, mutating } = useWorkspace()
+  const { payload, execute, mutating, refresh } = useWorkspace()
   const state = payload!.state
   const participation = state.participations[0]
   const person = state.people.find((entry) => entry.id === participation.personId)!
@@ -38,6 +38,48 @@ function PortalWorkspace() {
     publicCompany: participation.publicCompany,
     bio: person.bio,
   })
+  const [uploadingHeadshot, setUploadingHeadshot] = useState(false)
+  const [headshotError, setHeadshotError] = useState<string | null>(null)
+  const headshots = state.assets
+    .filter(
+      (asset) =>
+        asset.kind === 'headshot' && asset.owner.type === 'person' && asset.owner.id === person.id,
+    )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+
+  async function uploadHeadshot(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const formElement = event.currentTarget
+    const file = new FormData(formElement).get('file')
+    if (!(file instanceof File) || file.size < 1) {
+      setHeadshotError('Choose a headshot first.')
+      return
+    }
+    setUploadingHeadshot(true)
+    setHeadshotError(null)
+    try {
+      const body = new FormData()
+      body.set('file', file)
+      const response = await fetch(
+        `/public/v1/portal/${encodeURIComponent(participation.id)}/assets/headshot`,
+        {
+          method: 'POST',
+          headers: { 'x-programkit-portal-key': participation.portalAccessKey },
+          body,
+        },
+      )
+      const result = (await response.json()) as { error?: string }
+      if (!response.ok) throw new Error(result.error ?? 'The headshot could not be uploaded.')
+      formElement.reset()
+      await refresh()
+    } catch (caught) {
+      setHeadshotError(
+        caught instanceof Error ? caught.message : 'The headshot could not be uploaded.',
+      )
+    } finally {
+      setUploadingHeadshot(false)
+    }
+  }
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     await execute(
@@ -280,6 +322,67 @@ function PortalWorkspace() {
               </h2>
               <p className="text-base text-zinc-500 sm:text-sm">Shown on the published program.</p>
             </div>
+            <form
+              className="flex flex-col gap-3 border-b border-zinc-950/5 py-4"
+              onSubmit={(event) => void uploadHeadshot(event)}
+            >
+              <div className="flex items-center gap-3">
+                <Avatar
+                  src={person.avatarUrl}
+                  name={`${person.firstName} ${person.lastName}`}
+                  size="large"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-base font-medium text-zinc-950 sm:text-sm">Headshot</p>
+                  <p className="text-pretty text-sm text-zinc-500">
+                    JPEG, PNG, or WebP up to 8 MB.
+                  </p>
+                </div>
+              </div>
+              <input
+                type="file"
+                name="file"
+                required
+                accept="image/jpeg,image/png,image/webp"
+                className="focus-ring min-h-10 w-full rounded-xl px-3 py-2 text-sm text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-zinc-800"
+              />
+              {headshotError ? (
+                <p role="alert" className="text-sm text-red-600">
+                  {headshotError}
+                </p>
+              ) : null}
+              <div className="flex justify-start">
+                <Button type="submit" size="compact" disabled={uploadingHeadshot}>
+                  <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
+                  {uploadingHeadshot ? 'Uploading…' : 'Upload headshot'}
+                </Button>
+              </div>
+              {headshots[0] ? (
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 px-3 py-2 ring-1 ring-zinc-950/5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-zinc-800">
+                      {headshots[0].filename}
+                    </p>
+                    <p className="text-sm text-zinc-500">
+                      {(headshots[0].sizeBytes / 1_000).toFixed(0)} KB ·{' '}
+                      {new Intl.DateTimeFormat('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      }).format(new Date(headshots[0].createdAt))}
+                    </p>
+                  </div>
+                  <a
+                    href={`/public/v1/assets/${encodeURIComponent(headshots[0].id)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="focus-ring rounded-full px-3 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/10 hover:bg-white"
+                  >
+                    View
+                  </a>
+                </div>
+              ) : null}
+            </form>
             <form
               className="flex flex-col gap-4 pt-4"
               onSubmit={(event) => void saveProfile(event)}
