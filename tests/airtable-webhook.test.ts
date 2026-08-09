@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { verifyAirtableWebhookMac } from '../apps/cloudflare/src/airtable-webhook.ts'
+import { verifyAirtableWebhookMac } from '@programkit/core'
 
 function hex(value: ArrayBuffer) {
   return [...new Uint8Array(value)].map((byte) => byte.toString(16).padStart(2, '0')).join('')

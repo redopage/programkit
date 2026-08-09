@@ -31,16 +31,24 @@ Use sample data only.
 
 ### Optional Airtable source of truth
 
-The local demo remains zero-configuration. To exercise the Airtable-backed path, create a blank
-base and a token scoped to that base, then run:
+The local demo remains zero-configuration. For the recommended path, register a development OAuth
+integration with the localhost callback, copy the example, add its client ID, and start ProgramKit:
 
 ```bash
-cp apps/cloudflare/.dev.vars.example apps/cloudflare/.dev.vars
-# Add AIRTABLE_TOKEN and AIRTABLE_BASE_ID to the ignored file.
+cp apps/cloudflare/.dev.vars.example .dev.vars
+# Add AIRTABLE_OAUTH_CLIENT_ID and the optional client secret.
+pnpm dev
+```
+
+Open `/integrations`, connect Airtable, grant a base, and let ProgramKit initialize or import it.
+
+The operator-token fallback remains useful for scripts and integration tests:
+
+```bash
+# Add AIRTABLE_TOKEN and AIRTABLE_BASE_ID to .dev.vars.
 pnpm airtable:setup
 pnpm airtable:seed
 pnpm airtable:verify
-pnpm dev
 ```
 
 `airtable:verify` reconstructs the complete workspace from the base and reports collection counts.
@@ -133,7 +141,7 @@ production build, and plugin validation.
 
 ## Cloudflare deployment
 
-Authenticate Wrangler, review the account and Worker name in `apps/cloudflare/wrangler.jsonc`, then
+Authenticate Wrangler, review the account and Worker name in `wrangler.jsonc`, then
 run:
 
 ```bash
@@ -149,7 +157,7 @@ The configuration declares:
 - Worker observability.
 
 The seeded demonstration needs neither a D1 database ID nor an R2 bucket. Add a custom domain with
-a `routes` entry in `apps/cloudflare/wrangler.jsonc` or the Cloudflare dashboard.
+a `routes` entry in `wrangler.jsonc` or the Cloudflare dashboard.
 
 After deployment, verify at least:
 

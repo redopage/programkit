@@ -1,8 +1,14 @@
 import { DurableObject } from 'cloudflare:workers'
 
 import { AirtableCachedWorkspaceRepository } from './airtable-repository.ts'
+import {
+  refreshAirtableOAuthToken,
+  type AirtableBaseSummary,
+  type AirtableOAuthTokenSet,
+} from './airtable-oauth.ts'
 import { AIRTABLE_SCHEMA_VERSION } from './airtable-schema.ts'
-import { AirtableWorkspaceStore } from './airtable-store.ts'
+import { AirtableWorkspaceStore, type AirtableWebhookRegistration } from './airtable-store.ts'
+import { verifyAirtableWebhookMac } from './airtable-webhook.ts'
 import { handleCoreRequest } from './http.ts'
 import type { WorkspaceRepository } from './repository.ts'
 import { createSeedState } from './seed.ts'
@@ -88,43 +94,108 @@ class DurableObjectRepository implements WorkspaceRepository {
 }
 
 export class WorkspaceDurableObject extends DurableObject {
-  readonly #repository: WorkspaceRepository
-  readonly #airtableRepository: AirtableCachedWorkspaceRepository | null
+  readonly #cache: DurableObjectRepository
   readonly #ctx: DurableObjectState
+  readonly #env: {
+    AIRTABLE_TOKEN?: string
+    AIRTABLE_BASE_ID?: string
+    AIRTABLE_OAUTH_CLIENT_ID?: string
+    AIRTABLE_OAUTH_CLIENT_SECRET?: string
+  }
+  #airtableRepository: AirtableCachedWorkspaceRepository | null = null
+  #repositoryFingerprint = 'cache'
   #hydration: Promise<void> | null = null
+  #refreshingToken: Promise<StoredAirtableConnection> | null = null
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env)
     this.#ctx = ctx
-    const cache = new DurableObjectRepository(ctx.storage)
-    const airtableEnv = env as unknown as {
+    this.#cache = new DurableObjectRepository(ctx.storage)
+    this.#env = env as unknown as {
       AIRTABLE_TOKEN?: string
       AIRTABLE_BASE_ID?: string
-    }
-    if (airtableEnv.AIRTABLE_TOKEN && airtableEnv.AIRTABLE_BASE_ID) {
-      const store = new AirtableWorkspaceStore({
-        token: airtableEnv.AIRTABLE_TOKEN,
-        baseId: airtableEnv.AIRTABLE_BASE_ID,
-      })
-      this.#airtableRepository = new AirtableCachedWorkspaceRepository(cache, store)
-      this.#repository = this.#airtableRepository
-    } else {
-      this.#airtableRepository = null
-      this.#repository = cache
+      AIRTABLE_OAUTH_CLIENT_ID?: string
+      AIRTABLE_OAUTH_CLIENT_SECRET?: string
     }
   }
 
+  async #freshConnection() {
+    const connection = await this.#ctx.storage.get<StoredAirtableConnection>(
+      'airtable-oauth:connection',
+    )
+    if (!connection) return null
+    if (Date.parse(connection.expiresAt) > Date.now() + 60_000) return connection
+    if (Date.parse(connection.refreshExpiresAt) <= Date.now()) {
+      throw new Error('The Airtable authorization expired. Reconnect Airtable to continue.')
+    }
+    if (!this.#env.AIRTABLE_OAUTH_CLIENT_ID) {
+      throw new Error('The Airtable OAuth client is not configured on this deployment.')
+    }
+    this.#refreshingToken ??= refreshAirtableOAuthToken(connection.refreshToken, {
+      clientId: this.#env.AIRTABLE_OAUTH_CLIENT_ID,
+      clientSecret: this.#env.AIRTABLE_OAUTH_CLIENT_SECRET,
+    })
+      .then(async (token) => {
+        const next = { ...connection, ...token }
+        await this.#ctx.storage.put('airtable-oauth:connection', next)
+        this.#airtableRepository = null
+        this.#repositoryFingerprint = 'cache'
+        return next
+      })
+      .finally(() => {
+        this.#refreshingToken = null
+      })
+    return this.#refreshingToken
+  }
+
+  async #repository() {
+    const connection = await this.#freshConnection()
+    const binding = connection
+      ? { baseId: connection.baseId, token: connection.accessToken, mode: 'oauth' }
+      : this.#env.AIRTABLE_TOKEN && this.#env.AIRTABLE_BASE_ID
+        ? {
+            baseId: this.#env.AIRTABLE_BASE_ID,
+            token: this.#env.AIRTABLE_TOKEN,
+            mode: 'token',
+          }
+        : null
+    if (!binding) {
+      this.#airtableRepository = null
+      this.#repositoryFingerprint = 'cache'
+      return this.#cache
+    }
+    const fingerprint = `${binding.mode}:${binding.baseId}:${binding.token}`
+    if (!this.#airtableRepository || fingerprint !== this.#repositoryFingerprint) {
+      const store = new AirtableWorkspaceStore({ token: binding.token, baseId: binding.baseId })
+      this.#airtableRepository = new AirtableCachedWorkspaceRepository(this.#cache, store)
+      this.#repositoryFingerprint = fingerprint
+      this.#hydration = null
+    }
+    return this.#airtableRepository
+  }
+
+  async #activeBaseId() {
+    const connection = await this.#ctx.storage.get<StoredAirtableConnection>(
+      'airtable-oauth:connection',
+    )
+    return connection?.baseId ?? this.#env.AIRTABLE_BASE_ID ?? null
+  }
+
   async #hydrateFromAirtable(force = false) {
-    if (!this.#airtableRepository) return
+    const repository = await this.#repository()
+    if (!(repository instanceof AirtableCachedWorkspaceRepository)) return
+    const baseId = await this.#activeBaseId()
+    if (!baseId) return
     if (!force) {
-      const marker = await this.#ctx.storage.get<{ schemaVersion: number }>(
+      const marker = await this.#ctx.storage.get<{ schemaVersion: number; baseId: string }>(
         'airtable-cache:hydrated',
       )
-      if (marker?.schemaVersion === AIRTABLE_SCHEMA_VERSION) return
+      if (marker?.schemaVersion === AIRTABLE_SCHEMA_VERSION && marker.baseId === baseId) return
     }
-    await this.#airtableRepository.replaceCacheFromAirtable()
+    await repository.replaceCacheFromAirtable()
     await this.#ctx.storage.put('airtable-cache:hydrated', {
       schemaVersion: AIRTABLE_SCHEMA_VERSION,
+      baseId,
       refreshedAt: new Date().toISOString(),
     })
   }
@@ -137,10 +208,309 @@ export class WorkspaceDurableObject extends DurableObject {
     return this.#hydration
   }
 
+  async #status() {
+    const connection = await this.#ctx.storage.get<StoredAirtableConnection>(
+      'airtable-oauth:connection',
+    )
+    const pending = await this.#ctx.storage.get<PendingAirtableConnection>(
+      'airtable-oauth:pending-connection',
+    )
+    return {
+      available: Boolean(this.#env.AIRTABLE_OAUTH_CLIENT_ID),
+      mode: connection
+        ? 'oauth'
+        : this.#env.AIRTABLE_TOKEN && this.#env.AIRTABLE_BASE_ID
+          ? 'token'
+          : 'none',
+      connected: Boolean(connection || (this.#env.AIRTABLE_TOKEN && this.#env.AIRTABLE_BASE_ID)),
+      base: connection
+        ? { id: connection.baseId, name: connection.baseName }
+        : this.#env.AIRTABLE_BASE_ID
+          ? { id: this.#env.AIRTABLE_BASE_ID, name: 'Configured base' }
+          : null,
+      bases: pending?.bases ?? [],
+      authorizedAt: pending?.authorizedAt ?? null,
+      liveSync: connection?.webhook
+        ? {
+            status: 'active',
+            expiresAt: connection.webhook.expirationTime ?? null,
+            error: null,
+          }
+        : connection
+          ? { status: 'unavailable', expiresAt: null, error: connection.webhookError ?? null }
+          : null,
+    }
+  }
+
+  async #scheduleWebhookRenewal(connection: StoredAirtableConnection) {
+    const expiration = connection.webhook?.expirationTime
+    if (!expiration) return
+    const renewAt = Math.max(Date.now() + 60_000, Date.parse(expiration) - 24 * 60 * 60 * 1_000)
+    await this.#ctx.storage.setAlarm(renewAt)
+  }
+
+  async #connectPendingBase(baseId: string, webhookUrl?: string) {
+    const pending = await this.#ctx.storage.get<PendingAirtableConnection>(
+      'airtable-oauth:pending-connection',
+    )
+    if (!pending) throw new Error('The Airtable authorization is no longer available.')
+    const base = pending.bases.find((candidate) => candidate.id === baseId)
+    if (!base) throw new Error('Choose a base that was granted to ProgramKit.')
+    const store = new AirtableWorkspaceStore({ token: pending.accessToken, baseId })
+    const tables = await store.schema()
+    const managedNames = new Set([
+      'ProgramKit State',
+      'Events',
+      'People',
+      'Participations',
+      'Submissions',
+      'Tasks',
+      'Reviews',
+      'Sessions',
+      'Placements',
+      'Tracks',
+      'Rooms',
+    ])
+    const existingManagedTables = tables.filter((table) => managedNames.has(table.name))
+    const hasProgramKitState = tables.some((table) => table.name === 'ProgramKit State')
+    if (!hasProgramKitState && existingManagedTables.length > 0) {
+      throw new Error(
+        `This base already has tables named ${existingManagedTables.map((table) => table.name).join(', ')}. Choose a dedicated base or rename those tables first.`,
+      )
+    }
+
+    let imported = false
+    let recordCount = 0
+    if (hasProgramKitState) {
+      const issues = await store.ensureSchema()
+      if (issues.length > 0) {
+        throw new Error(`The existing ProgramKit schema is incompatible: ${JSON.stringify(issues)}`)
+      }
+      const restored = await store.rebuildWorkspace()
+      await this.#cache.mutate(() => ({ state: restored, result: undefined }))
+      imported = true
+    } else {
+      const current = await this.#cache.read()
+      const exported = await store.exportWorkspace(current)
+      recordCount = exported.recordCount
+    }
+
+    let webhook: AirtableWebhookRegistration | undefined
+    let webhookError: string | undefined
+    if (webhookUrl) {
+      try {
+        webhook = await store.createWebhook(webhookUrl)
+      } catch (error) {
+        webhookError =
+          error instanceof Error ? error.message : 'Airtable live sync could not be enabled.'
+      }
+    }
+
+    const connection: StoredAirtableConnection = {
+      baseId,
+      baseName: base.name,
+      connectedAt: new Date().toISOString(),
+      accessToken: pending.accessToken,
+      refreshToken: pending.refreshToken,
+      expiresAt: pending.expiresAt,
+      refreshExpiresAt: pending.refreshExpiresAt,
+      scopes: pending.scopes,
+      webhook,
+      webhookError,
+    }
+    await this.#ctx.storage.put('airtable-oauth:connection', connection)
+    await this.#ctx.storage.delete('airtable-oauth:pending-connection')
+    await this.#ctx.storage.put('airtable-cache:hydrated', {
+      schemaVersion: AIRTABLE_SCHEMA_VERSION,
+      baseId,
+      refreshedAt: new Date().toISOString(),
+    })
+    this.#airtableRepository = null
+    this.#repositoryFingerprint = 'cache'
+    this.#hydration = null
+    await this.#scheduleWebhookRenewal(connection)
+    return {
+      base: { id: base.id, name: base.name },
+      imported,
+      recordCount,
+      liveSync: webhook ? 'active' : webhookUrl ? 'unavailable' : 'manual',
+      warning: webhookError,
+    }
+  }
+
+  async #refreshWebhook(connection: StoredAirtableConnection) {
+    if (!connection.webhook) return connection
+    const store = new AirtableWorkspaceStore({
+      token: connection.accessToken,
+      baseId: connection.baseId,
+    })
+    const refreshed = await store.refreshWebhook(connection.webhook.id)
+    const next: StoredAirtableConnection = {
+      ...connection,
+      webhook: {
+        ...connection.webhook,
+        expirationTime: refreshed.expirationTime ?? undefined,
+      },
+      webhookError: undefined,
+    }
+    await this.#ctx.storage.put('airtable-oauth:connection', next)
+    await this.#scheduleWebhookRenewal(next)
+    return next
+  }
+
+  async alarm() {
+    const pendingRefresh = await this.#ctx.storage.get<boolean>('airtable-webhook:pending-refresh')
+    if (pendingRefresh) {
+      try {
+        await this.#hydrateFromAirtable(true)
+        await this.#ctx.storage.delete('airtable-webhook:pending-refresh')
+      } catch {
+        await this.#ctx.storage.setAlarm(Date.now() + 60_000)
+        return
+      }
+    }
+
+    const connection = await this.#freshConnection()
+    if (!connection?.webhook) return
+    const expiresAt = connection.webhook.expirationTime
+      ? Date.parse(connection.webhook.expirationTime)
+      : Number.POSITIVE_INFINITY
+    if (expiresAt <= Date.now() + 24 * 60 * 60 * 1_000) {
+      try {
+        await this.#refreshWebhook(connection)
+      } catch (error) {
+        await this.#ctx.storage.put('airtable-oauth:connection', {
+          ...connection,
+          webhookError:
+            error instanceof Error ? error.message : 'Airtable live sync renewal failed.',
+        } satisfies StoredAirtableConnection)
+        await this.#ctx.storage.setAlarm(Date.now() + 60 * 60 * 1_000)
+      }
+    } else {
+      await this.#scheduleWebhookRenewal(connection)
+    }
+  }
+
   async fetch(request: Request) {
     const url = new URL(request.url)
+    if (request.method === 'POST' && url.pathname === '/internal/airtable/oauth/start') {
+      const pending = (await request.json()) as PendingAirtableAuthorization
+      if (
+        !pending.state ||
+        !pending.codeVerifier ||
+        !pending.redirectUri ||
+        Date.parse(pending.expiresAt) <= Date.now()
+      ) {
+        return Response.json({ ok: false, error: 'Invalid OAuth request.' }, { status: 400 })
+      }
+      await this.#ctx.storage.put(`airtable-oauth:authorization:${pending.state}`, pending)
+      return Response.json({ ok: true })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/internal/airtable/oauth/consume') {
+      const { state } = (await request.json()) as { state?: string }
+      if (!state) return Response.json({ ok: false }, { status: 400 })
+      const key = `airtable-oauth:authorization:${state}`
+      const pending = await this.#ctx.storage.get<PendingAirtableAuthorization>(key)
+      await this.#ctx.storage.delete(key)
+      if (!pending || Date.parse(pending.expiresAt) <= Date.now()) {
+        return Response.json(
+          { ok: false, error: 'OAuth state is invalid or expired.' },
+          { status: 400 },
+        )
+      }
+      return Response.json({ ok: true, authorization: pending })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/internal/airtable/oauth/pending') {
+      const pending = (await request.json()) as PendingAirtableConnection
+      if (!pending.accessToken || !pending.refreshToken || !Array.isArray(pending.bases)) {
+        return Response.json({ ok: false, error: 'Invalid Airtable token set.' }, { status: 400 })
+      }
+      await this.#ctx.storage.put('airtable-oauth:pending-connection', pending)
+      return Response.json({ ok: true })
+    }
+
+    if (request.method === 'GET' && url.pathname === '/internal/airtable/status') {
+      return Response.json(await this.#status())
+    }
+
+    if (request.method === 'POST' && url.pathname === '/internal/airtable/connect') {
+      try {
+        const { baseId, webhookUrl } = (await request.json()) as {
+          baseId?: string
+          webhookUrl?: string
+        }
+        if (!baseId) throw new Error('Choose an Airtable base.')
+        return Response.json({
+          ok: true,
+          ...(await this.#connectPendingBase(baseId, webhookUrl)),
+        })
+      } catch (error) {
+        return Response.json(
+          { ok: false, error: error instanceof Error ? error.message : 'Airtable setup failed.' },
+          { status: 400 },
+        )
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/internal/airtable/disconnect') {
+      const connection = await this.#freshConnection()
+      if (connection?.webhook) {
+        try {
+          const store = new AirtableWorkspaceStore({
+            token: connection.accessToken,
+            baseId: connection.baseId,
+          })
+          await store.deleteWebhook(connection.webhook.id)
+        } catch {
+          // The local connection should still be removable if Airtable is unavailable.
+        }
+      }
+      await this.#ctx.storage.delete('airtable-oauth:connection')
+      await this.#ctx.storage.delete('airtable-oauth:pending-connection')
+      await this.#ctx.storage.delete('airtable-cache:hydrated')
+      await this.#ctx.storage.delete('airtable-webhook:pending-refresh')
+      await this.#ctx.storage.deleteAlarm()
+      this.#airtableRepository = null
+      this.#repositoryFingerprint = 'cache'
+      this.#hydration = null
+      return Response.json({ ok: true })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/internal/airtable/webhook') {
+      const connection = await this.#ctx.storage.get<StoredAirtableConnection>(
+        'airtable-oauth:connection',
+      )
+      if (!connection?.webhook) return new Response(null, { status: 404 })
+      const body = await request.arrayBuffer()
+      if (
+        !(await verifyAirtableWebhookMac(
+          body,
+          request.headers.get('x-airtable-content-mac'),
+          connection.webhook.macSecretBase64,
+        ))
+      ) {
+        return new Response(null, { status: 401 })
+      }
+      const notification = JSON.parse(new TextDecoder().decode(body)) as {
+        base?: { id?: string }
+        webhook?: { id?: string }
+      }
+      if (
+        notification.base?.id !== connection.baseId ||
+        (notification.webhook?.id && notification.webhook.id !== connection.webhook.id)
+      ) {
+        return new Response(null, { status: 403 })
+      }
+      await this.#ctx.storage.put('airtable-webhook:pending-refresh', true)
+      await this.#ctx.storage.setAlarm(Date.now() + 1_500)
+      return new Response(null, { status: 204 })
+    }
+
     if (request.method === 'POST' && url.pathname === '/internal/airtable/refresh') {
-      if (!this.#airtableRepository) {
+      const repository = await this.#repository()
+      if (!(repository instanceof AirtableCachedWorkspaceRepository)) {
         return Response.json({ ok: false, error: 'Airtable is not configured.' }, { status: 409 })
       }
       await this.#hydrateFromAirtable(true)
@@ -148,9 +518,30 @@ export class WorkspaceDurableObject extends DurableObject {
     }
 
     await this.#ensureHydrated()
-    const response = await handleCoreRequest(request, this.#repository, {
+    const repository = await this.#repository()
+    const response = await handleCoreRequest(request, repository, {
       actor: actorFromRequest(request),
     })
     return response ?? new Response('Not found.', { status: 404 })
   }
+}
+
+interface PendingAirtableAuthorization {
+  state: string
+  codeVerifier: string
+  redirectUri: string
+  expiresAt: string
+}
+
+interface PendingAirtableConnection extends AirtableOAuthTokenSet {
+  bases: AirtableBaseSummary[]
+  authorizedAt: string
+}
+
+interface StoredAirtableConnection extends AirtableOAuthTokenSet {
+  baseId: string
+  baseName: string
+  connectedAt: string
+  webhook?: AirtableWebhookRegistration
+  webhookError?: string
 }

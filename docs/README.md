@@ -14,9 +14,11 @@ not maintain a second version of product or architecture facts.
    are held to, and the checklist a UI change is reviewed against.
 3. [Product status and roadmap](../ROADMAP.md) distinguishes working capabilities from production
    depth that is still needed.
-4. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
+4. [Evaluator gap analysis](product/evaluator-gap-analysis.md) maps the complete competition rubric
+   to working evidence and missing end-to-end depth.
+5. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
    competition brief.
-5. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
+6. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
    processor, and persistence boundary.
 
 ### I want to run or adapt ProgramKit
@@ -46,18 +48,19 @@ Start at [Agent navigation](agents/README.md). Coding agents should also read th
 
 ## Sources of truth
 
-| Question                                           | Canonical document or code                             |
-| -------------------------------------------------- | ------------------------------------------------------ |
-| What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                          |
-| Why are the packages and hosts separated?          | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                |
-| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                    |
-| How is the repository operated?                    | [`OPERATIONS.md`](../OPERATIONS.md)                    |
-| What must change before real data?                 | [`SECURITY.md`](../SECURITY.md)                        |
-| Which operations exist?                            | `packages/core/src/manifest.ts`                        |
-| Which HTTP resources exist?                        | [`docs/api/README.md`](api/README.md)                  |
-| What does the domain store?                        | `packages/core/src/types.ts`                           |
-| Which URLs and surfaces exist?                     | `packages/web/src/routes` and `packages/web/README.md` |
-| Which MCP tools and resources exist?               | `packages/agent/README.md`                             |
+| Question                                           | Canonical document or code                                       |
+| -------------------------------------------------- | ---------------------------------------------------------------- |
+| What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                                    |
+| How do we compare with the full evaluator?         | [`evaluator-gap-analysis.md`](product/evaluator-gap-analysis.md) |
+| Why are the packages and hosts separated?          | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                          |
+| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                              |
+| How is the repository operated?                    | [`OPERATIONS.md`](../OPERATIONS.md)                              |
+| What must change before real data?                 | [`SECURITY.md`](../SECURITY.md)                                  |
+| Which operations exist?                            | `packages/core/src/manifest.ts`                                  |
+| Which HTTP resources exist?                        | [`docs/api/README.md`](api/README.md)                            |
+| What does the domain store?                        | `packages/core/src/types.ts`                                     |
+| Which URLs and surfaces exist?                     | `packages/web/src/routes` and `packages/web/README.md`           |
+| Which MCP tools and resources exist?               | `packages/agent/README.md`                                       |
 
 When behavior and prose disagree, verify the executable code and tests, then update the canonical
 document in the same change. Do not solve drift by adding another summary.

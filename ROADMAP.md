@@ -11,6 +11,9 @@ Communications and readiness span that lifecycle. The seeded AIE NYC workspace p
 spine, but a visible screen is not automatically a production-complete capability. This document
 is the source of truth for that distinction.
 
+The [competition evaluator gap analysis](docs/product/evaluator-gap-analysis.md) maps the complete
+96-item rubric to current evidence and the highest-value missing workflows.
+
 ## Current capability map
 
 | Workflow           | Trustworthy today                                                                                                                                                                                                                                 | Still needed for production depth                                                                                    |
@@ -97,7 +100,8 @@ provider; provider calls run after a transactional outbox commit.
 - Done: versioned additive schema for the workspace plus ten native operational tables.
 - Done: stable-ID batch upserts, exact reconstruction, record-level deltas, cached reads, and
   Airtable-before-cache acknowledgement.
-- Done: HMAC-verified notification endpoint and source-filter strategy for loop prevention.
+- Done: OAuth webhook registration, HMAC verification, source filtering, debounce, and renewal
+  alarms.
 - Add webhook payload cursors and fetch only affected records instead of a full refresh.
 - Add a durable retry journal or alarm for partially completed multi-table writes.
 - Route allowlisted inbound edits through named operations or human-approved change sets.

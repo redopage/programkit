@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   AIRTABLE_SCHEMA_VERSION,
+  AirtableWorkspaceStore,
   AirtableCachedWorkspaceRepository,
   MemoryWorkspaceRepository,
   airtableTableDefinitions,
@@ -112,5 +113,71 @@ describe('Airtable workspace persistence', () => {
       })),
     ).rejects.toThrow('Airtable unavailable')
     expect((await cache.read()).revision).toBe(initial.revision)
+  })
+
+  it('honors Airtable rate limits and retries a throttled request', async () => {
+    let attempts = 0
+    const store = new AirtableWorkspaceStore({
+      token: 'test',
+      baseId: 'app_test',
+      minimumRequestIntervalMs: 0,
+      fetch: async () => {
+        attempts += 1
+        if (attempts === 1) {
+          return Response.json(
+            { error: { type: 'TOO_MANY_REQUESTS' } },
+            { status: 429, headers: { 'retry-after': '0' } },
+          )
+        }
+        return Response.json({ tables: [] })
+      },
+    })
+
+    await expect(store.schema()).resolves.toEqual([])
+    expect(attempts).toBe(2)
+    expect(store.requestCount).toBe(2)
+  })
+
+  it('registers, renews, and removes a client-edit webhook', async () => {
+    const requests: Array<{ path: string; init: RequestInit }> = []
+    const store = new AirtableWorkspaceStore({
+      token: 'test',
+      baseId: 'app_test',
+      minimumRequestIntervalMs: 0,
+      fetch: async (input, init = {}) => {
+        const path = new URL(String(input)).pathname
+        requests.push({ path, init })
+        if (path.endsWith('/refresh')) {
+          return Response.json({ expirationTime: '2026-08-16T12:00:00.000Z' })
+        }
+        if (init.method === 'DELETE') return Response.json({ deleted: true })
+        return Response.json({
+          id: 'ach_test',
+          macSecretBase64: 'c2VjcmV0',
+          expirationTime: '2026-08-15T12:00:00.000Z',
+        })
+      },
+    })
+
+    const webhook = await store.createWebhook('https://programkit.dev/webhook')
+    await store.refreshWebhook(webhook.id)
+    await store.deleteWebhook(webhook.id)
+
+    expect(webhook).toMatchObject({
+      id: 'ach_test',
+      notificationUrl: 'https://programkit.dev/webhook',
+    })
+    expect(JSON.parse(String(requests[0]?.init.body))).toMatchObject({
+      specification: {
+        options: {
+          filters: { dataTypes: ['tableData'], fromSources: expect.arrayContaining(['client']) },
+        },
+      },
+    })
+    expect(requests.map((request) => [request.init.method, request.path])).toEqual([
+      ['POST', '/v0/bases/app_test/webhooks'],
+      ['POST', '/v0/bases/app_test/webhooks/ach_test/refresh'],
+      ['DELETE', '/v0/bases/app_test/webhooks/ach_test'],
+    ])
   })
 })

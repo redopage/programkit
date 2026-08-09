@@ -94,9 +94,10 @@ HMACs. The current seed uses 171 records. Measured steady-state costs are zero A
 page load, two requests for a simple one-record mutation, and eleven requests for an explicit full
 restore.
 
-The inbound webhook currently performs a full refresh and is intentionally marked experimental.
-Production work still needs payload cursors, narrow record fetches, durable partial-write retries,
-and conversion of direct edits through named operations or reviewable change sets. See the
+The OAuth flow registers an HMAC-signed webhook and renews it with a Durable Object alarm. Inbound
+edits currently perform a debounced full refresh. Production work still needs payload cursors,
+narrow record fetches, durable partial-write retries, and conversion of direct edits through named
+operations or reviewable change sets. See the
 [Airtable integration guide](docs/integrations/airtable.md) for setup and the exact current boundary.
 
 ## Local development
@@ -114,15 +115,31 @@ SQLite-backed Durable Object together in `workerd`.
 
 ## Deploy
 
-Authenticate Wrangler, review `apps/cloudflare/wrangler.jsonc`, then run:
+Use the Deploy to Cloudflare button for the shortest path:
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
+
+Cloudflare clones the public repository, builds it, and provisions the SQLite Durable Object from
+the root `wrangler.jsonc`. The application runs immediately with its isolated demo store. Airtable
+is an optional second setup step because every self-hosted callback domain needs its own Airtable
+OAuth registration.
+
+For a local checkout, authenticate Wrangler, review `wrangler.jsonc`, then run:
 
 ```bash
 pnpm deploy
 ```
 
 The command builds the three public packages, type-checks the workspace, builds the Vite client and
-Worker, and deploys the checked-in Cloudflare application. No deployment files are generated behind
-the scenes.
+Worker, and deploys the checked-in Cloudflare application.
+
+### Enable Airtable on a deployment
+
+Register an OAuth integration with the exact callback
+`https://YOUR_HOST/api/v1/integrations/airtable/oauth/callback`, then add the client ID and optional
+client secret as Worker secrets. Open **Integrations** and choose **Connect Airtable**. The full
+consent and base-selection flow is documented in the
+[Airtable integration guide](docs/integrations/airtable.md#connect-airtable).
 
 After deploying, verify:
 
@@ -157,13 +174,10 @@ production step is a durable retry journal for partial multi-table failures.
 ## Repository hosting and Forge
 
 ProgramKit does not depend on a GitHub-specific runtime. Forge, GitHub, or another Git server can
-host the repository because the deploy command uses the local checkout and Wrangler. CI examples
-currently live under `.github`, but repository hosting is a contributor workflow choice, not a
-product architecture boundary.
-
-The small Forge bonus is not worth splitting issue history or making the quick start less familiar
-before the product workflow is complete. A Forge mirror is reasonable later if it can run the same
-`pnpm check` and preserve an obvious contribution path.
+host the repository because the deploy command uses the local checkout and Wrangler. Cloudflare's
+deploy button currently accepts public GitHub and GitLab repositories only, so GitHub remains the
+canonical deployment source. A Forge mirror can earn the competition bonus without making the
+installation path worse.
 
 ## Leaving Cloudflare
 

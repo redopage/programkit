@@ -4,6 +4,8 @@ An open-source conference-program toolkit for calls for proposals, review, speak
 
 **Live demo:** [programkit.dev](https://programkit.dev)
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
+
 ProgramKit separates the operational truth, the human interface, and the agent interface so they
 all use the same commands and invariants. Conference program operations is the included proving
 application: it models people, event participation, readiness, communications, sessions,

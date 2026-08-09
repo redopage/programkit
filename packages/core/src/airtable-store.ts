@@ -14,6 +14,7 @@ interface AirtableStoreOptions {
   baseId: string
   fetch?: typeof globalThis.fetch
   apiOrigin?: string
+  minimumRequestIntervalMs?: number
 }
 
 interface AirtableTableMetadata {
@@ -46,6 +47,13 @@ export interface AirtableDeltaResult {
   changedTables: string[]
 }
 
+export interface AirtableWebhookRegistration {
+  id: string
+  macSecretBase64: string
+  expirationTime?: string
+  notificationUrl: string
+}
+
 export class AirtableApiError extends Error {
   constructor(
     message: string,
@@ -74,35 +82,65 @@ export class AirtableWorkspaceStore {
   readonly #baseId: string
   readonly #fetch: typeof globalThis.fetch
   readonly #apiOrigin: string
+  readonly #minimumRequestIntervalMs: number
   #requestCount = 0
+  #requestTail: Promise<void> = Promise.resolve()
+  #nextRequestAt = 0
 
   constructor(options: AirtableStoreOptions) {
     this.#token = options.token
     this.#baseId = options.baseId
-    this.#fetch = options.fetch ?? globalThis.fetch
+    this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis)
     this.#apiOrigin = options.apiOrigin ?? 'https://api.airtable.com'
+    this.#minimumRequestIntervalMs = options.minimumRequestIntervalMs ?? (options.fetch ? 0 : 220)
   }
 
   get requestCount() {
     return this.#requestCount
   }
 
+  async #scheduledRequest(path: string, init: RequestInit) {
+    const previous = this.#requestTail
+    let release: () => void = () => undefined
+    this.#requestTail = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    await previous
+    try {
+      const wait = Math.max(0, this.#nextRequestAt - Date.now())
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+      this.#nextRequestAt = Date.now() + this.#minimumRequestIntervalMs
+      this.#requestCount += 1
+      return await this.#fetch(`${this.#apiOrigin}${path}`, init)
+    } finally {
+      release()
+    }
+  }
+
   async #request<T>(path: string, init: RequestInit = {}) {
-    this.#requestCount += 1
     const headers = new Headers(init.headers)
     headers.set('authorization', `Bearer ${this.#token}`)
     if (init.body) headers.set('content-type', 'application/json')
-    const response = await this.#fetch(`${this.#apiOrigin}${path}`, { ...init, headers })
-    const text = await response.text()
-    const body = text ? (JSON.parse(text) as unknown) : null
-    if (!response.ok) {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await this.#scheduledRequest(path, { ...init, headers })
+      const text = await response.text()
+      const body = text ? (JSON.parse(text) as unknown) : null
+      if (response.ok) return body as T
+      if (response.status === 429 && attempt < 4) {
+        const retryAfter = Number(response.headers.get('retry-after'))
+        const retryDelay = Number.isFinite(retryAfter)
+          ? Math.max(250, retryAfter * 1_000)
+          : 500 * 2 ** attempt
+        this.#nextRequestAt = Math.max(this.#nextRequestAt, Date.now() + retryDelay)
+        continue
+      }
       throw new AirtableApiError(
         `Airtable request failed with ${response.status}.`,
         response.status,
         body,
       )
     }
-    return body as T
+    throw new AirtableApiError('Airtable rate limit retries were exhausted.', 429, null)
   }
 
   async schema() {
@@ -110,6 +148,41 @@ export class AirtableWorkspaceStore {
       `/v0/meta/bases/${this.#baseId}/tables`,
     )
     return body.tables
+  }
+
+  async createWebhook(notificationUrl: string): Promise<AirtableWebhookRegistration> {
+    const body = await this.#request<{
+      id: string
+      macSecretBase64: string
+      expirationTime?: string
+    }>(`/v0/bases/${this.#baseId}/webhooks`, {
+      method: 'POST',
+      body: JSON.stringify({
+        notificationUrl,
+        specification: {
+          options: {
+            filters: {
+              dataTypes: ['tableData'],
+              fromSources: ['client', 'formSubmission', 'formPageSubmission', 'automation', 'sync'],
+            },
+          },
+        },
+      }),
+    })
+    return { ...body, notificationUrl }
+  }
+
+  async refreshWebhook(webhookId: string) {
+    return this.#request<{ expirationTime: string | null }>(
+      `/v0/bases/${this.#baseId}/webhooks/${webhookId}/refresh`,
+      { method: 'POST', body: '{}' },
+    )
+  }
+
+  async deleteWebhook(webhookId: string) {
+    await this.#request(`/v0/bases/${this.#baseId}/webhooks/${webhookId}`, {
+      method: 'DELETE',
+    })
   }
 
   async ensureSchema() {

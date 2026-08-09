@@ -20,8 +20,18 @@ export type {
   AirtableDeltaResult,
   AirtableExportResult,
   AirtableSchemaIssue,
+  AirtableWebhookRegistration,
 } from './airtable-store.ts'
 export { AirtableCachedWorkspaceRepository } from './airtable-repository.ts'
+export {
+  airtableOAuthScopes,
+  createAirtableOAuthAuthorization,
+  exchangeAirtableAuthorizationCode,
+  listAirtableBases,
+  refreshAirtableOAuthToken,
+} from './airtable-oauth.ts'
+export type { AirtableBaseSummary, AirtableOAuthTokenSet } from './airtable-oauth.ts'
+export { verifyAirtableWebhookMac } from './airtable-webhook.ts'
 export type {
   AirtableFieldChange,
   AirtableFieldConflict,

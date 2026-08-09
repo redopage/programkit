@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as OperatorRouteImport } from './routes/_operator'
 import { Route as AgendaRouteImport } from './routes/agenda'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as OperatorIndexRouteImport } from './routes/_operator.index'
 import { Route as OperatorAgentRouteImport } from './routes/_operator.agent'
 import { Route as OperatorChangesRouteImport } from './routes/_operator.changes'
@@ -35,6 +37,16 @@ const OperatorRoute = OperatorRouteImport.update({
 const AgendaRoute = AgendaRouteImport.update({
   id: '/agenda',
   path: '/agenda',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OperatorIndexRoute = OperatorIndexRouteImport.update({
@@ -121,6 +133,8 @@ const SubmitFormSlugRoute = SubmitFormSlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof OperatorIndexRoute
   '/agenda': typeof AgendaRoute
+  '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/agent': typeof OperatorAgentRoute
   '/changes': typeof OperatorChangesRoute
   '/communications': typeof OperatorCommunicationsRoute
@@ -139,6 +153,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/agenda': typeof AgendaRoute
+  '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/agent': typeof OperatorAgentRoute
   '/changes': typeof OperatorChangesRoute
   '/communications': typeof OperatorCommunicationsRoute
@@ -160,6 +176,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_operator': typeof OperatorRouteWithChildren
   '/agenda': typeof AgendaRoute
+  '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/_operator/agent': typeof OperatorAgentRoute
   '/_operator/changes': typeof OperatorChangesRoute
   '/_operator/communications': typeof OperatorCommunicationsRoute
@@ -182,6 +200,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agenda'
+    | '/privacy'
+    | '/terms'
     | '/agent'
     | '/changes'
     | '/communications'
@@ -200,6 +220,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/agenda'
+    | '/privacy'
+    | '/terms'
     | '/agent'
     | '/changes'
     | '/communications'
@@ -220,6 +242,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_operator'
     | '/agenda'
+    | '/privacy'
+    | '/terms'
     | '/_operator/agent'
     | '/_operator/changes'
     | '/_operator/communications'
@@ -241,6 +265,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   OperatorRoute: typeof OperatorRouteWithChildren
   AgendaRoute: typeof AgendaRoute
+  PrivacyRoute: typeof PrivacyRoute
+  TermsRoute: typeof TermsRoute
   PortalParticipationIdRoute: typeof PortalParticipationIdRoute
   ReviewerReviewerIdRoute: typeof ReviewerReviewerIdRoute
   SubmitFormSlugRoute: typeof SubmitFormSlugRoute
@@ -260,6 +286,20 @@ declare module '@tanstack/react-router' {
       path: '/agenda'
       fullPath: '/agenda'
       preLoaderRoute: typeof AgendaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_operator/': {
@@ -416,6 +456,8 @@ const OperatorRouteWithChildren = OperatorRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   OperatorRoute: OperatorRouteWithChildren,
   AgendaRoute: AgendaRoute,
+  PrivacyRoute: PrivacyRoute,
+  TermsRoute: TermsRoute,
   PortalParticipationIdRoute: PortalParticipationIdRoute,
   ReviewerReviewerIdRoute: ReviewerReviewerIdRoute,
   SubmitFormSlugRoute: SubmitFormSlugRoute,

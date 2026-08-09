@@ -24,6 +24,9 @@ The demo intentionally makes all workflows immediately inspectable:
   scopes.
 - `x-programkit-workspace-key` selects a Durable Object. It is routing input, not verified organization
   membership or tenant isolation.
+- Starting Airtable OAuth creates a random, HTTP-only trial workspace cookie so one demo visitor
+  cannot replace another visitor's Airtable connection. This is browser isolation, not team
+  identity or cross-device authentication.
 
 These shortcuts are acceptable only for deterministic sample data. Production deployments must
 replace the actor and workspace resolution in `apps/cloudflare/src/worker.ts`; hiding the routes or
@@ -54,6 +57,9 @@ The following controls remain useful after a real identity adapter is added:
 - Current MCP protocol metadata and routing-header validation
 - Incrementally enforced 128 KB JSON request limits on the REST operation surface
 - Atomic repository mutation and transactional Durable Object storage writes
+- Airtable OAuth state expiry, PKCE, server-only rotating tokens, same-origin connection mutations,
+  per-trial-workspace connection isolation, signed inbound webhooks, and best-effort webhook
+  deletion on disconnect
 
 These controls do not authenticate a human, protect an OAuth bearer token, deliver email, scan a
 file, or establish regulatory compliance by themselves.

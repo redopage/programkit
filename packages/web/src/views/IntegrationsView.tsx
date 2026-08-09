@@ -8,16 +8,101 @@ import {
   MinusCircleIcon,
   TableCellsIcon,
 } from '@heroicons/react/16/solid'
+import { useEffect, useState } from 'react'
 
 import { useWorkspace } from '../lib/workspace.tsx'
-import { Button, Callout, PageHeader, cx, sentenceCase } from '../components/ui.tsx'
+import { Button, Callout, PageHeader, cx, selectControl, sentenceCase } from '../components/ui.tsx'
+
+interface AirtableSetupStatus {
+  available: boolean
+  connected: boolean
+  mode: 'oauth' | 'token' | 'none'
+  base: { id: string; name: string } | null
+  bases: Array<{ id: string; name: string; permissionLevel: string }>
+  liveSync: {
+    status: 'active' | 'unavailable'
+    expiresAt: string | null
+    error: string | null
+  } | null
+}
 
 export function IntegrationsView() {
-  const { payload, execute, mutating } = useWorkspace()
+  const { payload, execute, mutating, refresh } = useWorkspace()
+  const [setup, setSetup] = useState<AirtableSetupStatus | null>(null)
+  const [selectedBaseId, setSelectedBaseId] = useState('')
+  const [setupBusy, setSetupBusy] = useState(false)
+  const [setupError, setSetupError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void fetch('/api/v1/integrations/airtable/status', {
+      headers: { accept: 'application/json' },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Airtable status could not be loaded.')
+        return (await response.json()) as AirtableSetupStatus
+      })
+      .then((status) => {
+        setSetup(status)
+        setSelectedBaseId((current) => current || status.bases[0]?.id || '')
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return
+        setSetupError(
+          error instanceof Error ? error.message : 'Airtable status could not be loaded.',
+        )
+      })
+    return () => controller.abort()
+  }, [])
+
+  const query = new URLSearchParams(window.location.search)
+  const oauthStatus = query.get('airtable')
+  const oauthMessage = query.get('message')
+
   if (!payload) return null
   const { state } = payload
   const airtable = state.integrations.find((integration) => integration.kind === 'airtable')
   const connections = state.integrations.filter((integration) => integration.kind !== 'airtable')
+  const airtableConnected = setup?.connected ?? airtable?.status === 'connected'
+
+  async function connectAirtable() {
+    if (!selectedBaseId) return
+    setSetupBusy(true)
+    setSetupError(null)
+    try {
+      const response = await fetch('/api/v1/integrations/airtable/connect', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ baseId: selectedBaseId }),
+      })
+      const body = (await response.json()) as { ok?: boolean; error?: string }
+      if (!response.ok || !body.ok) throw new Error(body.error ?? 'Airtable setup failed.')
+      await refresh()
+      window.location.replace('/integrations?airtable=connected')
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : 'Airtable setup failed.')
+      setSetupBusy(false)
+    }
+  }
+
+  async function disconnectAirtable() {
+    if (!window.confirm('Disconnect Airtable? ProgramKit will keep its current local cache.'))
+      return
+    setSetupBusy(true)
+    setSetupError(null)
+    try {
+      const response = await fetch('/api/v1/integrations/airtable/disconnect', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      })
+      if (!response.ok) throw new Error('Airtable could not be disconnected.')
+      window.location.replace('/integrations?airtable=disconnected')
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : 'Airtable could not be disconnected.')
+      setSetupBusy(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -95,7 +180,7 @@ export function IntegrationsView() {
                     </div>
                   </div>
                   <span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-violet-700 ring-1 ring-inset ring-violet-950/10">
-                    {airtable?.status === 'connected' ? 'Connected' : 'Not configured'}
+                    {airtableConnected ? 'Connected' : 'Not configured'}
                   </span>
                 </div>
 
@@ -128,6 +213,93 @@ export function IntegrationsView() {
                     </span>
                   ))}
                 </div>
+
+                {oauthStatus === 'error' || setupError ? (
+                  <p role="alert" className="text-pretty text-sm font-medium text-red-700">
+                    {setupError ?? oauthMessage ?? 'Airtable authorization did not finish.'}
+                  </p>
+                ) : null}
+
+                {setup && setup.bases.length > 0 && !setup.connected ? (
+                  <div className="rounded-xl bg-white/80 p-3 ring-1 ring-inset ring-violet-950/10">
+                    <label
+                      htmlFor="airtable-base"
+                      className="block text-sm font-medium text-zinc-950"
+                    >
+                      Choose the base ProgramKit should use
+                    </label>
+                    <p className="pt-0.5 text-sm text-zinc-500">
+                      A dedicated blank base is recommended. Unrelated tables are left alone.
+                    </p>
+                    <div className="flex flex-col gap-2 pt-3 sm:flex-row sm:items-center">
+                      <span className="grid min-w-0 flex-1 grid-cols-1">
+                        <select
+                          id="airtable-base"
+                          className={selectControl}
+                          value={selectedBaseId}
+                          onChange={(event) => setSelectedBaseId(event.target.value)}
+                        >
+                          {setup.bases.map((base) => (
+                            <option key={base.id} value={base.id}>
+                              {base.name}
+                            </option>
+                          ))}
+                        </select>
+                      </span>
+                      <Button
+                        variant="primary"
+                        disabled={setupBusy || !selectedBaseId}
+                        onClick={() => void connectAirtable()}
+                      >
+                        {setupBusy ? 'Preparing base…' : 'Use this base'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : airtableConnected ? (
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-zinc-600">
+                        {setup?.base?.name ?? 'Airtable base'} is the durable source of truth.
+                      </p>
+                      {setup?.liveSync?.status === 'active' ? (
+                        <p className="pt-0.5 text-sm text-emerald-700">
+                          Direct Airtable edits sync back automatically.
+                        </p>
+                      ) : setup?.mode === 'oauth' ? (
+                        <p className="pt-0.5 text-sm text-amber-700">
+                          {setup.liveSync?.error ??
+                            'Automatic inbound sync is unavailable. Reconnect from the deployed HTTPS app.'}
+                        </p>
+                      ) : null}
+                    </div>
+                    {setup?.mode === 'oauth' ? (
+                      <Button
+                        variant="ghost"
+                        size="compact"
+                        disabled={setupBusy}
+                        onClick={() => void disconnectAirtable()}
+                      >
+                        Disconnect
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : setup?.available ? (
+                  <div>
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        window.location.assign('/api/v1/integrations/airtable/oauth/start')
+                      }
+                    >
+                      <TableCellsIcon className="size-4 h-lh shrink-0 fill-violet-600" />
+                      Connect Airtable
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-500">
+                    Add an Airtable OAuth client or installation token to this deployment.
+                  </p>
+                )}
               </div>
             </article>
           </div>

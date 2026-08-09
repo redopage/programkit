@@ -1,5 +1,20 @@
 @import '@fontsource-variable/inter';
 @import 'tailwindcss';
+
+@layer components {
+  .legal-copy {
+    @apply space-y-4 text-base leading-7;
+  }
+
+  .legal-copy h2 {
+    @apply pt-5 text-lg font-semibold text-zinc-950;
+  }
+
+  .legal-copy a,
+  .legal-footer a {
+    @apply font-medium text-blue-600 underline decoration-blue-600/25 underline-offset-2 hover:text-blue-700;
+  }
+}
 @source './';
 
 @theme {
