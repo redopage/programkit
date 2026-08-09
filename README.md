@@ -120,6 +120,7 @@ checklist is in [Security](SECURITY.md) and [Operations](OPERATIONS.md).
 - [Documentation map](docs/README.md) — choose a product, operator, contributor, or agent path
 - [Program lifecycle](docs/product/program-lifecycle.md) — the end-to-end conference workflow
 - [Build and publish a CFP](docs/guides/build-and-publish-a-cfp.md) — first product task
+- [Competition submission pack](docs/submission/README.md) — evidence, walkthrough, final QA, and release handoff
 - [Product evidence showcase](showcase/index.html) — screenshot comparison with the supplied brief
 - [HTTP API](docs/api/README.md) — event resources, named writes, and integration conventions
 - [Agent navigation](docs/agents/README.md) — help a human from the same canonical sources

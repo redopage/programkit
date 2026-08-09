@@ -18,7 +18,9 @@ not maintain a second version of product or architecture facts.
    sandbox, scoped projections, and embed routes.
 5. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
    competition brief.
-6. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
+6. [Competition submission pack](submission/README.md) maps requirements to evidence and provides
+   the walkthrough, final QA checklist, submission copy, and Andrew release handoff.
+7. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
    processor, and persistence boundary.
 
 ### I want to run or adapt ProgramKit

@@ -161,7 +161,6 @@ participant session. Open `/embed/speakers` and `/embed/itinerary` from the inte
 verify the deployed Content Security Policy allows only that framing relationship. In the
 speaker portal, confirm published resources render and a rejected HTML card cannot execute active
 content.
-participant route.
 
 ## Production bindings, in order
 
