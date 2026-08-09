@@ -1,8 +1,8 @@
 # Judge walkthrough — 8 to 10 minutes
 
 The walkthrough should feel like one program director moving an event from intake to a published,
-attendee-ready program. Do not narrate a feature inventory. Show a decision, its evidence, and the
-next downstream consequence.
+attendee-ready program. Do not narrate a feature inventory. Show a decision, the evidence it leaves,
+and what it unblocks next.
 
 ## Before recording
 
@@ -20,12 +20,12 @@ next downstream consequence.
 
 Open `/`.
 
-> ProgramKit is an open-source conference-program toolkit. It gives a small team one dependable
-> workflow from call for proposals to a published agenda, with the same scoped operations and audit
-> rules behind the human UI, API, and agent surface.
+> ProgramKit is an open-source conference-program toolkit. One small team moves an event from call
+> for proposals to a published agenda here, and the same named operations run behind the UI, the
+> API, and the agent surface, so every one of them lands in the same audit trail.
 
-Point out the current work queue. Briefly say the reference app uses deterministic demo identities,
-then move on.
+Point out the current work queue. Say once that the reference app uses deterministic demo
+identities, then move on.
 
 ### 0:40–1:35 — Conditional CFP and routing
 
@@ -33,9 +33,10 @@ Open `/forms`, select the public CFP, and switch the session format between Talk
 preview. Show the workshop-only plan question. Open `/submit/aie-nyc-2026-cfp`, then return to
 `/submissions`.
 
-> The form owns explicit mappings for speaker identity, session content, format, and track. The same
-> conditional rules validate the public response. When an accepted proposal becomes a session, its
-> selected track is the category-routing contract—not a later manual copy.
+> The form maps every answer onto something used later: speaker identity, session content, format,
+> and track. The same conditional rule that just revealed this question validates the public
+> response. And the track chosen here is what routes the session once the proposal is accepted, so
+> nobody retypes it downstream.
 
 ### 1:35–3:05 — Multi-round review to accepted session
 
@@ -47,9 +48,11 @@ Open `/reviewer/rev_002`, choose the finalist assignment, leave a short note, an
 `/reviewer/rev_001`. Return to `/submissions`, open the proposal, show the two finalist scorecards,
 and accept it.
 
-> Advancement is a staff-scoped, versioned, idempotent operation. Acceptance stays unavailable
-> until the final threshold is met. One accepted decision atomically creates or reuses the person,
-> participation, readiness work, and session.
+> Advancing a round is a staff-only move that carries the version it was based on, so a stale tab
+> cannot undo a newer decision and a double click cannot open a second round. Acceptance stays
+> unavailable until the final round clears its threshold. Then one accept creates the person, their
+> participation, their readiness work, and the session together — and that is the speaker we follow
+> for the rest of this demo.
 
 ### 3:05–4:05 — Speaker portal and readiness
 
@@ -58,21 +61,23 @@ file, and published resources. Keep `/readiness` visible in a second window, cha
 show its blocker count refresh within five seconds without a manual reload. Then open the same
 speaker in organizer detail.
 
-> The participant sees only their event-scoped record and private assets. Organizers see the
-> readiness consequence without giving the portal access to internal notes or anyone else's files.
+> This is one record seen from two sides. The speaker gets their own event-scoped profile and their
+> own private files and nothing else. The organizer watches the blocker leave the readiness board
+> seconds later, without the portal ever exposing internal notes or another speaker's uploads.
 
 ### 4:05–5:00 — Communications and calendar
 
 Open `/communications`. Preview the accepted-speaker reminder, show one personalized recipient,
 submit and approve the campaign, then inspect the frozen outbox and attachment. In the controlled
 provider workspace, show the returned message ID and the received `.ics`; otherwise leave the row
-truthfully pending and identify Andrew's sender-activation gate. Download the portable public
+truthfully pending and name Andrew's sender-activation gate on camera. Download the portable public
 calendar preview.
 
-> Sending records durable recipient intent before any provider call. The demo truthfully says
-> pending provider; it never turns a queued message into a fake success. The post-commit Cloudflare
-> consumer sends the frozen RFC 5545 file as an attachment, which opens in Gmail, Outlook, and
-> iCal-compatible clients.
+> Approval freezes the audience and the copy, and every recipient becomes a durable row before any
+> provider call happens. That is why this screen can say pending provider and mean it — a queued
+> message never reports itself as sent. Once the sender is activated, the post-commit Cloudflare
+> consumer sends the frozen RFC 5545 file as an attachment, the same file Gmail, Outlook, and
+> iCal-compatible clients open, and writes the returned message ID back onto this row.
 
 ### 5:00–6:35 — Schedule, conflict, undo, and immutable publish
 
@@ -80,19 +85,24 @@ Open `/schedule`. Switch through Session list, Day, Week, Track, and Room, then 
 unscheduled tray. Place or drag a session into a deliberate conflict, show the explanation, fix it,
 and use undo. Open the publish preflight and publish only a valid changed draft. Switch to `/agenda`.
 
-> Draft edits stay private. Publication rejects missing sessions, hard conflicts, duplicates, empty
-> schedules, and unchanged drafts. The public agenda reads only the new immutable release.
+> Everything so far is a private draft; attendees are still reading the previous release. The
+> preflight is what stands between the two — it refuses missing sessions, hard conflicts,
+> duplicates, an empty schedule, and a draft with nothing new in it. Publishing mints an immutable
+> release, and the public agenda reads that release and nothing else.
 
 ### 6:35–7:30 — Accelevents with real retry evidence
 
 Use only the controlled Accelevents event Andrew approved for smoke testing. Open `/integrations`,
 inspect the preflight, and stage the latest release. Show speakers receiving provider IDs before
 related sessions, then show a known ID using update on a later release. If a real provider failure
-exists, retry it and show the attempt history; do not manufacture or claim a provider result.
+exists, retry it and show the attempt history; do not manufacture or claim a provider result. If no
+Enterprise key is active, show the staged batch and its pending rows instead and say so plainly.
 
-> The packet uses stable keys and only the latest published release. The native Worker consumer
-> creates or updates speakers and sessions after commit, while the Enterprise key remains in the
-> owner-managed secret boundary. Staging a packet is never described as delivery.
+> The packet takes the latest published release rather than the draft, and every row carries a
+> stable key, so speakers land before the sessions that reference them and a later release updates
+> instead of duplicating. A retry resumes this batch. The Enterprise key stays inside the
+> owner-managed secret boundary, and staging a packet is never delivery — the row says only what
+> actually happened.
 
 ### 7:30–8:45 — Resources and attendee embeds
 
@@ -100,18 +110,21 @@ Open `/resources`. Show a guide, the restricted static HTML contract, and the un
 Open the published card in `/portal/par_003`. Switch to a 375px viewport for `/embed/speakers` and
 search for Jordan. Open `/embed/itinerary`, save two sessions, reload, and show **My itinerary**.
 
-> Public embeds receive only the immutable public program. The itinerary stays on this device; it
-> does not create an attendee tracking record.
+> Staff can publish a rich card without handing the portal an execution surface: active or remote
+> content is rejected at save time rather than cleaned up on the way out. The embeds receive only
+> the immutable public program, and the saved itinerary stays in this device's storage — it creates
+> no attendee record on our side.
 
 ### 8:45–9:30 — Architecture, API, and honest close
 
 Return to `/` or the repository README.
 
-> ProgramKit ships three publishable packages—core, web, and agent—inside one supported Cloudflare
-> Worker assembly with Durable Object state and private R2 files. The API exposes scoped reads,
-> named writes, an operation manifest, health, calendar, and logical export. We deliberately did not
-> claim unfinished Airtable runtime sync, production identity, or provider activation. The result is
-> a smaller product whose demonstrated path is inspectable and dependable.
+> All of this is one Cloudflare Worker: the React client, the API, SQLite-backed Durable Object
+> state, and private R2 files, factored into three publishable packages — core, web, and agent. The
+> API exposes the same scoped reads and named writes you just watched, plus an operation manifest,
+> health, calendar, and logical export. What we did not do is claim the unfinished parts: Airtable
+> runtime sync, production identity, and provider activation are documented as open rather than
+> demonstrated. The trade is a smaller product where the path you just saw is the path that works.
 
 End on the public repository URL and `programkit.dev`.
 
