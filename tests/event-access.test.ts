@@ -1,0 +1,186 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { EventAccessDurableObject } from '../apps/cloudflare/src/event-access.ts'
+import { MemoryStorage } from './support/cloudflare-workers.ts'
+
+const event = {
+  id: 'evt_0123456789abcdef01234567',
+  name: 'AIE NYC 2027',
+  slug: 'aie-nyc-2027',
+  createdAt: '2026-08-09T12:00:00.000Z',
+}
+
+const owner = { userId: 'usr_owner_123', email: 'owner@example.com' }
+const member = { userId: 'usr_member_123', email: 'member@example.com' }
+const admin = { userId: 'usr_admin_123', email: 'admin@example.com' }
+
+function request(path: string, body: Record<string, unknown>) {
+  return new Request(`http://event-access.internal${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+async function body(response: Response) {
+  return (await response.json()) as {
+    ok?: boolean
+    code?: string
+    scopes?: string[]
+    token?: string
+    event?: typeof event
+    membership?: {
+      id: string
+      email: string
+      role: string
+      status: string
+      version: number
+    }
+    invitation?: { id: string; status: string }
+  }
+}
+
+describe('EventAccessDurableObject', () => {
+  let access: EventAccessDurableObject
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-09T12:00:00.000Z'))
+    const storage = new MemoryStorage()
+    access = new EventAccessDurableObject(
+      { storage } as unknown as DurableObjectState,
+      {} as Cloudflare.Env,
+    )
+  })
+
+  afterEach(() => vi.useRealTimers())
+
+  async function initialize() {
+    const response = await access.fetch(
+      request('/internal/event-access/initialize', { event, owner }),
+    )
+    expect(response.status).toBe(201)
+    return body(response)
+  }
+
+  async function invite(actor: typeof owner, email: string, role: 'admin' | 'member' = 'member') {
+    const response = await access.fetch(
+      request('/internal/event-access/invitations/create', {
+        eventId: event.id,
+        actor,
+        email,
+        role,
+      }),
+    )
+    return { response, result: await body(response) }
+  }
+
+  async function consume(token: string, actor: typeof member) {
+    const response = await access.fetch(
+      request('/internal/event-access/invitations/consume', {
+        eventId: event.id,
+        token,
+        ...actor,
+      }),
+    )
+    return { response, result: await body(response) }
+  }
+
+  it('initializes one owner and returns role scopes from a live lookup', async () => {
+    const initialized = await initialize()
+    expect(initialized.membership).toMatchObject({ role: 'owner', status: 'active', version: 1 })
+
+    const response = await access.fetch(
+      request('/internal/event-access/memberships/lookup', {
+        eventId: event.id,
+        ...owner,
+      }),
+    )
+    expect(await body(response)).toMatchObject({ ok: true, scopes: ['*'] })
+  })
+
+  it('keeps invitation tokens hashed and enforces email-bound single use', async () => {
+    await initialize()
+    const created = await invite(owner, member.email)
+    expect(created.response.status).toBe(201)
+    expect(created.result.token).toMatch(new RegExp(`^${event.id}\\.[a-f0-9]{64}$`, 'u'))
+    expect(created.result.invitation).not.toHaveProperty('tokenHash')
+    const token = created.result.token!
+
+    const wrongEmail = await consume(token, {
+      ...member,
+      email: 'someone-else@example.com',
+    })
+    expect(wrongEmail.response.status).toBe(403)
+    expect(wrongEmail.result.code).toBe('INVITATION_EMAIL_MISMATCH')
+
+    const accepted = await consume(token, member)
+    expect(accepted.response.status).toBe(201)
+    expect(accepted.result).toMatchObject({
+      event,
+      membership: { email: member.email, role: 'member', status: 'active' },
+      invitation: { status: 'accepted' },
+    })
+
+    const replayed = await consume(token, member)
+    expect(replayed.response.status).toBe(404)
+    expect(replayed.result.code).toBe('INVITATION_INVALID')
+  })
+
+  it('limits administrator invitations and management to owners', async () => {
+    await initialize()
+    const adminInvitation = await invite(owner, admin.email, 'admin')
+    const accepted = await consume(adminInvitation.result.token!, admin)
+    expect(accepted.response.status).toBe(201)
+
+    const forbidden = await invite(admin, 'another-admin@example.com', 'admin')
+    expect(forbidden.response.status).toBe(403)
+    expect(forbidden.result.code).toBe('FORBIDDEN')
+
+    const allowed = await invite(admin, 'viewer@example.com', 'member')
+    expect(allowed.response.status).toBe(201)
+  })
+
+  it('applies revocation immediately and prevents self-removal', async () => {
+    const initialized = await initialize()
+    const created = await invite(owner, member.email)
+    const accepted = await consume(created.result.token!, member)
+
+    const revokedResponse = await access.fetch(
+      request('/internal/event-access/memberships/revoke', {
+        eventId: event.id,
+        actor: owner,
+        membershipId: accepted.result.membership!.id,
+      }),
+    )
+    expect(revokedResponse.status).toBe(200)
+
+    const lookup = await access.fetch(
+      request('/internal/event-access/memberships/lookup', {
+        eventId: event.id,
+        ...member,
+      }),
+    )
+    expect(lookup.status).toBe(404)
+
+    const selfRemoval = await access.fetch(
+      request('/internal/event-access/memberships/revoke', {
+        eventId: event.id,
+        actor: owner,
+        membershipId: initialized.membership!.id,
+      }),
+    )
+    expect(selfRemoval.status).toBe(409)
+    expect(await body(selfRemoval)).toMatchObject({ code: 'SELF_REMOVAL' })
+  })
+
+  it('expires pending invitations after seven days', async () => {
+    await initialize()
+    const created = await invite(owner, member.email)
+    vi.advanceTimersByTime(7 * 24 * 60 * 60 * 1_000 + 1)
+
+    const expired = await consume(created.result.token!, member)
+    expect(expired.response.status).toBe(410)
+    expect(expired.result.code).toBe('INVITATION_EXPIRED')
+  })
+})

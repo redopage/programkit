@@ -30,7 +30,8 @@ surface.
 The expiring `/demo/{capability}` workspace now provides a clean, isolated starting point for
 scenario runs and collaborator handoff. It improves test repeatability and safe evaluation, but it
 does not count as the real identity, role membership, or per-person authorization required by the
-scenarios.
+scenarios. The hosted app now has real owner, administrator, and viewer membership. Submitter,
+reviewer, and speaker identity remain separate gaps.
 
 ## How the V1 evaluator reaches the product
 
@@ -54,9 +55,9 @@ required end-to-end scenario.
 
 ## Recommended implementation order
 
-1. **Real identity and evaluator fixtures.** Keep the working staff sign-in, then add team
-   invitations plus submitter, reviewer, and speaker sessions. Provide deterministic evaluator role
-   sessions that do not require external inbox access.
+1. **Finish scoped identity and evaluator fixtures.** Keep the working staff sign-in and team
+   invitations, then add submitter, reviewer, and speaker sessions. Provide deterministic evaluator
+   role sessions that do not require external inbox access.
 2. **One complete file pipeline.** Use R2 for bytes and event records for metadata. Reuse it for CFP
    attachments, headshots, slides, and requirement deliverables, including version history and
    private access. Airtable mirroring must remain optional and outside this critical path.

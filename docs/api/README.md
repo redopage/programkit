@@ -23,6 +23,19 @@ These browser endpoints are available only on the hosted app. Mutations require 
 | `POST` | `/api/v1/events`               | Create and select an isolated empty event   |
 | `POST` | `/api/v1/account/active-event` | Select an event from verified membership    |
 
+Event team access uses these same-origin browser endpoints:
+
+| Method   | Path                                                  | Purpose                                     |
+| -------- | ----------------------------------------------------- | ------------------------------------------- |
+| `GET`    | `/api/v1/events/{eventId}/team`                       | List current access and pending invitations |
+| `POST`   | `/api/v1/events/{eventId}/invitations`                | Email a seven-day, single-use invitation    |
+| `DELETE` | `/api/v1/events/{eventId}/invitations/{invitationId}` | Cancel a pending invitation                 |
+| `DELETE` | `/api/v1/events/{eventId}/members/{membershipId}`     | Revoke event access                         |
+| `GET`    | `/auth/invite?token=...`                              | Accept after passwordless sign-in           |
+
+Owners can manage administrators and viewers. Administrators can manage viewers. Viewers receive
+read scopes only. The raw invitation token is emailed and is never returned by a team-list read.
+
 These routes are application session APIs, not the future third-party OAuth API. Token and
 tenancy details are in
 [Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).

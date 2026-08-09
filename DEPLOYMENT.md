@@ -17,8 +17,9 @@ Browser
   ▼
 Cloudflare Worker ── Workers Static Assets (Vite web build)
   │
-  ├── account Durable Object  ── staff sessions and event membership
-  ├── event Durable Object     ── authoritative event records and serialized mutations
+  ├── account Durable Object  ── staff sessions and event switcher projection
+  ├── event access object     ── authoritative membership, roles, and invitations
+  ├── event Durable Object    ── authoritative event records and serialized mutations
   ├── Airtable                 ── optional experimental team integration
   ├── R2                      ── private uploads and generated files (next)
   ├── Queue / object alarm    ── email, webhooks, and mirrors (next)
@@ -26,7 +27,8 @@ Cloudflare Worker ── Workers Static Assets (Vite web build)
 ```
 
 The runnable application currently includes the Worker, static assets, one account-sharded
-identity object for hosted users, and one SQLite-backed workspace object per event. The official
+identity object for hosted users, one access object per event, and one SQLite-backed workspace
+object per event. The official
 demo root creates isolated hosted trials that expire after seven days. Local and self-hosted
 installations need no D1 database, R2 bucket, queue, or email binding to run the deterministic
 sample workspace.
@@ -45,9 +47,9 @@ code, migrations, tests, and documentation together while isolating runtime stat
 
 The site profile serves the small public homepage and rejects workspace APIs. The demo host
 rejects operator or API access until a private demo has been created or opened. The app host uses
-passwordless staff sessions, an account event index, verified event selection, and one empty
-workspace object per new event. Team invitations and participant, reviewer, public-link, MCP, and
-file identities remain incomplete, so real conference data is still out of scope.
+passwordless staff sessions, an account event index, live role-scoped event membership, and one
+empty workspace object per new event. Participant, reviewer, MCP, account recovery, and file
+identities remain incomplete, so real conference data is still out of scope.
 
 Deploy the official profiles with:
 
@@ -71,6 +73,7 @@ The production additions are intentionally Cloudflare-native:
 | Background delivery       | Transactional outbox + Queue or Durable Object alarm | Retryable work that does not hold open a user request                                  |
 | Email                     | Cloudflare Email Service binding                     | Native Worker delivery; Resend may remain an optional provider                         |
 | Account event index       | Account Durable Object                               | Verified membership and fast event switching without scanning event objects            |
+| Event team access         | Event Access Durable Object                          | Live owner, administrator, viewer, invitation, and revocation authority per event      |
 | Cross-workspace analytics | D1 projection, only when needed                      | SQL reporting across many workspace objects                                            |
 
 ## Why Durable Objects remain in the write path
@@ -229,8 +232,8 @@ with idempotency, and record provider results. See the [email guide](docs/integr
 
 The golden-path production work should land in this sequence:
 
-1. Add team invitations and role-scoped membership, then add participant and reviewer magic-link
-   sessions and event-scoped public links.
+1. Add participant and reviewer magic-link sessions, then complete account recovery and ownership
+   transfer for hosted staff.
 2. Add OAuth and workspace-scoped authorization to MCP and API tokens.
 3. Add R2 upload initiation, direct upload, finalize/scanning, private download, and lifecycle
    cleanup.

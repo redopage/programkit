@@ -22,8 +22,8 @@ It is intentionally smaller than a general CRM or an enterprise event suite. The
 the conference-program job fast, understandable, and easy to own.
 
 > **Project status:** active alpha. The seeded demo is safe to explore, but the hosted app is not
-> ready for real participant data until participant and reviewer identity, private file storage,
-> production mail delivery, rate limiting, and backup policy are complete. See
+> ready for real participant data until participant and reviewer identity, account recovery,
+> private file storage, production mail delivery, rate limiting, and backup policy are complete. See
 > [Security](SECURITY.md) and the [roadmap](ROADMAP.md).
 
 ## Run it locally
@@ -72,9 +72,9 @@ ProgramKit has three reusable packages and one supported deployment assembly:
 React + TanStack
        │
        ▼
-Cloudflare Worker ── named core operations ── one Durable Object per event
-       │                                           │
-       ├── scoped HTTP and public routes            └── SQLite state + revisions
+Cloudflare Worker ── event access object ── one workspace object per event
+       │                                      │
+       ├── scoped HTTP and public routes       └── SQLite state + revisions
        ├── static Vite assets
        └── optional services: mail, R2, Airtable, MCP
 ```

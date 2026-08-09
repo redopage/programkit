@@ -18,6 +18,15 @@ export interface AuthEventSummary {
   slug: string
   role: 'owner' | 'admin' | 'member'
   createdAt: string
+  membershipId?: string
+  membershipVersion?: number
+  joinedAt?: string
+}
+
+export interface AuthMembershipProjection extends AuthEventSummary {
+  membershipId: string
+  membershipVersion: number
+  joinedAt: string
 }
 
 interface MagicLinkRecord {
@@ -226,6 +235,44 @@ export class AuthDurableObject extends DurableObject {
     return event
   }
 
+  async #linkMembership(sessionToken: string, projection: AuthMembershipProjection) {
+    const resolved = await this.#session(sessionToken)
+    if (!resolved) return null
+    const user = await this.#ctx.storage.get<AuthUser>(`user:${resolved.account.user.id}`)
+    if (!user) return null
+    const existing = await this.#ctx.storage.get<AuthEventSummary>(`event:${projection.id}`)
+    if (
+      existing?.membershipId === projection.membershipId &&
+      existing.membershipVersion === projection.membershipVersion &&
+      user.eventIds.includes(projection.id)
+    ) {
+      return projection
+    }
+    await this.#ctx.storage.put(`event:${projection.id}`, projection)
+    if (!user.eventIds.includes(projection.id)) {
+      await this.#ctx.storage.put(`user:${user.id}`, {
+        ...user,
+        eventIds: [...user.eventIds, projection.id],
+      } satisfies AuthUser)
+    }
+    return projection
+  }
+
+  async #unlinkMembership(userId: string, eventId: string, membershipId: string) {
+    const user = await this.#ctx.storage.get<AuthUser>(`user:${userId}`)
+    if (!user) return true
+    const event = await this.#ctx.storage.get<AuthEventSummary>(`event:${eventId}`)
+    if (event?.membershipId && event.membershipId !== membershipId) return false
+    await this.#ctx.storage.delete(`event:${eventId}`)
+    if (user.eventIds.includes(eventId)) {
+      await this.#ctx.storage.put(`user:${user.id}`, {
+        ...user,
+        eventIds: user.eventIds.filter((candidate) => candidate !== eventId),
+      } satisfies AuthUser)
+    }
+    return true
+  }
+
   async #scheduleCleanup() {
     const current = await this.#ctx.storage.getAlarm()
     const next = Date.now() + magicLinkLifetimeMs
@@ -307,6 +354,60 @@ export class AuthDurableObject extends DurableObject {
           { status: 400 },
         )
       }
+    }
+
+    if (url.pathname === '/internal/memberships/link') {
+      const token = typeof input.token === 'string' ? input.token : ''
+      const role =
+        input.role === 'owner' || input.role === 'admin' || input.role === 'member'
+          ? input.role
+          : null
+      const projection =
+        typeof input.eventId === 'string' &&
+        typeof input.membershipId === 'string' &&
+        typeof input.membershipVersion === 'number' &&
+        typeof input.name === 'string' &&
+        typeof input.slug === 'string' &&
+        role &&
+        typeof input.createdAt === 'string' &&
+        typeof input.joinedAt === 'string'
+          ? ({
+              id: input.eventId,
+              membershipId: input.membershipId,
+              membershipVersion: input.membershipVersion,
+              name: input.name,
+              slug: input.slug,
+              role,
+              createdAt: input.createdAt,
+              joinedAt: input.joinedAt,
+            } satisfies AuthMembershipProjection)
+          : null
+      if (!projection) {
+        return Response.json(
+          { ok: false, error: 'Invalid membership projection.' },
+          { status: 400 },
+        )
+      }
+      const linked = await this.#linkMembership(token, projection)
+      return linked
+        ? Response.json({ ok: true, event: linked })
+        : Response.json({ ok: false }, { status: 401 })
+    }
+
+    if (url.pathname === '/internal/memberships/unlink') {
+      const userId = typeof input.userId === 'string' ? input.userId : ''
+      const eventId = typeof input.eventId === 'string' ? input.eventId : ''
+      const membershipId = typeof input.membershipId === 'string' ? input.membershipId : ''
+      if (!userId || !eventId || !membershipId) {
+        return Response.json(
+          { ok: false, error: 'Invalid membership unlink request.' },
+          { status: 400 },
+        )
+      }
+      const unlinked = await this.#unlinkMembership(userId, eventId, membershipId)
+      return unlinked
+        ? Response.json({ ok: true })
+        : Response.json({ ok: false, error: 'Membership projection changed.' }, { status: 409 })
     }
 
     return new Response(null, { status: 404 })

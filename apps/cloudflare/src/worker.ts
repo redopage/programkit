@@ -14,6 +14,7 @@ import {
   normalizeEmail,
   type AuthAccount,
   type AuthEventSummary,
+  type AuthMembershipProjection,
 } from './auth.ts'
 import {
   createDemoId,
@@ -24,13 +25,21 @@ import {
   demoWorkspaceKey,
   isDemoId,
 } from './demo.ts'
+import {
+  EventAccessDurableObject,
+  type EventAccessActor,
+  type EventAccessEvent,
+  type EventInvitation,
+  type EventMembership,
+} from './event-access.ts'
 
-export { AuthDurableObject, WorkspaceDurableObject }
+export { AuthDurableObject, EventAccessDurableObject, WorkspaceDurableObject }
 
 interface Env {
   ASSETS: Fetcher
   PROGRAMKIT_WORKSPACES: DurableObjectNamespace<WorkspaceDurableObject>
   PROGRAMKIT_AUTH?: DurableObjectNamespace<AuthDurableObject>
+  PROGRAMKIT_EVENT_ACCESS?: DurableObjectNamespace<EventAccessDurableObject>
   PROGRAMKIT_DEPLOYMENT_PROFILE?: 'hosted-site' | 'hosted-demo' | 'hosted-app'
   PROGRAMKIT_APP_ORIGIN?: string
   PROGRAMKIT_DEMO_ORIGIN?: string
@@ -56,9 +65,11 @@ interface Env {
 const workspaceCookieName = 'programkit_workspace'
 const eventCookieName = 'programkit_event'
 const sessionCookieName = 'programkit_session'
+const invitationCookieName = 'programkit_invitation'
 const publicEventCookieName = 'programkit_public_event'
 const workspaceKeyPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u
 const hostedEventIdPattern = /^evt_[a-f0-9]{24}$/u
+const invitationTokenPattern = /^(evt_[a-f0-9]{24})\.([a-f0-9]{64})$/u
 const airtableCallbackPath = '/api/v1/integrations/airtable/oauth/callback'
 
 function deploymentProfile(env: Env) {
@@ -221,6 +232,11 @@ function authStub(env: Env, shard: string) {
   return env.PROGRAMKIT_AUTH.get(env.PROGRAMKIT_AUTH.idFromName(`account_${shard}`))
 }
 
+function eventAccessStub(env: Env, eventId: string) {
+  if (!env.PROGRAMKIT_EVENT_ACCESS) return null
+  return env.PROGRAMKIT_EVENT_ACCESS.get(env.PROGRAMKIT_EVENT_ACCESS.idFromName(eventId))
+}
+
 function eventWorkspaceKey(eventId: string) {
   return `event_${eventId}`
 }
@@ -234,6 +250,8 @@ interface HostedPrincipal {
   authShard: string
   sessionToken: string
   account: AuthAccount
+  membership: EventMembership | null
+  scopes: string[]
 }
 
 const authShardPattern = /^[a-f0-9]{32}$/u
@@ -269,9 +287,25 @@ async function resolveHostedPrincipal(env: Env, request: Request) {
   )
   if (!response.ok) return null
   const body = (await response.json()) as { ok: boolean; account?: AuthAccount }
-  return body.ok && body.account
-    ? { authShard: session.shard, sessionToken: session.secret, account: body.account }
-    : null
+  if (!body.ok || !body.account) return null
+  const activeEvent = body.account.events.find((event) => event.id === body.account!.activeEventId)
+  if (!activeEvent) return null
+  const access = await resolveHostedEventAccess(
+    env,
+    {
+      authShard: session.shard,
+      sessionToken: session.secret,
+      account: body.account,
+    },
+    activeEvent,
+  )
+  return {
+    authShard: session.shard,
+    sessionToken: session.secret,
+    account: body.account,
+    membership: access?.membership ?? null,
+    scopes: access?.scopes ?? [],
+  }
 }
 
 function hostedStaffActor(principal: HostedPrincipal) {
@@ -279,7 +313,7 @@ function hostedStaffActor(principal: HostedPrincipal) {
     type: 'staff' as const,
     id: principal.account.user.id,
     name: principal.account.user.email,
-    scopes: ['*'],
+    scopes: principal.scopes,
   }
 }
 
@@ -334,6 +368,117 @@ async function initializeHostedEvent(
   if (!response.ok && response.status !== 409) {
     throw new Error('The event workspace could not be initialized.')
   }
+}
+
+type HostedSessionPrincipal = Pick<HostedPrincipal, 'authShard' | 'sessionToken' | 'account'>
+
+interface EventAccessResponse {
+  ok: boolean
+  code?: string
+  error?: string
+  event?: EventAccessEvent
+  membership?: EventMembership
+  memberships?: EventMembership[]
+  invitation?: EventInvitation
+  invitations?: EventInvitation[]
+  token?: string
+  scopes?: string[]
+}
+
+function eventAccessActor(principal: HostedSessionPrincipal): EventAccessActor {
+  return {
+    userId: principal.account.user.id,
+    email: principal.account.user.email,
+  }
+}
+
+async function initializeHostedEventAccess(
+  env: Env,
+  event: AuthEventSummary,
+  owner: EventAccessActor,
+) {
+  const stub = eventAccessStub(env, event.id)
+  if (!stub) throw new Error('Event access is not configured.')
+  const response = await stub.fetch(
+    new Request('http://event-access.internal/internal/event-access/initialize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ event, owner }),
+    }),
+  )
+  const body = (await response.json()) as EventAccessResponse
+  if (!response.ok || !body.membership) {
+    throw new Error(body.error ?? 'Event access could not be initialized.')
+  }
+  return body.membership
+}
+
+function membershipProjection(
+  event: AuthEventSummary,
+  membership: EventMembership,
+): AuthMembershipProjection {
+  return {
+    id: event.id,
+    name: event.name,
+    slug: event.slug,
+    role: membership.role,
+    createdAt: event.createdAt,
+    membershipId: membership.id,
+    membershipVersion: membership.version,
+    joinedAt: membership.joinedAt,
+  }
+}
+
+async function linkHostedMembership(
+  env: Env,
+  principal: HostedSessionPrincipal,
+  event: AuthEventSummary,
+  membership: EventMembership,
+) {
+  const projection = membershipProjection(event, membership)
+  const response = await authStub(env, principal.authShard)!.fetch(
+    new Request('http://auth.internal/internal/memberships/link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: principal.sessionToken, eventId: event.id, ...projection }),
+    }),
+  )
+  if (!response.ok) throw new Error('Event access could not be linked to this account.')
+  Object.assign(event, projection)
+}
+
+async function resolveHostedEventAccess(
+  env: Env,
+  principal: HostedSessionPrincipal,
+  event: AuthEventSummary,
+) {
+  const stub = eventAccessStub(env, event.id)
+  if (!stub) return null
+  const actor = eventAccessActor(principal)
+  let response = await stub.fetch(
+    new Request('http://event-access.internal/internal/event-access/memberships/lookup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ eventId: event.id, ...actor }),
+    }),
+  )
+  let body = (await response.json()) as EventAccessResponse
+
+  if (!response.ok && body.code === 'EVENT_NOT_INITIALIZED' && event.role === 'owner') {
+    const membership = await initializeHostedEventAccess(env, event, actor)
+    body = { ok: true, membership, scopes: ['*'] }
+    response = new Response(null, { status: 200 })
+  }
+  if (!response.ok || !body.membership || !body.scopes) return null
+
+  if (
+    event.membershipId !== body.membership.id ||
+    event.membershipVersion !== body.membership.version ||
+    event.role !== body.membership.role
+  ) {
+    await linkHostedMembership(env, principal, event, body.membership)
+  }
+  return { membership: body.membership, scopes: body.scopes }
 }
 
 async function hostedEventExists(stub: DurableObjectStub<WorkspaceDurableObject>, eventId: string) {
@@ -452,6 +597,17 @@ async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
     )
     if (!firstEvent) return redirect(url, '/login?error=account')
     await initializeHostedEvent(env, firstEvent)
+    const principal: HostedSessionPrincipal = {
+      authShard: token.shard,
+      sessionToken: consumed.sessionToken,
+      account: consumed.account,
+    }
+    const membership = await initializeHostedEventAccess(
+      env,
+      firstEvent,
+      eventAccessActor(principal),
+    )
+    await linkHostedMembership(env, principal, firstEvent, membership)
     const maxAge = Math.max(
       0,
       Math.floor((Date.parse(consumed.sessionExpiresAt ?? '') - Date.now()) / 1_000),
@@ -492,6 +648,66 @@ async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
   }
 
   return null
+}
+
+async function acceptHostedInvitation(
+  env: Env,
+  principal: HostedPrincipal,
+  token: string,
+  url: URL,
+) {
+  const match = token.match(invitationTokenPattern)
+  if (!match) {
+    const headers = new Headers({
+      location: '/login?error=invitation',
+      'cache-control': 'no-store',
+    })
+    headers.append('set-cookie', clearAuthCookie(invitationCookieName, url))
+    return new Response(null, { status: 302, headers })
+  }
+  const eventId = match[1]
+  const stub = eventAccessStub(env, eventId)
+  if (!stub)
+    return Response.json({ ok: false, error: 'Event access is unavailable.' }, { status: 503 })
+  const response = await stub.fetch(
+    new Request('http://event-access.internal/internal/event-access/invitations/consume', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        eventId,
+        token,
+        userId: principal.account.user.id,
+        email: principal.account.user.email,
+      }),
+    }),
+  )
+  const body = (await response.json()) as EventAccessResponse
+  if (!response.ok || !body.membership || !body.event) {
+    const headers = new Headers({
+      location: '/login?error=invitation',
+      'cache-control': 'no-store',
+    })
+    headers.append('set-cookie', clearAuthCookie(invitationCookieName, url))
+    headers.append('set-cookie', clearAuthCookie(sessionCookieName, url))
+    headers.append('set-cookie', clearAuthCookie(eventCookieName, url))
+    return new Response(null, { status: 302, headers })
+  }
+  await linkHostedMembership(
+    env,
+    principal,
+    {
+      id: body.event.id,
+      name: body.event.name,
+      slug: body.event.slug,
+      createdAt: body.event.createdAt,
+      role: body.membership.role,
+    },
+    body.membership,
+  )
+  const headers = new Headers({ location: '/', 'cache-control': 'no-store' })
+  headers.append('set-cookie', clearAuthCookie(invitationCookieName, url))
+  headers.append('set-cookie', authCookie(eventCookieName, body.event.id, url, 30 * 24 * 60 * 60))
+  return new Response(null, { status: 302, headers })
 }
 
 async function demoStatus(stub: DurableObjectStub<WorkspaceDurableObject>) {
@@ -716,6 +932,14 @@ export default {
       isHostedPublicDocument(url.pathname)
     const hostedPublicApi = Boolean(publicEventId) && url.pathname.startsWith('/public/')
 
+    if (profile === 'hosted-app' && request.method === 'GET' && url.pathname === '/auth/invite') {
+      const token = url.searchParams.get('token') ?? ''
+      if (!invitationTokenPattern.test(token)) return redirect(url, '/login?error=invitation')
+      const headers = new Headers({ location: '/login?invite=1', 'cache-control': 'no-store' })
+      headers.append('set-cookie', authCookie(invitationCookieName, token, url, 7 * 24 * 60 * 60))
+      return new Response(null, { status: 302, headers })
+    }
+
     if (
       profile === 'hosted-app' &&
       (url.pathname === '/auth/verify' || url.pathname.startsWith('/api/v1/auth/'))
@@ -730,6 +954,27 @@ export default {
         url.pathname.startsWith('/api/') ||
         url.pathname === '/mcp'
       if (needsIdentity) hostedPrincipal = await resolveHostedPrincipal(env, request)
+
+      const pendingInvitation = cookie(request, invitationCookieName)
+      if (hostedPrincipal && pendingInvitation) {
+        return acceptHostedInvitation(env, hostedPrincipal, pendingInvitation, url)
+      }
+
+      if (hostedPrincipal && !hostedPrincipal.membership) {
+        if (request.method === 'GET' && isDocumentNavigation(request)) {
+          const headers = new Headers({
+            location: '/login?error=access',
+            'cache-control': 'no-store',
+          })
+          headers.append('set-cookie', clearAuthCookie(sessionCookieName, url))
+          headers.append('set-cookie', clearAuthCookie(eventCookieName, url))
+          return new Response(null, { status: 302, headers })
+        }
+        return Response.json(
+          { ok: false, error: 'Event access was not found.' },
+          { status: 403, headers: { 'cache-control': 'no-store' } },
+        )
+      }
 
       if (request.method === 'GET' && url.pathname === '/login' && hostedPrincipal) {
         return redirect(url, '/')
@@ -935,6 +1180,209 @@ export default {
         )
       }
 
+      const teamMatch = url.pathname.match(/^\/api\/v1\/events\/([^/]+)\/team$/u)
+      if (request.method === 'GET' && teamMatch) {
+        const eventId = decodeURIComponent(teamMatch[1])
+        if (eventId !== hostedPrincipal.membership!.eventId) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        const membership = hostedPrincipal.membership!
+        if (membership.role === 'member') {
+          return Response.json(
+            {
+              ok: true,
+              team: {
+                currentMembershipId: membership.id,
+                currentRole: membership.role,
+                members: [membership],
+                invitations: [],
+              },
+            },
+            { headers: { 'cache-control': 'no-store' } },
+          )
+        }
+        const access = eventAccessStub(env, eventId)!
+        const actor = eventAccessActor(hostedPrincipal)
+        const [membersResponse, invitationsResponse] = await Promise.all([
+          access.fetch(
+            new Request('http://event-access.internal/internal/event-access/memberships/list', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ eventId, actor }),
+            }),
+          ),
+          access.fetch(
+            new Request('http://event-access.internal/internal/event-access/invitations/list', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ eventId, actor }),
+            }),
+          ),
+        ])
+        const membersBody = (await membersResponse.json()) as EventAccessResponse
+        const invitationsBody = (await invitationsResponse.json()) as EventAccessResponse
+        if (!membersResponse.ok || !invitationsResponse.ok) {
+          return Response.json(
+            {
+              ok: false,
+              error:
+                membersBody.error ?? invitationsBody.error ?? 'Team access could not be loaded.',
+            },
+            { status: Math.max(membersResponse.status, invitationsResponse.status) },
+          )
+        }
+        return Response.json(
+          {
+            ok: true,
+            team: {
+              currentMembershipId: membership.id,
+              currentRole: membership.role,
+              members: membersBody.memberships ?? [],
+              invitations: (invitationsBody.invitations ?? []).filter(
+                (invitation) => invitation.status === 'pending',
+              ),
+            },
+          },
+          { headers: { 'cache-control': 'no-store' } },
+        )
+      }
+
+      const invitationsMatch = url.pathname.match(
+        /^\/api\/v1\/events\/([^/]+)\/invitations(?:\/([^/]+))?$/u,
+      )
+      if (invitationsMatch) {
+        const eventId = decodeURIComponent(invitationsMatch[1])
+        if (eventId !== hostedPrincipal.membership!.eventId) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+        const access = eventAccessStub(env, eventId)!
+        const actor = eventAccessActor(hostedPrincipal)
+
+        if (request.method === 'POST' && !invitationsMatch[2]) {
+          if (!env.EMAIL || !env.PROGRAMKIT_EMAIL_FROM) {
+            return Response.json(
+              { ok: false, error: 'Invitation email is not configured.' },
+              { status: 503 },
+            )
+          }
+          const input = (await request.json()) as { email?: unknown; role?: unknown }
+          const createdResponse = await access.fetch(
+            new Request('http://event-access.internal/internal/event-access/invitations/create', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ eventId, actor, email: input.email, role: input.role }),
+            }),
+          )
+          const created = (await createdResponse.json()) as EventAccessResponse
+          if (!createdResponse.ok || !created.invitation || !created.token) {
+            return Response.json(
+              { ok: false, error: created.error ?? 'The invitation could not be created.' },
+              { status: createdResponse.status },
+            )
+          }
+          const event = hostedPrincipal.account.events.find(
+            (candidate) => candidate.id === eventId,
+          )!
+          const invitationUrl = new URL('/auth/invite', configuredAppOrigin(env, url))
+          invitationUrl.searchParams.set('token', created.token)
+          const safeInvitationUrl = escapeHtml(invitationUrl.toString())
+          const safeEventName = escapeHtml(event.name)
+          try {
+            await env.EMAIL.send({
+              to: created.invitation.email,
+              from: env.PROGRAMKIT_EMAIL_FROM,
+              replyTo: env.PROGRAMKIT_SUPPORT_EMAIL,
+              subject: `Join ${event.name} in ProgramKit`,
+              text: `${hostedPrincipal.account.user.email} invited you to help manage ${event.name} in ProgramKit.\n\nAccept the invitation: ${invitationUrl.toString()}\n\nThis invitation expires in seven days.`,
+              html: `<div style="font-family:Inter,system-ui,sans-serif;color:#18181b;line-height:1.5"><h1 style="font-size:22px">Join ${safeEventName}</h1><p>${escapeHtml(hostedPrincipal.account.user.email)} invited you to help manage this event in ProgramKit.</p><p><a href="${safeInvitationUrl}" style="display:inline-block;border-radius:999px;background:#2563eb;color:white;padding:10px 16px;text-decoration:none">Accept invitation</a></p><p style="color:#71717a;font-size:14px">This invitation expires in seven days.</p></div>`,
+            })
+          } catch {
+            await access.fetch(
+              new Request('http://event-access.internal/internal/event-access/invitations/revoke', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                  eventId,
+                  actor,
+                  invitationId: created.invitation.id,
+                }),
+              }),
+            )
+            return Response.json(
+              { ok: false, error: 'The invitation email could not be sent. Try again.' },
+              { status: 503 },
+            )
+          }
+          return Response.json(
+            { ok: true, invitation: created.invitation },
+            { status: 201, headers: { 'cache-control': 'no-store' } },
+          )
+        }
+
+        if (request.method === 'DELETE' && invitationsMatch[2]) {
+          const revokedResponse = await access.fetch(
+            new Request('http://event-access.internal/internal/event-access/invitations/revoke', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                eventId,
+                actor,
+                invitationId: decodeURIComponent(invitationsMatch[2]),
+              }),
+            }),
+          )
+          const revoked = (await revokedResponse.json()) as EventAccessResponse
+          return revokedResponse.ok
+            ? Response.json({ ok: true }, { headers: { 'cache-control': 'no-store' } })
+            : Response.json(
+                { ok: false, error: revoked.error ?? 'The invitation could not be canceled.' },
+                { status: revokedResponse.status },
+              )
+        }
+      }
+
+      const memberMatch = url.pathname.match(/^\/api\/v1\/events\/([^/]+)\/members\/([^/]+)$/u)
+      if (request.method === 'DELETE' && memberMatch) {
+        if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+        const eventId = decodeURIComponent(memberMatch[1])
+        if (eventId !== hostedPrincipal.membership!.eventId) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        const access = eventAccessStub(env, eventId)!
+        const revokedResponse = await access.fetch(
+          new Request('http://event-access.internal/internal/event-access/memberships/revoke', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              eventId,
+              actor: eventAccessActor(hostedPrincipal),
+              membershipId: decodeURIComponent(memberMatch[2]),
+            }),
+          }),
+        )
+        const revoked = (await revokedResponse.json()) as EventAccessResponse
+        if (!revokedResponse.ok || !revoked.membership) {
+          return Response.json(
+            { ok: false, error: revoked.error ?? 'Team access could not be removed.' },
+            { status: revokedResponse.status },
+          )
+        }
+        const targetShard = (await hashValue(revoked.membership.email)).slice(0, 32)
+        await authStub(env, targetShard)?.fetch(
+          new Request('http://auth.internal/internal/memberships/unlink', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              userId: revoked.membership.userId,
+              eventId,
+              membershipId: revoked.membership.id,
+            }),
+          }),
+        )
+        return Response.json({ ok: true }, { headers: { 'cache-control': 'no-store' } })
+      }
+
       if (request.method === 'POST' && url.pathname === '/api/v1/events') {
         if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
         const input = (await request.json()) as { name?: unknown }
@@ -961,6 +1409,12 @@ export default {
           )
         }
         await initializeHostedEvent(env, created.event)
+        const membership = await initializeHostedEventAccess(
+          env,
+          created.event,
+          eventAccessActor(hostedPrincipal),
+        )
+        await linkHostedMembership(env, hostedPrincipal, created.event, membership)
         const headers = new Headers({ 'cache-control': 'no-store' })
         headers.append(
           'set-cookie',
@@ -976,6 +1430,10 @@ export default {
           (candidate) => candidate.id === input.eventId,
         )
         if (!event) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        const access = await resolveHostedEventAccess(env, hostedPrincipal, event)
+        if (!access) {
           return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
         }
         const headers = new Headers({ 'cache-control': 'no-store' })
@@ -1052,6 +1510,12 @@ export default {
     }
 
     if (url.pathname.startsWith('/api/v1/integrations/airtable/')) {
+      if (profile === 'hosted-app' && hostedPrincipal && !hostedPrincipal.scopes.includes('*')) {
+        return Response.json(
+          { ok: false, error: 'Administrator access is required.' },
+          { status: 403 },
+        )
+      }
       const integrationResponse = await handleAirtableIntegration(
         request,
         env,
@@ -1087,6 +1551,12 @@ export default {
     }
 
     if (url.pathname === '/mcp') {
+      if (profile === 'hosted-app' && hostedPrincipal && !hostedPrincipal.scopes.includes('*')) {
+        return Response.json(
+          { ok: false, error: 'Administrator access is required.' },
+          { status: 403 },
+        )
+      }
       return handleMcpRequest(request, {
         readState: () => readWorkspace(stub),
         execute: (operation, operationRequest) =>

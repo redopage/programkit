@@ -8,10 +8,10 @@ passwordless session
         │
         ▼
 account Auth Durable Object
-  user, sessions, event memberships
+  user, sessions, event switcher projection
         │
-        ├── event A ── Workspace Durable Object ── Airtable base when connected
-        └── event B ── Workspace Durable Object ── Airtable base when connected
+        ├── event A ── Event Access Durable Object ── Workspace Durable Object
+        └── event B ── Event Access Durable Object ── Workspace Durable Object
 
 private file bytes ── R2
 file metadata       ── event records
@@ -47,18 +47,29 @@ The account object owns:
 - the user identity;
 - magic-link hashes and expiry;
 - session hashes and expiry;
-- the user's event membership list; and
+- a repairable projection of the user's event memberships; and
 - the event index used by the switcher.
 
-The current hosted slice supports owner accounts and event creation. Team invitations, membership
-revocation, administrator roles, and account recovery policy are still required before teams use
-real participant data.
+Each event has a separate `EventAccessDurableObject` that is authoritative for membership. It owns
+active and revoked memberships, owner and administrator policy, and pending invitations. The
+Worker validates the selected membership there on every hosted request, then derives role scopes.
+Removing access takes effect even if an account event projection or browser cookie is stale.
+
+Owners can invite administrators or read-only viewers. Administrators can invite and remove
+viewers. Invitation secrets are random 256-bit values, stored only as SHA-256 hashes, bound to one
+normalized email, usable once, and expired after seven days. Accepting an invitation repairs the
+account switcher projection. Revocation removes that projection after the authoritative event
+membership is disabled.
+
+Account recovery, ownership transfer, and deployment-specific MFA or external OIDC policy are
+still required before teams use real participant data.
 
 ## One workspace object per event
 
 Every hosted event ID maps to one `WorkspaceDurableObject`. Event selection is accepted only when
-the authenticated account has a matching membership. The Worker then derives the object name from
-that verified event ID and injects the account as the trusted staff actor.
+the authenticated account has a live matching membership in that event's access object. The
+Worker then derives the workspace object name from that verified event ID and injects the account
+with server-owned role scopes as the trusted staff actor.
 
 Creating a second event initializes a separate empty object. Switching events changes only the
 selected-event cookie. It does not copy state, scan other objects, or merge caches.

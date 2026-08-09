@@ -4,11 +4,18 @@ import { useState, type FormEvent } from 'react'
 import { Button } from '../components/ui.tsx'
 
 export function AuthView() {
+  const search = new URLSearchParams(window.location.search)
+  const invited = search.get('invite') === '1'
   const [email, setEmail] = useState('')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(() => {
-    const reason = new URLSearchParams(window.location.search).get('error')
+    const reason = search.get('error')
+    if (reason === 'invitation') {
+      return 'That invitation expired, was canceled, or belongs to another email.'
+    }
+    if (reason === 'access') return 'Your access to that event was removed.'
+    if (reason === 'account') return 'That account could not be opened. Try again.'
     return reason ? 'That sign-in link expired or was already used. Request a new one.' : null
   })
 
@@ -82,7 +89,9 @@ export function AuthView() {
               Sign in to ProgramKit
             </h1>
             <p className="pt-3 text-pretty text-base/7 text-zinc-600 sm:text-sm/6">
-              Enter your email to continue.
+              {invited
+                ? 'Use the email address that received the invitation.'
+                : 'Enter your email to continue.'}
             </p>
             <div className="pt-7 text-left">
               <label htmlFor="auth-email" className="text-sm font-medium text-zinc-800">

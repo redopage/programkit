@@ -3,8 +3,9 @@
 ## Current release
 
 ProgramKit contains production-shaped domain controls and a working passwordless staff session for
-the hosted app. It does not yet have production-complete team membership, participant and reviewer
-identity, MCP OAuth, or file storage.
+the hosted app. It has event-scoped team invitations and live role enforcement, but does not yet
+have production-complete participant and reviewer identity, account recovery, MCP OAuth, or file
+storage.
 
 Do not place real participant data, provider credentials, private documents, or production email
 access in the reference deployment.
@@ -19,6 +20,12 @@ access in the reference deployment.
 - Sessions expire after 30 days and use HTTP-only, secure, same-site cookies in production.
 - Event creation and selection come from server-owned account membership. Each event maps to a
   separate Workspace Durable Object.
+- A separate Event Access Durable Object is authoritative for each event's owners, administrators,
+  viewers, pending invitations, and revocations.
+- Invitation secrets are random 256-bit values stored only as SHA-256 hashes. They are bound to one
+  normalized email, expire after seven days, and work once.
+- Every hosted workspace request checks the live event membership and derives scopes from its role.
+  The account event list is a repairable switcher projection, not an authorization boundary.
 - Caller-supplied actor headers and body actors never become the trusted staff actor.
 - Logout revokes the stored session and clears its cookies.
 
@@ -78,7 +85,8 @@ The following controls remain useful after a real identity adapter is added:
   per-trial-workspace connection isolation, signed inbound webhooks, and best-effort webhook
   deletion on disconnect
 - Hosted staff magic-link enumeration resistance, one-time tokens, hashed secrets, account resend
-  limits, canonical callbacks, revocable sessions, and verified event selection
+  limits, canonical callbacks, revocable sessions, email-bound team invitations, immediate event
+  revocation, and verified event selection
 
 These controls authenticate the hosted staff account but do not authenticate a participant or
 reviewer, protect an MCP OAuth bearer token, deliver product campaigns, scan a file, or establish
@@ -97,8 +105,8 @@ authorization decision in another deployment.
 
 ## Required before real data
 
-1. Add team invitation, membership revocation, administrator roles, server-owned role-to-scope
-   mapping, account recovery, and an MFA or external OIDC policy where deployment risk requires it.
+1. Add account recovery, ownership transfer, and an MFA or external OIDC policy where deployment
+   risk requires it. Add a complete leave-event flow before users can remove their own access.
 2. Replace participation and reviewer IDs in portal URLs with short-lived, one-time magic links or another
    verified participant login. Store only token hashes and scope the session to one workspace and
    participation.
