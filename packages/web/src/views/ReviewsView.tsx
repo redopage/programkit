@@ -1,6 +1,10 @@
 import { ArrowRightIcon, ClockIcon } from '@heroicons/react/16/solid'
 
 import {
+  evaluationCriterionKind,
+  evaluationRoundCriteria,
+  evaluationRoundIsBlind,
+  evaluationRoundReviewerTeamId,
   submissionAnswerByPurpose,
   submissionReviewSummary,
   type SubmissionAnswerValue,
@@ -41,8 +45,15 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   const completion =
     assignments.length === 0 ? 0 : Math.round((completed / assignments.length) * 100)
   const plan = (state.evaluationPlans ?? []).find((entry) => entry.eventId === state.activeEventId)
-  const team = state.reviewerTeams?.find((entry) => entry.id === plan?.reviewerTeamId)
-  const reviewers = (state.reviewers ?? []).filter((entry) => team?.reviewerIds.includes(entry.id))
+  const reviewerTeamIds = new Set(
+    plan?.rounds.map((round) => evaluationRoundReviewerTeamId(plan, round.id)) ?? [],
+  )
+  const reviewerIds = new Set(
+    (state.reviewerTeams ?? [])
+      .filter((team) => reviewerTeamIds.has(team.id))
+      .flatMap((team) => team.reviewerIds),
+  )
+  const reviewers = (state.reviewers ?? []).filter((entry) => reviewerIds.has(entry.id))
   const inReview = (state.submissions ?? [])
     .filter(
       (submission) =>
@@ -177,41 +188,47 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             </p>
           </div>
           {plan ? (
-            <div className="flex flex-col gap-5 pt-4">
-              <dl className="grid grid-cols-2 gap-4">
-                <div>
-                  <dt className="text-base font-medium text-zinc-950 sm:text-sm">Reviewer team</dt>
-                  <dd className="text-base text-zinc-500 sm:text-sm">
-                    {team?.name ?? 'Unassigned'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-base font-medium text-zinc-950 sm:text-sm">Identity</dt>
-                  <dd className="text-base text-zinc-500 sm:text-sm">
-                    {plan.blindReview ? 'Blind review' : 'Visible submitter'}
-                  </dd>
-                </div>
-              </dl>
-              <div>
-                <p className="text-base font-medium text-zinc-950 sm:text-sm">Scoring criteria</p>
-                <ul role="list" className="divide-y divide-zinc-950/5 pt-1">
-                  {plan.criteria.map((criterion) => (
-                    <li key={criterion.id} className="flex items-start justify-between gap-4 py-3">
-                      <span className="min-w-0">
-                        <span className="block text-base font-medium text-zinc-950 sm:text-sm">
-                          {criterion.label}
+            <div className="divide-y divide-zinc-950/5">
+              {[...plan.rounds]
+                .sort((left, right) => left.order - right.order)
+                .map((round) => {
+                  const teamId = evaluationRoundReviewerTeamId(plan, round.id)
+                  const team = state.reviewerTeams.find((entry) => entry.id === teamId)
+                  const criteria = evaluationRoundCriteria(plan, round.id)
+                  return (
+                    <article key={round.id} className="py-4 first:pt-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <h3 className="text-base font-medium text-zinc-950 sm:text-sm">
+                            {round.name}
+                          </h3>
+                          <p className="truncate text-base text-zinc-500 sm:text-sm">
+                            {team?.name ?? 'No reviewer pool'} ·{' '}
+                            {evaluationRoundIsBlind(plan, round.id)
+                              ? 'Blind review'
+                              : 'Visible submitter'}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-sm text-zinc-500">
+                          {round.reviewersPerSubmission} per proposal
                         </span>
-                        <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
-                          {criterion.description}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-sm tabular-nums text-zinc-500">
-                        {criterion.weight}× weight
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                      </div>
+                      <ul role="list" className="flex flex-wrap gap-1.5 pt-3">
+                        {criteria.map((criterion) => (
+                          <li
+                            key={criterion.id}
+                            className="rounded-full bg-zinc-100 px-2.5 py-1 text-sm text-zinc-700 ring-1 ring-zinc-950/5"
+                          >
+                            {criterion.label}
+                            {evaluationCriterionKind(criterion) === 'numeric'
+                              ? ` · ${criterion.minimum ?? 1}–${criterion.maximum ?? 5} · ${criterion.weight}×`
+                              : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </article>
+                  )
+                })}
             </div>
           ) : (
             <div className="flex items-start gap-2 py-8 text-zinc-500">

@@ -483,7 +483,7 @@ function SubmissionDrawer({
                           className="h-full w-(--score) rounded-full bg-blue-600"
                           style={
                             {
-                              '--score': `${(value / criterion.maximum) * 100}%`,
+                              '--score': `${(value / (criterion.maximum ?? 5)) * 100}%`,
                             } as React.CSSProperties
                           }
                         />

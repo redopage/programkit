@@ -1,4 +1,5 @@
 import { executeOperation } from './engine.ts'
+import { evaluationRoundIsBlind } from './reviews.ts'
 import { createWorkspaceExportArchive, workspaceExportFilename } from './export.ts'
 import { operationManifest } from './manifest.ts'
 import { publicAgenda, readinessSummary, scheduleConflicts } from './selectors.ts'
@@ -186,7 +187,8 @@ function reviewerState(state: WorkspaceState, reviewerId: string) {
     .filter((entry) => submissionIds.has(entry.id))
     .map((submission) => {
       const plan = plans.find((entry) => entry.formId === submission.formId)
-      if (!plan?.blindReview) return structuredClone(submission)
+      const assignment = assignments.find((entry) => entry.submissionId === submission.id)
+      if (!evaluationRoundIsBlind(plan, assignment?.roundId)) return structuredClone(submission)
       const hiddenKeys = new Set(
         fields
           .filter(

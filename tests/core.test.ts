@@ -710,6 +710,147 @@ describe('ProgramKit operation engine', () => {
       convertedSessionId: expect.any(String),
     })
   })
+
+  it('configures independent review rounds with typed scorecards', () => {
+    let state = createSeedState()
+    state.reviewerTeams.push({
+      id: 'rvt_final',
+      eventId: state.activeEventId,
+      name: 'Final review committee',
+      reviewerIds: ['rev_002', 'rev_003'],
+      version: 1,
+    })
+    const plan = state.evaluationPlans[0]
+    const updated = executeOperation(state, 'evaluation-plan.update', {
+      input: {
+        planId: plan.id,
+        name: 'AIE NYC two-round review',
+        rounds: [
+          {
+            id: 'rnd_program_review',
+            name: 'Initial Review',
+            opensAt: '2026-08-01T00:00:00-04:00',
+            closesAt: '2026-10-15T23:59:00-04:00',
+            reviewerTeamId: 'rvt_program',
+            blindReview: true,
+            reviewersPerSubmission: 2,
+            minimumCompletedReviews: 2,
+            criteria: [
+              {
+                id: 'crt_originality',
+                label: 'Originality',
+                kind: 'numeric',
+                minimum: 1,
+                maximum: 5,
+                weight: 2,
+              },
+              {
+                id: 'crt_relevance',
+                label: 'Relevance',
+                kind: 'numeric',
+                minimum: 1,
+                maximum: 5,
+                weight: 1,
+              },
+              {
+                id: 'crt_recommendation',
+                label: 'Recommendation',
+                kind: 'select',
+                options: ['Accept', 'Maybe', 'Reject'],
+              },
+              {
+                id: 'crt_comments',
+                label: 'Comments',
+                kind: 'long_text',
+              },
+            ],
+          },
+          {
+            id: 'rnd_final_review',
+            name: 'Final Review',
+            opensAt: '2026-10-16T00:00:00-04:00',
+            closesAt: '2026-11-30T23:59:00-05:00',
+            reviewerTeamId: 'rvt_final',
+            blindReview: false,
+            reviewersPerSubmission: 1,
+            minimumCompletedReviews: 1,
+            criteria: [
+              {
+                id: 'crt_final_score',
+                label: 'Final Score',
+                kind: 'numeric',
+                minimum: 1,
+                maximum: 10,
+                weight: 1,
+              },
+              {
+                id: 'crt_final_comments',
+                label: 'Comments',
+                kind: 'long_text',
+              },
+            ],
+          },
+        ],
+      },
+      expectedVersions: { [plan.id]: plan.version },
+    })
+    expect(updated.response.ok).toBe(true)
+    state = updated.state
+    const savedPlan = state.evaluationPlans[0]
+    expect(savedPlan.name).toBe('AIE NYC two-round review')
+    expect(savedPlan.rounds).toHaveLength(2)
+    expect(savedPlan.rounds[0]).toMatchObject({
+      name: 'Initial Review',
+      reviewerTeamId: 'rvt_program',
+      blindReview: true,
+    })
+    expect(savedPlan.rounds[0].criteria).toEqual([
+      expect.objectContaining({ id: 'crt_originality', kind: 'numeric', weight: 2 }),
+      expect.objectContaining({ id: 'crt_relevance', kind: 'numeric', weight: 1 }),
+      expect.objectContaining({
+        id: 'crt_recommendation',
+        kind: 'select',
+        options: ['Accept', 'Maybe', 'Reject'],
+      }),
+      expect.objectContaining({ id: 'crt_comments', kind: 'long_text' }),
+    ])
+    expect(savedPlan.rounds[1]).toMatchObject({
+      name: 'Final Review',
+      reviewerTeamId: 'rvt_final',
+      blindReview: false,
+    })
+    expect(savedPlan.rounds[1].criteria).toEqual([
+      expect.objectContaining({ maximum: 10 }),
+      expect.objectContaining({ kind: 'long_text' }),
+    ])
+
+    const assignment = state.reviewerAssignments.find((entry) => entry.id === 'rva_007')!
+    const scored = executeOperation(state, 'review.submit-scorecard', {
+      input: {
+        assignmentId: assignment.id,
+        answers: {
+          crt_originality: 5,
+          crt_relevance: 3,
+          crt_recommendation: 'Accept',
+          crt_comments: 'A distinct idea with a clear audience fit.',
+        },
+      },
+      expectedVersions: { [assignment.id]: assignment.version },
+    })
+    expect(scored.response.ok).toBe(true)
+    expect(
+      scored.state.scorecards.find((entry) => entry.assignmentId === assignment.id),
+    ).toMatchObject({
+      answers: {
+        crt_originality: 5,
+        crt_relevance: 3,
+        crt_recommendation: 'Accept',
+        crt_comments: 'A distinct idea with a clear audience fit.',
+      },
+      scores: { crt_originality: 5, crt_relevance: 3 },
+      recommendation: 'accept',
+    })
+  })
 })
 
 describe('next actions', () => {

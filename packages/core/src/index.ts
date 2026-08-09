@@ -48,6 +48,13 @@ export type {
 } from './airtable.ts'
 export { handleCoreRequest } from './http.ts'
 export { operationDefinition, operationManifest } from './manifest.ts'
+export {
+  evaluationCriterionKind,
+  evaluationRound,
+  evaluationRoundCriteria,
+  evaluationRoundIsBlind,
+  evaluationRoundReviewerTeamId,
+} from './reviews.ts'
 export { MemoryWorkspaceRepository } from './repository.ts'
 export {
   activeEvent,

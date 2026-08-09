@@ -1,5 +1,10 @@
 import { operationDefinition } from './manifest.ts'
 import {
+  evaluationCriterionKind,
+  evaluationRoundCriteria,
+  evaluationRoundReviewerTeamId,
+} from './reviews.ts'
+import {
   requiredSubmissionFieldPurposes,
   submissionFormAvailability,
   submissionFieldPurposeSupportsKind,
@@ -18,6 +23,9 @@ import type {
   ChangeOperation,
   ChangeSet,
   DomainEvent,
+  EvaluationCriterion,
+  EvaluationPlan,
+  EvaluationRound,
   OperationRequest,
   OperationDefinition,
   OperationResponse,
@@ -25,6 +33,7 @@ import type {
   ParticipationStatus,
   Person,
   RequirementStatus,
+  ReviewRecommendation,
   Session,
   Submission,
   SubmissionAnswers,
@@ -104,6 +113,164 @@ function assertSubmissionAnswers(value: unknown): SubmissionAnswers {
 
 function optionalString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function optionalBoolean(value: unknown, fallback: boolean) {
+  if (value === undefined) return fallback
+  if (typeof value !== 'boolean') {
+    throw new OperationError('INVALID_INPUT', 'Expected a true or false value.')
+  }
+  return value
+}
+
+function boundedInteger(value: unknown, field: string, minimum: number, maximum: number) {
+  if (!Number.isInteger(value) || (value as number) < minimum || (value as number) > maximum) {
+    throw new OperationError('INVALID_INPUT', `${field} must be from ${minimum} to ${maximum}.`, {
+      [field]: `Enter a whole number from ${minimum} to ${maximum}.`,
+    })
+  }
+  return value as number
+}
+
+function finiteNumber(value: unknown, field: string, minimum = 0) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < minimum) {
+    throw new OperationError('INVALID_INPUT', `${field} must be at least ${minimum}.`, {
+      [field]: `Enter a number of at least ${minimum}.`,
+    })
+  }
+  return value
+}
+
+function parseEvaluationCriteria(value: unknown, roundIndex: number): EvaluationCriterion[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new OperationError('INVALID_INPUT', 'Every evaluation round needs a scorecard.', {
+      [`rounds.${roundIndex}.criteria`]: 'Add at least one criterion.',
+    })
+  }
+  const ids = new Set<string>()
+  return value.map((entry, criterionIndex) => {
+    const prefix = `rounds.${roundIndex}.criteria.${criterionIndex}`
+    const record = assertRecord(entry, prefix)
+    const kind = assertOneOf(record.kind ?? 'numeric', `${prefix}.kind`, [
+      'numeric',
+      'select',
+      'long_text',
+    ] as const)
+    const id =
+      typeof record.id === 'string' && record.id.trim().length > 0
+        ? record.id.trim()
+        : createId('crt')
+    if (ids.has(id)) {
+      throw new OperationError('INVALID_INPUT', 'Criterion IDs must be unique within a round.')
+    }
+    ids.add(id)
+    const criterion: EvaluationCriterion = {
+      id,
+      label: assertString(record.label, `${prefix}.label`),
+      description: optionalString(record.description),
+      kind,
+      required: optionalBoolean(record.required, true),
+      weight: kind === 'numeric' ? finiteNumber(record.weight ?? 1, `${prefix}.weight`) : 0,
+    }
+    if (kind === 'numeric') {
+      criterion.minimum = finiteNumber(record.minimum ?? 1, `${prefix}.minimum`)
+      criterion.maximum = finiteNumber(record.maximum ?? 5, `${prefix}.maximum`)
+      if (criterion.maximum <= criterion.minimum) {
+        throw new OperationError('INVALID_INPUT', 'A numeric maximum must exceed its minimum.')
+      }
+    }
+    if (kind === 'select') {
+      const options = assertStringArray(record.options, `${prefix}.options`)
+        .map((option) => option.trim())
+        .filter(Boolean)
+      if (options.length < 2 || new Set(options).size !== options.length) {
+        throw new OperationError('INVALID_INPUT', 'A dropdown needs at least two unique options.')
+      }
+      criterion.options = options
+    }
+    return criterion
+  })
+}
+
+function parseEvaluationRounds(
+  state: WorkspaceState,
+  eventId: string,
+  value: unknown,
+): EvaluationRound[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new OperationError('INVALID_INPUT', 'An evaluation plan needs at least one round.', {
+      rounds: 'Add at least one round.',
+    })
+  }
+  const ids = new Set<string>()
+  const rounds = value.map((entry, index) => {
+    const record = assertRecord(entry, `rounds.${index}`)
+    const id =
+      typeof record.id === 'string' && record.id.trim().length > 0
+        ? record.id.trim()
+        : createId('rnd')
+    if (ids.has(id)) throw new OperationError('INVALID_INPUT', 'Round IDs must be unique.')
+    ids.add(id)
+    const reviewerTeamId = assertString(record.reviewerTeamId, `rounds.${index}.reviewerTeamId`)
+    const team = findRequired(state.reviewerTeams, reviewerTeamId, 'reviewer team')
+    if (team.eventId !== eventId) {
+      throw new OperationError('FORBIDDEN', 'Reviewer teams cannot be shared across events.')
+    }
+    const opensAt = optionalDateTime(record.opensAt, `rounds.${index}.opensAt`)
+    const closesAt = optionalDateTime(record.closesAt, `rounds.${index}.closesAt`)
+    if (opensAt && closesAt && new Date(opensAt) >= new Date(closesAt)) {
+      throw new OperationError('INVALID_INPUT', 'A review round must close after it opens.')
+    }
+    return {
+      id,
+      name: assertString(record.name, `rounds.${index}.name`),
+      order: index + 1,
+      opensAt,
+      closesAt,
+      reviewerTeamId,
+      blindReview: optionalBoolean(record.blindReview, false),
+      criteria: parseEvaluationCriteria(record.criteria, index),
+      reviewersPerSubmission: boundedInteger(
+        record.reviewersPerSubmission ?? 1,
+        `rounds.${index}.reviewersPerSubmission`,
+        1,
+        20,
+      ),
+      minimumCompletedReviews: boundedInteger(
+        record.minimumCompletedReviews ?? record.reviewersPerSubmission ?? 1,
+        `rounds.${index}.minimumCompletedReviews`,
+        1,
+        20,
+      ),
+    }
+  })
+  for (const round of rounds) {
+    if (round.minimumCompletedReviews > round.reviewersPerSubmission) {
+      throw new OperationError(
+        'INVALID_INPUT',
+        'Required completed reviews cannot exceed reviewers per submission.',
+      )
+    }
+  }
+  return rounds
+}
+
+function recommendationFromAnswers(
+  criteria: EvaluationCriterion[],
+  answers: Record<string, number | string>,
+): ReviewRecommendation {
+  const criterion = criteria.find(
+    (entry) => evaluationCriterionKind(entry) === 'select' && /recommendation/iu.test(entry.label),
+  )
+  const answer = criterion ? answers[criterion.id] : undefined
+  const normalized =
+    typeof answer === 'string' ? answer.trim().toLowerCase().replaceAll(' ', '_') : ''
+  if (normalized === 'strong_accept') return 'strong_accept'
+  if (normalized === 'accept') return 'accept'
+  if (normalized === 'maybe' || normalized === 'borderline') return 'borderline'
+  if (normalized === 'reject') return 'reject'
+  if (normalized === 'strong_reject') return 'strong_reject'
+  return 'borderline'
 }
 
 function optionalDateTime(value: unknown, field: string) {
@@ -776,7 +943,8 @@ function applyHandler(
       const createdAssignments = []
       if (plan) {
         const round = [...plan.rounds].sort((left, right) => left.order - right.order)[0]
-        const team = state.reviewerTeams.find((entry) => entry.id === plan.reviewerTeamId)
+        const teamId = evaluationRoundReviewerTeamId(plan, round?.id)
+        const team = state.reviewerTeams.find((entry) => entry.id === teamId)
         const activeReviewerIds = (team?.reviewerIds ?? []).filter(
           (reviewerId) =>
             state.reviewers.find((reviewer) => reviewer.id === reviewerId)?.status === 'active',
@@ -810,6 +978,98 @@ function applyHandler(
       return { submission, assignments: createdAssignments }
     }
 
+    case 'evaluation-plan.create': {
+      const form = findRequired(state.submissionForms, input.formId, 'submission form')
+      if (form.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'Evaluation plans cannot cross event boundaries.')
+      }
+      if (state.evaluationPlans.some((entry) => entry.formId === form.id)) {
+        throw new OperationError(
+          'DUPLICATE',
+          'This submission form already has an evaluation plan.',
+        )
+      }
+      const rounds = parseEvaluationRounds(state, form.eventId, input.rounds)
+      const firstRound = rounds[0]
+      const submissionKinds =
+        input.submissionKinds === undefined
+          ? [...form.allowedKinds]
+          : assertStringArray(input.submissionKinds, 'submissionKinds').map((kind) =>
+              assertOneOf(kind, 'submissionKinds', ['abstract', 'guaranteed_session'] as const),
+            )
+      if (submissionKinds.length === 0) {
+        throw new OperationError('INVALID_INPUT', 'Choose at least one submission kind.')
+      }
+      const plan: EvaluationPlan = {
+        id: createId('evp'),
+        eventId: form.eventId,
+        formId: form.id,
+        name: assertString(input.name, 'name'),
+        submissionKinds,
+        rounds,
+        // These plan-level values keep persisted v4 clients readable. Round-level
+        // settings are authoritative for every new plan.
+        reviewerTeamId: firstRound.reviewerTeamId!,
+        blindReview: firstRound.blindReview!,
+        criteria: structuredClone(firstRound.criteria!),
+        version: 1,
+      }
+      state.evaluationPlans.push(plan)
+      appendEvent(state, context, {
+        type: 'evaluation-plan.created',
+        aggregate: { type: 'evaluation-plan', id: plan.id, version: plan.version },
+        summary: `Created evaluation plan “${plan.name}”.`,
+        data: { formId: form.id, roundIds: rounds.map((round) => round.id) },
+      })
+      return { plan }
+    }
+
+    case 'evaluation-plan.update': {
+      const plan = findRequired(state.evaluationPlans, input.planId, 'evaluation plan')
+      if (plan.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'Only the active event plan can be updated here.')
+      }
+      const rounds =
+        input.rounds === undefined
+          ? plan.rounds
+          : parseEvaluationRounds(state, plan.eventId, input.rounds)
+      const assignedRoundIds = new Set(
+        state.reviewerAssignments
+          .filter((assignment) => assignment.evaluationPlanId === plan.id)
+          .map((assignment) => assignment.roundId),
+      )
+      const nextRoundIds = new Set(rounds.map((round) => round.id))
+      if ([...assignedRoundIds].some((roundId) => !nextRoundIds.has(roundId))) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'A review round with assignments cannot be removed.',
+        )
+      }
+      if (input.name !== undefined) plan.name = assertString(input.name, 'name')
+      if (input.submissionKinds !== undefined) {
+        plan.submissionKinds = assertStringArray(input.submissionKinds, 'submissionKinds').map(
+          (kind) =>
+            assertOneOf(kind, 'submissionKinds', ['abstract', 'guaranteed_session'] as const),
+        )
+        if (plan.submissionKinds.length === 0) {
+          throw new OperationError('INVALID_INPUT', 'Choose at least one submission kind.')
+        }
+      }
+      plan.rounds = rounds
+      const firstRound = rounds[0]
+      plan.reviewerTeamId = firstRound.reviewerTeamId!
+      plan.blindReview = firstRound.blindReview!
+      plan.criteria = structuredClone(firstRound.criteria!)
+      plan.version += 1
+      appendEvent(state, context, {
+        type: 'evaluation-plan.updated',
+        aggregate: { type: 'evaluation-plan', id: plan.id, version: plan.version },
+        summary: `Updated evaluation plan “${plan.name}”.`,
+        data: { roundIds: rounds.map((round) => round.id) },
+      })
+      return { plan }
+    }
+
     case 'review.submit-scorecard': {
       const assignment = findRequired(
         state.reviewerAssignments,
@@ -824,34 +1084,62 @@ function applyHandler(
         assignment.evaluationPlanId,
         'evaluation plan',
       )
-      const scoreInput = assertRecord(input.scores, 'scores')
+      const criteria = evaluationRoundCriteria(plan, assignment.roundId)
+      const answerInput = assertRecord(input.answers ?? input.scores ?? {}, 'answers')
+      const answers: Record<string, number | string> = {}
       const scores: Record<string, number> = {}
       const fields: Record<string, string> = {}
-      for (const criterion of plan.criteria) {
-        const value = scoreInput[criterion.id]
-        if (
-          typeof value !== 'number' ||
-          !Number.isFinite(value) ||
-          value < criterion.minimum ||
-          value > criterion.maximum
-        ) {
-          fields[criterion.id] = `Enter a score from ${criterion.minimum} to ${criterion.maximum}.`
+      for (const criterion of criteria) {
+        const value = answerInput[criterion.id]
+        const kind = evaluationCriterionKind(criterion)
+        const required = criterion.required ?? true
+        if (!required && (value === undefined || value === '')) continue
+        if (kind === 'numeric') {
+          const minimum = criterion.minimum ?? 1
+          const maximum = criterion.maximum ?? 5
+          if (
+            typeof value !== 'number' ||
+            !Number.isFinite(value) ||
+            value < minimum ||
+            value > maximum
+          ) {
+            fields[criterion.id] = `Enter a score from ${minimum} to ${maximum}.`
+          } else {
+            answers[criterion.id] = value
+            scores[criterion.id] = value
+          }
+          continue
+        }
+        if (kind === 'select') {
+          if (typeof value !== 'string' || !(criterion.options ?? []).includes(value)) {
+            fields[criterion.id] = 'Choose one of the available options.'
+          } else {
+            answers[criterion.id] = value
+          }
+          continue
+        }
+        if (typeof value !== 'string' || value.trim().length === 0) {
+          fields[criterion.id] = 'Enter a response.'
         } else {
-          scores[criterion.id] = value
+          answers[criterion.id] = value.trim()
         }
       }
       if (Object.keys(fields).length > 0) {
         throw new OperationError('INVALID_INPUT', 'Complete every scorecard criterion.', fields)
       }
-      const recommendation = assertOneOf(input.recommendation, 'recommendation', [
-        'strong_accept',
-        'accept',
-        'borderline',
-        'reject',
-        'strong_reject',
-      ] as const)
+      const recommendation =
+        input.recommendation === undefined
+          ? recommendationFromAnswers(criteria, answers)
+          : assertOneOf(input.recommendation, 'recommendation', [
+              'strong_accept',
+              'accept',
+              'borderline',
+              'reject',
+              'strong_reject',
+            ] as const)
       let scorecard = state.scorecards.find((entry) => entry.assignmentId === assignment.id)
       if (scorecard) {
+        scorecard.answers = answers
         scorecard.scores = scores
         scorecard.recommendation = recommendation
         scorecard.comments = optionalString(input.comments)
@@ -862,6 +1150,7 @@ function applyHandler(
         scorecard = {
           id: createId('sco'),
           assignmentId: assignment.id,
+          answers,
           scores,
           recommendation,
           comments: optionalString(input.comments),

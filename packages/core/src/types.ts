@@ -195,15 +195,23 @@ export interface EvaluationCriterion {
   id: Id
   label: string
   description: string
-  minimum: number
-  maximum: number
+  kind?: 'numeric' | 'select' | 'long_text'
+  required?: boolean
+  minimum?: number
+  maximum?: number
   weight: number
+  options?: string[]
 }
 
 export interface EvaluationRound {
   id: Id
   name: string
   order: number
+  opensAt?: ISODateTime | null
+  closesAt?: ISODateTime | null
+  reviewerTeamId?: Id
+  blindReview?: boolean
+  criteria?: EvaluationCriterion[]
   reviewersPerSubmission: number
   minimumCompletedReviews: number
 }
@@ -240,6 +248,7 @@ export type ReviewRecommendation =
 export interface Scorecard {
   id: Id
   assignmentId: Id
+  answers?: Record<Id, number | string>
   scores: Record<Id, number>
   recommendation: ReviewRecommendation
   comments: string

@@ -1,4 +1,5 @@
 import { nowIso } from './utils.ts'
+import { evaluationCriterionKind, evaluationRoundCriteria } from './reviews.ts'
 import type {
   Campaign,
   ISODateTime,
@@ -114,8 +115,16 @@ export function submissionReviewSummary(
   const plan = (state.evaluationPlans ?? []).find(
     (entry) => entry.id === assignments[0]?.evaluationPlanId,
   )
+  const criteria = [
+    ...new Map(
+      assignments
+        .flatMap((assignment) => evaluationRoundCriteria(plan, assignment.roundId))
+        .filter((criterion) => evaluationCriterionKind(criterion) === 'numeric')
+        .map((criterion) => [criterion.id, criterion]),
+    ).values(),
+  ]
   const criterionAverages = Object.fromEntries(
-    (plan?.criteria ?? []).map((criterion) => {
+    criteria.map((criterion) => {
       const values = scorecards
         .map((scorecard) => scorecard.scores[criterion.id])
         .filter((score): score is number => typeof score === 'number')
@@ -128,14 +137,15 @@ export function submissionReviewSummary(
     }),
   )
   const scorecardAverages = scorecards.map((scorecard) => {
-    const weighted = (plan?.criteria ?? []).reduce(
+    const assignment = assignments.find((entry) => entry.id === scorecard.assignmentId)
+    const roundCriteria = evaluationRoundCriteria(plan, assignment?.roundId).filter(
+      (criterion) => evaluationCriterionKind(criterion) === 'numeric',
+    )
+    const weighted = roundCriteria.reduce(
       (total, criterion) => total + (scorecard.scores[criterion.id] ?? 0) * criterion.weight,
       0,
     )
-    const totalWeight = (plan?.criteria ?? []).reduce(
-      (total, criterion) => total + criterion.weight,
-      0,
-    )
+    const totalWeight = roundCriteria.reduce((total, criterion) => total + criterion.weight, 0)
     return totalWeight === 0 ? 0 : weighted / totalWeight
   })
   const recommendations: SubmissionReviewSummary['recommendations'] = {}
