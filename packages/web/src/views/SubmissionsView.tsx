@@ -382,7 +382,7 @@ function SubmissionDrawer({
         decision,
         reason:
           decision === 'accepted'
-            ? 'Selected for the program after committee review.'
+            ? 'Selected for the program after review.'
             : decision === 'waitlisted'
               ? 'Held for a later program decision.'
               : 'Not selected for this program edition.',
@@ -535,17 +535,17 @@ function SubmissionDrawer({
                 id="review-summary-heading"
                 className="text-base font-medium text-zinc-950 sm:text-sm"
               >
-                {currentRound?.name ?? 'Committee review'}
+                {currentRound?.name ?? 'Review'}
               </h3>
-              <p className="text-base text-zinc-500 sm:text-sm">
-                {review.completed} of {review.assigned} assignments complete.
+              <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                Across all rounds · {review.completed} of {review.assigned} assignments complete.
               </p>
             </div>
             <div className="text-right">
               <p className="text-3xl font-semibold tracking-tight tabular-nums text-zinc-950">
                 {review.averageScore?.toFixed(1) ?? '—'}
               </p>
-              <p className="text-sm text-zinc-500">out of 5</p>
+              <p className="text-sm text-zinc-500">out of 5, all rounds</p>
             </div>
           </div>
           {plan ? (
@@ -588,35 +588,45 @@ function SubmissionDrawer({
             <div className="mt-5 rounded-lg bg-amber-50 p-3 text-amber-800 ring-1 ring-amber-800/10">
               <p className="text-pretty text-base sm:text-sm">
                 Complete {currentRound.minimumCompletedReviews - review.completed} more review
-                {currentRound.minimumCompletedReviews - review.completed === 1 ? '' : 's'} before
-                the committee records a decision.
+                {currentRound.minimumCompletedReviews - review.completed === 1 ? '' : 's'} in{' '}
+                {currentRound.name} before a decision can be recorded.
               </p>
             </div>
           ) : null}
-          {decisionReady && !canAccept && finalRound ? (
+          {canResolve && !canAccept && finalRound ? (
             <div className="mt-5 rounded-lg bg-blue-50 p-3 text-blue-800 ring-1 ring-blue-800/10">
               <p className="text-pretty text-base sm:text-sm">
-                This round is complete. Advance the proposal to {finalRound.name} from the Review
-                workspace before accepting it.
+                {currentRound?.name ?? 'This round'} is complete, but acceptance is decided in{' '}
+                {finalRound.name}. Advance the proposal from the Review workspace first. Decline and
+                Waitlist stay available now.
               </p>
             </div>
           ) : null}
+          {decisionReady && !canResolve ? (
+            <p className="mt-5 text-pretty text-base text-zinc-500 sm:text-sm">
+              {submission.status === 'draft'
+                ? 'This proposal has not been submitted yet, so there is nothing to decide.'
+                : `A decision is already recorded (${sentenceCase(submission.status).toLowerCase()}), so the review actions are closed.`}
+            </p>
+          ) : null}
           {scorecards.length > 0 ? (
-            <ul role="list" className="divide-y divide-zinc-950/5 pt-5">
-              {scorecards.map((scorecard) => (
-                <li key={scorecard.id} className="py-3">
-                  <div className="flex items-center justify-between gap-3">
+            <>
+              <p className="pt-5 text-base font-medium text-zinc-950 sm:text-sm">
+                Reviewer feedback from {currentRound?.name ?? 'this round'}
+              </p>
+              <ul role="list" className="divide-y divide-zinc-950/5 pt-1">
+                {scorecards.map((scorecard) => (
+                  <li key={scorecard.id} className="py-3">
                     <p className="text-base font-medium text-zinc-950 sm:text-sm">
                       {sentenceCase(scorecard.recommendation)}
                     </p>
-                    <p className="text-sm text-zinc-500">Reviewer feedback</p>
-                  </div>
-                  <p className="pt-1 text-pretty text-base text-zinc-600 sm:text-sm">
-                    {scorecard.comments}
-                  </p>
-                </li>
-              ))}
-            </ul>
+                    <p className="pt-1 text-pretty text-base text-zinc-600 sm:text-sm">
+                      {scorecard.comments}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : null}
         </section>
       </div>

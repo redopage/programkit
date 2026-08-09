@@ -111,10 +111,10 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
               id="review-progress-heading"
               className="text-base font-medium text-zinc-950 sm:text-sm"
             >
-              Committee progress
+              Review progress
             </h2>
             <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-              {completed} of {assignments.length} assigned reviews are complete.
+              {completed} of {assignments.length} assigned reviews are complete across every round.
             </p>
           </div>
           <p className="text-base font-medium tabular-nums text-zinc-950 sm:text-sm">
@@ -163,7 +163,8 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                 Decision queue
               </h2>
               <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-                Proposals still moving through committee review.
+                Proposals still moving through the review plan. Each row shows the round it is in
+                now.
               </p>
             </div>
             <button
@@ -179,18 +180,22 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
               <li key={submission.id} className="flex flex-wrap items-center gap-3 py-3">
                 <button
                   type="button"
-                  className="focus-ring flex min-w-0 flex-1 items-center gap-4 rounded-lg py-1 text-left hover:bg-zinc-950/2"
+                  className="focus-ring flex min-w-0 flex-1 basis-full items-center gap-4 rounded-lg py-1 text-left hover:bg-zinc-950/2 sm:basis-auto"
                   onClick={() => navigate('/submissions')}
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-medium text-zinc-950 sm:text-sm">
                       {answerText(submissionAnswerByPurpose(state, submission, 'proposal_title'))}
                     </span>
-                    <span className="block truncate text-base text-zinc-500 sm:text-sm">
-                      {answerText(submissionAnswerByPurpose(state, submission, 'first_name'))}{' '}
-                      {answerText(submissionAnswerByPurpose(state, submission, 'last_name'))} ·{' '}
-                      {currentRound?.name ?? 'Review'} · {review.completed}/{review.assigned}{' '}
-                      reviews
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5">
+                      <span className="inline-flex max-w-full shrink-0 items-center truncate whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/5">
+                        {currentRound?.name ?? 'Review'}
+                      </span>
+                      <span className="min-w-0 truncate text-base text-zinc-500 sm:text-sm">
+                        {answerText(submissionAnswerByPurpose(state, submission, 'first_name'))}{' '}
+                        {answerText(submissionAnswerByPurpose(state, submission, 'last_name'))} ·{' '}
+                        {review.completed}/{review.assigned} reviews
+                      </span>
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
@@ -318,7 +323,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             Reviewer assignments
           </h2>
           <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-            Every outstanding review and its owner.
+            Every assignment, the round it belongs to, and its owner.
           </p>
         </div>
         <div className="-mx-4 -my-2 overflow-x-auto whitespace-nowrap sm:-mx-6">
