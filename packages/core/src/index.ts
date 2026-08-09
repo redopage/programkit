@@ -1,4 +1,11 @@
 export { executeOperation } from './engine.ts'
+export {
+  createStoredZip,
+  createWorkspaceExportArchive,
+  recordsToCsv,
+  workspaceExportFilename,
+} from './export.ts'
+export type { WorkspaceExportFile } from './export.ts'
 export { reconcileAirtableRecord } from './airtable.ts'
 export {
   AIRTABLE_SCHEMA_VERSION,

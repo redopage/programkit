@@ -127,11 +127,17 @@ workspace revision atomically.
 
 ## Domain events and export
 
-| Method | Path                             | Purpose                                           |
-| ------ | -------------------------------- | ------------------------------------------------- |
-| `GET`  | `/api/v1/domain-events?limit=50` | Read the newest accepted domain events            |
-| `GET`  | `/api/v1/export`                 | Download the versioned logical workspace document |
-| `GET`  | `/api/v1/health`                 | Check schema and workspace revision               |
+| Method | Path                             | Purpose                                            |
+| ------ | -------------------------------- | -------------------------------------------------- |
+| `GET`  | `/api/v1/domain-events?limit=50` | Read the newest accepted domain events             |
+| `GET`  | `/api/v1/export`                 | Download a ZIP with the JSON backup and CSV tables |
+| `GET`  | `/api/v1/export.json`            | Download the versioned logical workspace document  |
+| `GET`  | `/api/v1/health`                 | Check schema and workspace revision                |
+
+The ZIP contains `workspace.json`, a manifest, a short README, and one UTF-8 CSV for every record
+collection. Nested values use dot-separated columns, and the manifest records every table's row
+count. The JSON document is the lossless logical backup. CSV files are intended for inspection,
+spreadsheets, and migration work.
 
 The domain-event route is an operator feed, not a delivery guarantee. The Airtable persistence
 adapter uses stable-ID upserts and cache acknowledgement. Production hardening still needs a

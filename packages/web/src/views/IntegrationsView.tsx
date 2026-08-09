@@ -110,7 +110,7 @@ export function IntegrationsView() {
         title="Infrastructure & API"
         description="Cloudflare runtime, data ownership, exports, and optional connections."
         actions={
-          <Button variant="primary" onClick={() => window.open('/api/v1/export', '_blank')}>
+          <Button variant="primary" onClick={() => window.location.assign('/api/v1/export')}>
             <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
             Download full export
           </Button>

@@ -37,7 +37,17 @@ describe('operation HTTP surface', () => {
       new Request('http://local/api/v1/export'),
       repository,
     )
-    expect(exportResponse?.headers.get('content-disposition')).toContain('aie-export.json')
+    expect(exportResponse?.headers.get('content-disposition')).toContain('aie-export-')
+    expect(exportResponse?.headers.get('content-type')).toBe('application/zip')
+    expect(new Uint8Array(await exportResponse!.arrayBuffer()).slice(0, 4)).toEqual(
+      new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+    )
+
+    const jsonExportResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/export.json'),
+      repository,
+    )
+    expect(jsonExportResponse?.headers.get('content-disposition')).toContain('aie-export.json')
   })
 
   it('serves event-scoped, paginated integration resources', async () => {

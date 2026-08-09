@@ -1,4 +1,5 @@
 import { executeOperation } from './engine.ts'
+import { createWorkspaceExportArchive, workspaceExportFilename } from './export.ts'
 import { operationManifest } from './manifest.ts'
 import { publicAgenda, readinessSummary, scheduleConflicts } from './selectors.ts'
 import { defaultActor } from './utils.ts'
@@ -428,12 +429,27 @@ export async function handleCoreRequest(
     return json(paginate(speakers, url))
   }
 
-  if (request.method === 'GET' && path === '/api/v1/export') {
+  if (request.method === 'GET' && (path === '/api/v1/export' || path === '/api/v1/export.json')) {
     if (!hasScope(actor, 'workspace:export')) return forbidden('workspace:export')
     const state = await repository.read()
+    const exportedAt = new Date().toISOString()
+    if (path === '/api/v1/export') {
+      const archive = createWorkspaceExportArchive(state, exportedAt)
+      const body = archive.buffer.slice(
+        archive.byteOffset,
+        archive.byteOffset + archive.byteLength,
+      ) as ArrayBuffer
+      return new Response(body, {
+        headers: {
+          'cache-control': 'no-store',
+          'content-disposition': `attachment; filename="${workspaceExportFilename(state, exportedAt)}"`,
+          'content-type': 'application/zip',
+        },
+      })
+    }
     return json(
       {
-        exportedAt: new Date().toISOString(),
+        exportedAt,
         format: 'programkit.workspace.v1',
         state: publicState(state),
       },
