@@ -9,7 +9,7 @@ import type {
 
 const surfaceOperationAllowlist: Record<ProgramKitSurface['kind'], ReadonlySet<string> | null> = {
   operator: null,
-  submission: new Set(['submission.create', 'submission.submit']),
+  submission: new Set(['submission.create', 'submission.submit', 'submission.update']),
   reviewer: new Set(['review.submit-scorecard']),
   speaker: new Set(['participation.set-status', 'requirement.set-status', 'portal.update-profile']),
   'public-program': new Set(),
@@ -30,7 +30,11 @@ async function parseJson<T>(response: Response) {
 function stateEndpoint(surface: ProgramKitSurface) {
   switch (surface.kind) {
     case 'submission':
-      return `/public/v1/submission-forms/${encodeURIComponent(surface.formSlug)}/state`
+      return `/public/v1/submission-forms/${encodeURIComponent(surface.formSlug)}/state${
+        surface.speakerAccessKey
+          ? `?speakerAccessKey=${encodeURIComponent(surface.speakerAccessKey)}`
+          : ''
+      }`
     case 'reviewer':
       return `/api/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/state`
     case 'speaker':

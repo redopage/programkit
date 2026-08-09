@@ -37,6 +37,7 @@ import type {
   Session,
   Submission,
   SubmissionAnswers,
+  SubmissionContributor,
   SubmissionForm,
   SubmissionFormField,
   WorkspaceState,
@@ -77,7 +78,11 @@ function initializeProgramCollections(state: WorkspaceState) {
   state.reviewerAssignments ??= []
   state.scorecards ??= []
   state.reviewDecisions ??= []
-  state.schemaVersion = Math.max(state.schemaVersion, 4)
+  for (const submission of state.submissions) {
+    submission.contributors ??= []
+    submission.speakerAccessKey ??= createId('speaker')
+  }
+  state.schemaVersion = Math.max(state.schemaVersion, 5)
 }
 
 function assertRecord(value: unknown, field: string) {
@@ -109,6 +114,48 @@ function assertSubmissionAnswers(value: unknown): SubmissionAnswers {
     throw new OperationError('INVALID_INPUT', `Answer ${key} has an unsupported value.`)
   }
   return answers
+}
+
+function assertSubmissionContributors(
+  value: unknown,
+  primaryEmail: string,
+): SubmissionContributor[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value) || value.length > 10) {
+    throw new OperationError(
+      'INVALID_INPUT',
+      'contributors must be an array with no more than 10 people.',
+      { contributors: 'Add no more than 10 co-speakers.' },
+    )
+  }
+  const emails = new Set([primaryEmail.toLowerCase()])
+  return value.map((entry, index) => {
+    const record = assertRecord(entry, `contributors.${index}`)
+    const email = assertEmail(record.email, `contributors.${index}.email`)
+    if (emails.has(email)) {
+      throw new OperationError('DUPLICATE', 'Each submission participant needs a unique email.', {
+        [`contributors.${index}.email`]: 'Use a different email address.',
+      })
+    }
+    emails.add(email)
+    return {
+      id:
+        typeof record.id === 'string' && record.id.trim().length > 0
+          ? record.id.trim()
+          : createId('contributor'),
+      firstName: assertString(record.firstName, `contributors.${index}.firstName`),
+      lastName: assertString(record.lastName, `contributors.${index}.lastName`),
+      email,
+      company: optionalString(record.company),
+      title: optionalString(record.title),
+      biography: optionalString(record.biography),
+      role: assertOneOf(record.role, `contributors.${index}.role`, [
+        'co_speaker',
+        'co_author',
+        'co_presenter',
+      ] as const),
+    }
+  })
 }
 
 function optionalString(value: unknown) {
@@ -910,13 +957,17 @@ function applyHandler(
       if (!form.allowedKinds.includes(kind)) {
         throw new OperationError('INVALID_INPUT', 'This form does not accept that submission kind.')
       }
+      const answers = assertSubmissionAnswers(input.answers)
+      const requestedAccessKey = optionalString(input.speakerAccessKey)
       const submission: Submission = {
         id: createId('sub'),
         eventId: form.eventId,
         formId: form.id,
         kind,
         status: 'draft',
-        answers: assertSubmissionAnswers(input.answers),
+        answers,
+        contributors: [],
+        speakerAccessKey: requestedAccessKey || createId('speaker'),
         assetIds: input.assetIds === undefined ? [] : assertStringArray(input.assetIds, 'assetIds'),
         submittedAt: null,
         decidedAt: null,
@@ -926,6 +977,27 @@ function applyHandler(
         updatedAt: timestamp,
         version: 1,
       }
+      const primaryEmail = stringAnswer(state, submission, 'email')
+      if (requestedAccessKey) {
+        const verifiedPrimaryEmail = assertEmail(primaryEmail)
+        const ownedSubmission = state.submissions.find(
+          (entry) =>
+            entry.eventId === form.eventId && entry.speakerAccessKey === requestedAccessKey,
+        )
+        if (
+          !ownedSubmission ||
+          stringAnswer(state, ownedSubmission, 'email').toLowerCase() !== verifiedPrimaryEmail
+        ) {
+          throw new OperationError(
+            'FORBIDDEN',
+            'This speaker access link does not match the submission email.',
+          )
+        }
+      }
+      submission.contributors =
+        input.contributors === undefined
+          ? []
+          : assertSubmissionContributors(input.contributors, assertEmail(primaryEmail))
       state.submissions.push(submission)
       appendEvent(state, context, {
         type: 'submission.created',
@@ -936,14 +1008,79 @@ function applyHandler(
       return { submission }
     }
 
+    case 'submission.update': {
+      const submission = findRequired(state.submissions, input.submissionId, 'submission')
+      const form = findRequired(state.submissionForms, submission.formId, 'submission form')
+      if (
+        context.actor.type === 'submitter' &&
+        (context.actor.id !== form.slug ||
+          optionalString(input.speakerAccessKey) !== submission.speakerAccessKey)
+      ) {
+        throw new OperationError('FORBIDDEN', 'This speaker link cannot edit that submission.')
+      }
+      if (submission.status === 'accepted' || submission.status === 'withdrawn') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          `A ${submission.status} submission cannot be edited.`,
+        )
+      }
+      const previous = structuredClone(submission)
+      if (input.answers !== undefined) {
+        const nextAnswers = { ...submission.answers, ...assertSubmissionAnswers(input.answers) }
+        if (context.actor.type === 'submitter') {
+          const emailField = state.submissionFormFields.find(
+            (field) => field.formId === form.id && field.purpose === 'email',
+          )
+          if (
+            emailField &&
+            String(nextAnswers[emailField.key] ?? '').toLowerCase() !==
+              stringAnswer(state, submission, 'email').toLowerCase()
+          ) {
+            throw new OperationError(
+              'INVALID_INPUT',
+              'The submission contact email cannot be changed from a speaker access link.',
+              { [emailField.key]: 'Contact the program team to change this email.' },
+            )
+          }
+        }
+        submission.answers = nextAnswers
+      }
+      if (input.contributors !== undefined) {
+        submission.contributors = assertSubmissionContributors(
+          input.contributors,
+          assertEmail(stringAnswer(state, submission, 'email')),
+        )
+      }
+      if (input.assetIds !== undefined) {
+        submission.assetIds = assertStringArray(input.assetIds, 'assetIds')
+      }
+      if (submission.status !== 'draft') validateAnswersForSubmission(state, submission)
+      submission.updatedAt = timestamp
+      submission.version += 1
+      appendEvent(state, context, {
+        type: 'submission.updated',
+        aggregate: { type: 'submission', id: submission.id, version: submission.version },
+        summary: `Updated “${stringAnswer(state, submission, 'proposal_title')}”.`,
+        data: {
+          previousContributorCount: previous.contributors.length,
+          contributorCount: submission.contributors.length,
+        },
+      })
+      return { submission }
+    }
+
     case 'submission.submit': {
       const submission = findRequired(state.submissions, input.submissionId, 'submission')
       if (submission.status !== 'draft') {
         throw new OperationError('INVALID_TRANSITION', 'Only a draft submission can be submitted.')
       }
       const form = findRequired(state.submissionForms, submission.formId, 'submission form')
-      if (context.actor.type === 'submitter' && context.actor.id !== form.slug) {
-        throw new OperationError('FORBIDDEN', 'This submission link cannot submit that draft.')
+      if (
+        context.actor.type === 'submitter' &&
+        (context.actor.id !== form.slug ||
+          optionalString(input.speakerAccessKey) !== submission.speakerAccessKey)
+      ) {
+        throw new OperationError('FORBIDDEN', 'This speaker link cannot submit that draft.')
       }
       assertSubmissionFormAccepting(form, timestamp)
       if (input.answers !== undefined) {
@@ -954,6 +1091,12 @@ function applyHandler(
       }
       if (input.assetIds !== undefined) {
         submission.assetIds = assertStringArray(input.assetIds, 'assetIds')
+      }
+      if (input.contributors !== undefined) {
+        submission.contributors = assertSubmissionContributors(
+          input.contributors,
+          assertEmail(stringAnswer(state, submission, 'email')),
+        )
       }
       validateAnswersForSubmission(state, submission)
       submission.status = 'submitted'
@@ -1615,95 +1758,120 @@ function applyHandler(
       let person: Person | null = null
       let participation: Participation | null = null
       let session: Session | null = null
+      const acceptedParticipations: Participation[] = []
       if (decision === 'accepted') {
-        const email = assertString(stringAnswer(state, submission, 'email'), 'email').toLowerCase()
-        const firstName = assertString(stringAnswer(state, submission, 'first_name'), 'firstName')
-        const lastName = assertString(stringAnswer(state, submission, 'last_name'), 'lastName')
-        person = state.people.find((entry) => entry.email.toLowerCase() === email) ?? null
-        if (!person) {
-          person = {
-            id: createId('per'),
-            firstName,
-            lastName,
-            email,
+        const submissionParticipants = [
+          {
+            firstName: assertString(stringAnswer(state, submission, 'first_name'), 'firstName'),
+            lastName: assertString(stringAnswer(state, submission, 'last_name'), 'lastName'),
+            email: assertEmail(stringAnswer(state, submission, 'email')),
             company: stringAnswer(state, submission, 'company'),
             title: stringAnswer(state, submission, 'job_title'),
-            city: '',
-            timezone: state.workspace.timezone,
-            bio: stringAnswer(state, submission, 'biography'),
-            avatarUrl: `https://assets.ui.sh/avatars/${(state.people.length % 12) + 1}.webp`,
-            tags: [],
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            version: 1,
-          }
-          state.people.push(person)
-          appendEvent(state, context, {
-            type: 'person.created',
-            aggregate: { type: 'person', id: person.id, version: person.version },
-            summary: `Created ${person.firstName} ${person.lastName} from an accepted submission.`,
-            data: { submissionId: submission.id },
-          })
-        }
-        participation =
-          state.participations.find(
-            (entry) => entry.eventId === submission.eventId && entry.personId === person?.id,
-          ) ?? null
-        if (!participation) {
-          participation = {
-            id: createId('par'),
-            eventId: submission.eventId,
-            personId: person.id,
-            roles: ['speaker'],
-            status: 'invited',
-            sessionIds: [],
-            internalNotes: '',
-            publicTitle: person.title,
-            publicCompany: person.company,
-            confirmedAt: null,
-            updatedAt: timestamp,
-            version: 1,
-          }
-          state.participations.push(participation)
-          appendEvent(state, context, {
-            type: 'participation.created',
-            aggregate: {
-              type: 'participation',
-              id: participation.id,
-              version: participation.version,
-            },
-            summary: `Invited ${person.firstName} ${person.lastName} to the event.`,
-            data: { personId: person.id, submissionId: submission.id },
-          })
-        } else if (
-          participation.status === 'prospect' ||
-          participation.status === 'declined' ||
-          participation.status === 'withdrawn'
-        ) {
-          participation.status = 'invited'
-          participation.updatedAt = timestamp
-          participation.version += 1
-        }
-        for (const definition of state.requirementDefinitions.filter(
-          (entry) => entry.eventId === submission.eventId,
-        )) {
-          if (
-            !state.requirementInstances.some(
-              (entry) =>
-                entry.definitionId === definition.id && entry.participationId === participation?.id,
-            )
-          ) {
-            state.requirementInstances.push({
-              id: createId('rqi'),
-              definitionId: definition.id,
-              participationId: participation.id,
-              status: 'not_started',
-              value: '',
-              submittedAt: null,
-              reviewedAt: null,
+            biography: stringAnswer(state, submission, 'biography'),
+          },
+          ...submission.contributors,
+        ]
+        for (const [index, participantInput] of submissionParticipants.entries()) {
+          let participantPerson =
+            state.people.find(
+              (entry) => entry.email.toLowerCase() === participantInput.email.toLowerCase(),
+            ) ?? null
+          if (!participantPerson) {
+            participantPerson = {
+              id: createId('per'),
+              firstName: participantInput.firstName,
+              lastName: participantInput.lastName,
+              email: participantInput.email.toLowerCase(),
+              company: participantInput.company,
+              title: participantInput.title,
+              city: '',
+              timezone: state.workspace.timezone,
+              bio: participantInput.biography,
+              avatarUrl: `https://assets.ui.sh/avatars/${(state.people.length % 12) + 1}.webp`,
+              tags: [],
+              createdAt: timestamp,
               updatedAt: timestamp,
               version: 1,
+            }
+            state.people.push(participantPerson)
+            appendEvent(state, context, {
+              type: 'person.created',
+              aggregate: {
+                type: 'person',
+                id: participantPerson.id,
+                version: participantPerson.version,
+              },
+              summary: `Created ${participantPerson.firstName} ${participantPerson.lastName} from an accepted submission.`,
+              data: { submissionId: submission.id },
             })
+          }
+          let participantParticipation =
+            state.participations.find(
+              (entry) =>
+                entry.eventId === submission.eventId && entry.personId === participantPerson?.id,
+            ) ?? null
+          if (!participantParticipation) {
+            participantParticipation = {
+              id: createId('par'),
+              eventId: submission.eventId,
+              personId: participantPerson.id,
+              roles: ['speaker'],
+              status: 'invited',
+              sessionIds: [],
+              internalNotes: '',
+              publicTitle: participantPerson.title,
+              publicCompany: participantPerson.company,
+              confirmedAt: null,
+              updatedAt: timestamp,
+              version: 1,
+            }
+            state.participations.push(participantParticipation)
+            appendEvent(state, context, {
+              type: 'participation.created',
+              aggregate: {
+                type: 'participation',
+                id: participantParticipation.id,
+                version: participantParticipation.version,
+              },
+              summary: `Invited ${participantPerson.firstName} ${participantPerson.lastName} to the event.`,
+              data: { personId: participantPerson.id, submissionId: submission.id },
+            })
+          } else if (
+            participantParticipation.status === 'prospect' ||
+            participantParticipation.status === 'declined' ||
+            participantParticipation.status === 'withdrawn'
+          ) {
+            participantParticipation.status = 'invited'
+            participantParticipation.updatedAt = timestamp
+            participantParticipation.version += 1
+          }
+          for (const definition of state.requirementDefinitions.filter(
+            (entry) => entry.eventId === submission.eventId,
+          )) {
+            if (
+              !state.requirementInstances.some(
+                (entry) =>
+                  entry.definitionId === definition.id &&
+                  entry.participationId === participantParticipation?.id,
+              )
+            ) {
+              state.requirementInstances.push({
+                id: createId('rqi'),
+                definitionId: definition.id,
+                participationId: participantParticipation.id,
+                status: 'not_started',
+                value: '',
+                submittedAt: null,
+                reviewedAt: null,
+                updatedAt: timestamp,
+                version: 1,
+              })
+            }
+          }
+          acceptedParticipations.push(participantParticipation)
+          if (index === 0) {
+            person = participantPerson
+            participation = participantParticipation
           }
         }
         const format = assertOneOf(stringAnswer(state, submission, 'session_format'), 'format', [
@@ -1738,7 +1906,7 @@ function applyHandler(
           format,
           summary: assertString(stringAnswer(state, submission, 'abstract'), 'abstract'),
           trackId: track.id,
-          participantIds: [participation.id],
+          participantIds: acceptedParticipations.map((entry) => entry.id),
           durationMinutes,
           expectedAttendance,
           status: 'ready',
@@ -1746,16 +1914,22 @@ function applyHandler(
           version: 1,
         }
         state.sessions.push(session)
-        participation.sessionIds.push(session.id)
-        participation.updatedAt = timestamp
-        participation.version += 1
+        for (const acceptedParticipation of acceptedParticipations) {
+          acceptedParticipation.sessionIds.push(session.id)
+          acceptedParticipation.updatedAt = timestamp
+          acceptedParticipation.version += 1
+        }
         appendEvent(state, context, {
           type: 'session.created-from-submission',
           aggregate: { type: 'session', id: session.id, version: session.version },
           summary: `Created session “${session.title}” from an accepted submission.`,
-          data: { submissionId: submission.id, participationId: participation.id },
+          data: {
+            submissionId: submission.id,
+            participationId: participation!.id,
+            participantIds: acceptedParticipations.map((entry) => entry.id),
+          },
         })
-        submission.convertedParticipationId = participation.id
+        submission.convertedParticipationId = participation!.id
         submission.convertedSessionId = session.id
       }
 

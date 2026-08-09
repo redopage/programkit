@@ -7,7 +7,7 @@ import type {
 
 export type ProgramKitSurface =
   | { kind: 'operator' }
-  | { kind: 'submission'; formSlug: string }
+  | { kind: 'submission'; formSlug: string; speakerAccessKey?: string }
   | { kind: 'reviewer'; reviewerId: string }
   | { kind: 'speaker'; participationId: string }
   | { kind: 'public-program' }

@@ -133,10 +133,12 @@ function projectionBase(state: WorkspaceState) {
   return clone
 }
 
-function publicSubmissionState(state: WorkspaceState, slug: string) {
+function publicSubmissionState(state: WorkspaceState, slug: string, speakerAccessKey = '') {
   const form = state.submissionForms.find(
     (entry) =>
-      entry.slug === slug && entry.eventId === state.activeEventId && entry.status === 'open',
+      entry.slug === slug &&
+      entry.eventId === state.activeEventId &&
+      (entry.status === 'open' || speakerAccessKey.length > 0),
   )
   if (!form) return null
   const projected = projectionBase(state)
@@ -146,6 +148,18 @@ function publicSubmissionState(state: WorkspaceState, slug: string) {
   projected.submissionFormFields = state.submissionFormFields
     .filter((entry) => entry.formId === form.id)
     .map((entry) => structuredClone(entry))
+  projected.tracks = state.tracks
+    .filter((entry) => entry.eventId === form.eventId)
+    .map((entry) => structuredClone(entry))
+  if (speakerAccessKey) {
+    projected.submissions = state.submissions
+      .filter((entry) => entry.formId === form.id && entry.speakerAccessKey === speakerAccessKey)
+      .map((entry) => structuredClone(entry))
+    const submissionIds = new Set(projected.submissions.map((entry) => entry.id))
+    projected.assets = state.assets
+      .filter((entry) => entry.owner.type === 'submission' && submissionIds.has(entry.owner.id))
+      .map((entry) => structuredClone(entry))
+  }
   return projected
 }
 
@@ -198,6 +212,7 @@ function reviewerState(state: WorkspaceState, reviewerId: string) {
       )
       return {
         ...structuredClone(submission),
+        contributors: [],
         answers: Object.fromEntries(
           Object.entries(submission.answers).filter(([key]) => !hiddenKeys.has(key)),
         ),
@@ -487,7 +502,11 @@ export async function handleCoreRequest(
   if (request.method === 'GET' && publicSubmissionStateMatch) {
     const slug = decodeURIComponent(publicSubmissionStateMatch[1])
     const state = await repository.read()
-    const projected = publicSubmissionState(state, slug)
+    const projected = publicSubmissionState(
+      state,
+      slug,
+      url.searchParams.get('speakerAccessKey') ?? '',
+    )
     if (!projected) return json({ error: 'Submission form not found.' }, { status: 404 })
     return json(projectionPayload(projected))
   }
@@ -578,7 +597,8 @@ export async function handleCoreRequest(
     if (
       submissionFormSlug &&
       operation !== 'submission.create' &&
-      operation !== 'submission.submit'
+      operation !== 'submission.submit' &&
+      operation !== 'submission.update'
     ) {
       return json(
         { error: 'That operation is not available on a public submission form.' },
@@ -599,12 +619,16 @@ export async function handleCoreRequest(
           if (operation === 'submission.create' && body.input.formId !== form.id) {
             throw new Error('This submission link cannot write to that form.')
           }
-          if (operation === 'submission.submit') {
+          if (operation === 'submission.submit' || operation === 'submission.update') {
             const submission = state.submissions.find(
               (entry) => entry.id === body.input.submissionId,
             )
-            if (!submission || submission.formId !== form.id) {
-              throw new Error('This submission link cannot submit that draft.')
+            if (
+              !submission ||
+              submission.formId !== form.id ||
+              submission.speakerAccessKey !== body.input.speakerAccessKey
+            ) {
+              throw new Error('This speaker link cannot update that submission.')
             }
           }
         }

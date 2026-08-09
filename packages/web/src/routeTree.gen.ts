@@ -30,6 +30,7 @@ import { Route as OperatorSubmissionsRouteImport } from './routes/_operator.subm
 import { Route as PortalParticipationIdRouteImport } from './routes/portal.$participationId'
 import { Route as ReviewerReviewerIdRouteImport } from './routes/reviewer.$reviewerId'
 import { Route as SubmitFormSlugRouteImport } from './routes/submit.$formSlug'
+import { Route as SubmitFormSlugMineSpeakerAccessKeyRouteImport } from './routes/submit.$formSlug_.mine.$speakerAccessKey'
 
 const OperatorRoute = OperatorRouteImport.update({
   id: '/_operator',
@@ -135,6 +136,12 @@ const SubmitFormSlugRoute = SubmitFormSlugRouteImport.update({
   path: '/submit/$formSlug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SubmitFormSlugMineSpeakerAccessKeyRoute =
+  SubmitFormSlugMineSpeakerAccessKeyRouteImport.update({
+    id: '/submit/$formSlug_/mine/$speakerAccessKey',
+    path: '/submit/$formSlug/mine/$speakerAccessKey',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof OperatorIndexRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/portal/$participationId': typeof PortalParticipationIdRoute
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
+  '/submit/$formSlug/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
 export interface FileRoutesByTo {
   '/agenda': typeof AgendaRoute
@@ -179,6 +187,7 @@ export interface FileRoutesByTo {
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
   '/': typeof OperatorIndexRoute
+  '/submit/$formSlug/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -203,6 +212,7 @@ export interface FileRoutesById {
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
   '/_operator/': typeof OperatorIndexRoute
+  '/submit/$formSlug_/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -227,6 +237,7 @@ export interface FileRouteTypes {
     | '/portal/$participationId'
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
+    | '/submit/$formSlug/mine/$speakerAccessKey'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/agenda'
@@ -249,6 +260,7 @@ export interface FileRouteTypes {
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
     | '/'
+    | '/submit/$formSlug/mine/$speakerAccessKey'
   id:
     | '__root__'
     | '/_operator'
@@ -272,6 +284,7 @@ export interface FileRouteTypes {
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
     | '/_operator/'
+    | '/submit/$formSlug_/mine/$speakerAccessKey'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -283,6 +296,7 @@ export interface RootRouteChildren {
   PortalParticipationIdRoute: typeof PortalParticipationIdRoute
   ReviewerReviewerIdRoute: typeof ReviewerReviewerIdRoute
   SubmitFormSlugRoute: typeof SubmitFormSlugRoute
+  SubmitFormSlugMineSpeakerAccessKeyRoute: typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -434,6 +448,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubmitFormSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/submit/$formSlug_/mine/$speakerAccessKey': {
+      id: '/submit/$formSlug_/mine/$speakerAccessKey'
+      path: '/submit/$formSlug/mine/$speakerAccessKey'
+      fullPath: '/submit/$formSlug/mine/$speakerAccessKey'
+      preLoaderRoute: typeof SubmitFormSlugMineSpeakerAccessKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -482,6 +503,8 @@ const rootRouteChildren: RootRouteChildren = {
   PortalParticipationIdRoute: PortalParticipationIdRoute,
   ReviewerReviewerIdRoute: ReviewerReviewerIdRoute,
   SubmitFormSlugRoute: SubmitFormSlugRoute,
+  SubmitFormSlugMineSpeakerAccessKeyRoute:
+    SubmitFormSlugMineSpeakerAccessKeyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

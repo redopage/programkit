@@ -144,6 +144,19 @@ export interface SubmissionFormField {
   visibleWhen: SubmissionFieldCondition | null
 }
 
+export type SubmissionContributorRole = 'co_speaker' | 'co_author' | 'co_presenter'
+
+export interface SubmissionContributor {
+  id: Id
+  firstName: string
+  lastName: string
+  email: string
+  company: string
+  title: string
+  biography: string
+  role: SubmissionContributorRole
+}
+
 export interface Submission {
   id: Id
   eventId: Id
@@ -151,6 +164,8 @@ export interface Submission {
   kind: SubmissionKind
   status: SubmissionStatus
   answers: SubmissionAnswers
+  contributors: SubmissionContributor[]
+  speakerAccessKey: string
   assetIds: Id[]
   submittedAt: ISODateTime | null
   decidedAt: ISODateTime | null

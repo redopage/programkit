@@ -8,6 +8,7 @@ import { useMemo } from 'react'
 
 import {
   submissionAnswerByPurpose,
+  submissionParticipants,
   submissionPipelineSummary,
   submissionReviewSummary,
   type SubmissionAnswerValue,
@@ -343,6 +344,7 @@ function SubmissionDrawer({
     decisionReady && (submission.status === 'submitted' || submission.status === 'in_review')
   const trackValue = answerText(submissionAnswerByPurpose(state, submission, 'track'))
   const trackLabel = state.tracks.find((entry) => entry.id === trackValue)?.name ?? trackValue
+  const participants = submissionParticipants(state, submission)
 
   async function decide(decision: 'accepted' | 'rejected' | 'waitlisted') {
     const response = await execute(
@@ -438,6 +440,39 @@ function SubmissionDrawer({
               {answerText(submissionAnswerByPurpose(state, submission, 'abstract'))}
             </p>
           </div>
+        </section>
+
+        <section
+          aria-labelledby="submission-participants-heading"
+          className="border-t border-zinc-950/5 pt-6"
+        >
+          <h3
+            id="submission-participants-heading"
+            className="text-base font-medium text-zinc-950 sm:text-sm"
+          >
+            Participants
+          </h3>
+          <ul role="list" className="divide-y divide-zinc-950/5 pt-2">
+            {participants.map((participant) => (
+              <li
+                key={participant.id}
+                className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-5"
+              >
+                <div className="min-w-0">
+                  <p className="text-base font-medium text-zinc-950 sm:text-sm">
+                    {participant.firstName} {participant.lastName}
+                  </p>
+                  <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                    {[participant.title, participant.company].filter(Boolean).join(' · ') ||
+                      participant.email}
+                  </p>
+                </div>
+                <p className="shrink-0 text-base text-zinc-500 sm:text-sm">
+                  {participant.roleLabel}
+                </p>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section

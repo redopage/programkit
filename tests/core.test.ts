@@ -580,6 +580,103 @@ describe('ProgramKit operation engine', () => {
     ).toHaveLength(2)
   })
 
+  it('keeps co-speaker roles attached to a speaker-owned submission', () => {
+    let state = createSeedState()
+    const actor = {
+      type: 'submitter' as const,
+      id: 'aie-nyc-2026-cfp',
+      name: 'Public submitter',
+      scopes: ['submissions:write', 'submissions:submit'],
+    }
+    const answers = {
+      first_name: 'Nia',
+      last_name: 'Rivera',
+      email: 'nia@example.com',
+      company: 'Useful Systems',
+      job_title: 'Engineering lead',
+      biography: 'Nia builds tools for small program teams.',
+      proposal_title: 'Designing dependable review queues',
+      abstract: 'Practical patterns for giving reviewers clarity without slowing them down.',
+      session_format: 'talk',
+      track: 'trk_build',
+    }
+    const contributor = {
+      id: 'contributor_lee',
+      firstName: 'Lee',
+      lastName: 'Morgan',
+      email: 'lee@example.com',
+      company: 'Useful Systems',
+      title: 'Design lead',
+      biography: 'Lee designs collaborative review systems.',
+      role: 'co_speaker' as const,
+    }
+    const created = executeOperation(state, 'submission.create', {
+      input: {
+        formId: 'frm_cfp_2026',
+        kind: 'abstract',
+        answers,
+        contributors: [contributor],
+      },
+      actor,
+    })
+    expect(created.response.ok).toBe(true)
+    state = created.state
+    const draft = state.submissions.at(-1)!
+    expect(draft).toMatchObject({
+      status: 'draft',
+      speakerAccessKey: expect.any(String),
+      contributors: [contributor],
+    })
+
+    const submitted = executeOperation(state, 'submission.submit', {
+      input: { submissionId: draft.id, speakerAccessKey: draft.speakerAccessKey },
+      expectedVersions: { [draft.id]: draft.version },
+      actor,
+    })
+    expect(submitted.response.ok).toBe(true)
+    state = submitted.state
+    const current = state.submissions.find((entry) => entry.id === draft.id)!
+
+    const updated = executeOperation(state, 'submission.update', {
+      input: {
+        submissionId: current.id,
+        speakerAccessKey: current.speakerAccessKey,
+        contributors: [{ ...contributor, role: 'co_presenter' }],
+      },
+      expectedVersions: { [current.id]: current.version },
+      actor,
+    })
+    expect(updated.response.ok).toBe(true)
+    expect(
+      updated.state.submissions.find((entry) => entry.id === current.id)?.contributors,
+    ).toEqual([{ ...contributor, role: 'co_presenter' }])
+
+    const changedEmail = executeOperation(state, 'submission.update', {
+      input: {
+        submissionId: current.id,
+        speakerAccessKey: current.speakerAccessKey,
+        answers: { email: 'different@example.com' },
+      },
+      expectedVersions: { [current.id]: current.version },
+      actor,
+    })
+    expect(changedEmail.response).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT', fields: { email: expect.any(String) } },
+    })
+
+    const denied = executeOperation(state, 'submission.update', {
+      input: {
+        submissionId: current.id,
+        speakerAccessKey: 'not-the-speaker-key',
+        contributors: [],
+      },
+      expectedVersions: { [current.id]: current.version },
+      actor,
+    })
+    expect(denied.response.error?.code).toBe('FORBIDDEN')
+  })
+
   it('enforces submission form open and close times at the operation boundary', () => {
     let state = createSeedState()
     const form = state.submissionForms.find((entry) => entry.id === 'frm_cfp_2026')!
@@ -665,6 +762,42 @@ describe('ProgramKit operation engine', () => {
         'review.decision-recorded',
       ]),
     )
+  })
+
+  it('converts every accepted co-speaker into the session and onboarding workflow', () => {
+    const state = createSeedState()
+    const submission = state.submissions.find((entry) => entry.id === 'sub_005')!
+    const accepted = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: submission.id,
+        decision: 'accepted',
+        override: true,
+        reason: 'The program chair approved this proposal before the final scorecard arrived.',
+      },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+    expect(accepted.response.ok).toBe(true)
+    const converted = accepted.state.submissions.find((entry) => entry.id === submission.id)!
+    const session = accepted.state.sessions.find(
+      (entry) => entry.id === converted.convertedSessionId,
+    )!
+    const participantEmails = session.participantIds.map((participationId) => {
+      const participation = accepted.state.participations.find(
+        (entry) => entry.id === participationId,
+      )!
+      return accepted.state.people.find((entry) => entry.id === participation.personId)!.email
+    })
+    expect(participantEmails).toEqual(
+      expect.arrayContaining(['priya@craftwork.dev', 'marcus@cloudreachlabs.example']),
+    )
+    expect(session.participantIds).toHaveLength(2)
+    for (const participationId of session.participantIds) {
+      expect(
+        accepted.state.requirementInstances.filter(
+          (entry) => entry.participationId === participationId,
+        ),
+      ).toHaveLength(accepted.state.requirementDefinitions.length)
+    }
   })
 
   it('records scorecards and allows guaranteed sessions to bypass abstract review', () => {

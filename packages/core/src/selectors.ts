@@ -73,6 +73,35 @@ export function submissionAnswerByPurpose(
   return field ? submission.answers[field.key] : undefined
 }
 
+export function submissionParticipants(state: WorkspaceState, submission: Submission) {
+  const text = (purpose: SubmissionFieldPurpose) => {
+    const value = submissionAnswerByPurpose(state, submission, purpose)
+    return typeof value === 'string' ? value.trim() : ''
+  }
+  return [
+    {
+      id: `lead:${submission.id}`,
+      firstName: text('first_name'),
+      lastName: text('last_name'),
+      email: text('email'),
+      company: text('company'),
+      title: text('job_title'),
+      biography: text('biography'),
+      role: 'lead_speaker' as const,
+      roleLabel: 'Lead speaker',
+    },
+    ...(submission.contributors ?? []).map((contributor) => ({
+      ...contributor,
+      roleLabel:
+        contributor.role === 'co_author'
+          ? 'Co-author'
+          : contributor.role === 'co_presenter'
+            ? 'Co-presenter'
+            : 'Co-speaker',
+    })),
+  ]
+}
+
 export function submissionPipelineSummary(
   state: WorkspaceState,
   eventId = state.activeEventId,

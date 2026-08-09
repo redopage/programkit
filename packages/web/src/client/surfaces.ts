@@ -9,6 +9,14 @@ function decodedSegment(value: string) {
 }
 
 export function surfaceFromPathname(pathname: string): ProgramKitSurface {
+  const speakerSubmissions = pathname.match(/^\/submit\/([^/]+)\/mine\/([^/]+)(?:\/|$)/u)
+  if (speakerSubmissions) {
+    return {
+      kind: 'submission',
+      formSlug: decodedSegment(speakerSubmissions[1]),
+      speakerAccessKey: decodedSegment(speakerSubmissions[2]),
+    }
+  }
   const submission = pathname.match(/^\/submit\/([^/]+)(?:\/|$)/u)
   if (submission) return { kind: 'submission', formSlug: decodedSegment(submission[1]) }
 
@@ -28,7 +36,7 @@ export function surfaceFromPathname(pathname: string): ProgramKitSurface {
 export function surfaceKey(surface: ProgramKitSurface) {
   switch (surface.kind) {
     case 'submission':
-      return `submission:${surface.formSlug}`
+      return `submission:${surface.formSlug}:${surface.speakerAccessKey ?? 'public'}`
     case 'reviewer':
       return `reviewer:${surface.reviewerId}`
     case 'speaker':

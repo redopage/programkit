@@ -1,15 +1,17 @@
 import { CheckCircleIcon, ChevronUpDownIcon, ClockIcon } from '@heroicons/react/16/solid'
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import {
   submissionFormAvailability,
   visibleSubmissionFormFields,
   type SubmissionAnswers,
+  type SubmissionContributor,
   type SubmissionFormField,
   type SubmissionKind,
 } from '@programkit/core'
 
 import { ProgramKitMark } from '../components/brand.tsx'
+import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
 import { Button, cx } from '../components/ui.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 
@@ -37,6 +39,8 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
   const form = state?.submissionForms?.find((entry) => entry.slug === slug)
   const event = state?.events.find((entry) => entry.id === form?.eventId)
   const [answers, setAnswers] = useState<SubmissionAnswers>({})
+  const [contributors, setContributors] = useState<SubmissionContributor[]>([])
+  const [speakerAccessKey, setSpeakerAccessKey] = useState('')
   const [kind, setKind] = useState<SubmissionKind | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [confirmationId, setConfirmationId] = useState<string | null>(null)
@@ -45,6 +49,11 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     () => (state && form ? visibleSubmissionFormFields(state, form.id, answers) : []),
     [answers, form, state],
   )
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(`programkit:speaker:${slug}`)
+    if (stored) setSpeakerAccessKey(stored)
+  }, [slug])
 
   if (!payload || !form || !event) {
     return (
@@ -74,7 +83,13 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     event.preventDefault()
     const created = await execute(
       'submission.create',
-      { formId: form!.id, kind: activeKind, answers },
+      {
+        formId: form!.id,
+        kind: activeKind,
+        answers,
+        contributors,
+        speakerAccessKey: speakerAccessKey || undefined,
+      },
       undefined,
       'Draft saved.',
     )
@@ -82,15 +97,21 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
       setFieldErrors(created.error?.fields ?? {})
       return
     }
-    const data = created.data as { submissionId?: string; submission?: { id?: string } } | undefined
+    const data = created.data as
+      | {
+          submissionId?: string
+          submission?: { id?: string; speakerAccessKey?: string }
+        }
+      | undefined
     const submissionId = data?.submissionId ?? data?.submission?.id
-    if (!submissionId) {
+    const nextSpeakerAccessKey = data?.submission?.speakerAccessKey
+    if (!submissionId || !nextSpeakerAccessKey) {
       setFieldErrors({ _form: 'The draft was saved, but its reference was not returned.' })
       return
     }
     const submitted = await execute(
       'submission.submit',
-      { submissionId },
+      { submissionId, speakerAccessKey: nextSpeakerAccessKey },
       undefined,
       'Proposal submitted.',
     )
@@ -102,6 +123,8 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
       )
       return
     }
+    setSpeakerAccessKey(nextSpeakerAccessKey)
+    window.localStorage.setItem(`programkit:speaker:${slug}`, nextSpeakerAccessKey)
     setConfirmationId(submissionId)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -136,6 +159,16 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
             </ol>
           </div>
           <p className="pt-6 font-mono text-sm text-zinc-400">Reference {confirmationId}</p>
+          <div className="pt-6">
+            <Button
+              variant="primary"
+              onClick={() => {
+                window.location.href = `/submit/${slug}/mine/${encodeURIComponent(speakerAccessKey)}`
+              }}
+            >
+              View my submissions
+            </Button>
+          </div>
         </main>
       </div>
     )
@@ -270,6 +303,8 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
               errors={fieldErrors}
               onChange={setAnswer}
             />
+
+            <SubmissionParticipantsEditor contributors={contributors} onChange={setContributors} />
 
             <FormSection
               title="About you"

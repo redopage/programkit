@@ -1,6 +1,10 @@
 import type { WorkspaceState } from './types.ts'
 import { evaluationCriterionKind, evaluationRoundCriteria } from './reviews.ts'
-import { submissionAnswerByPurpose, submissionReviewSummary } from './selectors.ts'
+import {
+  submissionAnswerByPurpose,
+  submissionParticipants,
+  submissionReviewSummary,
+} from './selectors.ts'
 
 const csvCollectionKeys = [
   'events',
@@ -382,6 +386,12 @@ export function createReviewResultsCsv(state: WorkspaceState) {
         title: submissionAnswerByPurpose(state, submission, 'proposal_title') ?? '',
         speakerFirstName: submissionAnswerByPurpose(state, submission, 'first_name') ?? '',
         speakerLastName: submissionAnswerByPurpose(state, submission, 'last_name') ?? '',
+        participants: submissionParticipants(state, submission)
+          .map(
+            (participant) =>
+              `${participant.firstName} ${participant.lastName} (${participant.roleLabel})`,
+          )
+          .join(' | '),
         track: submissionAnswerByPurpose(state, submission, 'track') ?? '',
         status: submission.status,
         assignedReviews: review.assigned,
@@ -401,6 +411,7 @@ export function createReviewResultsCsv(state: WorkspaceState) {
     'title',
     'speakerFirstName',
     'speakerLastName',
+    'participants',
     'track',
     'status',
     'assignedReviews',

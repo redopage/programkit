@@ -163,6 +163,12 @@ describe('operation HTTP surface', () => {
     const formBody = (await formResponse?.json()) as { state: WorkspaceState }
     expect(formBody.state.submissionForms.map((entry) => entry.id)).toEqual(['frm_cfp_2026'])
     expect(formBody.state.submissionFormFields.length).toBeGreaterThan(5)
+    expect(formBody.state.tracks.map((entry) => entry.name)).toEqual([
+      'Frontier',
+      'Build',
+      'Operate',
+      'Society',
+    ])
     expect(formBody.state.people).toHaveLength(0)
     expect(formBody.state.submissions).toHaveLength(0)
     expect(formBody.state.reviewerAssignments).toHaveLength(0)
@@ -234,7 +240,33 @@ describe('operation HTTP surface', () => {
       expect(submission.answers.email).toBeUndefined()
       expect(submission.answers.biography).toBeUndefined()
       expect(submission.answers.proposal_title).toBeTruthy()
+      expect(submission.contributors).toEqual([])
     }
+  })
+
+  it('serves a private speaker submission history without exposing another speaker', async () => {
+    const repository = new MemoryWorkspaceRepository()
+    const response = await handleCoreRequest(
+      new Request(
+        'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/state?speakerAccessKey=speaker_priya_raman',
+      ),
+      repository,
+    )
+    expect(response?.status).toBe(200)
+    const body = (await response?.json()) as { state: WorkspaceState }
+    expect(body.state.submissions.map((entry) => entry.id)).toEqual(['sub_005'])
+    expect(body.state.submissions[0]).toMatchObject({
+      speakerAccessKey: 'speaker_priya_raman',
+      contributors: [
+        expect.objectContaining({
+          firstName: 'Marcus',
+          lastName: 'Okafor',
+          role: 'co_speaker',
+        }),
+      ],
+    })
+    expect(body.state.assets).toEqual([])
+    expect(body.state.people).toEqual([])
   })
 
   it('enforces public-form and reviewer operation boundaries', async () => {
@@ -260,6 +292,32 @@ describe('operation HTTP surface', () => {
       { actor: submitter },
     )
     expect(crossFormResponse?.status).toBe(400)
+
+    const current = await repository.read()
+    const priya = current.submissions.find((entry) => entry.id === 'sub_005')!
+    const wrongSpeakerResponse = await handleCoreRequest(
+      new Request(
+        'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations/submission.update',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              submissionId: priya.id,
+              speakerAccessKey: 'wrong-speaker-key',
+              contributors: [],
+            },
+            expectedVersions: { [priya.id]: priya.version },
+          }),
+        },
+      ),
+      repository,
+      { actor: submitter },
+    )
+    expect(wrongSpeakerResponse?.status).toBe(400)
+    expect(await wrongSpeakerResponse?.json()).toEqual({
+      error: 'This speaker link cannot update that submission.',
+    })
 
     const disallowedResponse = await handleCoreRequest(
       new Request(
