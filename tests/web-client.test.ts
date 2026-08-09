@@ -71,4 +71,43 @@ describe('ProgramKit web client', () => {
     ).rejects.toThrow('is not available')
     expect(fetch).not.toHaveBeenCalled()
   })
+
+  it('uploads requirement files only through the scoped speaker endpoint', async () => {
+    let receivedInput: RequestInfo | URL | undefined
+    let receivedInit: RequestInit | undefined
+    const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      receivedInput = input
+      receivedInit = init
+      return Response.json({
+        ok: true,
+        eventIds: [],
+        warnings: [],
+        approvalRequired: false,
+        stateRevision: 2,
+        traceId: 'trace',
+      })
+    })
+    const client = createProgramKitHttpClient({ fetch })
+    const file = new File(['image'], 'headshot.png', { type: 'image/png' })
+
+    await client.uploadRequirementFile(
+      { kind: 'speaker', participationId: 'par_003' },
+      'rqi_3_3',
+      file,
+    )
+
+    expect(receivedInput).toBe('/api/v1/portal/par_003/assets')
+    expect(receivedInit?.method).toBe('POST')
+    expect(receivedInit?.body).toBeInstanceOf(FormData)
+    const body = receivedInit?.body as FormData
+    expect(body.get('requirementInstanceId')).toBe('rqi_3_3')
+    expect((body.get('file') as File).name).toBe('headshot.png')
+    expect(client.assetUrl({ kind: 'speaker', participationId: 'par_003' }, 'ast_123')).toBe(
+      '/api/v1/portal/par_003/assets/ast_123/content',
+    )
+
+    await expect(
+      client.uploadRequirementFile({ kind: 'operator' }, 'rqi_3_3', file),
+    ).rejects.toThrow('speaker portal')
+  })
 })

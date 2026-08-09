@@ -165,6 +165,20 @@ export const operationManifest = [
     emits: ['requirement.status-changed', 'participation.readiness-changed'],
   },
   {
+    name: 'requirement.submit-file',
+    title: 'Submit requirement file',
+    description:
+      'Attach a privately stored file to an owned speaker requirement and submit it for review.',
+    kind: 'command',
+    scopes: ['requirements:write', 'assets:write'],
+    risk: 'internal',
+    agentPolicy: 'denied',
+    reversible: true,
+    supportsDryRun: false,
+    requiredInput: ['requirementInstanceId', 'filename', 'contentType', 'sizeBytes', 'storageKey'],
+    emits: ['asset.created', 'requirement.status-changed', 'participation.readiness-changed'],
+  },
+  {
     name: 'portal.update-profile',
     title: 'Update participant profile',
     description: 'Allow a participant to update their own public profile fields.',

@@ -159,6 +159,71 @@ describe('ProgramKit operation engine', () => {
     expect(result.state).toBe(state)
   })
 
+  it('submits private requirement files with ownership and file validation', () => {
+    const state = createSeedState()
+    const requirement = state.requirementInstances.find(
+      (entry) => entry.participationId === 'par_003' && entry.definitionId === 'req_headshot',
+    )!
+    const participant = {
+      type: 'participant' as const,
+      id: 'par_003',
+      name: 'Jordan Bell',
+      scopes: ['requirements:write', 'assets:write'],
+    }
+    const result = executeOperation(state, 'requirement.submit-file', {
+      input: {
+        requirementInstanceId: requirement.id,
+        filename: 'jordan-headshot.png',
+        contentType: 'image/png',
+        sizeBytes: 42_000,
+        storageKey: 'workspaces/wrk_aie/participants/par_003/upload-1/jordan-headshot.png',
+      },
+      expectedVersions: { [requirement.id]: requirement.version },
+      actor: participant,
+    })
+    expect(result.response.ok).toBe(true)
+    expect(result.state.assets).toHaveLength(state.assets.length + 1)
+    const asset = result.state.assets.at(-1)!
+    expect(asset).toMatchObject({
+      owner: { type: 'participation', id: 'par_003' },
+      kind: 'headshot',
+      filename: 'jordan-headshot.png',
+      storageKey: 'workspaces/wrk_aie/participants/par_003/upload-1/jordan-headshot.png',
+    })
+    expect(result.response.data).toMatchObject({ asset: { id: asset.id, storageKey: '' } })
+    expect(
+      result.state.requirementInstances.find((entry) => entry.id === requirement.id),
+    ).toMatchObject({ status: 'submitted', value: asset.id, version: requirement.version + 1 })
+
+    const foreignRequirement = state.requirementInstances.find(
+      (entry) => entry.participationId === 'par_004' && entry.definitionId === 'req_headshot',
+    )!
+    const foreign = executeOperation(state, 'requirement.submit-file', {
+      input: {
+        requirementInstanceId: foreignRequirement.id,
+        filename: 'foreign.png',
+        contentType: 'image/png',
+        sizeBytes: 100,
+        storageKey: 'workspaces/wrk_aie/participants/par_004/upload-2/foreign.png',
+      },
+      actor: participant,
+    })
+    expect(foreign.response.error?.code).toBe('FORBIDDEN')
+
+    const invalidType = executeOperation(state, 'requirement.submit-file', {
+      input: {
+        requirementInstanceId: requirement.id,
+        filename: 'headshot.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 100,
+        storageKey: 'workspaces/wrk_aie/participants/par_003/upload-3/headshot.pdf',
+      },
+      actor: participant,
+    })
+    expect(invalidType.response.error?.code).toBe('INVALID_INPUT')
+    expect(invalidType.state).toBe(state)
+  })
+
   it('keeps participant submission and lifecycle actions separate from staff review', () => {
     const state = createSeedState()
     const ownRequirement = state.requirementInstances.find(

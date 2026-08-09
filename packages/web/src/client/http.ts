@@ -58,6 +58,20 @@ function operationEndpoint(surface: ProgramKitSurface, operation: string) {
   }
 }
 
+function requirementUploadEndpoint(surface: ProgramKitSurface) {
+  if (surface.kind !== 'speaker') {
+    throw new Error('Requirement uploads are only available in a speaker portal.')
+  }
+  return `/api/v1/portal/${encodeURIComponent(surface.participationId)}/assets`
+}
+
+function assetEndpoint(surface: ProgramKitSurface, assetId: string) {
+  if (surface.kind !== 'speaker') {
+    throw new Error('Private assets are only available in a speaker portal.')
+  }
+  return `/api/v1/portal/${encodeURIComponent(surface.participationId)}/assets/${encodeURIComponent(assetId)}/content`
+}
+
 export function createProgramKitHttpClient(
   options: ProgramKitHttpClientOptions = {},
 ): ProgramKitClient {
@@ -97,6 +111,23 @@ export function createProgramKitHttpClient(
           }),
         }),
       )
+    },
+
+    async uploadRequirementFile(surface, requirementInstanceId, file) {
+      const body = new FormData()
+      body.set('requirementInstanceId', requirementInstanceId)
+      body.set('file', file)
+      return parseJson<OperationResponse>(
+        await fetcher(resolveUrl(requirementUploadEndpoint(surface)), {
+          method: 'POST',
+          headers: requestHeaders(),
+          body,
+        }),
+      )
+    },
+
+    assetUrl(surface, assetId) {
+      return resolveUrl(assetEndpoint(surface, assetId))
     },
   }
 }

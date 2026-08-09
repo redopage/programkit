@@ -35,6 +35,12 @@ interface WorkspaceContextValue {
     options?: Omit<OperationRequest, 'input'>,
     successMessage?: string,
   ) => Promise<OperationResponse>
+  uploadRequirementFile: (
+    requirementInstanceId: string,
+    file: File,
+    successMessage?: string,
+  ) => Promise<OperationResponse>
+  assetUrl: (assetId: string) => string
   dismissToast: () => void
 }
 
@@ -66,6 +72,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       client.execute(surface, operation, input, options),
   })
   const { isPending: workspaceMutating, mutateAsync } = operationMutation
+  const assetMutation = useMutation({
+    mutationFn: ({ requirementInstanceId, file }: { requirementInstanceId: string; file: File }) =>
+      client.uploadRequirementFile(surface, requirementInstanceId, file),
+  })
+  const { isPending: assetUploading, mutateAsync: uploadAsync } = assetMutation
 
   useEffect(() => {
     if (!toast) return
@@ -120,6 +131,47 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [mutateAsync, queryClient, workspacePayload?.state.revision, workspaceQueryKey],
   )
 
+  const uploadRequirementFile = useCallback(
+    async (requirementInstanceId: string, file: File, successMessage?: string) => {
+      try {
+        const response = await uploadAsync({ requirementInstanceId, file })
+        if (!response.ok) {
+          setToast({
+            id: crypto.randomUUID(),
+            tone: 'error',
+            message: response.error?.message ?? 'The file could not be uploaded.',
+          })
+          return response
+        }
+        await queryClient.invalidateQueries({ queryKey: workspaceQueryKey, exact: true })
+        setToast({
+          id: crypto.randomUUID(),
+          tone: 'success',
+          message: successMessage ?? 'File submitted for review.',
+        })
+        return response
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : 'The file could not be uploaded.'
+        setToast({ id: crypto.randomUUID(), tone: 'error', message })
+        return {
+          ok: false,
+          error: { code: 'REQUEST_FAILED', message },
+          eventIds: [],
+          warnings: [],
+          approvalRequired: false,
+          stateRevision: workspacePayload?.state.revision ?? 0,
+          traceId: crypto.randomUUID(),
+        }
+      }
+    },
+    [queryClient, uploadAsync, workspacePayload?.state.revision, workspaceQueryKey],
+  )
+
+  const assetUrl = useCallback(
+    (assetId: string) => client.assetUrl(surface, assetId),
+    [client, surface],
+  )
+
   const error = workspaceError
     ? workspaceError instanceof Error
       ? workspaceError.message
@@ -130,11 +182,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       payload: workspacePayload ?? null,
       loading: workspaceLoading,
       refreshing: workspaceRefreshing,
-      mutating: workspaceMutating,
+      mutating: workspaceMutating || assetUploading,
       error,
       toast,
       refresh,
       execute,
+      uploadRequirementFile,
+      assetUrl,
       dismissToast: () => setToast(null),
     }),
     [
@@ -142,10 +196,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       workspaceLoading,
       workspaceRefreshing,
       workspaceMutating,
+      assetUploading,
       error,
       toast,
       refresh,
       execute,
+      uploadRequirementFile,
+      assetUrl,
     ],
   )
 

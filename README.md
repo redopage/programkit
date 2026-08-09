@@ -71,8 +71,10 @@ TypeScript, production builds, and plugin validation.
 pnpm deploy
 ```
 
-The `apps/cloudflare` assembly uses one Worker, static assets, and one SQLite-backed Durable Object
-per workspace key. No D1 database or R2 bucket is required for the seeded demo.
+The `apps/cloudflare` assembly uses one Worker, static assets, one SQLite-backed Durable Object per
+workspace key, and a private R2 binding for participant requirement files. Local development
+emulates the bucket; before a remote deploy, create the checked-in `programkit-assets` bucket. No D1
+database, queue, or email binding is required for the seeded demo.
 
 The Worker maps the `x-programkit-workspace-key` request header to a Durable Object name; a missing or
 invalid key uses `demo`. Inside the object, every operation runs through an atomic repository
@@ -104,8 +106,8 @@ export is available at `GET /api/v1/export`. Cloudflare is still the only suppor
 clean package boundaries and exportability are not a promise to maintain speculative host adapters.
 
 Before real use, provide real staff and participant identity, OAuth for MCP, outbound email and
-webhook delivery, private file storage, retention and backup policies, and rate limiting. The
-complete checklist is in [SECURITY.md](SECURITY.md) and [OPERATIONS.md](OPERATIONS.md).
+webhook delivery, upload scanning, retention and backup policies, and rate limiting. The complete
+checklist is in [Security](SECURITY.md) and [Operations](OPERATIONS.md).
 
 ## Documentation
 

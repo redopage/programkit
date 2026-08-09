@@ -69,8 +69,11 @@ The speaker portal is scoped to one participation. The speaker updates public pr
 confirms participation, and completes assigned requirements. Organizers see readiness across the
 event and can review submitted work.
 
-The next production-depth milestone is a shared task-form and asset renderer so profiles, releases,
-headshots, slides, and logistics use the same dependable primitives as the CFP.
+The portal now persists text and simple form responses and sends participant-owned headshots,
+slides, and supporting documents through a private R2 upload/download path with type, size, and
+ownership checks. Release approval remains deliberately unavailable until the event team provides
+an actual document and response contract. The next production-depth milestone is a shared
+cross-surface task renderer plus revision conversations, upload scanning, and lifecycle cleanup.
 
 ## 6. Build and publish the schedule
 

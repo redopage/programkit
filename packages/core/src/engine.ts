@@ -13,6 +13,7 @@ import {
 import { createSeedState } from './seed.ts'
 import type {
   Actor,
+  Asset,
   Campaign,
   ChangeOperation,
   ChangeSet,
@@ -115,6 +116,68 @@ function optionalDateTime(value: unknown, field: string) {
     })
   }
   return parsed.toISOString()
+}
+
+const maximumRequirementFileBytes = 8 * 1024 * 1024
+const imageContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const documentContentTypes = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])
+
+function requirementAssetKind(definitionId: string): Asset['kind'] {
+  if (definitionId === 'req_headshot') return 'headshot'
+  if (definitionId === 'req_slides') return 'slides'
+  return 'supporting_document'
+}
+
+function validateRequirementFile(
+  workspaceId: string,
+  participationId: string,
+  definitionId: string,
+  input: Record<string, unknown>,
+) {
+  const filename = assertString(input.filename, 'filename')
+  if (filename.length > 160 || filename.includes('/') || filename.includes('\\')) {
+    throw new OperationError('INVALID_INPUT', 'Use a filename without folders.', {
+      filename: 'Choose a file with a name under 160 characters.',
+    })
+  }
+  const contentType = assertString(input.contentType, 'contentType').toLowerCase()
+  const allowedTypes = definitionId === 'req_headshot' ? imageContentTypes : documentContentTypes
+  if (!allowedTypes.has(contentType)) {
+    throw new OperationError(
+      'INVALID_INPUT',
+      definitionId === 'req_headshot'
+        ? 'Headshots must be JPEG, PNG, or WebP images.'
+        : 'Files must be PDF, Word, or PowerPoint documents.',
+      { contentType: 'Choose a supported file type.' },
+    )
+  }
+  const sizeBytes = input.sizeBytes
+  if (
+    typeof sizeBytes !== 'number' ||
+    !Number.isInteger(sizeBytes) ||
+    sizeBytes <= 0 ||
+    sizeBytes > maximumRequirementFileBytes
+  ) {
+    throw new OperationError('INVALID_INPUT', 'Files must be between 1 byte and 8 MB.', {
+      sizeBytes: 'Choose a file no larger than 8 MB.',
+    })
+  }
+  const storageKey = assertString(input.storageKey, 'storageKey')
+  const requiredPrefix = `workspaces/${workspaceId}/participants/${participationId}/`
+  if (
+    !storageKey.startsWith(requiredPrefix) ||
+    storageKey.includes('..') ||
+    storageKey.length > 512
+  ) {
+    throw new OperationError('FORBIDDEN', 'The file storage key is outside this participant.')
+  }
+  return { filename, contentType, sizeBytes, storageKey }
 }
 
 function assertTimeZone(value: unknown, field: string) {
@@ -1322,6 +1385,86 @@ function applyHandler(
         data: { previous, next: nextStatus },
       })
       return { participation }
+    }
+
+    case 'requirement.submit-file': {
+      const instance = findRequired(
+        state.requirementInstances,
+        input.requirementInstanceId,
+        'requirement instance',
+      )
+      if (context.actor.type === 'participant' && context.actor.id !== instance.participationId) {
+        throw new OperationError(
+          'FORBIDDEN',
+          'A participant can only upload files for their own requirements.',
+        )
+      }
+      if (instance.status !== 'not_started' && instance.status !== 'revision_requested') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Only an incomplete or revision-requested file can be submitted.',
+        )
+      }
+      const definition = findRequired(
+        state.requirementDefinitions,
+        instance.definitionId,
+        'requirement definition',
+      )
+      if (definition.kind !== 'file') {
+        throw new OperationError('INVALID_INPUT', 'This requirement does not accept a file.')
+      }
+      const file = validateRequirementFile(
+        state.workspace.id,
+        instance.participationId,
+        definition.id,
+        input,
+      )
+      const asset: Asset = {
+        id: createId('ast'),
+        eventId: definition.eventId,
+        owner: { type: 'participation', id: instance.participationId },
+        kind: requirementAssetKind(definition.id),
+        ...file,
+        createdAt: timestamp,
+      }
+      state.assets.push(asset)
+      const previous = instance.status
+      instance.status = 'submitted'
+      instance.value = asset.id
+      instance.submittedAt = timestamp
+      instance.reviewedAt = null
+      instance.updatedAt = timestamp
+      instance.version += 1
+      appendEvent(state, context, {
+        type: 'asset.created',
+        aggregate: { type: 'asset', id: asset.id, version: 1 },
+        summary: `Uploaded ${asset.filename} for ${definition.label}.`,
+        data: {
+          participationId: instance.participationId,
+          requirementInstanceId: instance.id,
+          assetKind: asset.kind,
+          contentType: asset.contentType,
+          sizeBytes: asset.sizeBytes,
+        },
+      })
+      appendEvent(state, context, {
+        type: 'requirement.status-changed',
+        aggregate: { type: 'requirement', id: instance.id, version: instance.version },
+        summary: `${definition.label} changed from ${previous} to submitted.`,
+        data: {
+          participationId: instance.participationId,
+          previous,
+          next: 'submitted',
+          assetId: asset.id,
+        },
+      })
+      appendEvent(state, context, {
+        type: 'participation.readiness-changed',
+        aggregate: { type: 'participation', id: instance.participationId, version: 1 },
+        summary: 'Participant readiness was recalculated.',
+        data: { requirementInstanceId: instance.id },
+      })
+      return { asset: { ...asset, storageKey: '' }, requirementInstance: instance }
     }
 
     case 'requirement.set-status': {

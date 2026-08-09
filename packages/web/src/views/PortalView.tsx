@@ -1,23 +1,60 @@
 import {
+  ArrowDownTrayIcon,
   ArrowLeftIcon,
+  ArrowPathIcon,
   CheckCircleIcon,
   ClockIcon,
   DocumentArrowUpIcon,
+  LockClosedIcon,
 } from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
 
-import { readinessRows } from '@programkit/core'
+import {
+  readinessRows,
+  type Asset,
+  type RequirementDefinition,
+  type RequirementInstance,
+} from '@programkit/core'
 
+import { eventDateTime } from '../lib/date.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Avatar,
   Button,
+  Callout,
+  EmptyState,
   ProgressBar,
   StatusBadge,
+  cx,
   sentenceCase,
   textAreaControl,
   textControl,
 } from '../components/ui.tsx'
+
+/**
+ * One treatment for every place a task asks the speaker for something, so the
+ * upload, the written answer, and the blocked release all read as the same
+ * kind of object rather than three unrelated widgets.
+ */
+const taskWell = 'rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5 sm:ml-6'
+
+/**
+ * An approval the speaker has never been given a document for cannot be acted
+ * on, so it is the program team's move, not theirs. Grouping and due-date copy
+ * both read from this so the page never asks for something it has not provided.
+ */
+function blockedOnProgramTeam({
+  definition,
+  instance,
+}: {
+  definition: RequirementDefinition
+  instance: RequirementInstance
+}) {
+  return (
+    definition.kind === 'approval' &&
+    (instance.status === 'not_started' || instance.status === 'revision_requested')
+  )
+}
 
 export function PortalView() {
   const { payload } = useWorkspace()
@@ -26,8 +63,9 @@ export function PortalView() {
 }
 
 function PortalWorkspace() {
-  const { payload, execute, mutating } = useWorkspace()
+  const { payload, execute, uploadRequirementFile, assetUrl, mutating } = useWorkspace()
   const state = payload!.state
+  const event = state.events.find((entry) => entry.id === state.activeEventId)!
   const participation =
     state.participations.find((entry) => entry.id === 'par_003') ?? state.participations[0]
   const person = state.people.find((entry) => entry.id === participation.personId)!
@@ -51,6 +89,45 @@ function PortalWorkspace() {
       'Public profile updated.',
     )
   }
+
+  const tasks = state.requirementInstances
+    .filter((instance) => instance.participationId === participation.id)
+    .map((instance) => ({
+      instance,
+      definition: state.requirementDefinitions.find((entry) => entry.id === instance.definitionId)!,
+    }))
+    .sort((left, right) => left.definition.dueAt.localeCompare(right.definition.dueAt))
+
+  // Three groups answer the only questions a speaker has on this page: what is
+  // waiting on me, what is waiting on somebody else, and what is finished.
+  const groups = [
+    {
+      key: 'open',
+      label: 'Waiting on you',
+      tasks: tasks.filter(
+        (task) =>
+          (task.instance.status === 'not_started' ||
+            task.instance.status === 'revision_requested') &&
+          !blockedOnProgramTeam(task),
+      ),
+    },
+    {
+      key: 'review',
+      label: 'With the program team',
+      tasks: tasks.filter(
+        (task) => task.instance.status === 'submitted' || blockedOnProgramTeam(task),
+      ),
+    },
+    {
+      key: 'settled',
+      label: 'Settled',
+      tasks: tasks.filter(
+        ({ instance }) => instance.status === 'approved' || instance.status === 'waived',
+      ),
+    },
+  ].filter((group) => group.tasks.length > 0)
+
+  const nothingOutstanding = tasks.length > 0 && groups.every((group) => group.key === 'settled')
 
   return (
     <div className="min-h-dvh bg-white">
@@ -105,6 +182,9 @@ function PortalWorkspace() {
             <div className="pt-2">
               <ProgressBar value={row.percent} />
             </div>
+            <p className="pt-2 text-base tabular-nums text-zinc-500 sm:text-sm">
+              {row.completed} of {row.total} approved
+            </p>
           </div>
         </section>
 
@@ -144,75 +224,84 @@ function PortalWorkspace() {
           >
             <div className="border-b border-zinc-950/5 pb-3">
               <h2 id="tasks-heading" className="text-lg font-semibold text-zinc-950">
-                Next steps
+                Your tasks
               </h2>
-              <p className="text-base text-zinc-500 sm:text-sm">
-                Complete these before their due dates.
+              <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                What you send goes to the program team, who approve it or ask for a change.
               </p>
             </div>
-            <ul role="list" className="divide-y divide-zinc-950/5">
-              {state.requirementInstances
-                .filter((instance) => instance.participationId === participation.id)
-                .map((instance) => {
-                  const definition = state.requirementDefinitions.find(
-                    (entry) => entry.id === instance.definitionId,
-                  )!
-                  return (
-                    <li
-                      key={instance.id}
-                      className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start gap-2">
-                          {instance.status === 'approved' ? (
-                            <CheckCircleIcon className="size-4 h-lh shrink-0 fill-emerald-600" />
-                          ) : (
-                            <ClockIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
-                          )}
-                          <div className="min-w-0">
-                            <p className="text-base font-medium text-zinc-950 sm:text-sm">
-                              {definition.label}
-                            </p>
-                            <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-                              {definition.description}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
-                        <span className="flex sm:w-32">
-                          <StatusBadge status={instance.status} />
-                        </span>
-                        <span className="flex sm:w-24 sm:justify-end">
-                          {(instance.status === 'not_started' ||
-                            instance.status === 'revision_requested') &&
-                          definition.id !== 'req_confirm' ? (
-                            <Button
-                              size="compact"
-                              disabled={mutating}
-                              onClick={() =>
-                                void execute(
-                                  'requirement.set-status',
-                                  {
-                                    requirementInstanceId: instance.id,
-                                    status: 'submitted',
-                                    value: 'Submitted through participant portal.',
-                                  },
-                                  { expectedVersions: { [instance.id]: instance.version } },
-                                  `${definition.label} submitted for review.`,
-                                )
-                              }
-                            >
-                              <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
-                              Submit
-                            </Button>
-                          ) : null}
-                        </span>
-                      </div>
-                    </li>
-                  )
-                })}
-            </ul>
+
+            {tasks.length === 0 ? (
+              <EmptyState
+                title="Nothing assigned yet"
+                description="The program team has not given you anything to complete for this event."
+              />
+            ) : (
+              <>
+                {nothingOutstanding ? (
+                  <div className="pt-4">
+                    <Callout tone="success" title={`You are ready for ${event.name}`}>
+                      Every task on your list is settled. Nothing here is waiting on you.
+                    </Callout>
+                  </div>
+                ) : null}
+                <div>
+                  {groups.map((group) => (
+                    <div key={group.key} className="pt-5 first:pt-3">
+                      <h3 className="text-base font-medium text-zinc-500 sm:text-sm">
+                        {group.label}
+                      </h3>
+                      <ul role="list" className="divide-y divide-zinc-950/5">
+                        {group.tasks.map(({ instance, definition }) => (
+                          <RequirementTask
+                            key={instance.id}
+                            definition={definition}
+                            instance={instance}
+                            asset={
+                              state.assets.find((entry) => entry.id === instance.value) ?? null
+                            }
+                            dueLabel={eventDateTime(definition.dueAt, event.timezone, {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                            submittedLabel={
+                              instance.submittedAt
+                                ? eventDateTime(instance.submittedAt, event.timezone, {
+                                    month: 'short',
+                                    day: 'numeric',
+                                  })
+                                : null
+                            }
+                            awaitingConfirmation={participation.status === 'invited'}
+                            mutating={mutating}
+                            assetUrl={assetUrl}
+                            onSubmit={(value) =>
+                              execute(
+                                'requirement.set-status',
+                                {
+                                  requirementInstanceId: instance.id,
+                                  status: 'submitted',
+                                  value,
+                                },
+                                { expectedVersions: { [instance.id]: instance.version } },
+                                `${definition.label} submitted for review.`,
+                              )
+                            }
+                            onUpload={(file) =>
+                              uploadRequirementFile(
+                                instance.id,
+                                file,
+                                `${definition.label} uploaded for review.`,
+                              )
+                            }
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </section>
 
           <section
@@ -279,5 +368,193 @@ function PortalWorkspace() {
         </div>
       </main>
     </div>
+  )
+}
+
+function RequirementTask({
+  definition,
+  instance,
+  asset,
+  dueLabel,
+  submittedLabel,
+  awaitingConfirmation,
+  mutating,
+  assetUrl,
+  onSubmit,
+  onUpload,
+}: {
+  definition: RequirementDefinition
+  instance: RequirementInstance
+  asset: Asset | null
+  dueLabel: string
+  submittedLabel: string | null
+  awaitingConfirmation: boolean
+  mutating: boolean
+  assetUrl: (assetId: string) => string
+  onSubmit: (value: string) => Promise<unknown>
+  onUpload: (file: File) => Promise<unknown>
+}) {
+  const [value, setValue] = useState(instance.value)
+  const [file, setFile] = useState<File | null>(null)
+  const editable = instance.status === 'not_started' || instance.status === 'revision_requested'
+  const settled = instance.status === 'approved' || instance.status === 'waived'
+  const blocked = blockedOnProgramTeam({ definition, instance })
+  // A release the speaker has never been given is not late by their doing, so a
+  // blocked task is never marked overdue and never dated as if they owed it.
+  const overdue = editable && !blocked && Date.parse(definition.dueAt) < Date.now()
+  const fileAccept =
+    definition.id === 'req_headshot'
+      ? 'image/jpeg,image/png,image/webp'
+      : '.pdf,.doc,.docx,.ppt,.pptx,application/pdf'
+
+  const StatusIcon = settled
+    ? CheckCircleIcon
+    : instance.status === 'revision_requested'
+      ? ArrowPathIcon
+      : ClockIcon
+  const statusTone = settled
+    ? 'fill-emerald-600'
+    : instance.status === 'revision_requested'
+      ? 'fill-rose-500'
+      : instance.status === 'submitted'
+        ? 'fill-amber-500'
+        : 'fill-zinc-300'
+
+  return (
+    <li className="flex flex-col gap-3 py-4">
+      {/* The title line owns the status chip so the description keeps the full
+          column at 375px instead of wrapping around a floating badge. */}
+      <div className="flex items-start gap-2">
+        <StatusIcon className={cx('size-4 h-lh shrink-0', statusTone)} />
+        <p className="min-w-0 flex-1 text-base font-medium text-zinc-950 sm:text-sm">
+          {definition.label}
+        </p>
+        <StatusBadge status={instance.status} />
+      </div>
+      <div className="-mt-2 sm:ml-6">
+        <p className="text-pretty text-base text-zinc-500 sm:text-sm">{definition.description}</p>
+        {settled ? null : (
+          <p
+            className={cx('pt-1 text-sm', overdue ? 'font-medium text-rose-700' : 'text-zinc-500')}
+          >
+            {blocked
+              ? `Due ${dueLabel}, once the program team provides it`
+              : overdue
+                ? `Overdue since ${dueLabel}`
+                : `Due ${dueLabel}`}
+          </p>
+        )}
+      </div>
+
+      {instance.status === 'submitted' ? (
+        <p className="text-base text-zinc-500 sm:ml-6 sm:text-sm">
+          {submittedLabel ? `Sent ${submittedLabel}. ` : ''}The program team is reviewing it now.
+        </p>
+      ) : null}
+
+      {instance.status === 'waived' ? (
+        <p className="text-base text-zinc-500 sm:ml-6 sm:text-sm">
+          The program team waived this for you.
+        </p>
+      ) : null}
+
+      {asset ? (
+        <a
+          href={assetUrl(asset.id)}
+          className="focus-ring inline-flex w-fit items-center gap-1.5 rounded-md text-base font-medium text-blue-700 hover:text-blue-900 sm:ml-6 sm:text-sm"
+        >
+          <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
+          Download {asset.filename}
+        </a>
+      ) : null}
+
+      {editable && definition.kind === 'confirmation' ? (
+        <p className="text-pretty text-base text-zinc-500 sm:ml-6 sm:text-sm">
+          {awaitingConfirmation
+            ? 'Use Confirm participation at the top of this page.'
+            : 'The program team closes this out once your participation is on record.'}
+        </p>
+      ) : null}
+
+      {editable && definition.kind === 'file' ? (
+        <div className={cx(taskWell, 'flex flex-col gap-3')}>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-base font-medium text-zinc-950 sm:text-sm">
+              {asset ? 'Replace file' : 'Choose file'}
+            </span>
+            <input
+              type="file"
+              accept={fileAccept}
+              className="focus-ring block w-full rounded-lg bg-white p-2 text-base text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 sm:text-sm"
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-base text-zinc-500 sm:text-sm">
+              {definition.id === 'req_headshot'
+                ? 'JPEG, PNG, or WebP · 8 MB maximum'
+                : 'PDF, Word, or PowerPoint · 8 MB maximum'}
+            </p>
+            <Button
+              size="compact"
+              className="w-full sm:w-auto"
+              disabled={mutating || !file}
+              onClick={() => file && void onUpload(file)}
+            >
+              <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
+              Upload for review
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {editable && (definition.kind === 'text' || definition.kind === 'form') ? (
+        <div className={cx(taskWell, 'flex flex-col gap-3')}>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-base font-medium text-zinc-950 sm:text-sm">
+              {definition.kind === 'form' ? 'Production notes' : 'Your response'}
+            </span>
+            <textarea
+              rows={definition.kind === 'form' ? 4 : 5}
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              className={textAreaControl}
+            />
+          </label>
+          <div className="flex justify-end">
+            <Button
+              size="compact"
+              className="w-full sm:w-auto"
+              disabled={mutating || value.trim().length === 0}
+              onClick={() => void onSubmit(value.trim())}
+            >
+              Submit for review
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {blocked ? (
+        <div className={cx(taskWell, 'flex items-start gap-3')}>
+          <LockClosedIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
+          <div className="min-w-0">
+            <p className="text-base font-medium text-zinc-950 sm:text-sm">
+              Release not available yet
+            </p>
+            <p className="text-pretty text-base text-zinc-600 sm:text-sm">
+              The program team has not attached the release document. Once they add it here or send
+              it to you, you can respond. Nothing is waiting on you right now.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {!editable && !asset && instance.value ? (
+        <div className={taskWell}>
+          <p className="text-base font-medium text-zinc-950 sm:text-sm">What you sent</p>
+          <p className="text-pretty text-base text-zinc-600 sm:text-sm">{instance.value}</p>
+        </div>
+      ) : null}
+    </li>
   )
 }

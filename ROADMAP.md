@@ -18,7 +18,7 @@ is the source of truth for that distinction.
 | Event setup        | Active-event identity, slug, venue, city, dates, timezone, lifecycle status, version checks and schedule-boundary validation                                                                                                                      | Multi-event switching, administrator membership, branding and public theme controls                                  |
 | CFP                | Multiple event forms, editable public content, ordered fields, choice options, required fields, explicit speaker/session data mappings, shared publish readiness, conditional visibility, draft preview, public submission and confirmation state | File restrictions, richer validation rules, category routing, published-version comparison and branch-coverage tests |
 | Review             | Reviewer teams, assignment rounds, scoped reviewer projection, scorecards, blind-review redaction, decision rules, accepted-record conversion                                                                                                     | Assignment UI, conflicts of interest, saved committee filters, multi-round release policy                            |
-| Speaker onboarding | Scoped participant projection, profile editing, requirements, due dates, organizer review states                                                                                                                                                  | Shared task-form renderer, real uploads, revision conversations, logistics and release templates                     |
+| Speaker onboarding | Scoped participant projection, profile editing, typed text/form/file requirement submission, private R2 uploads and downloads, due dates, organizer review states                                                                                 | Shared cross-surface task renderer, release documents, revision conversations, logistics templates, upload scanning  |
 | Communications     | Draft, audience calculation, approval, frozen recipients, idempotent demo send                                                                                                                                                                    | Provider delivery, templates, merge-variable browser, test sends, scheduling, failures and message history           |
 | Scheduling         | Draft placements, timezone-safe editing, accessible drag-and-drop over an explicit move form, conflict previews, room/list views, immutable releases, public projection                                                                           | Unscheduled tray, undo, day/track filters and fuller publish preflight                                               |
 | Readiness          | Participant matrix, due dates in the domain, blocker counts, submitted-item approval, speaker detail                                                                                                                                              | Overdue explanations, saved filters, bulk reminders/approval and communication history                               |
@@ -59,16 +59,20 @@ membership. See [Security](SECURITY.md).
 
 ### 2. Add one real asset pipeline
 
-- Define file metadata and upload lifecycle contracts in core.
-- Add authenticated upload initiation, type/size validation, progress, retry, cancellation,
-  replace/remove, and private download authorization.
-- Implement private R2 storage in `apps/cloudflare`.
+- Done: define asset metadata, owner-scoped validation, and a named file-submission operation in
+  core.
+- Done: implement private R2 storage, participant-owned upload, private download authorization, and
+  type/size validation in `apps/cloudflare`.
+- Next: replace the passwordless demo actor with authenticated upload initiation and add progress,
+  retry, cancellation, replace/remove, scanning, and lifecycle cleanup.
 - Use the same asset UI for proposal files, video, headshots and slides.
 
 ### 3. Turn requirements into assigned work
 
-- Render profile, text, checkbox, file and custom form requirements in the speaker portal.
-- Persist submitted values and asset references.
+- Done: render text, file, and simple form requirements in the speaker portal and preserve explicit
+  server-backed review states.
+- Done: persist submitted values and private asset references through named core operations.
+- Next: render release/approval tasks only when an actual document and response contract exist.
 - Show organizer review, revision reasons, due/overdue state and direct task links.
 
 ### 4. Complete two communication automations

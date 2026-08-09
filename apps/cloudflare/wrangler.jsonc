@@ -17,6 +17,12 @@
       },
     ],
   },
+  "r2_buckets": [
+    {
+      "binding": "PROGRAMKIT_ASSETS",
+      "bucket_name": "programkit-assets",
+    },
+  ],
   "migrations": [
     {
       "tag": "v1",

@@ -18,14 +18,16 @@ Browser
 Cloudflare Worker ── Workers Static Assets (Vite web build)
   │
   ├── workspace Durable Object ── SQLite-backed atomic event state
-  ├── R2                      ── private uploads and generated files (next)
+  ├── R2                      ── private participant uploads
   ├── Queue / object alarm    ── email, webhooks, and mirrors (next)
   └── Email Service           ── confirmations and reminders (next)
 ```
 
-The runnable application currently includes the Worker, static assets, and one SQLite-backed
-Durable Object per workspace key. It needs no D1 database, R2 bucket, queue, or email binding to run
-the deterministic demo.
+The runnable application currently includes the Worker, static assets, one SQLite-backed Durable
+Object per workspace key, and a private R2 binding for participant requirement uploads. Local
+development emulates that bucket. A remote deployment must provision the checked-in
+`programkit-assets` bucket first; it still needs no D1 database, queue, or email binding to run the
+deterministic demo.
 
 The production additions are intentionally Cloudflare-native:
 
@@ -120,7 +122,15 @@ SQLite-backed Durable Object together in `workerd`.
 
 ## Deploy
 
-Authenticate Wrangler, review `apps/cloudflare/wrangler.jsonc`, then run:
+Authenticate Wrangler, review `apps/cloudflare/wrangler.jsonc`, and provision the private asset
+bucket once for the target account:
+
+```bash
+pnpm --filter @programkit/app-cloudflare exec wrangler login
+pnpm --filter @programkit/app-cloudflare exec wrangler r2 bucket create programkit-assets
+```
+
+Then run:
 
 ```bash
 pnpm deploy
@@ -138,7 +148,9 @@ curl https://YOUR_HOST/api/v1/events
 curl https://YOUR_HOST/public/agenda.json
 ```
 
-Then open the operator app, public CFP, reviewer workspace, speaker portal, and public program.
+Then open the operator app, public CFP, reviewer workspace, speaker portal, and public program. In
+the speaker portal, verify an allowed file can be uploaded and downloaded only through the owning
+participant route.
 
 ## Production bindings, in order
 
@@ -146,7 +158,8 @@ The golden-path production work should land in this sequence:
 
 1. Replace the demo workspace header and fixed actors with verified sessions, API tokens, and
    workspace membership.
-2. Add R2 upload initiation, direct upload, finalize/scanning, private download, and lifecycle
+2. Evolve the current participant-owned R2 upload and private-download path into authenticated
+   upload initiation with progress, retry, cancellation, replacement, scanning, and lifecycle
    cleanup.
 3. Add a transactional delivery outbox and Cloudflare Email Service for submission confirmations
    and accepted-speaker reminders.

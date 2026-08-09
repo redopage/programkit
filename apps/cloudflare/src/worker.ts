@@ -6,6 +6,7 @@ export { WorkspaceDurableObject }
 
 interface Env {
   ASSETS: Fetcher
+  PROGRAMKIT_ASSETS: R2Bucket
   PROGRAMKIT_WORKSPACES: DurableObjectNamespace<WorkspaceDurableObject>
 }
 
@@ -28,6 +29,65 @@ const publicReaderActor = {
   id: 'public_web',
   name: 'Public web',
   scopes: [],
+}
+
+function participantActor(participationId: string) {
+  return {
+    type: 'participant' as const,
+    id: participationId,
+    name: 'Portal participant',
+    scopes: ['participations:write', 'requirements:write', 'portal:write', 'assets:write'],
+  }
+}
+
+const maximumRequirementFileBytes = 8 * 1024 * 1024
+
+function json(body: unknown, init?: ResponseInit) {
+  return new Response(JSON.stringify(body), {
+    ...init,
+    headers: {
+      'cache-control': 'no-store',
+      'content-type': 'application/json; charset=utf-8',
+      ...init?.headers,
+    },
+  })
+}
+
+function safeFilename(value: string) {
+  const normalized = value
+    .normalize('NFKC')
+    .split('')
+    .map((character) => {
+      const codePoint = character.codePointAt(0) ?? 0
+      return character === '/' || character === '\\' || codePoint < 32 || codePoint === 127
+        ? '-'
+        : character
+    })
+    .join('')
+    .replace(/\s+/gu, ' ')
+    .trim()
+  return (normalized || 'upload').slice(0, 160)
+}
+
+function participantCanAccessAsset(
+  state: WorkspaceState,
+  participationId: string,
+  assetId: string,
+) {
+  const participation = state.participations.find((entry) => entry.id === participationId)
+  if (!participation) return false
+  const submissionIds = new Set(
+    state.submissions
+      .filter((entry) => entry.convertedParticipationId === participationId)
+      .map((entry) => entry.id),
+  )
+  const asset = state.assets.find((entry) => entry.id === assetId)
+  if (!asset) return false
+  return (
+    (asset.owner.type === 'participation' && asset.owner.id === participationId) ||
+    (asset.owner.type === 'person' && asset.owner.id === participation.personId) ||
+    (asset.owner.type === 'submission' && submissionIds.has(asset.owner.id))
+  )
 }
 
 function workspaceStub(env: Env, request: Request) {
@@ -88,6 +148,116 @@ export default {
     const url = new URL(request.url)
     const stub = workspaceStub(env, request)
 
+    const portalAssetCollectionMatch = url.pathname.match(/^\/api\/v1\/portal\/([^/]+)\/assets$/u)
+    if (request.method === 'POST' && portalAssetCollectionMatch) {
+      const participationId = decodeURIComponent(portalAssetCollectionMatch[1])
+      const declaredLength = Number(request.headers.get('content-length'))
+      if (
+        Number.isFinite(declaredLength) &&
+        declaredLength > maximumRequirementFileBytes + 128_000
+      ) {
+        return json({ error: 'Choose a file no larger than 8 MB.' }, { status: 413 })
+      }
+      let formData: FormData
+      try {
+        formData = await request.formData()
+      } catch {
+        return json({ error: 'The upload form could not be read.' }, { status: 400 })
+      }
+      const requirementInstanceId = formData.get('requirementInstanceId')
+      const upload = formData.get('file')
+      if (typeof requirementInstanceId !== 'string' || !(upload instanceof File)) {
+        return json({ error: 'Choose a requirement and a file to upload.' }, { status: 400 })
+      }
+      if (upload.size <= 0 || upload.size > maximumRequirementFileBytes) {
+        return json({ error: 'Choose a file between 1 byte and 8 MB.' }, { status: 400 })
+      }
+
+      const state = await readWorkspace(stub)
+      const requirement = state.requirementInstances.find(
+        (entry) => entry.id === requirementInstanceId && entry.participationId === participationId,
+      )
+      if (!requirement) {
+        return json({ error: 'That requirement is not available in this portal.' }, { status: 404 })
+      }
+      const filename = safeFilename(upload.name)
+      const storageKey = `workspaces/${state.workspace.id}/participants/${participationId}/${crypto.randomUUID()}/${filename}`
+      try {
+        await env.PROGRAMKIT_ASSETS.put(storageKey, upload.stream(), {
+          httpMetadata: { contentType: upload.type },
+          customMetadata: {
+            filename,
+            participationId,
+            requirementInstanceId,
+          },
+        })
+      } catch {
+        return json({ error: 'The file could not be stored. Try again.' }, { status: 502 })
+      }
+
+      const actor = participantActor(participationId)
+      let operationResponse: Response
+      try {
+        operationResponse = await stub.fetch(
+          withActor(
+            new Request(
+              `http://workspace.internal/api/v1/portal/${encodeURIComponent(participationId)}/operations/requirement.submit-file`,
+              {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                  input: {
+                    requirementInstanceId,
+                    filename,
+                    contentType: upload.type,
+                    sizeBytes: upload.size,
+                    storageKey,
+                  },
+                  expectedVersions: { [requirement.id]: requirement.version },
+                  idempotencyKey: crypto.randomUUID(),
+                }),
+              },
+            ),
+            actor,
+          ),
+        )
+      } catch {
+        await env.PROGRAMKIT_ASSETS.delete(storageKey).catch(() => undefined)
+        return json({ error: 'The upload could not be recorded. Try again.' }, { status: 502 })
+      }
+      if (!operationResponse.ok) {
+        await env.PROGRAMKIT_ASSETS.delete(storageKey).catch(() => undefined)
+      }
+      return operationResponse
+    }
+
+    const portalAssetMatch = url.pathname.match(
+      /^\/api\/v1\/portal\/([^/]+)\/assets\/([^/]+)\/content$/u,
+    )
+    if (request.method === 'GET' && portalAssetMatch) {
+      const participationId = decodeURIComponent(portalAssetMatch[1])
+      const assetId = decodeURIComponent(portalAssetMatch[2])
+      const state = await readWorkspace(stub)
+      if (!participantCanAccessAsset(state, participationId, assetId)) {
+        return json({ error: 'File not found.' }, { status: 404 })
+      }
+      const asset = state.assets.find((entry) => entry.id === assetId)!
+      const object = await env.PROGRAMKIT_ASSETS.get(asset.storageKey)
+      if (!object) return json({ error: 'File not found.' }, { status: 404 })
+      const asciiFilename = asset.filename.replace(/[^\x20-\x7e]/gu, '_').replace(/["\\]/gu, '_')
+      const headers = new Headers()
+      object.writeHttpMetadata(headers)
+      headers.set('cache-control', 'private, no-store')
+      headers.set(
+        'content-disposition',
+        `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(asset.filename)}`,
+      )
+      headers.set('content-length', String(asset.sizeBytes))
+      headers.set('etag', object.httpEtag)
+      headers.set('x-content-type-options', 'nosniff')
+      return new Response(object.body, { headers })
+    }
+
     if (url.pathname === '/mcp') {
       return handleMcpRequest(request, {
         readState: () => readWorkspace(stub),
@@ -103,12 +273,7 @@ export default {
         /^\/public\/v1\/submission-forms\/([^/]+)\//u,
       )
       const actor = portalMatch
-        ? ({
-            type: 'participant' as const,
-            id: decodeURIComponent(portalMatch[1]),
-            name: 'Portal participant',
-            scopes: ['participations:write', 'requirements:write', 'portal:write'],
-          } satisfies OperationRequest['actor'])
+        ? participantActor(decodeURIComponent(portalMatch[1]))
         : reviewerMatch
           ? ({
               type: 'reviewer' as const,

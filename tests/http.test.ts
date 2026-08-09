@@ -114,7 +114,19 @@ describe('operation HTTP surface', () => {
   })
 
   it('returns a participant-specific projection without operator-only records', async () => {
-    const repository = new MemoryWorkspaceRepository()
+    const state = createSeedState()
+    state.assets.push({
+      id: 'ast_private_portal',
+      eventId: state.activeEventId,
+      owner: { type: 'participation', id: 'par_003' },
+      kind: 'headshot',
+      filename: 'private-headshot.png',
+      contentType: 'image/png',
+      sizeBytes: 1_024,
+      storageKey: 'workspaces/wrk_aie/participants/par_003/private/private-headshot.png',
+      createdAt: '2026-08-08T12:00:00.000Z',
+    })
+    const repository = new MemoryWorkspaceRepository(state)
     const actor = {
       type: 'participant' as const,
       id: 'par_003',
@@ -140,6 +152,9 @@ describe('operation HTTP surface', () => {
     expect(body.state.reviewerAssignments).toHaveLength(0)
     expect(body.state.scorecards).toHaveLength(0)
     expect(body.state.reviewDecisions).toHaveLength(0)
+    expect(body.state.assets).toEqual([
+      expect.objectContaining({ id: 'ast_private_portal', storageKey: '' }),
+    ])
   })
 
   it('serves distinct public and reviewer projections without operator records', async () => {

@@ -76,12 +76,14 @@ function participantState(state: WorkspaceState, participationId: string) {
     formIds.has(entry.formId),
   )
   const submissionIds = new Set(clone.submissions.map((entry) => entry.id))
-  clone.assets = (state.assets ?? []).filter(
-    (entry) =>
-      (entry.owner.type === 'submission' && submissionIds.has(entry.owner.id)) ||
-      (entry.owner.type === 'participation' && entry.owner.id === participationId) ||
-      (entry.owner.type === 'person' && entry.owner.id === person.id),
-  )
+  clone.assets = (state.assets ?? [])
+    .filter(
+      (entry) =>
+        (entry.owner.type === 'submission' && submissionIds.has(entry.owner.id)) ||
+        (entry.owner.type === 'participation' && entry.owner.id === participationId) ||
+        (entry.owner.type === 'person' && entry.owner.id === person.id),
+    )
+    .map((entry) => ({ ...structuredClone(entry), storageKey: '' }))
   clone.reviewers = []
   clone.reviewerTeams = []
   clone.evaluationPlans = []
