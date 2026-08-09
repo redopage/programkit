@@ -3,6 +3,7 @@ import {
   CalendarDaysIcon,
   ClipboardDocumentCheckIcon,
   DocumentTextIcon,
+  GlobeAltIcon,
   InboxStackIcon,
   UserGroupIcon,
 } from '@heroicons/react/16/solid'
@@ -39,33 +40,96 @@ const programJobs = [
   },
 ]
 
-const workflowStages = [
-  { label: 'Form published', detail: '2 open', icon: DocumentTextIcon, iconColor: 'text-blue-600' },
+const programFeatures = [
   {
-    label: 'Proposals received',
-    detail: '6 received',
+    title: 'Submission forms',
+    description: 'Build the CFP, add conditional questions, and map every answer.',
+    image: '/assets/marketing/forms.png',
+    imageAlt: 'ProgramKit submission form builder',
+    icon: DocumentTextIcon,
+    iconColor: 'text-blue-600',
+    surface: 'bg-blue-50',
+    cardClassName: 'lg:col-span-8 lg:row-span-2',
+  },
+  {
+    title: 'Submissions',
+    description: 'Triage every proposal from one clear queue.',
+    image: '/assets/marketing/submissions.png',
+    imageAlt: 'ProgramKit submissions queue',
     icon: InboxStackIcon,
     iconColor: 'text-amber-500',
+    surface: 'bg-amber-50',
+    cardClassName: 'lg:col-span-4',
   },
   {
-    label: 'Committee review',
-    detail: '1 awaiting',
+    title: 'Review',
+    description: 'Keep scoring, assignments, and decisions together.',
+    image: '/assets/marketing/reviews.png',
+    imageAlt: 'ProgramKit committee review workspace',
     icon: ClipboardDocumentCheckIcon,
     iconColor: 'text-violet-600',
+    surface: 'bg-violet-50',
+    cardClassName: 'lg:col-span-4',
   },
   {
-    label: 'Speakers onboarded',
-    detail: '15 active',
+    title: 'Readiness',
+    description: 'See what every speaker still owes.',
+    image: '/assets/marketing/readiness.png',
+    imageAlt: 'ProgramKit speaker readiness dashboard',
     icon: UserGroupIcon,
     iconColor: 'text-rose-500',
+    surface: 'bg-rose-50',
+    cardClassName: 'lg:col-span-4',
   },
   {
-    label: 'Agenda ready',
-    detail: '10 sessions',
+    title: 'Schedule',
+    description: 'Place sessions and catch conflicts before they publish.',
+    image: '/assets/marketing/schedule.png',
+    imageAlt: 'ProgramKit schedule studio',
     icon: CalendarDaysIcon,
-    iconColor: 'text-emerald-500',
+    iconColor: 'text-cyan-600',
+    surface: 'bg-cyan-50',
+    cardClassName: 'lg:col-span-4',
+  },
+  {
+    title: 'Public agenda',
+    description: 'Give attendees a fast, shareable program.',
+    image: '/assets/marketing/agenda.png',
+    imageAlt: 'ProgramKit public conference agenda',
+    icon: GlobeAltIcon,
+    iconColor: 'text-emerald-600',
+    surface: 'bg-emerald-50',
+    cardClassName: 'lg:col-span-4',
   },
 ]
+
+function ProgramFeatureCard({ feature }: { feature: (typeof programFeatures)[number] }) {
+  return (
+    <article
+      className={`flex min-w-0 flex-col overflow-hidden rounded-[2rem] bg-zinc-50 p-2 ring-1 ring-zinc-950/8 sm:p-3 ${feature.cardClassName}`}
+    >
+      <div
+        className={`relative min-h-64 flex-1 overflow-hidden rounded-[calc(2rem-0.75rem)] outline outline-zinc-950/8 lg:min-h-0 ${feature.surface}`}
+      >
+        <img
+          src={feature.image}
+          alt={feature.imageAlt}
+          width="1440"
+          height="1010"
+          loading="lazy"
+          className="absolute inset-x-3 bottom-0 w-[calc(100%-1.5rem)] rounded-t-[1.25rem] bg-white object-cover object-top shadow-xl shadow-zinc-950/8 outline outline-zinc-950/8 sm:inset-x-5 sm:w-[calc(100%-2.5rem)]"
+        />
+      </div>
+      <div className="px-3 pt-5 pb-4 sm:px-4 sm:pt-6 sm:pb-5">
+        <div className="flex items-center gap-2.5">
+          <feature.icon aria-hidden="true" className={`size-5 shrink-0 ${feature.iconColor}`} />
+          <h3 className="text-lg font-semibold tracking-tight text-zinc-950">{feature.title}</h3>
+        </div>
+        <p className="max-w-xl pt-2 text-base/7 text-zinc-600">{feature.description}</p>
+      </div>
+    </article>
+  )
+}
 
 const programKitBarGlyphs = {
   P: ['11111', '10001', '11111', '10000', '10000'],
@@ -294,74 +358,19 @@ export function SiteView() {
 
         <section className="px-5 py-20 sm:px-8 sm:py-28 lg:px-10">
           <div className="mx-auto max-w-7xl">
-            <div className="grid min-w-0 items-end gap-10 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20">
-              <div className="min-w-0">
-                <h2 className="max-w-[12ch] text-balance text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                  The program stays connected.
-                </h2>
-                <p className="max-w-xl pt-5 text-pretty text-base/7 text-zinc-600 sm:text-lg/8">
-                  No handoff spreadsheets. No wondering which version is live. Every part moves
-                  forward together.
-                </p>
-              </div>
-
-              <ol
-                role="list"
-                className="min-w-0 overflow-hidden rounded-[2rem] bg-zinc-50 p-2 ring-1 ring-zinc-950/8 sm:p-3"
-              >
-                {workflowStages.map((item, index) => (
-                  <li
-                    key={item.label}
-                    className={`grid min-h-14 min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 sm:min-h-16 sm:gap-4 sm:px-4 ${index === 0 ? 'rounded-t-[calc(2rem-0.5rem)]' : ''} ${index === workflowStages.length - 1 ? 'rounded-b-[calc(2rem-0.5rem)]' : 'border-b border-zinc-950/8'}`}
-                  >
-                    <item.icon aria-hidden="true" className={`size-5 shrink-0 ${item.iconColor}`} />
-                    <span className="min-w-0 truncate text-base font-medium text-zinc-900">
-                      {item.label}
-                    </span>
-                    <span className="shrink-0 text-sm tabular-nums text-zinc-500">
-                      {item.detail}
-                    </span>
-                  </li>
-                ))}
-              </ol>
+            <div className="max-w-3xl">
+              <h2 className="max-w-[15ch] text-balance text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
+                Every part, in one place.
+              </h2>
+              <p className="max-w-xl pt-5 text-pretty text-base/7 text-zinc-600 sm:text-lg/8">
+                Move from intake to a published agenda without losing the thread.
+              </p>
             </div>
 
-            <div className="grid min-w-0 gap-6 pt-20 lg:grid-cols-2">
-              <figure className="min-w-0">
-                <div className="overflow-hidden rounded-[2rem] bg-rose-50 p-2 ring-1 ring-zinc-950/8 sm:p-3">
-                  <div className="relative aspect-[16/10] overflow-hidden rounded-[calc(2rem-0.75rem)] bg-white outline outline-zinc-950/8">
-                    <img
-                      src="/assets/marketing/readiness.png"
-                      alt="ProgramKit speaker readiness dashboard"
-                      width="1440"
-                      height="1010"
-                      loading="lazy"
-                      className="absolute inset-0 h-full w-full object-cover object-top"
-                    />
-                  </div>
-                </div>
-                <figcaption className="pt-4 text-base font-medium text-zinc-700">
-                  See what every speaker still needs.
-                </figcaption>
-              </figure>
-
-              <figure className="min-w-0">
-                <div className="overflow-hidden rounded-[2rem] bg-emerald-50 p-2 ring-1 ring-zinc-950/8 sm:p-3">
-                  <div className="relative aspect-[16/10] overflow-hidden rounded-[calc(2rem-0.75rem)] bg-white outline outline-zinc-950/8">
-                    <img
-                      src="/assets/marketing/schedule.png"
-                      alt="ProgramKit schedule studio"
-                      width="1440"
-                      height="1010"
-                      loading="lazy"
-                      className="absolute inset-0 h-full w-full object-cover object-top"
-                    />
-                  </div>
-                </div>
-                <figcaption className="pt-4 text-base font-medium text-zinc-700">
-                  Build the agenda without losing the details.
-                </figcaption>
-              </figure>
+            <div className="grid min-w-0 gap-4 pt-14 md:grid-cols-2 lg:auto-rows-[19rem] lg:grid-cols-12">
+              {programFeatures.map((feature) => (
+                <ProgramFeatureCard key={feature.title} feature={feature} />
+              ))}
             </div>
           </div>
         </section>
