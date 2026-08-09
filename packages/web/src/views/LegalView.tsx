@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { ProgramKitMark } from '../components/brand.tsx'
+
 export function LegalView({
   title,
   updated,
@@ -12,7 +14,12 @@ export function LegalView({
   return (
     <main className="min-h-dvh bg-white px-5 py-12 text-zinc-700 sm:px-8 sm:py-16">
       <article className="mx-auto max-w-2xl">
-        <a href="/" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+        <a
+          href="/"
+          aria-label="ProgramKit homepage"
+          className="focus-ring flex w-fit items-center gap-2 rounded-lg text-sm font-semibold text-zinc-950"
+        >
+          <ProgramKitMark className="size-5" />
           ProgramKit
         </a>
         <h1 className="pt-6 text-3xl font-semibold tracking-tight text-zinc-950">{title}</h1>

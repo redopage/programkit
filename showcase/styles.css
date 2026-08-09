@@ -85,14 +85,9 @@ ol {
   text-decoration: none;
 }
 .brand-mark {
-  display: grid;
   width: 26px;
   height: 26px;
-  place-items: center;
-  border-radius: 7px;
-  color: #fff;
-  background: var(--ink);
-  font-size: 13px;
+  object-fit: contain;
 }
 .site-header nav {
   display: flex;

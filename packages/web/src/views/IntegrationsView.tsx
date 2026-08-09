@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { useEffect, useState } from 'react'
 
+import { ProgramKitMark } from '../components/brand.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 import { Button, Callout, PageHeader, cx, selectControl, sentenceCase } from '../components/ui.tsx'
 
@@ -190,7 +191,8 @@ export function IntegrationsView() {
                 </p>
 
                 <div className="flex flex-wrap items-center gap-2 text-base font-semibold text-zinc-700 sm:text-sm">
-                  <span className="rounded-lg bg-zinc-950 px-2.5 py-1.5 text-white">
+                  <span className="flex items-center gap-1.5 rounded-lg bg-zinc-950 px-2.5 py-1.5 text-white">
+                    <ProgramKitMark className="size-4" />
                     ProgramKit
                   </span>
                   <ArrowRightIcon className="size-4 h-lh shrink-0 rotate-180 fill-violet-500" />

@@ -1,5 +1,7 @@
 import { ArrowRightIcon, CodeBracketIcon } from '@heroicons/react/16/solid'
 
+import { ProgramKitMark } from '../components/brand.tsx'
+
 const jobs = [
   'Collect proposals with a flexible call for speakers.',
   'Review submissions and keep speaker tasks moving.',
@@ -11,10 +13,12 @@ export function SiteView() {
     <main className="min-h-dvh bg-white px-6 py-8 text-zinc-950 sm:px-8 sm:py-10">
       <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-4xl flex-col sm:min-h-[calc(100dvh-5rem)]">
         <header className="flex items-center justify-between gap-4">
-          <a href="/" className="focus-ring flex items-center gap-2.5 rounded-xl">
-            <span className="grid size-9 place-items-center rounded-xl bg-blue-600 text-sm font-semibold text-white">
-              P
-            </span>
+          <a
+            href="/"
+            aria-label="ProgramKit homepage"
+            className="focus-ring flex items-center gap-2.5 rounded-xl"
+          >
+            <ProgramKitMark className="size-8" />
             <span className="text-base font-semibold">ProgramKit</span>
           </a>
           <a

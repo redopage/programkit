@@ -8,6 +8,7 @@ import {
   type SubmissionAnswerValue,
 } from '@programkit/core'
 
+import { ProgramKitMark } from '../components/brand.tsx'
 import { Button, cx, selectControl, sentenceCase, textAreaControl } from '../components/ui.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 
@@ -121,9 +122,10 @@ function ReviewerWorkspace({
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-6">
           <a
             href={`/reviewer/${reviewer.id}`}
-            aria-label="Homepage"
-            className="focus-ring text-base font-semibold tracking-tight text-zinc-950"
+            aria-label="ProgramKit homepage"
+            className="focus-ring flex items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-zinc-950"
           >
+            <ProgramKitMark className="size-6" />
             ProgramKit
           </a>
           <div className="min-w-0 text-right">

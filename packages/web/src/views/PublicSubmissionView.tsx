@@ -8,6 +8,7 @@ import {
   type SubmissionKind,
 } from '@programkit/core'
 
+import { ProgramKitMark } from '../components/brand.tsx'
 import { Button, cx } from '../components/ui.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 
@@ -261,9 +262,10 @@ function PublicHeader({ eventName }: { eventName: string }) {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <a
           href="/"
-          aria-label="Homepage"
-          className="focus-ring text-base font-semibold tracking-tight text-zinc-950"
+          aria-label="ProgramKit homepage"
+          className="focus-ring flex items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-zinc-950"
         >
+          <ProgramKitMark className="size-6" />
           ProgramKit
         </a>
         <p className="truncate text-base text-zinc-500 sm:text-sm">{eventName}</p>

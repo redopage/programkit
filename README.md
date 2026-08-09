@@ -1,13 +1,24 @@
-# ProgramKit
+<p align="center">
+  <img src="apps/cloudflare/public/favicon.svg" alt="" width="64" height="66" />
+</p>
 
-Open-source conference program management, from the first call for proposals to the published
-agenda.
+<h1 align="center">ProgramKit</h1>
 
-[Website](https://programkit.dev) · [Try a seven-day demo](https://demo.programkit.dev) ·
-[Forge](https://forge.smol.ai/andheller/programkit) ·
-[GitHub mirror](https://github.com/redopage/programkit) · [Documentation](docs/README.md)
+<p align="center">
+  Open-source conference program management, from the first call for proposals to the published agenda.
+</p>
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
+<p align="center">
+  <a href="https://programkit.dev">Website</a> ·
+  <a href="https://demo.programkit.dev">Try a seven-day demo</a> ·
+  <a href="https://forge.smol.ai/andheller/programkit">Forge</a> ·
+  <a href="https://github.com/redopage/programkit">GitHub mirror</a> ·
+  <a href="docs/README.md">Documentation</a>
+</p>
+
+<p align="center">
+  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" /></a>
+</p>
 
 ProgramKit gives organizers one focused workspace to:
 

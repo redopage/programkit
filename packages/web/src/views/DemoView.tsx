@@ -1,6 +1,7 @@
 import { ArrowRightIcon, CheckIcon, LinkIcon } from '@heroicons/react/16/solid'
 import { useEffect, useState } from 'react'
 
+import { ProgramKitMark } from '../components/brand.tsx'
 import { Button } from '../components/ui.tsx'
 import {
   createDemo as createHostedDemo,
@@ -66,9 +67,7 @@ export function DemoView() {
           aria-label="ProgramKit homepage"
           className="focus-ring mx-auto flex w-fit items-center gap-2.5 rounded-xl"
         >
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-sm font-semibold text-white">
-            P
-          </span>
+          <ProgramKitMark className="size-8" />
           <span className="text-base font-semibold text-zinc-950">ProgramKit</span>
         </a>
 
