@@ -487,15 +487,22 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         style={{ '--room-count': activeRooms.length } as CSSProperties}
       >
         <div className="border-b border-zinc-950/10 pb-3" />
-        {activeRooms.map((room) => (
-          <div key={room.id} className="min-w-0 border-b border-zinc-950/10 px-1.5 pb-3">
-            <h2 className="truncate text-base font-medium text-zinc-950 sm:text-sm">{room.name}</h2>
-            <p className="truncate text-sm tabular-nums text-zinc-500">
-              Capacity {room.capacity} ·{' '}
-              {activePlacements.filter((entry) => entry.roomId === room.id).length} sessions
-            </p>
-          </div>
-        ))}
+        {activeRooms.map((room) => {
+          const roomSessionCount = activePlacements.filter(
+            (entry) => entry.roomId === room.id,
+          ).length
+          return (
+            <div key={room.id} className="min-w-0 border-b border-zinc-950/10 px-1.5 pb-3">
+              <h2 className="truncate text-base font-medium text-zinc-950 sm:text-sm">
+                {room.name}
+              </h2>
+              <p className="truncate text-sm tabular-nums text-zinc-500">
+                Capacity {room.capacity} · {roomSessionCount}{' '}
+                {roomSessionCount === 1 ? 'session' : 'sessions'}
+              </p>
+            </div>
+          )
+        })}
 
         {startTimes.map((startsAt) => (
           <Fragment key={startsAt}>

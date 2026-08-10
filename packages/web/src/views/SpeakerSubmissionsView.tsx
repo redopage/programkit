@@ -406,7 +406,7 @@ export function SpeakerSubmissionsView({
 
         <div className="pt-10">
           <a
-            href={`/submit/${formSlug}`}
+            href={publicSubmissionPath(event.id, formSlug)}
             className="focus-ring inline-flex items-center gap-2 rounded-lg text-base font-medium text-zinc-600 hover:text-zinc-950 sm:text-sm"
           >
             <ArrowLeftIcon className="size-4 h-lh shrink-0 fill-current" />
