@@ -667,7 +667,7 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
               type="date"
               required
               value={eventDraft.startsOn}
-              onChange={(changeEvent) =>
+              onInput={(changeEvent) =>
                 updateEventDraft('startsOn', changeEvent.currentTarget.value)
               }
               className={eventCreationControl}
@@ -680,9 +680,7 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
               required
               min={eventDraft.startsOn}
               value={eventDraft.endsOn}
-              onChange={(changeEvent) =>
-                updateEventDraft('endsOn', changeEvent.currentTarget.value)
-              }
+              onInput={(changeEvent) => updateEventDraft('endsOn', changeEvent.currentTarget.value)}
               className={eventCreationControl}
             />
           </label>

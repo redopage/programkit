@@ -711,7 +711,7 @@ export function SettingsView() {
                   required
                   value={draft.startsAt}
                   aria-invalid={Boolean(errors.startsAt)}
-                  onChange={(inputEvent) => update('startsAt', inputEvent.target.value)}
+                  onInput={(inputEvent) => update('startsAt', inputEvent.currentTarget.value)}
                   className={textControl}
                 />
                 {errors.startsAt ? (
@@ -726,7 +726,7 @@ export function SettingsView() {
                   required
                   value={draft.endsAt}
                   aria-invalid={Boolean(errors.endsAt)}
-                  onChange={(inputEvent) => update('endsAt', inputEvent.target.value)}
+                  onInput={(inputEvent) => update('endsAt', inputEvent.currentTarget.value)}
                   className={textControl}
                 />
                 {errors.endsAt ? <p className="text-sm text-rose-700">{errors.endsAt}</p> : null}
