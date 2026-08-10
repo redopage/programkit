@@ -51,7 +51,7 @@ const programFeatures = [
     focus: [0.005, 0.015],
     icon: DocumentTextIcon,
     iconColor: 'text-blue-600',
-    surface: 'bg-blue-100',
+    surface: 'bg-blue-200',
   },
   {
     title: 'Submissions',
@@ -63,7 +63,7 @@ const programFeatures = [
     focus: [0.37, 0.315],
     icon: InboxStackIcon,
     iconColor: 'text-amber-500',
-    surface: 'bg-amber-100',
+    surface: 'bg-amber-200',
   },
   {
     title: 'Review',
@@ -75,7 +75,7 @@ const programFeatures = [
     focus: [0.5, 0.435],
     icon: ClipboardDocumentCheckIcon,
     iconColor: 'text-violet-600',
-    surface: 'bg-violet-100',
+    surface: 'bg-violet-200',
   },
   {
     title: 'Readiness',
@@ -87,7 +87,7 @@ const programFeatures = [
     focus: [0.005, 0.27],
     icon: UserGroupIcon,
     iconColor: 'text-rose-500',
-    surface: 'bg-rose-100',
+    surface: 'bg-rose-200',
   },
   {
     title: 'Schedule',
@@ -99,7 +99,7 @@ const programFeatures = [
     focus: [0.03, 0.23],
     icon: CalendarDaysIcon,
     iconColor: 'text-cyan-600',
-    surface: 'bg-cyan-100',
+    surface: 'bg-cyan-200',
   },
   {
     title: 'Public agenda',
@@ -111,7 +111,7 @@ const programFeatures = [
     focus: [0.03, 0.115],
     icon: GlobeAltIcon,
     iconColor: 'text-emerald-600',
-    surface: 'bg-emerald-100',
+    surface: 'bg-emerald-200',
   },
 ]
 
@@ -125,33 +125,46 @@ const featureFrameAspect = 4 / 3
 // `top` percentages resolve against the frame's height, not its width, so the
 // vertical offset carries the frame-to-image aspect correction.
 const featureVerticalFactor = (featureFrameAspect / (featureImageWidth / featureImageHeight)) * 100
+// The screenshot gets its own window, inset from the panel's top-left and
+// running off the bottom-right. Cropping inside that window rather than by
+// shoving the image out of the panel is what keeps the band of colour the same
+// on every card, whichever corner of the screenshot a card happens to show.
+// The window is 4/3 like the panel, so the vertical factor still applies; being
+// `featureBleed` times wider, every offset within it scales down to match.
+const featureBleed = 1.28
 
 function ProgramFeature({ feature }: { feature: (typeof programFeatures)[number] }) {
   const [focusX, focusY] = feature.focus
 
   return (
-    // Radii stay concentric as they nest: the 2rem card holds 0.5rem of padding
-    // around a 1.5rem frame, which holds 1rem around the 0.5rem screenshot. The
-    // caption's 1.5rem of inset lands it on the screenshot's own left edge.
-    <div className="min-w-0 rounded-[2rem] bg-zinc-50 p-2 outline outline-zinc-950/6">
+    // The colour runs edge to edge: the tinted panel is flush to the card, and
+    // the card's own rounding clips it. Radii stay concentric through the nest —
+    // the screenshot sits 2rem inside a 2.5rem card, so it carries 0.5rem. The
+    // caption takes the same 2rem, landing on the screenshot's own left edge.
+    <div className="min-w-0 overflow-hidden rounded-[2.5rem] bg-zinc-50 outline outline-zinc-950/6">
       <div
-        className={`relative aspect-[4/3] overflow-hidden rounded-[1.5rem] inset-ring inset-ring-zinc-950/8 ${feature.surface}`}
+        className={`relative aspect-[4/3] overflow-hidden inset-ring inset-ring-zinc-950/8 ${feature.surface}`}
       >
-        <img
-          src={feature.image}
-          alt={feature.imageAlt}
-          width={featureImageWidth}
-          height={featureImageHeight}
-          loading="lazy"
-          className="absolute max-w-none rounded-lg bg-white shadow-xl shadow-zinc-950/10 outline outline-zinc-950/8"
-          style={{
-            width: `${feature.zoom * 100}%`,
-            left: `calc(1rem - ${focusX * feature.zoom * 100}%)`,
-            top: `calc(1rem - ${focusY * feature.zoom * featureVerticalFactor}%)`,
-          }}
-        />
+        <div
+          className="absolute left-8 top-8 aspect-[4/3] overflow-hidden rounded-lg bg-white shadow-xl shadow-zinc-950/10 outline outline-zinc-950/8"
+          style={{ width: `${featureBleed * 100}%` }}
+        >
+          <img
+            src={feature.image}
+            alt={feature.imageAlt}
+            width={featureImageWidth}
+            height={featureImageHeight}
+            loading="lazy"
+            className="absolute max-w-none"
+            style={{
+              width: `${(feature.zoom * 100) / featureBleed}%`,
+              left: `${(-focusX * feature.zoom * 100) / featureBleed}%`,
+              top: `${(-focusY * feature.zoom * featureVerticalFactor) / featureBleed}%`,
+            }}
+          />
+        </div>
       </div>
-      <div className="px-4 pb-4 pt-5">
+      <div className="px-8 pb-7 pt-5">
         <div className="flex items-baseline gap-2.5">
           <feature.icon
             aria-hidden="true"
