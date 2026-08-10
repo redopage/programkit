@@ -26,6 +26,8 @@ import type {
   Campaign,
   ChangeOperation,
   ChangeSet,
+  ContactNote,
+  CrmSegment,
   DomainEvent,
   EvaluationCriterion,
   EvaluationPlan,
@@ -40,6 +42,8 @@ import type {
   RequirementStatus,
   ReviewRecommendation,
   Session,
+  SpeakerPipelineEntry,
+  SpeakerPipelineStage,
   Submission,
   SubmissionAnswers,
   SubmissionContributor,
@@ -73,6 +77,9 @@ interface ApplyContext {
 
 function initializeProgramCollections(state: WorkspaceState) {
   for (const event of state.events) event.version ??= 1
+  state.contactNotes ??= []
+  state.crmSegments ??= []
+  state.speakerPipeline ??= []
   state.submissionForms ??= []
   state.submissionFormFields ??= []
   state.submissions ??= []
@@ -123,7 +130,7 @@ function initializeProgramCollections(state: WorkspaceState) {
     asset.sessionId ??= null
     asset.uploadedBy ??= { type: 'staff', id: 'system', name: 'ProgramKit' }
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 9)
+  state.schemaVersion = Math.max(state.schemaVersion, 10)
 }
 
 function queueOutboundMessage(
@@ -712,6 +719,8 @@ function allVersionedRecords(state: WorkspaceState) {
   return [
     ...state.events,
     ...state.people,
+    ...(state.crmSegments ?? []),
+    ...(state.speakerPipeline ?? []),
     ...state.participations,
     ...state.requirementInstances,
     ...(state.submissionForms ?? []),
@@ -2615,6 +2624,338 @@ function applyHandler(
       return { person, participation }
     }
 
+    case 'person.add-note': {
+      const person = findRequired(state.people, input.personId, 'person')
+      const note: ContactNote = {
+        id: createId('note'),
+        personId: person.id,
+        body: assertString(input.body, 'body'),
+        createdBy: context.actor.name,
+        createdAt: timestamp,
+      }
+      state.contactNotes.unshift(note)
+      appendEvent(state, context, {
+        type: 'person.note-added',
+        aggregate: { type: 'person', id: person.id, version: person.version },
+        summary: `Added a note to ${person.firstName} ${person.lastName}.`,
+        data: { noteId: note.id },
+      })
+      return { person, note }
+    }
+
+    case 'person.add-to-event': {
+      const person = findRequired(state.people, input.personId, 'person')
+      const event = findRequired(state.events, input.eventId, 'event')
+      const existing = state.participations.find(
+        (entry) => entry.personId === person.id && entry.eventId === event.id,
+      )
+      if (existing) return { person, participation: existing, created: false }
+
+      const participation: Participation = {
+        id: createId('par'),
+        eventId: event.id,
+        personId: person.id,
+        portalAccessKey: createId('portal'),
+        roles: ['speaker'],
+        status: 'prospect',
+        sessionIds: [],
+        internalNotes: '',
+        publicTitle: person.title,
+        publicCompany: person.company,
+        confirmedAt: null,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      state.participations.push(participation)
+      for (const definition of state.requirementDefinitions.filter(
+        (entry) => entry.eventId === event.id,
+      )) {
+        state.requirementInstances.push({
+          id: createId('rqi'),
+          definitionId: definition.id,
+          participationId: participation.id,
+          status: 'not_started',
+          value: '',
+          submittedAt: null,
+          reviewedAt: null,
+          updatedAt: timestamp,
+          version: 1,
+        })
+      }
+      appendEvent(state, context, {
+        type: 'participation.created',
+        aggregate: { type: 'participation', id: participation.id, version: 1 },
+        summary: `Added ${person.firstName} ${person.lastName} to ${event.name}.`,
+        data: { personId: person.id, eventId: event.id, roles: participation.roles },
+      })
+      return { person, participation, created: true }
+    }
+
+    case 'person.merge': {
+      const primary = findRequired(state.people, input.primaryPersonId, 'primary person')
+      const duplicate = findRequired(state.people, input.duplicatePersonId, 'duplicate person')
+      if (primary.id === duplicate.id) {
+        throw new OperationError('INVALID_INPUT', 'Choose two different contacts to merge.')
+      }
+
+      primary.tags = [...new Set([...primary.tags, ...duplicate.tags])]
+      for (const field of ['company', 'title', 'city', 'bio'] as const) {
+        if (!primary[field] && duplicate[field]) primary[field] = duplicate[field]
+      }
+      const duplicateParticipations = state.participations.filter(
+        (entry) => entry.personId === duplicate.id,
+      )
+      let combinedParticipations = 0
+      for (const source of duplicateParticipations) {
+        const target = state.participations.find(
+          (entry) => entry.personId === primary.id && entry.eventId === source.eventId,
+        )
+        if (!target) {
+          source.personId = primary.id
+          source.updatedAt = timestamp
+          source.version += 1
+          continue
+        }
+
+        combinedParticipations += 1
+        target.roles = [...new Set([...target.roles, ...source.roles])]
+        target.sessionIds = [...new Set([...target.sessionIds, ...source.sessionIds])]
+        target.internalNotes = [target.internalNotes, source.internalNotes]
+          .filter(Boolean)
+          .join('\n\n')
+        target.publicTitle ||= source.publicTitle
+        target.publicCompany ||= source.publicCompany
+        target.confirmedAt ||= source.confirmedAt
+        target.updatedAt = timestamp
+        target.version += 1
+
+        for (const session of state.sessions.filter((entry) =>
+          entry.participantIds.includes(source.id),
+        )) {
+          session.participantIds = [
+            ...new Set(
+              session.participantIds.map((participantId) =>
+                participantId === source.id ? target.id : participantId,
+              ),
+            ),
+          ]
+          session.updatedAt = timestamp
+          session.version += 1
+        }
+
+        for (const sourceRequirement of state.requirementInstances.filter(
+          (entry) => entry.participationId === source.id,
+        )) {
+          const targetRequirement = state.requirementInstances.find(
+            (entry) =>
+              entry.participationId === target.id &&
+              entry.definitionId === sourceRequirement.definitionId,
+          )
+          if (!targetRequirement) {
+            sourceRequirement.participationId = target.id
+            sourceRequirement.updatedAt = timestamp
+            sourceRequirement.version += 1
+            continue
+          }
+          if (sourceRequirement.updatedAt > targetRequirement.updatedAt) {
+            targetRequirement.status = sourceRequirement.status
+            targetRequirement.value = sourceRequirement.value
+            targetRequirement.submittedAt = sourceRequirement.submittedAt
+            targetRequirement.reviewedAt = sourceRequirement.reviewedAt
+            targetRequirement.updatedAt = timestamp
+            targetRequirement.version += 1
+          }
+          for (const asset of state.assets) {
+            if (asset.owner.type === 'requirement' && asset.owner.id === sourceRequirement.id) {
+              asset.owner.id = targetRequirement.id
+            }
+          }
+          state.requirementInstances = state.requirementInstances.filter(
+            (entry) => entry.id !== sourceRequirement.id,
+          )
+        }
+        for (const asset of state.assets) {
+          if (asset.owner.type === 'participation' && asset.owner.id === source.id) {
+            asset.owner.id = target.id
+          }
+        }
+        state.participations = state.participations.filter((entry) => entry.id !== source.id)
+      }
+
+      for (const asset of state.assets) {
+        if (asset.owner.type === 'person' && asset.owner.id === duplicate.id) {
+          asset.owner.id = primary.id
+        }
+      }
+      for (const note of state.contactNotes) {
+        if (note.personId === duplicate.id) note.personId = primary.id
+      }
+      for (const segment of state.crmSegments) {
+        if (segment.personIds.includes(duplicate.id)) {
+          segment.personIds = [
+            ...new Set(
+              segment.personIds.map((personId) =>
+                personId === duplicate.id ? primary.id : personId,
+              ),
+            ),
+          ]
+          segment.updatedAt = timestamp
+          segment.version += 1
+        }
+      }
+
+      const primaryPipeline = state.speakerPipeline.find((entry) => entry.personId === primary.id)
+      const duplicatePipeline = state.speakerPipeline.find(
+        (entry) => entry.personId === duplicate.id,
+      )
+      if (duplicatePipeline && primaryPipeline) {
+        primaryPipeline.notes.unshift(...duplicatePipeline.notes)
+        primaryPipeline.history.push(...duplicatePipeline.history)
+        primaryPipeline.updatedAt = timestamp
+        primaryPipeline.version += 1
+        state.speakerPipeline = state.speakerPipeline.filter(
+          (entry) => entry.id !== duplicatePipeline.id,
+        )
+      } else if (duplicatePipeline) {
+        duplicatePipeline.personId = primary.id
+        duplicatePipeline.updatedAt = timestamp
+        duplicatePipeline.version += 1
+      }
+
+      primary.updatedAt = timestamp
+      primary.version += 1
+      state.people = state.people.filter((entry) => entry.id !== duplicate.id)
+      appendEvent(state, context, {
+        type: 'person.merged',
+        aggregate: { type: 'person', id: primary.id, version: primary.version },
+        summary: `Merged ${duplicate.firstName} ${duplicate.lastName} into ${primary.firstName} ${primary.lastName}.`,
+        data: { duplicatePersonId: duplicate.id, combinedParticipations },
+      })
+      return { person: primary, duplicatePersonId: duplicate.id, combinedParticipations }
+    }
+
+    case 'crm.segment.create': {
+      const mode = assertOneOf(input.mode, 'mode', ['dynamic', 'static'] as const)
+      const filtersInput = input.filters === undefined ? {} : assertRecord(input.filters, 'filters')
+      const filters: CrmSegment['filters'] = {}
+      for (const field of ['company', 'title', 'tag'] as const) {
+        if (filtersInput[field] !== undefined) {
+          filters[field] = assertString(filtersInput[field], `filters.${field}`)
+        }
+      }
+      const personIds =
+        mode === 'static' ? [...new Set(assertStringArray(input.personIds ?? [], 'personIds'))] : []
+      for (const personId of personIds) findRequired(state.people, personId, 'person')
+      const segment: CrmSegment = {
+        id: createId('seg'),
+        name: assertString(input.name, 'name'),
+        mode,
+        filters,
+        personIds,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      state.crmSegments.unshift(segment)
+      appendEvent(state, context, {
+        type: 'crm.segment-created',
+        aggregate: { type: 'crm_segment', id: segment.id, version: 1 },
+        summary: `Saved the ${segment.name} segment.`,
+        data: { mode, personCount: personIds.length, filters },
+      })
+      return { segment }
+    }
+
+    case 'crm.pipeline.enroll': {
+      const person = findRequired(state.people, input.personId, 'person')
+      if (state.speakerPipeline.some((entry) => entry.personId === person.id)) {
+        throw new OperationError('DUPLICATE', 'This contact is already in the speaker pipeline.')
+      }
+      const stage = assertOneOf(input.stage, 'stage', [
+        'researching',
+        'identified',
+        'contacted',
+        'interested',
+        'confirmed',
+        'declined',
+      ] as const)
+      const score = input.score === undefined || input.score === null ? null : Number(input.score)
+      if (score !== null && (!Number.isInteger(score) || score < 0 || score > 100)) {
+        throw new OperationError('INVALID_INPUT', 'score must be an integer from 0 to 100.')
+      }
+      const entry: SpeakerPipelineEntry = {
+        id: createId('pipe'),
+        personId: person.id,
+        stage,
+        score,
+        rationale: optionalString(input.rationale),
+        notes: [],
+        history: [{ from: null, to: stage, changedAt: timestamp, changedBy: context.actor.name }],
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      state.speakerPipeline.unshift(entry)
+      appendEvent(state, context, {
+        type: 'crm.pipeline-enrolled',
+        aggregate: { type: 'speaker_pipeline', id: entry.id, version: 1 },
+        summary: `Added ${person.firstName} ${person.lastName} to the speaker pipeline.`,
+        data: { personId: person.id, stage, score },
+      })
+      return { entry, person }
+    }
+
+    case 'crm.pipeline.move': {
+      const entry = findRequired(state.speakerPipeline, input.entryId, 'pipeline entry')
+      const stage: SpeakerPipelineStage = assertOneOf(input.stage, 'stage', [
+        'researching',
+        'identified',
+        'contacted',
+        'interested',
+        'confirmed',
+        'declined',
+      ] as const)
+      if (entry.stage === stage) return { entry, changed: false }
+      const previous = entry.stage
+      entry.stage = stage
+      entry.history.push({
+        from: previous,
+        to: stage,
+        changedAt: timestamp,
+        changedBy: context.actor.name,
+      })
+      entry.updatedAt = timestamp
+      entry.version += 1
+      appendEvent(state, context, {
+        type: 'crm.pipeline-moved',
+        aggregate: { type: 'speaker_pipeline', id: entry.id, version: entry.version },
+        summary: `Moved a speaker prospect from ${previous} to ${stage}.`,
+        data: { personId: entry.personId, from: previous, to: stage },
+      })
+      return { entry, changed: true }
+    }
+
+    case 'crm.pipeline.add-note': {
+      const entry = findRequired(state.speakerPipeline, input.entryId, 'pipeline entry')
+      const note: ContactNote = {
+        id: createId('note'),
+        personId: entry.personId,
+        body: assertString(input.body, 'body'),
+        createdBy: context.actor.name,
+        createdAt: timestamp,
+      }
+      entry.notes.unshift(note)
+      entry.updatedAt = timestamp
+      entry.version += 1
+      appendEvent(state, context, {
+        type: 'crm.pipeline-note-added',
+        aggregate: { type: 'speaker_pipeline', id: entry.id, version: entry.version },
+        summary: 'Added a note to a speaker prospect.',
+        data: { personId: entry.personId, noteId: note.id },
+      })
+      return { entry, note }
+    }
+
     case 'person.import': {
       if (!Array.isArray(input.people) || input.people.length === 0 || input.people.length > 500) {
         throw new OperationError('INVALID_INPUT', 'people must contain between 1 and 500 rows.', {
@@ -2745,6 +3086,25 @@ function applyHandler(
           }
           person[field] = next
           changed.push(field)
+        }
+      }
+      if (input.tags !== undefined) {
+        const tags = [
+          ...new Set(
+            assertStringArray(input.tags, 'tags')
+              .map((tag) => tag.trim().toLowerCase())
+              .filter(Boolean),
+          ),
+        ]
+        if (tags.length > 20 || tags.some((tag) => tag.length > 40)) {
+          throw new OperationError(
+            'INVALID_INPUT',
+            'A contact can have up to 20 tags, each no longer than 40 characters.',
+          )
+        }
+        if (JSON.stringify(tags) !== JSON.stringify(person.tags)) {
+          person.tags = tags
+          changed.push('tags')
         }
       }
       if (changed.length === 0) return { person, changed }

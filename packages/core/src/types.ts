@@ -54,6 +54,54 @@ export interface Person {
   version: number
 }
 
+export interface ContactNote {
+  id: Id
+  personId: Id
+  body: string
+  createdBy: string
+  createdAt: ISODateTime
+}
+
+export interface CrmSegmentFilter {
+  company?: string
+  title?: string
+  tag?: string
+}
+
+export interface CrmSegment {
+  id: Id
+  name: string
+  mode: 'dynamic' | 'static'
+  filters: CrmSegmentFilter
+  personIds: Id[]
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
+}
+
+export type SpeakerPipelineStage =
+  'researching' | 'identified' | 'contacted' | 'interested' | 'confirmed' | 'declined'
+
+export interface SpeakerPipelineTransition {
+  from: SpeakerPipelineStage | null
+  to: SpeakerPipelineStage
+  changedAt: ISODateTime
+  changedBy: string
+}
+
+export interface SpeakerPipelineEntry {
+  id: Id
+  personId: Id
+  stage: SpeakerPipelineStage
+  score: number | null
+  rationale: string
+  notes: ContactNote[]
+  history: SpeakerPipelineTransition[]
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
+}
+
 export interface Participation {
   id: Id
   eventId: Id
@@ -458,6 +506,9 @@ export interface WorkspaceState {
   activeEventId: Id
   events: Event[]
   people: Person[]
+  contactNotes: ContactNote[]
+  crmSegments: CrmSegment[]
+  speakerPipeline: SpeakerPipelineEntry[]
   participations: Participation[]
   requirementDefinitions: RequirementDefinition[]
   requirementInstances: RequirementInstance[]

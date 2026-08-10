@@ -1,5 +1,11 @@
 export { executeOperation } from './engine.ts'
 export {
+  contactConnections,
+  crmDashboard,
+  crmSegmentMembers,
+  duplicateContactGroups,
+} from './crm.ts'
+export {
   createStoredZip,
   createReviewResultsCsv,
   createWorkspaceExportArchive,
