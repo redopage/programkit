@@ -50,6 +50,77 @@ describe('operation HTTP surface', () => {
     expect(jsonExportResponse?.headers.get('content-disposition')).toContain('aie-export.json')
   })
 
+  it('serves portable public program feeds with filters and field visibility', async () => {
+    const repository = new MemoryWorkspaceRepository()
+    const jsonResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/program.json'),
+      repository,
+    )
+    expect(jsonResponse?.status).toBe(200)
+    expect(jsonResponse?.headers.get('content-type')).toBe('application/json; charset=utf-8')
+    expect(jsonResponse?.headers.get('access-control-allow-origin')).toBe('*')
+    const jsonBody = (await jsonResponse?.json()) as {
+      event: { id: string; publishedScheduleVersion: number }
+      sessions: Array<{
+        id: string
+        description?: string
+        room: { id: string } | null
+        track: { id: string } | null
+      }>
+    }
+    expect(jsonBody.event).toMatchObject({ id: 'evt_nyc_2026', publishedScheduleVersion: 3 })
+    expect(jsonBody.sessions).toHaveLength(10)
+    expect(jsonBody.sessions.every((session) => session.description)).toBe(true)
+
+    const sample = jsonBody.sessions.find((session) => session.track && session.room)!
+
+    const filteredResponse = await handleCoreRequest(
+      new Request(
+        `http://local/public/v1/program.json?track=${sample.track!.id}&room=${sample.room!.id}&descriptions=hide`,
+      ),
+      repository,
+    )
+    const filteredBody = (await filteredResponse?.json()) as typeof jsonBody
+    expect(filteredBody.sessions.length).toBeGreaterThan(0)
+    expect(filteredBody.sessions.every((session) => session.track?.id === sample.track!.id)).toBe(
+      true,
+    )
+    expect(filteredBody.sessions.every((session) => session.room?.id === sample.room!.id)).toBe(
+      true,
+    )
+    expect(filteredBody.sessions.every((session) => !('description' in session))).toBe(true)
+
+    const xmlResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/program.xml?track=trk_build'),
+      repository,
+    )
+    expect(xmlResponse?.headers.get('content-type')).toBe('application/xml; charset=utf-8')
+    const xml = await xmlResponse!.text()
+    expect(xml).toContain('<program eventId="evt_nyc_2026" version="3">')
+    expect(xml).toContain('<track id="trk_build"')
+    expect(xml).toContain('<speakers>')
+
+    const calendarResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/program.ics'),
+      repository,
+    )
+    expect(calendarResponse?.headers.get('content-type')).toBe('text/calendar; charset=utf-8')
+    expect(calendarResponse?.headers.get('content-disposition')).toContain(
+      'aie-nyc-2026-program.ics',
+    )
+    const calendar = await calendarResponse!.text()
+    expect(calendar).toContain('BEGIN:VCALENDAR\r\n')
+    expect(calendar.match(/BEGIN:VEVENT/gu)).toHaveLength(10)
+    expect(calendar).toContain('LOCATION:')
+
+    const optionsResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/program.json', { method: 'OPTIONS' }),
+      repository,
+    )
+    expect(optionsResponse?.status).toBe(204)
+    expect(optionsResponse?.headers.get('access-control-allow-origin')).toBe('*')
+  })
+
   it('serves event-scoped, paginated integration resources', async () => {
     const repository = new MemoryWorkspaceRepository()
 

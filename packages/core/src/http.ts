@@ -327,6 +327,150 @@ function includesQuery(query: string, values: Array<string | null | undefined>) 
   return values.some((value) => value?.toLocaleLowerCase().includes(query))
 }
 
+function publicFeedHeaders(contentType: string, extra: HeadersInit = {}) {
+  return {
+    'access-control-allow-methods': 'GET, OPTIONS',
+    'access-control-allow-origin': '*',
+    'cache-control': 'public, max-age=60',
+    'content-type': contentType,
+    ...extra,
+  }
+}
+
+function publicProgramFeed(state: WorkspaceState, url: URL) {
+  const event = state.events.find((entry) => entry.id === state.activeEventId)
+  if (!event) return null
+  const track = url.searchParams.get('track')
+  const room = url.searchParams.get('room')
+  const includeDescriptions = url.searchParams.get('descriptions') !== 'hide'
+  const sessions = publicAgenda(state)
+    .filter(
+      (entry) =>
+        entry.session != null &&
+        (!track || entry.track?.id === track) &&
+        (!room || entry.room?.id === room),
+    )
+    .map((entry) => ({
+      id: entry.session!.id,
+      title: entry.session!.title,
+      ...(includeDescriptions ? { description: entry.session!.summary } : {}),
+      format: entry.session!.format,
+      startsAt: entry.placement.startsAt,
+      endsAt: entry.placement.endsAt,
+      room: entry.room ? { id: entry.room.id, name: entry.room.name } : null,
+      track: entry.track
+        ? { id: entry.track.id, name: entry.track.name, color: entry.track.color }
+        : null,
+      speakers: entry.speakers.map((speaker) => ({
+        id: speaker.id,
+        name: speaker.name,
+        title: speaker.title,
+        company: speaker.company,
+      })),
+    }))
+  return {
+    event: {
+      id: event.id,
+      name: event.name,
+      slug: event.slug,
+      venue: event.venue,
+      city: event.city,
+      startsAt: event.startsAt,
+      endsAt: event.endsAt,
+      timezone: event.timezone,
+      publishedScheduleVersion: event.publishedScheduleVersion,
+    },
+    sessions,
+  }
+}
+
+function xmlEscape(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
+}
+
+function publicProgramXml(feed: NonNullable<ReturnType<typeof publicProgramFeed>>) {
+  const event = feed.event
+  const sessions = feed.sessions
+    .map(
+      (session) => `  <session id="${xmlEscape(session.id)}">
+    <title>${xmlEscape(session.title)}</title>
+${session.description !== undefined ? `    <description>${xmlEscape(session.description)}</description>\n` : ''}    <format>${xmlEscape(session.format)}</format>
+    <startsAt>${xmlEscape(session.startsAt)}</startsAt>
+    <endsAt>${xmlEscape(session.endsAt)}</endsAt>
+    <room${session.room ? ` id="${xmlEscape(session.room.id)}"` : ''}>${xmlEscape(session.room?.name ?? '')}</room>
+    <track${session.track ? ` id="${xmlEscape(session.track.id)}" color="${xmlEscape(session.track.color)}"` : ''}>${xmlEscape(session.track?.name ?? '')}</track>
+    <speakers>
+${session.speakers
+  .map(
+    (speaker) =>
+      `      <speaker id="${xmlEscape(speaker.id)}" title="${xmlEscape(speaker.title)}" company="${xmlEscape(speaker.company)}">${xmlEscape(speaker.name)}</speaker>`,
+  )
+  .join('\n')}
+    </speakers>
+  </session>`,
+    )
+    .join('\n')
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<program eventId="${xmlEscape(event.id)}" version="${event.publishedScheduleVersion ?? ''}">
+  <event>
+    <name>${xmlEscape(event.name)}</name>
+    <venue>${xmlEscape(event.venue)}</venue>
+    <city>${xmlEscape(event.city)}</city>
+    <startsAt>${xmlEscape(event.startsAt)}</startsAt>
+    <endsAt>${xmlEscape(event.endsAt)}</endsAt>
+    <timezone>${xmlEscape(event.timezone)}</timezone>
+  </event>
+  <sessions>
+${sessions}
+  </sessions>
+</program>`
+}
+
+function calendarEscape(value: string) {
+  return value
+    .replaceAll('\\', '\\\\')
+    .replaceAll(',', '\\,')
+    .replaceAll(';', '\\;')
+    .replaceAll(/\r?\n/gu, '\\n')
+}
+
+function calendarDate(value: string) {
+  return new Date(value).toISOString().replaceAll(/[-:]/gu, '').replace('.000', '')
+}
+
+function publicProgramCalendar(feed: NonNullable<ReturnType<typeof publicProgramFeed>>) {
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//ProgramKit//Published program//EN',
+    'CALSCALE:GREGORIAN',
+    `X-WR-CALNAME:${calendarEscape(feed.event.name)}`,
+    ...feed.sessions.flatMap((session) => [
+      'BEGIN:VEVENT',
+      `UID:${calendarEscape(session.id)}@programkit.dev`,
+      `DTSTAMP:${calendarDate(feed.event.startsAt)}`,
+      `DTSTART:${calendarDate(session.startsAt)}`,
+      `DTEND:${calendarDate(session.endsAt)}`,
+      `SUMMARY:${calendarEscape(session.title)}`,
+      ...(session.description !== undefined
+        ? [`DESCRIPTION:${calendarEscape(session.description)}`]
+        : []),
+      `LOCATION:${calendarEscape(session.room?.name ?? feed.event.venue)}`,
+      ...(session.speakers.length > 0
+        ? [`CONTACT:${calendarEscape(session.speakers.map((speaker) => speaker.name).join(', '))}`]
+        : []),
+      'END:VEVENT',
+    ]),
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n')
+}
+
 export interface CoreRequestContext {
   actor?: Actor
 }
@@ -510,6 +654,32 @@ export async function handleCoreRequest(
         headers: { 'cache-control': 'public, max-age=60' },
       },
     )
+  }
+
+  const publicProgramFormat = path.match(/^\/public\/v1\/program\.(json|xml|ics)$/u)?.[1]
+  if (request.method === 'OPTIONS' && publicProgramFormat) {
+    return new Response(null, { status: 204, headers: publicFeedHeaders('text/plain') })
+  }
+
+  if (request.method === 'GET' && publicProgramFormat) {
+    const state = await repository.read()
+    const feed = publicProgramFeed(state, url)
+    if (!feed) return json({ error: 'Published program not found.' }, { status: 404 })
+    if (publicProgramFormat === 'json') {
+      return new Response(JSON.stringify(feed), {
+        headers: publicFeedHeaders('application/json; charset=utf-8'),
+      })
+    }
+    if (publicProgramFormat === 'xml') {
+      return new Response(publicProgramXml(feed), {
+        headers: publicFeedHeaders('application/xml; charset=utf-8'),
+      })
+    }
+    return new Response(publicProgramCalendar(feed), {
+      headers: publicFeedHeaders('text/calendar; charset=utf-8', {
+        'content-disposition': `attachment; filename="${feed.event.slug}-program.ics"`,
+      }),
+    })
   }
 
   if (request.method === 'GET' && path === '/public/v1/program/state') {

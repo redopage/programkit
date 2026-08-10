@@ -37,6 +37,7 @@ import {
 
 type ScheduleMode = 'grid' | 'list'
 type SharedProgramView = 'agenda' | 'sessions' | 'speakers' | 'itinerary' | 'gallery'
+type SharedOutputFormat = 'link' | 'embed' | 'json' | 'xml' | 'ical'
 
 const sharedProgramViews: Array<{ id: SharedProgramView; label: string }> = [
   { id: 'agenda', label: 'Agenda' },
@@ -44,6 +45,14 @@ const sharedProgramViews: Array<{ id: SharedProgramView; label: string }> = [
   { id: 'speakers', label: 'Speakers list' },
   { id: 'itinerary', label: 'Schedule itinerary' },
   { id: 'gallery', label: 'Speaker gallery' },
+]
+
+const sharedOutputFormats: Array<{ id: SharedOutputFormat; label: string }> = [
+  { id: 'link', label: 'Hosted view' },
+  { id: 'embed', label: 'Iframe embed' },
+  { id: 'json', label: 'JSON feed' },
+  { id: 'xml', label: 'XML feed' },
+  { id: 'ical', label: 'iCal feed' },
 ]
 
 function escapeHtmlAttribute(value: string) {
@@ -145,9 +154,12 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const [moveFeedback, setMoveFeedback] = useState<MoveFeedback | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [sharedView, setSharedView] = useState<SharedProgramView>('agenda')
+  const [sharedOutputFormat, setSharedOutputFormat] = useState<SharedOutputFormat>('embed')
   const [sharedTrackId, setSharedTrackId] = useState('all')
   const [sharedRoomId, setSharedRoomId] = useState('all')
-  const [copied, setCopied] = useState<'link' | 'embed' | null>(null)
+  const [sharedAccent, setSharedAccent] = useState('#2563eb')
+  const [sharedShowDescriptions, setSharedShowDescriptions] = useState(true)
+  const [copied, setCopied] = useState(false)
   const eventForDay = payload?.state.events.find(
     (entry) => entry.id === payload.state.activeEventId,
   )
@@ -221,10 +233,30 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   publicUrl.searchParams.set('view', sharedView)
   if (sharedTrackId !== 'all') publicUrl.searchParams.set('track', sharedTrackId)
   if (sharedRoomId !== 'all') publicUrl.searchParams.set('room', sharedRoomId)
+  publicUrl.searchParams.set('accent', sharedAccent)
+  if (!sharedShowDescriptions) publicUrl.searchParams.set('descriptions', 'hide')
   const publicUrlText = publicUrl.toString()
   const embedCode = `<iframe src="${escapeHtmlAttribute(publicUrlText)}" title="${escapeHtmlAttribute(`${event.name} public program`)}" loading="lazy" style="width:100%;min-height:720px;border:0"></iframe>`
+  const feedExtension =
+    sharedOutputFormat === 'ical' ? 'ics' : sharedOutputFormat === 'xml' ? 'xml' : 'json'
+  const feedUrl = new URL(
+    `/public/v1/program.${feedExtension}`,
+    typeof window === 'undefined' ? 'https://app.programkit.dev' : window.location.origin,
+  )
+  feedUrl.searchParams.set('event', state.activeEventId)
+  if (sharedTrackId !== 'all') feedUrl.searchParams.set('track', sharedTrackId)
+  if (sharedRoomId !== 'all') feedUrl.searchParams.set('room', sharedRoomId)
+  if (!sharedShowDescriptions) feedUrl.searchParams.set('descriptions', 'hide')
+  const shareValue =
+    sharedOutputFormat === 'link'
+      ? publicUrlText
+      : sharedOutputFormat === 'embed'
+        ? embedCode
+        : feedUrl.toString()
+  const outputLabel =
+    sharedOutputFormats.find((format) => format.id === sharedOutputFormat)?.label ?? 'Output'
 
-  async function copyShareValue(value: string, kind: 'link' | 'embed') {
+  async function copyShareValue(value: string) {
     try {
       await navigator.clipboard.writeText(value)
     } catch {
@@ -237,7 +269,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       document.execCommand('copy')
       textarea.remove()
     }
-    setCopied(kind)
+    setCopied(true)
   }
 
   function startDragging(event: DragEvent<HTMLButtonElement>, placementId: string) {
@@ -306,7 +338,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
             <Button
               variant="secondary"
               onClick={() => {
-                setCopied(null)
+                setCopied(false)
                 setShareOpen(true)
               }}
             >
@@ -628,31 +660,52 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         open={shareOpen}
         onClose={() => setShareOpen(false)}
         title="Share the public program"
-        description="Choose a published view, then copy a link or an embed snippet."
+        description="Choose a view, format, and the fields you want to publish."
         footer={
           <>
-            <Button variant="secondary" onClick={() => void copyShareValue(publicUrlText, 'link')}>
-              <LinkIcon className="size-4" />
-              {copied === 'link' ? 'Link copied' : 'Copy link'}
+            <Button variant="secondary" onClick={() => setShareOpen(false)}>
+              Done
             </Button>
-            <Button variant="primary" onClick={() => void copyShareValue(embedCode, 'embed')}>
-              <CodeBracketIcon className="size-4" />
-              {copied === 'embed' ? 'Embed copied' : 'Copy embed'}
+            <Button variant="primary" onClick={() => void copyShareValue(shareValue)}>
+              {sharedOutputFormat === 'embed' ? (
+                <CodeBracketIcon className="size-4" />
+              ) : (
+                <LinkIcon className="size-4" />
+              )}
+              {copied ? 'Copied' : `Copy ${sharedOutputFormat === 'embed' ? 'embed' : 'URL'}`}
             </Button>
           </>
         }
       >
         <div className="space-y-6">
-          <div className="grid min-w-0 gap-4 sm:grid-cols-3">
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+            <Field label="Output" htmlFor="shared-output-format">
+              <select
+                id="shared-output-format"
+                value={sharedOutputFormat}
+                onChange={(interaction) => {
+                  setSharedOutputFormat(interaction.target.value as SharedOutputFormat)
+                  setCopied(false)
+                }}
+                className={selectControl}
+              >
+                {sharedOutputFormats.map((format) => (
+                  <option key={format.id} value={format.id}>
+                    {format.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="Program view" htmlFor="shared-program-view">
               <select
                 id="shared-program-view"
                 value={sharedView}
+                disabled={sharedOutputFormat !== 'link' && sharedOutputFormat !== 'embed'}
                 onChange={(interaction) => {
                   setSharedView(interaction.target.value as SharedProgramView)
-                  setCopied(null)
+                  setCopied(false)
                 }}
-                className="focus-ring-control min-h-11 rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+                className={selectControl}
               >
                 {sharedProgramViews.map((view) => (
                   <option key={view.id} value={view.id}>
@@ -667,9 +720,9 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                 value={sharedTrackId}
                 onChange={(interaction) => {
                   setSharedTrackId(interaction.target.value)
-                  setCopied(null)
+                  setCopied(false)
                 }}
-                className="focus-ring-control min-h-11 rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+                className={selectControl}
               >
                 <option value="all">All tracks</option>
                 {activeTracks.map((track) => (
@@ -685,9 +738,9 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                 value={sharedRoomId}
                 onChange={(interaction) => {
                   setSharedRoomId(interaction.target.value)
-                  setCopied(null)
+                  setCopied(false)
                 }}
-                className="focus-ring-control min-h-11 rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+                className={selectControl}
               >
                 <option value="all">All rooms</option>
                 {activeRooms.map((room) => (
@@ -699,20 +752,47 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
             </Field>
           </div>
 
-          <Field label="Shareable URL" htmlFor="shared-program-url">
-            <input
-              id="shared-program-url"
-              readOnly
-              value={publicUrlText}
-              className={cx(textControl, 'w-full font-mono text-sm')}
-              onFocus={(interaction) => interaction.currentTarget.select()}
-            />
-          </Field>
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+            <Field label="Accent color" htmlFor="shared-program-accent">
+              <div className="flex min-h-11 items-center gap-3 rounded-xl bg-white px-3 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9">
+                <input
+                  id="shared-program-accent"
+                  type="color"
+                  value={sharedAccent}
+                  disabled={sharedOutputFormat !== 'link' && sharedOutputFormat !== 'embed'}
+                  onChange={(interaction) => {
+                    setSharedAccent(interaction.target.value)
+                    setCopied(false)
+                  }}
+                  className="h-6 w-8 cursor-pointer rounded border-0 bg-transparent p-0 disabled:cursor-not-allowed disabled:opacity-40"
+                />
+                <span className="font-mono text-sm text-zinc-600">{sharedAccent}</span>
+              </div>
+            </Field>
+            <Field label="Fields" htmlFor="shared-program-descriptions">
+              <label
+                htmlFor="shared-program-descriptions"
+                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl bg-white px-3 text-base text-zinc-700 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+              >
+                <input
+                  id="shared-program-descriptions"
+                  type="checkbox"
+                  checked={sharedShowDescriptions}
+                  onChange={(interaction) => {
+                    setSharedShowDescriptions(interaction.target.checked)
+                    setCopied(false)
+                  }}
+                  className="size-4 rounded border-zinc-300 accent-blue-600"
+                />
+                Show session descriptions
+              </label>
+            </Field>
+          </div>
 
           <div>
-            <p className="text-base font-medium text-zinc-950 sm:text-sm">Embed snippet</p>
+            <p className="text-base font-medium text-zinc-950 sm:text-sm">{outputLabel}</p>
             <pre className="mt-1.5 max-h-36 overflow-auto whitespace-pre-wrap rounded-2xl bg-zinc-950 p-4 text-sm text-zinc-200">
-              <code>{embedCode}</code>
+              <code>{shareValue}</code>
             </pre>
           </div>
 

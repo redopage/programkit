@@ -9,7 +9,7 @@ import {
   MapPinIcon,
   PlusIcon,
 } from '@heroicons/react/16/solid'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
 import { publicAgenda } from '@programkit/core'
 
@@ -54,6 +54,17 @@ function initialTrack() {
 function initialRoom() {
   if (typeof window === 'undefined') return 'all'
   return new URLSearchParams(window.location.search).get('room') ?? 'all'
+}
+
+function initialAccent() {
+  if (typeof window === 'undefined') return '#2563eb'
+  const requested = new URLSearchParams(window.location.search).get('accent') ?? ''
+  return /^#[\da-f]{6}$/iu.test(requested) ? requested : '#2563eb'
+}
+
+function initialShowDescriptions() {
+  if (typeof window === 'undefined') return true
+  return new URLSearchParams(window.location.search).get('descriptions') !== 'hide'
 }
 
 function isPublishedSession(item: AgendaItem): item is PublishedSession {
@@ -306,6 +317,8 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
   const [trackId, setTrackId] = useState(initialTrack)
   const [roomId, setRoomId] = useState(initialRoom)
   const [format, setFormat] = useState('all')
+  const [programAccent] = useState(initialAccent)
+  const [showDescriptions] = useState(initialShowDescriptions)
   const [selectedDay, setSelectedDay] = useState('')
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [selectedSpeakerId, setSelectedSpeakerId] = useState<string | null>(null)
@@ -474,7 +487,10 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
   }
 
   return (
-    <div className="min-h-dvh bg-white text-zinc-950">
+    <div
+      className="min-h-dvh bg-white text-zinc-950"
+      style={{ '--program-accent': programAccent } as CSSProperties}
+    >
       <header className="sticky top-0 z-30 border-b border-zinc-950/5 bg-white/95 backdrop-blur">
         <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -552,9 +568,10 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                     className={cx(
                       'focus-ring border-b-2 py-4 text-base sm:text-sm',
                       view === item.id
-                        ? 'border-blue-600 font-medium text-zinc-950'
+                        ? 'font-medium text-zinc-950'
                         : 'border-transparent text-zinc-500 hover:text-zinc-950',
                     )}
+                    style={view === item.id ? { borderColor: programAccent } : undefined}
                     onClick={() => updateShareableView(item.id)}
                   >
                     {item.label}
@@ -664,21 +681,26 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                           {eventDayLabel(item.placement.startsAt, event.timezone)} ·{' '}
                           {eventTimeRange(item, event.timezone)} · {item.room?.name}
                         </p>
-                        <p
-                          className={cx(
-                            'pt-3 text-pretty text-base/7 text-zinc-600',
-                            !expanded && 'line-clamp-2',
-                          )}
-                        >
-                          {item.session.summary}
-                        </p>
-                        <button
-                          type="button"
-                          className="focus-ring mt-1 rounded-md text-base font-medium text-blue-700 hover:text-blue-800 sm:text-sm"
-                          onClick={() => toggleExpanded(item.session.id)}
-                        >
-                          {expanded ? 'Show less' : 'Show more'}
-                        </button>
+                        {showDescriptions ? (
+                          <>
+                            <p
+                              className={cx(
+                                'pt-3 text-pretty text-base/7 text-zinc-600',
+                                !expanded && 'line-clamp-2',
+                              )}
+                            >
+                              {item.session.summary}
+                            </p>
+                            <button
+                              type="button"
+                              className="focus-ring mt-1 rounded-md text-base font-medium hover:opacity-75 sm:text-sm"
+                              style={{ color: programAccent }}
+                              onClick={() => toggleExpanded(item.session.id)}
+                            >
+                              {expanded ? 'Show less' : 'Show more'}
+                            </button>
+                          </>
+                        ) : null}
                         <div className="flex min-w-0 flex-col gap-4 pt-5 sm:flex-row sm:items-end sm:justify-between">
                           <ul role="list" className="min-w-0 space-y-2">
                             {item.speakers.map((speaker) => (
@@ -798,9 +820,11 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                       >
                         {item.session.title}
                       </button>
-                      <p className="pt-2 text-pretty text-base/7 text-zinc-600">
-                        {item.session.summary}
-                      </p>
+                      {showDescriptions ? (
+                        <p className="pt-2 text-pretty text-base/7 text-zinc-600">
+                          {item.session.summary}
+                        </p>
+                      ) : null}
                       <p className="pt-3 text-base text-zinc-500 sm:text-sm">
                         {item.speakers
                           .map(
@@ -867,12 +891,14 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                 </dd>
               </div>
             </dl>
-            <div>
-              <h3 className="text-base font-semibold text-zinc-950">About this session</h3>
-              <p className="pt-2 text-pretty text-base/7 text-zinc-600">
-                {selectedSession.session.summary}
-              </p>
-            </div>
+            {showDescriptions ? (
+              <div>
+                <h3 className="text-base font-semibold text-zinc-950">About this session</h3>
+                <p className="pt-2 text-pretty text-base/7 text-zinc-600">
+                  {selectedSession.session.summary}
+                </p>
+              </div>
+            ) : null}
             <div>
               <h3 className="text-base font-semibold text-zinc-950">Speakers</h3>
               <ul role="list" className="space-y-2 pt-3">

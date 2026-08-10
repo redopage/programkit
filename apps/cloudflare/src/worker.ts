@@ -338,6 +338,8 @@ function hostedPublicEventId(request: Request, url: URL) {
     return requested && hostedEventIdPattern.test(requested) ? requested : null
   }
   if (url.pathname.startsWith('/public/')) {
+    const requested = url.searchParams.get('event')
+    if (requested && hostedEventIdPattern.test(requested)) return requested
     const selected = cookie(request, publicEventCookieName)
     return selected && hostedEventIdPattern.test(selected) ? selected : null
   }

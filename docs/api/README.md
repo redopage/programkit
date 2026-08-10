@@ -152,6 +152,9 @@ ProgramKit does not return the operator workspace to every client.
 | ------------------ | ------------------------------------------ |
 | Public program     | `/public/v1/program/state`                 |
 | Public agenda data | `/public/agenda.json`                      |
+| Public JSON feed   | `/public/v1/program.json`                  |
+| Public XML feed    | `/public/v1/program.xml`                   |
+| Public iCal feed   | `/public/v1/program.ics`                   |
 | Public CFP         | `/public/v1/submission-forms/{slug}/state` |
 | Reviewer workspace | `/public/v1/reviewers/{reviewerId}/state`  |
 | Speaker portal     | `/api/v1/portal/{participationId}/state`   |
@@ -166,6 +169,12 @@ reviewer's queue and scorecard operations. The Worker verifies the event and set
 event-routing cookie for the public projection requests made by that page. This cookie cannot call
 operator endpoints or select another event. Local and disposable demo workspaces omit the event
 query because their workspace is already scoped by the host.
+
+The JSON, XML, and iCal feeds accept `event`, `track`, `room`, and `descriptions=hide` query
+parameters. They use the same published-program selector as the interactive views, allow
+cross-origin `GET` requests, and cache for one minute. JSON and XML are data feeds for websites and
+integrations. iCal returns a downloadable event calendar with one entry per matching published
+session.
 
 ## External API key contract
 
