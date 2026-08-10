@@ -209,8 +209,10 @@ condition used in the workspace.
 
 `WorkspaceRepository` is the testable boundary between domain transitions and Durable Object
 storage. Identity, email, webhooks, R2, queues, Airtable credentials, and secret management are
-composed in `apps/cloudflare`. Hosted staff identity and magic-link email are implemented there;
-participant identity, R2, and the product-delivery outbox remain incomplete.
+composed in `apps/cloudflare`. Hosted staff and participant identity, magic-link email, scoped R2
+uploads, and the product-delivery outbox are implemented there. Remaining production hardening is
+tracked in the identity, file-storage, and integration documents rather than hidden behind a
+second runtime path.
 
 See [Storage and integrations](docs/architecture/storage-and-integrations.md) for service ownership
 and [Deployment](DEPLOYMENT.md) for the supported Cloudflare stack and production binding sequence.

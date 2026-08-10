@@ -20,6 +20,8 @@ async function body(response: Response) {
       user: { id: string; name: string; email: string }
       events: Array<{
         id: string
+        name: string
+        slug: string
         membershipId?: string
         membershipVersion?: number
         role: string
@@ -160,6 +162,64 @@ describe('AuthDurableObject membership projections', () => {
     )
     expect(invalidResponse.status).toBe(401)
     await expect(invalidResponse.json()).resolves.toEqual({ ok: false })
+  })
+
+  it('creates multiple events and honors the selected event on the next request', async () => {
+    const signupResponse = await auth.fetch(
+      request('/internal/auth/password', {
+        email: 'multi-event@example.com',
+        name: 'Jordan Alvarez',
+        password: 'correct horse battery staple',
+        intent: 'signup',
+        ipHash: 'multi-event-test',
+      }),
+    )
+    const signup = await body(signupResponse)
+    const sessionToken = signup.sessionToken!
+    const firstEventId = signup.account!.activeEventId
+
+    const createdResponse = await auth.fetch(
+      request('/internal/events/create', {
+        token: sessionToken,
+        name: 'DevFlow Conf 2027',
+      }),
+    )
+    expect(createdResponse.status).toBe(201)
+    const created = (await createdResponse.json()) as {
+      ok: boolean
+      event: { id: string; name: string; slug: string; role: string }
+    }
+    expect(created).toMatchObject({
+      ok: true,
+      event: { name: 'DevFlow Conf 2027', slug: 'devflow-conf-2027', role: 'owner' },
+    })
+    expect(created.event.id).toMatch(/^evt_[a-f0-9]{24}$/u)
+
+    const duplicateResponse = await auth.fetch(
+      request('/internal/events/create', {
+        token: sessionToken,
+        name: 'DevFlow Conf 2027',
+      }),
+    )
+    const duplicate = (await duplicateResponse.json()) as {
+      ok: boolean
+      event: { id: string; slug: string }
+    }
+    expect(duplicateResponse.status).toBe(201)
+    expect(duplicate.event).toMatchObject({ slug: 'devflow-conf-2027-2' })
+
+    const selectedResponse = await auth.fetch(
+      request('/internal/auth/session', {
+        token: sessionToken,
+        preferredEventId: created.event.id,
+      }),
+    )
+    const selected = await body(selectedResponse)
+    expect(selected.account!.activeEventId).toBe(created.event.id)
+    expect(selected.account!.events).toHaveLength(3)
+    expect(selected.account!.events.map((event) => event.id)).toEqual(
+      expect.arrayContaining([firstEventId, created.event.id, duplicate.event.id]),
+    )
   })
 
   it('does not let password signup claim an existing passwordless account', async () => {
