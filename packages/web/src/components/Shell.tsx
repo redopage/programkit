@@ -1,4 +1,5 @@
 import {
+  ArrowPathIcon,
   ArrowRightStartOnRectangleIcon,
   ArrowTopRightOnSquareIcon,
   Bars3Icon,
@@ -236,6 +237,11 @@ function SidebarUtilities({
             label: copied ? 'Link copied' : 'Copy demo link',
             icon: copied ? CheckIcon : LinkIcon,
             action: () => void copyLink(),
+          },
+          {
+            label: 'Demo options',
+            icon: ArrowPathIcon,
+            action: () => open('/demo'),
           },
         ]
       : []),

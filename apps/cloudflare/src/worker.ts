@@ -1427,10 +1427,6 @@ export default {
       }
     }
 
-    if (profile === 'hosted-demo' && url.pathname === '/demo') {
-      return redirect(url, '/')
-    }
-
     if (profile === 'hosted-app' && (url.pathname === '/demo' || demoIdFromPath(url.pathname))) {
       return redirect(url, '/')
     }

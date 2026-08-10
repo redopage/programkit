@@ -92,22 +92,36 @@ export function DemoView() {
                   Continue demo
                   <ArrowRightIcon className="size-4" />
                 </Button>
-                <Button variant="secondary" className="w-full" onClick={() => void copyLink()}>
-                  {copied ? (
-                    <CheckIcon className="size-4 fill-emerald-600" />
-                  ) : (
-                    <LinkIcon className="size-4" />
-                  )}
-                  {copied ? 'Copied' : 'Copy private link'}
-                </Button>
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   className="w-full"
-                  onClick={() => void leaveDemo()}
-                  disabled={leaving}
+                  onClick={() => void createDemo()}
+                  disabled={creating || leaving}
                 >
-                  {leaving ? 'Leaving…' : 'Leave demo'}
+                  {creating ? 'Creating demo…' : 'Start a new demo'}
                 </Button>
+                <div className="flex items-center justify-center gap-4 pt-1 text-sm text-zinc-500">
+                  <button
+                    type="button"
+                    className="focus-ring inline-flex items-center gap-1.5 rounded-md underline-offset-4 hover:text-zinc-950 hover:underline"
+                    onClick={() => void copyLink()}
+                  >
+                    {copied ? (
+                      <CheckIcon className="size-3.5 fill-emerald-600" />
+                    ) : (
+                      <LinkIcon className="size-3.5" />
+                    )}
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
+                  <button
+                    type="button"
+                    className="focus-ring rounded-md underline-offset-4 hover:text-zinc-950 hover:underline"
+                    onClick={() => void leaveDemo()}
+                    disabled={leaving || creating}
+                  >
+                    {leaving ? 'Leaving…' : 'Leave demo'}
+                  </button>
+                </div>
               </>
             ) : (
               <Button
@@ -125,7 +139,7 @@ export function DemoView() {
 
           <p className="pt-5 text-pretty text-base/7 text-zinc-500 sm:text-sm/6">
             {current
-              ? 'The workspace is deleted when its seven-day demo ends.'
+              ? 'A new demo gets a new private link. This one keeps working until it expires.'
               : 'Private link. Sample data only. Deleted after seven days.'}
           </p>
         </div>
