@@ -29,9 +29,9 @@ import {
   schedulePublishPreflight,
   submissionAnswerByPurpose,
   submissionAnswerDisplayByPurpose,
+  submissionAnswerErrors,
   submissionDecisionReadiness,
   submissionReviewSummary,
-  visibleSubmissionFormFields,
 } from './selectors.ts'
 import { createSeedState } from './seed.ts'
 import type {
@@ -725,44 +725,8 @@ function assertSubmissionFormAccepting(form: SubmissionForm, at: string) {
   throw new OperationError('FORM_CLOSED', message)
 }
 
-function answerIsEmpty(value: SubmissionAnswers[string] | undefined) {
-  return (
-    value === undefined ||
-    value === null ||
-    value === false ||
-    (typeof value === 'string' && value.trim().length === 0) ||
-    (Array.isArray(value) && value.length === 0)
-  )
-}
-
 function validateAnswersForSubmission(state: WorkspaceState, submission: Submission) {
-  const visibleFields = visibleSubmissionFormFields(state, submission.formId, submission.answers)
-  const errors: Record<string, string> = {}
-  for (const field of visibleFields) {
-    const value = submission.answers[field.key]
-    if (field.required && answerIsEmpty(value)) errors[field.key] = `${field.label} is required.`
-    if (answerIsEmpty(value)) continue
-    if (field.kind === 'email' && typeof value === 'string' && !/^\S+@\S+\.\S+$/u.test(value)) {
-      errors[field.key] = 'Enter a valid email address.'
-    }
-    if (field.kind === 'url' && typeof value === 'string') {
-      try {
-        new URL(value)
-      } catch {
-        errors[field.key] = 'Enter a valid URL.'
-      }
-    }
-    if (field.kind === 'select' && typeof value === 'string') {
-      if (!field.options.some((option) => option.value === value)) {
-        errors[field.key] = 'Choose one of the available options.'
-      }
-    }
-    if (field.kind === 'multi_select' && Array.isArray(value)) {
-      if (value.some((entry) => !field.options.some((option) => option.value === entry))) {
-        errors[field.key] = 'Choose only available options.'
-      }
-    }
-  }
+  const errors = submissionAnswerErrors(state, submission.formId, submission.answers)
   if (Object.keys(errors).length > 0) {
     throw new OperationError('INVALID_INPUT', 'Complete the required submission fields.', errors)
   }

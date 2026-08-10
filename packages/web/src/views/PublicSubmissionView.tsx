@@ -1,8 +1,9 @@
 import { CheckCircleIcon, ClockIcon } from '@heroicons/react/16/solid'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
   submissionFormAvailability,
+  submissionAnswerErrors,
   visibleSubmissionFormFields,
   type Event as ProgramEvent,
   type SubmissionAnswers,
@@ -61,6 +62,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     recipientEmail: string
     receiptStatus: SubmissionReceiptDeliveryStatus | null
   } | null>(null)
+  const focusErrorsRef = useRef(false)
   const activeKind = kind ?? form?.allowedKinds[0] ?? 'abstract'
   const visibleFields = useMemo(
     () => (state && form ? visibleSubmissionFormFields(state, form.id, answers) : []),
@@ -87,6 +89,14 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
       setSpeakerAccessKey(externalAccess.session.submissionAccessKey)
     }
   }, [externalAccess.session, form, state])
+
+  useEffect(() => {
+    if (!focusErrorsRef.current) return
+    const firstInvalidField = visibleFields.find((field) => fieldErrors[field.key])
+    if (!firstInvalidField) return
+    document.getElementById(`submission-answer-${firstInvalidField.id}`)?.focus()
+    focusErrorsRef.current = false
+  }, [fieldErrors, visibleFields])
 
   if (!payload || !form || !event) {
     return (
@@ -178,6 +188,12 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const errors = submissionAnswerErrors(state!, form!.id, answers)
+    if (Object.keys(errors).length > 0) {
+      focusErrorsRef.current = true
+      setFieldErrors(errors)
+      return
+    }
     const created = await createDraft('Draft saved.')
     if (!created.ok) {
       setFieldErrors(

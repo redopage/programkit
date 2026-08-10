@@ -860,6 +860,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
         icon: CalendarDaysIcon,
         keywords: ['public', 'embed', 'attendees'],
         default: true,
+        external: true,
       },
     ]
     const openForm = payload?.state.submissionForms.find(

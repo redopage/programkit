@@ -31,6 +31,8 @@ export interface ProgramCommand {
   shortcut?: readonly [string, string]
   default?: boolean
   meta?: string
+  /** Opens in its own tab instead of replacing the operator console. */
+  external?: boolean
 }
 
 interface CommandCenterProps {
@@ -161,12 +163,27 @@ export function CommandCenter({
 
   const shortcutCommands = useMemo(() => commands.filter((command) => command.shortcut), [commands])
 
+  /**
+   * Keeps the palette and the `g`-prefixed shortcuts on one definition of what
+   * following a command means, so external targets get a tab either way.
+   */
+  const openCommand = useCallback(
+    (command: ProgramCommand) => {
+      if (command.external) {
+        window.open(command.href, '_blank', 'noopener,noreferrer')
+        return
+      }
+      navigate(command.href)
+    },
+    [navigate],
+  )
+
   const runCommand = useCallback(
     (command: ProgramCommand) => {
       close()
-      navigate(command.href)
+      openCommand(command)
     },
-    [close, navigate],
+    [close, openCommand],
   )
 
   useEffect(() => {
@@ -213,7 +230,7 @@ export function CommandCenter({
         clearGoMode()
         if (!command) return
         event.preventDefault()
-        navigate(command.href)
+        openCommand(command)
         return
       }
 
@@ -225,7 +242,7 @@ export function CommandCenter({
 
     document.addEventListener('keydown', handleGlobalKey)
     return () => document.removeEventListener('keydown', handleGlobalKey)
-  }, [applePlatform, clearGoMode, goMode, mode, navigate, onModeChange, shortcutCommands])
+  }, [applePlatform, clearGoMode, goMode, mode, onModeChange, openCommand, shortcutCommands])
 
   useEffect(() => () => clearGoMode(), [clearGoMode])
 
@@ -403,7 +420,10 @@ export function CommandCenter({
                               {items.map(({ command, index }) => {
                                 const Icon = command.icon
                                 const active = index === activeIndex
-                                const current = pathname === command.href.split('?')[0]
+                                // An external target opens beside the console, so it is
+                                // never the page the operator is currently on.
+                                const current =
+                                  !command.external && pathname === command.href.split('?')[0]
                                 return (
                                   <button
                                     key={command.id}

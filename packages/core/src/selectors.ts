@@ -62,6 +62,58 @@ export function visibleSubmissionFormFields(
   return fields.filter((field) => isSubmissionFieldVisible(field, fields, answers))
 }
 
+function submissionAnswerIsEmpty(value: SubmissionAnswerValue | undefined) {
+  return (
+    value === undefined ||
+    value === null ||
+    value === false ||
+    (typeof value === 'string' && value.trim().length === 0) ||
+    (Array.isArray(value) && value.length === 0)
+  )
+}
+
+/**
+ * Validate only the questions a submitter can currently see.
+ *
+ * The public form and the operation boundary both use this selector so conditional
+ * questions, option membership, and field-level messages cannot drift apart.
+ */
+export function submissionAnswerErrors(
+  state: WorkspaceState,
+  formId: string,
+  answers: SubmissionAnswers,
+) {
+  const errors: Record<string, string> = {}
+  for (const field of visibleSubmissionFormFields(state, formId, answers)) {
+    const value = answers[field.key]
+    if (field.required && submissionAnswerIsEmpty(value)) {
+      errors[field.key] = `${field.label} is required.`
+    }
+    if (submissionAnswerIsEmpty(value)) continue
+    if (field.kind === 'email' && typeof value === 'string' && !/^\S+@\S+\.\S+$/u.test(value)) {
+      errors[field.key] = 'Enter a valid email address.'
+    }
+    if (field.kind === 'url' && typeof value === 'string') {
+      try {
+        new URL(value)
+      } catch {
+        errors[field.key] = 'Enter a valid URL.'
+      }
+    }
+    if (field.kind === 'select' && typeof value === 'string') {
+      if (!field.options.some((option) => option.value === value)) {
+        errors[field.key] = 'Choose one of the available options.'
+      }
+    }
+    if (field.kind === 'multi_select' && Array.isArray(value)) {
+      if (value.some((entry) => !field.options.some((option) => option.value === entry))) {
+        errors[field.key] = 'Choose only available options.'
+      }
+    }
+  }
+  return errors
+}
+
 export function submissionAnswerByPurpose(
   state: WorkspaceState,
   submission: Submission,
