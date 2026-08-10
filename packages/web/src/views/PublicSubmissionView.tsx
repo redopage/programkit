@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   submissionFormAvailability,
   visibleSubmissionFormFields,
+  type Event as ProgramEvent,
   type SubmissionAnswers,
   type SubmissionContributor,
+  type SubmissionForm,
   type SubmissionFormField,
   type SubmissionFieldPurpose,
   type SubmissionKind,
@@ -36,6 +38,10 @@ function formatFormDate(value: string, timeZone: string) {
     timeZone,
     timeZoneName: 'short',
   }).format(new Date(value))
+}
+
+function configuredOptions(fields: SubmissionFormField[], purpose: SubmissionFieldPurpose) {
+  return fields.find((field) => field.purpose === purpose)?.options ?? []
 }
 
 export function PublicSubmissionView({ slug }: { slug: string }) {
@@ -297,18 +303,18 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
   }
 
   if (externalAccess.enabled && !externalAccess.session.authenticated) {
+    const formatOptions = configuredOptions(visibleFields, 'session_format')
+    const trackOptions = configuredOptions(visibleFields, 'track')
     return (
       <div className="min-h-dvh bg-white">
         <PublicHeader eventName={event.name} />
         <main className="mx-auto grid min-h-[calc(100dvh-4rem)] max-w-6xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[4fr_7fr] lg:gap-16">
-          <div className="min-w-0">
-            <h2 className="max-w-[18ch] text-balance text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">
-              {form.title}
-            </h2>
-            <p className="max-w-[48ch] pt-3 text-pretty text-base text-zinc-600">
-              Save drafts, return from any device, and follow the program decision.
-            </p>
-          </div>
+          <SubmissionIntroduction
+            form={form}
+            event={event}
+            formatOptions={formatOptions}
+            trackOptions={trackOptions}
+          />
           <ExternalAccessForm
             title="Start your proposal"
             onSubmit={async (input) => {
@@ -328,6 +334,8 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
 
   const proposalFields = visibleFields.filter((field) => !isSpeakerField(field))
   const speakerFields = visibleFields.filter(isSpeakerField)
+  const formatOptions = configuredOptions(visibleFields, 'session_format')
+  const trackOptions = configuredOptions(visibleFields, 'track')
 
   return (
     <div className="min-h-dvh bg-white">
@@ -344,35 +352,13 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
         }
       />
       <main className="mx-auto grid max-w-6xl gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[4fr_7fr] lg:gap-16">
-        <aside className="min-w-0 lg:sticky lg:top-10 lg:self-start">
-          <h1 className="max-w-[18ch] text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
-            {form.title}
-          </h1>
-          <p className="max-w-[48ch] pt-4 text-pretty text-base text-zinc-600">
-            {form.description}
-          </p>
-          <dl className="flex flex-col gap-4 border-t border-zinc-950/5 pt-6 mt-6">
-            <div>
-              <dt className="text-base font-medium text-zinc-950 sm:text-sm">Event</dt>
-              <dd className="text-base text-zinc-500 sm:text-sm">{event.name}</dd>
-            </div>
-            <div>
-              <dt className="text-base font-medium text-zinc-950 sm:text-sm">Location</dt>
-              <dd className="text-base text-zinc-500 sm:text-sm">
-                {event.venue} · {event.city}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-base font-medium text-zinc-950 sm:text-sm">Submissions close</dt>
-              <dd className="flex items-center gap-2 text-zinc-500">
-                <ClockIcon className="size-4 h-lh shrink-0 fill-current" />
-                <p className="text-base sm:text-sm">
-                  {form.closesAt ? formatFormDate(form.closesAt, event.timezone) : 'No close date'}
-                </p>
-              </dd>
-            </div>
-          </dl>
-        </aside>
+        <SubmissionIntroduction
+          form={form}
+          event={event}
+          formatOptions={formatOptions}
+          trackOptions={trackOptions}
+          sticky
+        />
 
         <form className="min-w-0" onSubmit={(event) => void submit(event)} noValidate>
           <div className="flex flex-col gap-10">
@@ -462,6 +448,82 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
           </div>
         </form>
       </main>
+    </div>
+  )
+}
+
+function SubmissionIntroduction({
+  form,
+  event,
+  formatOptions,
+  trackOptions,
+  sticky = false,
+}: {
+  form: SubmissionForm
+  event: ProgramEvent
+  formatOptions: Array<{ value: string; label: string }>
+  trackOptions: Array<{ value: string; label: string }>
+  sticky?: boolean
+}) {
+  return (
+    <aside className={cx('min-w-0', sticky && 'lg:sticky lg:top-10 lg:self-start')}>
+      <h1 className="max-w-[18ch] text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
+        {form.title}
+      </h1>
+      <p className="max-w-[48ch] pt-4 text-pretty text-base text-zinc-600">{form.description}</p>
+      <dl className="mt-6 flex flex-col gap-4 border-t border-zinc-950/5 pt-6">
+        <div>
+          <dt className="text-base font-medium text-zinc-950 sm:text-sm">Event</dt>
+          <dd className="text-base text-zinc-500 sm:text-sm">{event.name}</dd>
+        </div>
+        {event.venue || event.city ? (
+          <div>
+            <dt className="text-base font-medium text-zinc-950 sm:text-sm">Location</dt>
+            <dd className="text-base text-zinc-500 sm:text-sm">
+              {[event.venue, event.city].filter(Boolean).join(' · ')}
+            </dd>
+          </div>
+        ) : null}
+        <div>
+          <dt className="text-base font-medium text-zinc-950 sm:text-sm">Submissions close</dt>
+          <dd className="flex items-center gap-2 text-zinc-500">
+            <ClockIcon className="size-4 h-lh shrink-0 fill-current" />
+            <span className="text-base sm:text-sm">
+              {form.closesAt ? formatFormDate(form.closesAt, event.timezone) : 'No close date'}
+            </span>
+          </dd>
+        </div>
+        {formatOptions.length > 0 ? (
+          <SubmissionOptionSummary label="Formats" options={formatOptions} />
+        ) : null}
+        {trackOptions.length > 0 ? (
+          <SubmissionOptionSummary label="Tracks" options={trackOptions} />
+        ) : null}
+      </dl>
+    </aside>
+  )
+}
+
+function SubmissionOptionSummary({
+  label,
+  options,
+}: {
+  label: string
+  options: Array<{ value: string; label: string }>
+}) {
+  return (
+    <div>
+      <dt className="text-base font-medium text-zinc-950 sm:text-sm">{label}</dt>
+      <dd className="flex flex-wrap gap-1.5 pt-1.5">
+        {options.map((option) => (
+          <span
+            key={option.value}
+            className="rounded-full bg-zinc-100 px-2.5 py-1 text-sm text-zinc-600 ring-1 ring-zinc-950/5"
+          >
+            {option.label}
+          </span>
+        ))}
+      </dd>
     </div>
   )
 }
