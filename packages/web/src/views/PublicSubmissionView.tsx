@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import {
   submissionFormAvailability,
+  submissionAnswerErrors,
   visibleSubmissionFormFields,
   type Event as ProgramEvent,
   type SubmissionAnswers,
@@ -173,6 +174,17 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const errors = submissionAnswerErrors(state!, form!.id, answers)
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      const firstInvalidField = visibleFields.find((field) => errors[field.key])
+      window.requestAnimationFrame(() => {
+        if (firstInvalidField) {
+          document.getElementById(`submission-answer-${firstInvalidField.id}`)?.focus()
+        }
+      })
+      return
+    }
     const created = await createDraft('Draft saved.')
     if (!created.ok) {
       setFieldErrors(

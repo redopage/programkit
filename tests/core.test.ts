@@ -16,6 +16,7 @@ import {
   submissionFormAvailability,
   submissionFormPublishReadiness,
   submissionDecisionReadiness,
+  submissionAnswerErrors,
   submissionAnswerDisplayByPurpose,
   submissionReviewSummary,
   visibleSubmissionFormFields,
@@ -1681,6 +1682,33 @@ describe('ProgramKit operation engine', () => {
       subject: expect.stringContaining('A workshop with a missing plan'),
       status: 'queued',
     })
+  })
+
+  it('shares conditional submission errors with the public form before creating a draft', () => {
+    const state = createSeedState()
+    const baseAnswers = {
+      first_name: 'Nia',
+      last_name: 'Rivera',
+      email: 'not-an-email',
+      biography: 'Nia builds tools for small program teams.',
+      proposal_title: 'A proposal with client-visible errors',
+      abstract: 'A practical session about dependable event operations.',
+      session_format: 'workshop',
+      track: 'not-a-track',
+    }
+
+    expect(submissionAnswerErrors(state, 'frm_cfp_2026', baseAnswers)).toMatchObject({
+      email: 'Enter a valid email address.',
+      track: 'Choose one of the available options.',
+      workshop_outline: 'Workshop plan is required.',
+    })
+
+    expect(
+      submissionAnswerErrors(state, 'frm_cfp_2026', {
+        ...baseAnswers,
+        session_format: 'talk',
+      }),
+    ).not.toHaveProperty('workshop_outline')
   })
 
   it('keeps co-speaker roles attached to a speaker-owned submission', () => {
