@@ -163,9 +163,11 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
                               <p className="truncate text-sm font-medium text-zinc-950">
                                 {person.firstName} {person.lastName}
                               </p>
-                              <p className="truncate text-sm text-zinc-500">
-                                {person.title} · {person.company}
-                              </p>
+                              {person.title || person.company ? (
+                                <p className="truncate text-sm text-zinc-500">
+                                  {[person.title, person.company].filter(Boolean).join(' · ')}
+                                </p>
+                              ) : null}
                             </div>
                           </button>
                         </td>
@@ -461,9 +463,11 @@ function PersonDrawer({
             <p className="text-lg font-semibold text-zinc-950">
               {person.firstName} {person.lastName}
             </p>
-            <p className="text-base text-zinc-500 sm:text-sm">
-              {person.title} at {person.company}
-            </p>
+            {person.title || person.company ? (
+              <p className="text-base text-zinc-500 sm:text-sm">
+                {[person.title, person.company].filter(Boolean).join(' at ')}
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2 pt-2">
               <StatusBadge status={participation.status} />
               <label>
