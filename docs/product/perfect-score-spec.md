@@ -4,6 +4,10 @@ Companion to [competition-endgame.md](competition-endgame.md). That document say
 this one defines, item by item, what a **full-credit** result looks like for all 96 rubric items
 (178 required points + 19 extra credit) and what has to exist for the evaluator to observe it.
 
+> **Status note:** this file is the acceptance specification, not a current gap report. Many
+> historical “Build” notes below have since shipped. Use the area-by-area
+> [evaluator evidence maps](evals/README.md) for current implementation status.
+
 ## How the evaluation actually runs — four facts that change everything
 
 Read `killmysaas-evals` closely and the picture is different from "point the agent at our demo":
@@ -218,8 +222,9 @@ The judge is an LLM reading screenshots. Features must _photograph well_:
 
 - Submit the app origin (not the marketing site). Provide the pre-seeded organizer credentials in
   `evalconfig` `credentials.organizer` **and** support open signup so either path works.
-- The deployment starts effectively empty (the agent builds DevFlow Conf 2027); keep a reset
-  mechanism so we can re-run the full 20-scenario chain ourselves before submitting.
-- Fill `submissionNotes` with the route map, role model, outbox location, and reset instructions.
+- The deployment starts effectively empty (the agent builds DevFlow Conf 2027). Provision a second
+  disposable organizer account for repeat runs; never expose the seeded demo reset to hosted events.
+- Fill `submissionNotes` with the route map, role model, outbox location, and disposable-account
+  fixture instructions.
 - Before submitting: run the eval kit end-to-end at least twice (`npm run eval -- --url …`), fix
   every item where the agent got lost, and keep the best `report.html` as our own evidence.

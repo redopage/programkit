@@ -6,10 +6,14 @@ describes how to run it.
 
 ## Target
 
-Use one fresh seven-day workspace at `demo.programkit.dev/demo/{capability}`. Keep every role and
-public page on that origin because the V1 runner blocks cross-origin navigation and provides no
-external account credentials. Do not run destructive scenarios against `app.programkit.dev` or a
-collaborator's long-lived workspace.
+Use a fresh organizer account at `app.programkit.dev`. Create the fixture event from the empty
+workspace, then keep every role and public page on that origin because the V1 runner blocks
+cross-origin navigation and cannot rely on an external inbox. Use a different disposable organizer
+account for each full run. Do not run destructive scenarios against a collaborator's long-lived
+event, and do not expose the seeded demonstration reset in the hosted app.
+
+The seven-day demo is still the fastest product walkthrough, but its seeded capability actors do
+not prove account signup, event membership, or participant recovery.
 
 ## Evidence rule
 
@@ -27,17 +31,17 @@ not verified evidence of a transition.
 
 ## Role surfaces
 
-| Role      | Demo route                     | Expected boundary                                     |
-| --------- | ------------------------------ | ----------------------------------------------------- |
-| Organizer | `/forms`, `/submissions`, etc. | Full sample-workspace operations                      |
-| Submitter | `/submit/{formSlug}`           | One public form and its allowed submission operations |
-| Reviewer  | Copy from `/reviews`           | Assigned proposals and scorecard operations only      |
-| Speaker   | `/portal/{participationId}`    | One accepted participation and eligible tasks only    |
-| Attendee  | `/agenda?view={view}`          | Five public views of one immutable published program  |
+| Role      | Hosted route                                              | Expected boundary                                                |
+| --------- | --------------------------------------------------------- | ---------------------------------------------------------------- |
+| Organizer | `/`, `/forms`, `/submissions`, and other operator routes  | Verified event membership and role-derived scopes                |
+| Submitter | `/submit/{formSlug}?event={eventId}` then `/access`       | Only submissions matching the participant email                  |
+| Reviewer  | Link copied from `/reviews`                               | Only that reviewer's assignments and scorecard actions           |
+| Speaker   | Link copied from `/people` or recovered through `/access` | One accepted participation, profile, resources, files, and tasks |
+| Attendee  | `/agenda?event={eventId}&view={view}`                     | Five anonymous views of one published program                    |
 
-The demo derives scoped actors from sample participant IDs and reviewer capabilities. Reviewer
-links work on the hosted app without exposing organizer navigation. Account-based reviewer login,
-recovery, and capability rotation remain separate hardening work.
+Reviewer and speaker destinations retain record capabilities. Participant sign-in makes them
+recoverable from another device but does not replace the server capability check or authorize
+organizer routes.
 
 Public program views use `agenda`, `sessions`, `speakers`, `itinerary`, and `gallery`. Add
 `track={trackId}` to verify filtered links and embeds. The itinerary selection must survive a reload,
@@ -51,13 +55,13 @@ Run the workflow in dependency order so later evidence uses real earlier transit
 2. public submission;
 3. reviewer assignment, scoring, and decision;
 4. accepted-speaker profile and requirements;
-5. file delivery when R2 support is complete;
+5. file delivery, versioning, comments, and organizer review;
 6. schedule construction and publication;
 7. public program, embeds, and calendar output;
 8. optional CRM and bonus scenarios.
 
-Reset to a fresh capability when a scenario needs a conflicting starting state. Keep screenshots,
-the capability creation time, relevant IDs, and the git commit together in the evidence record.
+Provision a second disposable account before another full run. Keep screenshots, relevant IDs, the
+Worker version, and the source commit together in the evidence record.
 
 ## What V1 does not score
 

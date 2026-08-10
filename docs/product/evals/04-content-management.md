@@ -52,7 +52,8 @@ Automated core coverage exercises:
 
 ## Evaluator handoff
 
-Use one durable demo capability for the chained evaluator run. It keeps organizer, speaker, public
-agenda, and file endpoints on one origin and in one event state without requiring the browser-only
-grader to leave the site for a magic link. The organizer can copy the generated speaker link from a
-speaker record, then return to the same organizer workspace after the portal steps.
+Use one disposable hosted organizer account for the chained evaluator run. Organizer, speaker,
+public agenda, and file endpoints remain on `app.programkit.dev` in one event state without asking
+the browser-only grader to leave the site for a magic link. The organizer can copy the generated
+speaker link from a speaker record, complete the portal steps in another tab, then return to the
+same organizer workspace.

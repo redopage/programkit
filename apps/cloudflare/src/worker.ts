@@ -417,6 +417,14 @@ export function hostedPublicEventId(request: Request, url: URL) {
   return null
 }
 
+export function isHostedDemoReset(profile: string, method: string, pathname: string) {
+  return (
+    profile === 'hosted-app' &&
+    method === 'POST' &&
+    pathname === '/api/v1/operations/workspace.reset-demo'
+  )
+}
+
 interface ExternalAccessIdentity {
   id: string
   email: string
@@ -2683,6 +2691,13 @@ export default {
         execute: (operation, operationRequest) =>
           executeWorkspaceOperation(stub, operation, operationRequest),
       })
+    }
+
+    if (isHostedDemoReset(profile, request.method, url.pathname)) {
+      return Response.json(
+        { ok: false, error: 'The demonstration reset is not available for hosted events.' },
+        { status: 403, headers: { 'cache-control': 'no-store' } },
+      )
     }
 
     if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/public/')) {

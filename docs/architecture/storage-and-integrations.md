@@ -10,7 +10,7 @@ SQLite-backed Durable Object
    ├── authoritative workspace state
    ├── serialized named operations
    ├── revisions and idempotency
-   └── future live connections and delivery alarms
+   └── delivery alarms and durable message state
 ```
 
 This is the default for local development, hosted demos, self-hosting, and the official app. It is
@@ -18,14 +18,14 @@ fast, requires no database provisioning, and gives each event an isolated transa
 
 ## Service ownership
 
-| Concern                             | Recommended owner                               | Status                                   |
-| ----------------------------------- | ----------------------------------------------- | ---------------------------------------- |
-| Event business records              | SQLite-backed Durable Object                    | Working default                          |
-| Staff identity and event membership | Account Durable Object                          | Working, team roles still incomplete     |
-| File bytes                          | R2                                              | Planned production pipeline              |
-| Email and webhook attempts          | Transactional outbox plus Queue or object alarm | Planned                                  |
-| Cross-event search and analytics    | Rebuildable D1 projection                       | Add only when needed                     |
-| Airtable team view                  | Optional integration                            | Experimental Airtable-backed mode exists |
+| Concern                             | Recommended owner                        | Status                                    |
+| ----------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| Event business records              | SQLite-backed Durable Object             | Working default                           |
+| Staff identity and event membership | Account and Event Access Durable Objects | Working owner, admin, and viewer roles    |
+| File bytes                          | R2                                       | Working scoped, versioned upload pipeline |
+| Email and webhook attempts          | Transactional outbox plus object alarm   | Working delivery state and retry path     |
+| Cross-event search and analytics    | Rebuildable D1 projection                | Add only when needed                      |
+| Airtable team view                  | Optional integration                     | Experimental Airtable-backed mode exists  |
 
 R2, mail, Airtable, and MCP are integrations around the event store. They do not change the core
 operation contract.

@@ -1,117 +1,66 @@
-# Competition evaluator gap analysis
+# Competition evaluator readiness
 
-This review compares ProgramKit with the complete `killmysaas-evals` repository at commit
-`d99935c3e3c6c50c6b9292220260ccfe2df6d6d4`. That evaluator contains 96 rubric items across 20
-scenarios: 84 required items worth 178 points and 12 extra-credit items worth 19 points.
+This is the current capability audit against `killmysaas-evals` commit
+`d99935c3e3c6c50c6b9292220260ccfe2df6d6d4`: 96 rubric items across 20 browser
+scenarios. It is not a claimed score. The detailed implementation and verification map for each
+area lives in [`evals`](evals/README.md).
 
-This is a capability audit, not a claimed evaluator score. A passing UI, API route, or seed record
-still needs scenario evidence before it should be counted.
+## Current position
 
-## Where ProgramKit stands
+| Area                | Product coverage                                                    | Remaining evidence or risk                                                 |
+| ------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Call for Papers     | All 16 browser criteria implemented                                 | Live confirmation and decision-email delivery                              |
+| Abstract Management | 13 criteria implemented; AI evaluation intentionally not advertised | Live reviewer reminder delivery; keep AI claims absent                     |
+| Speaker Management  | All 16 browser criteria implemented                                 | Live invite, bulk mail, automatic reminder, and calendar-import evidence   |
+| Content Management  | All 14 browser criteria implemented                                 | Live reminder delivery and downloaded ZIP inspection                       |
+| AI Agenda           | All 8 browser criteria implemented                                  | Full fresh-workspace browser chain and publish evidence                    |
+| Public Widgets      | All 16 browser criteria implemented                                 | Cross-origin iframe check and real calendar import                         |
+| Speaker CRM         | All 12 optional criteria implemented                                | Full chained browser evidence after fresh import and second-event creation |
 
-| Evaluator area             | Current fit          | Working evidence                                                                                                                                                                                          | Largest gaps                                                                                                                       |
-| -------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Call for papers            | Strong foundation    | Form builder, required fields, conditional visibility, category-based reviewer routing, public form, account-backed draft resume and editing, reviewer workspace, decisions, accepted proposal conversion | Live-provider delivery evidence and precise post-close policy                                                                      |
-| Abstract management        | Strong               | Reviewer teams, independent rounds, weighted scorecards, blind projection, category routing, exact and bulk assignments, progress, recusal, coauthors, and CSV export                                     | Round release controls and live-provider reminder evidence; AI review is deliberately not claimed                                  |
-| Speaker management         | Partial              | Searchable people roster, lifecycle state, profiles, readiness tasks, scoped speaker portal, linked sessions                                                                                              | CSV import, real invites, headshot and file upload, logistics, bulk communication, automated reminders, message history            |
-| Content management         | Early                | Asset metadata and requirement concepts exist                                                                                                                                                             | R2 uploads, file constraints, private download, versions, comments, approval gate, deliverables dashboard, files library, bulk ZIP |
-| AI agenda                  | Partial              | Draft placements, conflict detection, room and list views, validated moves, immutable publish, public release                                                                                             | Unscheduled tray, multi-day views, track filters, configurable inventory UI, clear and undo, auto-schedule                         |
-| Public program and widgets | Strong foundation    | Five public views share one immutable release: searchable sessions and speakers, details, multi-day agenda, gallery, persistent itinerary, ICS export, share links, and embeds                            | Account-synced itineraries, richer embed appearance controls, and recorded evaluator evidence                                      |
-| CRM extra credit           | Deliberately limited | People records, search, detail, tags in the domain                                                                                                                                                        | Organizations, notes, custom fields, CSV import, merge, kanban, segments, history, bulk email, dashboard                           |
+“Implemented” means the product has a real user action, an authorized server transition, persisted
+state, and focused automated coverage. It does not replace the evaluator's own screenshots or the
+manual mailbox, calendar, download, and cross-origin checks.
 
-## Important evaluator lesson
+## How the evaluator reaches the product
 
-The evaluator rewards working data transitions more than screen count. CRUD and round-trip checks
-represent about 42 percent of the available evidence weight. Existence checks are about 15 percent.
-That means the best next work is not another broad UI pass. It is a smaller number of complete
-flows that create, update, persist, reload, authorize, and expose the right result on every relevant
-surface.
+The V1 runner is browser-only, uses strict same-origin navigation, and does not bring usable inbox
+credentials. The official evaluation target should therefore be `app.programkit.dev`, where:
 
-The expiring `/demo/{capability}` workspace now provides a clean, isolated starting point for
-scenario runs and collaborator handoff. It improves test repeatability and safe evaluation, but it
-does not count as the real identity, role membership, or per-person authorization required by the
-scenarios. The hosted app has real owner, administrator, and viewer membership. Public participants
-use a separate event-scoped account that can recover only matching submission, reviewer, and
-speaker destinations by normalized email.
+- an organizer can create an email/password account without leaving the origin;
+- every event is stored in a separate Workspace Durable Object;
+- public CFP and agenda links retain validated event context on the same origin;
+- submitters create event-scoped accounts and recover only their own proposal destinations;
+- reviewer and speaker workspaces use copyable same-origin record capability links; and
+- participant sessions never authorize operator endpoints.
 
-## How the V1 evaluator reaches the product
+The anonymous seven-day demo remains useful for a fast walkthrough, but it is not the proof of
+hosted identity or event membership.
 
-The V1 evaluator is a browser-only runner with strict same-origin navigation. It does not supply
-credentials for any of the 20 scenarios. That creates three practical requirements for the
-evaluation deployment:
+## Evidence still required before submission
 
-- organizer, submitter, reviewer, speaker, and attendee surfaces must be reachable from one origin;
-- public form and agenda links must keep their event context without relying on another subdomain;
-- scenario fixtures and role transitions must be repeatable without asking the evaluator to open an
-  email inbox or leave the product.
+1. Start with a new organizer account and create the fixture event through the UI.
+2. Run all 20 scenarios in order without directly modifying state.
+3. Reload after every round-trip action the rubric explicitly checks.
+4. Use the same origin for organizer, public, reviewer, speaker, and attendee surfaces.
+5. Inspect downloaded CSV, ZIP, and iCal artifacts rather than counting the click alone.
+6. Send the required messages to mailboxes we control and record subject, personalization,
+   attachment, timestamp, and delivery state.
+7. Paste the generated iframe into another origin and verify interactivity and filters.
+8. Repeat the entire chain from a second disposable organizer account and retain the stronger
+   report. Never reset a collaborator's event in place.
 
-The hosted app now emits event-specific public CFP and program links on `app.programkit.dev`. The
-event ID is validated before the public page loads and is exchanged for an HTTP-only routing cookie.
-That cookie selects only the event's public projections and does not grant organizer access. The
-program exposes agenda, session, speaker, itinerary, and gallery views on the same `/agenda` route.
-Each view reads the same immutable release and can be linked or embedded with query parameters. The
-hosted app supports deterministic organizer password signup and sign-in. Public CFP accounts are
-event-scoped and recover matching submission, reviewer, and speaker destinations without granting
-organizer access. The seven-day demo remains useful for repeatable seeded walkthroughs.
+## Product risks outside the score
 
-Airtable, the Cloudflare runtime, API breadth, repository hosting, and performance are not scored by
-the V1 browser rubric. They remain useful bonus or product-quality work, but should not displace a
-required end-to-end scenario.
+The evaluator does not score backup policy, account recovery, MFA, abuse controls, malware
+scanning, observability, API lifecycle, or Airtable safety. Those still matter for a real product
+and remain on the [roadmap](../../ROADMAP.md).
 
-## Recommended implementation order
-
-1. **Finish evaluator identity fixtures.** Keep the working staff and participant sign-in paths,
-   then verify the evaluator's exact role transitions and add a deterministic reset for repeated
-   runs.
-2. **One complete file pipeline.** Use R2 for bytes and event records for metadata. Reuse it for CFP
-   attachments, headshots, slides, and requirement deliverables, including version history and
-   private access. Airtable mirroring must remain optional and outside this critical path.
-3. **Review administration.** Build reviewer pools, exact and bulk assignment, release by round,
-   progress, recusal, and export. Keep the existing scoped scorecard as the reviewer surface.
-4. **Scheduling studio depth.** Add the unscheduled tray, multi-day filters, configurable rooms and
-   tracks, clear and undo, then one deterministic auto-schedule action with conflict evidence.
-5. **Real delivery.** Ship submission confirmation and accepted-speaker reminder first. Include a
-   transactional outbox, test send, provider result, history, and an ICS attachment compatible with
-   Gmail, Outlook, and Apple Calendar.
-6. **Public program evidence and hardening.** Record the five public views, itinerary persistence,
-   calendar export, shared links, and embed builder against a fresh published fixture. Add an
-   account-backed itinerary only after attendee identity exists.
-7. **CRM extras last.** Add only the organization and relationship capabilities that improve the
-   program workflow after all required areas are dependable.
-
-MCP expansion remains after the human workflow, data, and evaluator surfaces are complete.
-
-## Scenario readiness checklist
-
-Before claiming an evaluator area, its fixtures and tests should prove:
-
-- a clean seeded workspace can reach the required starting state;
-- the action can be completed through the intended UI without direct state edits;
-- every write persists in the configured authoritative repository and survives a reload;
-- optional Airtable failures do not block the recommended Durable Object configuration;
-- role-scoped routes hide records and actions the actor must not see;
-- deadlines, locked states, conflicts, and invalid transitions fail on the server;
-- bulk operations report partial or total failure without silent data loss;
-- public pages read only published data and never leak drafts;
-- email, calendar, file, and webhook side effects have durable status and safe retry behavior;
-- the same result is observable through the relevant API projection; and
-- the full flow works at desktop and mobile sizes with keyboard access.
-
-## What not to do
-
-- Do not count a seeded visual state as a completed workflow.
-- Do not build the optional CRM before the required content, agenda, and public-program scenarios.
-- Do not expose real data through the passwordless demo actors.
-- Do not poll Airtable on every navigation. Keep acknowledged writes, signed webhooks, and the
-  Durable Object cache.
-- Do not add more provider choices until the Cloudflare, Airtable, R2, and email golden path is
-  complete and documented.
+Airtable, Cloudflare, API breadth, Forge hosting, and speed are bonus or product-quality signals,
+not replacements for a complete browser workflow. Durable Object SQLite remains the recommended
+authoritative store. Airtable stays optional and disconnected during evaluator runs.
 
 ## Buyer-brief work outside the V1 rubric
 
-The original buyer brief also calls for a one-way Accelevents integration and speaker-portal
-resource pages that can include trusted organizer HTML embeds. The V1 evaluator does not currently
-score either capability. The Accelevents handoff is implemented as a published-program export with
-official speaker and session CSV shapes. Organizers can also publish speaker resource pages with
-guidance, links, and sandboxed HTTPS embeds. Neither optional feature changes the authoritative
-event data path.
+The original brief also asks for one-way Accelevents transfer and speaker resources with trusted
+embeds. ProgramKit includes both: a published-program Accelevents export package and organizer-
+authored portal resource pages with sandboxed HTTPS embeds.

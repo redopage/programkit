@@ -117,13 +117,19 @@ the [Airtable guide](../integrations/airtable.md#current-boundary).
 
 ## R2 file boundary
 
-R2 will own headshots, slides, supporting documents, and generated exports. Event records will
-store only an opaque object key, file metadata, ownership, and lifecycle state. A browser will
-never receive a bucket credential.
+R2 owns headshots, slides, supporting documents, and generated ZIP exports. Event records store
+only an opaque object key, file metadata, ownership, version, uploader, and lifecycle state. A
+browser never receives a bucket credential.
 
-The upload pipeline is not implemented yet. It must include authenticated initiation, direct
-upload, type and size validation, finalize, scanning state, private download authorization,
-replacement, deletion, and retention cleanup before real files are accepted.
+The Worker accepts scoped multipart uploads for a speaker's own headshot and assigned file tasks,
+plus organizer headshot replacement. It validates type and size before writing bytes, registers
+metadata through the named operation engine, preserves earlier versions, marks the latest version,
+and authorizes every download against the active event and record owner. Organizers can review
+files, exchange attributed comments with speakers, and export selected latest versions as a ZIP.
+
+Production hardening still includes malware scanning, explicit retention and deletion policy,
+orphan cleanup after interrupted uploads, and storage observability. Those controls should be in
+place before accepting sensitive participant files at scale.
 
 ## Hosted surfaces
 

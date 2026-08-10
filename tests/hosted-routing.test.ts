@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   hostedPublicEventId,
   isApiKeyAccessiblePath,
+  isHostedDemoReset,
   normalizeHostedEventCreateInput,
   parseApiKeyToken,
 } from '../apps/cloudflare/src/worker.ts'
@@ -109,5 +110,15 @@ describe('hosted event creation', () => {
         endsAt: '2027-05-12T16:00:00.000Z',
       }),
     ).toThrow('end must be after its start')
+  })
+})
+
+describe('hosted event safety', () => {
+  it('reserves the seeded reset for demo deployments', () => {
+    const path = '/api/v1/operations/workspace.reset-demo'
+
+    expect(isHostedDemoReset('hosted-app', 'POST', path)).toBe(true)
+    expect(isHostedDemoReset('hosted-demo', 'POST', path)).toBe(false)
+    expect(isHostedDemoReset('hosted-app', 'GET', path)).toBe(false)
   })
 })

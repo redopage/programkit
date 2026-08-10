@@ -14,16 +14,13 @@ not maintain a second version of product or architecture facts.
    are held to, and the checklist a UI change is reviewed against.
 3. [Product status and roadmap](../ROADMAP.md) distinguishes working capabilities from production
    depth that is still needed.
-4. [Evaluator gap analysis](product/evaluator-gap-analysis.md) maps the complete competition rubric
-   to working evidence and missing end-to-end depth.
+4. [Evaluator readiness](product/evaluator-gap-analysis.md) summarizes the complete competition
+   rubric and the remaining manual evidence.
 5. [Evaluator runbook](product/evaluator-runbook.md) explains how to produce repeatable browser
    evidence without overstating a seeded screen.
-6. Evaluator coverage records exercised behavior for [Call for Papers](product/evals/01-call-for-papers.md),
-   [abstract management](product/evals/02-abstract-management.md),
-   [speaker management](product/evals/03-speaker-management.md),
-   [content management](product/evals/04-content-management.md),
-   [AI agenda](product/evals/05-ai-agenda.md), and
-   [public widgets and embeds](product/evals/06-public-widgets.md).
+6. [Evaluator evidence](product/evals/README.md) records exercised behavior for Call for Papers,
+   Abstract Management, Speaker Management, Content Management, AI Agenda, Public Widgets, and
+   optional Speaker CRM.
 7. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
    competition brief.
 8. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation

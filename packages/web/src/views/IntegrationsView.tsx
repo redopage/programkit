@@ -584,31 +584,33 @@ export function IntegrationsView() {
         </dl>
       </section>
 
-      <section
-        aria-labelledby="demo-heading"
-        className="rounded-xl bg-zinc-50 p-5 ring-1 ring-zinc-950/5"
-      >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 id="demo-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-              Reset demonstration data
-            </h2>
-            <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-              Restore the deterministic AIE NYC workspace after testing operations.
-            </p>
+      {!hostedApp ? (
+        <section
+          aria-labelledby="demo-heading"
+          className="rounded-xl bg-zinc-50 p-5 ring-1 ring-zinc-950/5"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 id="demo-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+                Reset demonstration data
+              </h2>
+              <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                Restore the deterministic AIE NYC workspace after testing operations.
+              </p>
+            </div>
+            <Button
+              variant="danger"
+              disabled={mutating}
+              onClick={() =>
+                void execute('workspace.reset-demo', {}, undefined, 'Demo workspace reset.')
+              }
+            >
+              <ArrowPathIcon className="size-4 h-lh shrink-0 fill-current" />
+              Reset demo
+            </Button>
           </div>
-          <Button
-            variant="danger"
-            disabled={mutating}
-            onClick={() =>
-              void execute('workspace.reset-demo', {}, undefined, 'Demo workspace reset.')
-            }
-          >
-            <ArrowPathIcon className="size-4 h-lh shrink-0 fill-current" />
-            Reset demo
-          </Button>
-        </div>
-      </section>
+        </section>
+      ) : null}
     </div>
   )
 }
