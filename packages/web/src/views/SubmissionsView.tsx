@@ -8,6 +8,7 @@ import { useMemo } from 'react'
 
 import {
   submissionAnswerByPurpose,
+  submissionDecisionReadiness,
   submissionParticipants,
   submissionPipelineSummary,
   submissionReviewSummary,
@@ -335,13 +336,14 @@ function SubmissionDrawer({
       entry.id ===
       state.reviewerAssignments.find((a) => a.submissionId === submission.id)?.evaluationPlanId,
   )
-  const firstRound = plan?.rounds.slice().sort((left, right) => left.order - right.order)[0]
-  const decisionReady =
-    submission.kind === 'guaranteed_session' ||
-    !firstRound ||
-    review.completed >= firstRound.minimumCompletedReviews
+  const decisionReadiness = submissionDecisionReadiness(state, submission)
+  const decisionReady = decisionReadiness.ready
   const canDecide =
-    decisionReady && (submission.status === 'submitted' || submission.status === 'in_review')
+    decisionReady &&
+    (submission.status === 'submitted' ||
+      submission.status === 'in_review' ||
+      submission.status === 'rejected' ||
+      submission.status === 'waitlisted')
   const trackValue = answerText(submissionAnswerByPurpose(state, submission, 'track'))
   const trackLabel = state.tracks.find((entry) => entry.id === trackValue)?.name ?? trackValue
   const participants = submissionParticipants(state, submission)
@@ -375,18 +377,27 @@ function SubmissionDrawer({
       footer={
         canDecide ? (
           <>
+            {submission.status !== 'rejected' ? (
+              <Button
+                size="compact"
+                variant="danger"
+                disabled={mutating}
+                onClick={() => void decide('rejected')}
+              >
+                Decline
+              </Button>
+            ) : null}
+            {submission.status !== 'waitlisted' ? (
+              <Button size="compact" disabled={mutating} onClick={() => void decide('waitlisted')}>
+                Waitlist
+              </Button>
+            ) : null}
             <Button
               size="compact"
-              variant="danger"
+              variant="primary"
               disabled={mutating}
-              onClick={() => void decide('rejected')}
+              onClick={() => void decide('accepted')}
             >
-              Decline
-            </Button>
-            <Button size="compact" disabled={mutating} onClick={() => void decide('waitlisted')}>
-              Waitlist
-            </Button>
-            <Button variant="primary" disabled={mutating} onClick={() => void decide('accepted')}>
               <CheckIcon className="size-4 h-lh shrink-0 fill-current" />
               Accept proposal
             </Button>
@@ -534,12 +545,13 @@ function SubmissionDrawer({
               <p className="text-pretty text-base sm:text-sm">No review plan is assigned yet.</p>
             </div>
           )}
-          {!decisionReady && firstRound ? (
+          {!decisionReady && decisionReadiness.incompleteRounds[0] ? (
             <div className="mt-5 rounded-lg bg-amber-50 p-3 text-amber-800 ring-1 ring-amber-800/10">
               <p className="text-pretty text-base sm:text-sm">
-                Complete {firstRound.minimumCompletedReviews - review.completed} more review
-                {firstRound.minimumCompletedReviews - review.completed === 1 ? '' : 's'} before the
-                committee records a decision.
+                Complete {decisionReadiness.incompleteRounds[0].remaining} more review
+                {decisionReadiness.incompleteRounds[0].remaining === 1 ? '' : 's'} in{' '}
+                {decisionReadiness.incompleteRounds[0].name} before the committee records a
+                decision.
               </p>
             </div>
           ) : null}

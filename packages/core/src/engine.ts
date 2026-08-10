@@ -13,6 +13,7 @@ import {
   audienceForCampaign,
   scheduleConflicts,
   submissionAnswerByPurpose,
+  submissionDecisionReadiness,
   submissionReviewSummary,
   visibleSubmissionFormFields,
 } from './selectors.ts'
@@ -1769,10 +1770,15 @@ function applyHandler(
             'Review assignments cannot cross event, form, or submission-kind boundaries.',
           )
         }
-        if (submission.status !== 'submitted' && submission.status !== 'in_review') {
+        if (
+          submission.status !== 'submitted' &&
+          submission.status !== 'in_review' &&
+          submission.status !== 'rejected' &&
+          submission.status !== 'waitlisted'
+        ) {
           throw new OperationError(
             'INVALID_TRANSITION',
-            'Only submitted proposals can be assigned.',
+            'Only proposals that have been submitted can be assigned.',
           )
         }
         if (trackValues && !trackValues.has(stringAnswer(state, submission, 'track'))) {
@@ -2145,28 +2151,13 @@ function applyHandler(
         'rejected',
         'waitlisted',
       ] as const)
-      const plan = state.evaluationPlans.find(
-        (entry) =>
-          entry.formId === submission.formId && entry.submissionKinds.includes(submission.kind),
-      )
-      if (plan && input.override !== true) {
-        const incompleteRounds = [...plan.rounds]
-          .sort((left, right) => left.order - right.order)
-          .map((round) => ({
-            round,
-            completed: state.reviewerAssignments.filter(
-              (entry) =>
-                entry.submissionId === submission.id &&
-                entry.roundId === round.id &&
-                entry.status === 'completed',
-            ).length,
-          }))
-          .filter(({ round, completed }) => completed < round.minimumCompletedReviews)
-        if (incompleteRounds.length > 0) {
-          const nextIncomplete = incompleteRounds[0]
+      if (input.override !== true) {
+        const readiness = submissionDecisionReadiness(state, submission)
+        if (!readiness.ready) {
+          const nextIncomplete = readiness.incompleteRounds[0]
           throw new OperationError(
             'REVIEWS_INCOMPLETE',
-            `Complete ${nextIncomplete.round.minimumCompletedReviews} reviews in “${nextIncomplete.round.name}” before deciding this submission.`,
+            `Complete ${nextIncomplete.required} reviews in “${nextIncomplete.name}” before deciding this submission.`,
           )
         }
       }

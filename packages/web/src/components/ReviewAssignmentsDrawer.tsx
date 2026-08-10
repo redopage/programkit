@@ -52,7 +52,10 @@ export function ReviewAssignmentsDrawer({ open, onClose }: { open: boolean; onCl
           submission.eventId === state?.activeEventId &&
           submission.formId === plan?.formId &&
           plan.submissionKinds.includes(submission.kind) &&
-          (submission.status === 'submitted' || submission.status === 'in_review'),
+          (submission.status === 'submitted' ||
+            submission.status === 'in_review' ||
+            submission.status === 'rejected' ||
+            submission.status === 'waitlisted'),
       ),
     [plan?.formId, plan?.submissionKinds, state?.activeEventId, state?.submissions],
   )
@@ -280,7 +283,12 @@ export function ReviewAssignmentsDrawer({ open, onClose }: { open: boolean; onCl
                           {title(submission)}
                         </span>
                         <span className="block text-sm text-zinc-500">
-                          {trackLabel(submission)} · {assigned ? 'Already assigned' : 'Available'}
+                          {trackLabel(submission)} ·{' '}
+                          {assigned
+                            ? 'Already assigned'
+                            : submission.status === 'rejected' || submission.status === 'waitlisted'
+                              ? `Reconsider ${submission.status}`
+                              : 'Available'}
                         </span>
                       </span>
                       {assigned ? <CheckIcon className="size-4 fill-emerald-600" /> : null}

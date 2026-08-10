@@ -14,6 +14,7 @@ import {
   submissionPipelineSummary,
   submissionFormAvailability,
   submissionFormPublishReadiness,
+  submissionDecisionReadiness,
   submissionReviewSummary,
   visibleSubmissionFormFields,
 } from '@programkit/core'
@@ -1743,6 +1744,18 @@ describe('ProgramKit operation engine', () => {
     state = configured.state
 
     const submission = state.submissions.find((entry) => entry.id === 'sub_002')!
+    expect(submissionDecisionReadiness(state, submission)).toMatchObject({
+      ready: false,
+      incompleteRounds: [
+        {
+          id: 'rnd_final_decision',
+          name: 'Final committee review',
+          completed: 0,
+          required: 1,
+          remaining: 1,
+        },
+      ],
+    })
     const blocked = executeOperation(state, 'review.decide', {
       input: { submissionId: submission.id, decision: 'accepted' },
       expectedVersions: { [submission.id]: submission.version },
@@ -1776,6 +1789,10 @@ describe('ProgramKit operation engine', () => {
     state = scored.state
 
     const currentSubmission = state.submissions.find((entry) => entry.id === submission.id)!
+    expect(submissionDecisionReadiness(state, currentSubmission)).toMatchObject({
+      ready: true,
+      incompleteRounds: [],
+    })
     const decided = executeOperation(state, 'review.decide', {
       input: {
         submissionId: currentSubmission.id,
@@ -1785,6 +1802,50 @@ describe('ProgramKit operation engine', () => {
       expectedVersions: { [currentSubmission.id]: currentSubmission.version },
     })
     expect(decided.response.ok).toBe(true)
+  })
+
+  it('can reconsider a rejected proposal in a later committee workflow', () => {
+    let state = createSeedState()
+    const submission = state.submissions.find((entry) => entry.id === 'sub_004')!
+    const plan = state.evaluationPlans[0]
+    const round = plan.rounds[0]
+
+    expect(submission.status).toBe('rejected')
+    expect(
+      state.reviewDecisions.filter((entry) => entry.submissionId === submission.id),
+    ).toHaveLength(1)
+
+    const assigned = executeOperation(state, 'review.assign', {
+      input: {
+        evaluationPlanId: plan.id,
+        roundId: round.id,
+        reviewerId: 'rev_001',
+        submissionIds: [submission.id],
+      },
+    })
+    expect(assigned.response.ok, JSON.stringify(assigned.response)).toBe(true)
+    state = assigned.state
+    expect(state.submissions.find((entry) => entry.id === submission.id)?.status).toBe('rejected')
+
+    const reconsidered = state.submissions.find((entry) => entry.id === submission.id)!
+    const accepted = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: reconsidered.id,
+        decision: 'accepted',
+        reason: 'The committee reconsidered the proposal for the revised program.',
+      },
+      expectedVersions: { [reconsidered.id]: reconsidered.version },
+    })
+    expect(accepted.response.ok, JSON.stringify(accepted.response)).toBe(true)
+    const current = accepted.state.submissions.find((entry) => entry.id === submission.id)!
+    expect(current).toMatchObject({
+      status: 'accepted',
+      convertedParticipationId: expect.any(String),
+      convertedSessionId: expect.any(String),
+    })
+    expect(
+      accepted.state.reviewDecisions.filter((entry) => entry.submissionId === submission.id),
+    ).toEqual([expect.objectContaining({ decision: 'accepted', version: 2 })])
   })
 
   it('bulk assigns only eligible proposals with reviewer caps and track filters', () => {

@@ -198,6 +198,40 @@ export function submissionReviewSummary(
   }
 }
 
+export function submissionDecisionReadiness(state: WorkspaceState, submission: Submission) {
+  if (submission.kind === 'guaranteed_session') {
+    return { ready: true, incompleteRounds: [] }
+  }
+
+  const plan = (state.evaluationPlans ?? []).find(
+    (entry) =>
+      entry.formId === submission.formId && entry.submissionKinds.includes(submission.kind),
+  )
+  if (!plan) return { ready: true, incompleteRounds: [] }
+
+  const incompleteRounds = [...plan.rounds]
+    .sort((left, right) => left.order - right.order)
+    .map((round) => {
+      const completed = (state.reviewerAssignments ?? []).filter(
+        (entry) =>
+          entry.submissionId === submission.id &&
+          entry.evaluationPlanId === plan.id &&
+          entry.roundId === round.id &&
+          entry.status === 'completed',
+      ).length
+      return {
+        id: round.id,
+        name: round.name,
+        completed,
+        required: round.minimumCompletedReviews,
+        remaining: Math.max(0, round.minimumCompletedReviews - completed),
+      }
+    })
+    .filter((round) => round.remaining > 0)
+
+  return { ready: incompleteRounds.length === 0, incompleteRounds }
+}
+
 export function reviewerQueue(state: WorkspaceState, reviewerId: string) {
   return (state.reviewerAssignments ?? [])
     .filter((assignment) => assignment.reviewerId === reviewerId)
