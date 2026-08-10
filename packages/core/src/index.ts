@@ -10,13 +10,14 @@ export {
   duplicateContactGroups,
 } from './crm.ts'
 export {
+  createStoredAssetExportPlan,
   createStoredZip,
   createReviewResultsCsv,
   createWorkspaceExportArchive,
   recordsToCsv,
   workspaceExportFilename,
 } from './export.ts'
-export type { WorkspaceExportFile, ZipFile } from './export.ts'
+export type { StoredAssetExportEntry, WorkspaceExportFile, ZipFile } from './export.ts'
 export { reconcileAirtableRecord } from './airtable.ts'
 export {
   AIRTABLE_SCHEMA_VERSION,

@@ -519,6 +519,102 @@ export interface ZipFile {
   data?: Uint8Array
 }
 
+export interface StoredAssetExportEntry {
+  assetId: string
+  storageKey: string
+  path: string
+  sizeBytes: number
+}
+
+function safeZipPathSegment(value: string, fallback: string) {
+  const withoutControls = [...value.normalize('NFKC')]
+    .map((character) => (character.codePointAt(0)! < 32 ? '-' : character))
+    .join('')
+  const normalized = withoutControls
+    .replace(/[<>:"/\\|?*]+/gu, '-')
+    .replace(/\s+/gu, ' ')
+    .replace(/\.{2,}/gu, '.')
+    .trim()
+    .replace(/^[. -]+|[. -]+$/gu, '')
+    .slice(0, 120)
+  return normalized || fallback
+}
+
+function newestAsset<T extends WorkspaceState['assets'][number]>(assets: readonly T[]) {
+  return [...assets].sort((left, right) => {
+    const version = (right.version ?? 0) - (left.version ?? 0)
+    if (version !== 0) return version
+    const createdAt = right.createdAt.localeCompare(left.createdAt)
+    return createdAt !== 0 ? createdAt : right.id.localeCompare(left.id)
+  })[0]
+}
+
+/**
+ * Resolve the exact latest requirement uploads that belong in an operator ZIP.
+ * The plan is intentionally storage-agnostic so every host enforces the same
+ * version and folder rules before reading private objects.
+ */
+export function createStoredAssetExportPlan(
+  state: WorkspaceState,
+  requestedIds: ReadonlySet<string>,
+): StoredAssetExportEntry[] {
+  const requirementAssets = state.assets.filter(
+    (asset) => asset.eventId === state.activeEventId && asset.owner.type === 'requirement',
+  )
+  const assetsByRequirement = new Map<string, typeof requirementAssets>()
+  for (const asset of requirementAssets) {
+    const assets = assetsByRequirement.get(asset.owner.id) ?? []
+    assets.push(asset)
+    assetsByRequirement.set(asset.owner.id, assets)
+  }
+  const latestAssets = [...assetsByRequirement.values()]
+    .map(
+      (assets) =>
+        newestAsset(assets.filter((asset) => asset.isLatest === true)) ?? newestAsset(assets),
+    )
+    .filter((asset) => asset && (requestedIds.size === 0 || requestedIds.has(asset.id)))
+
+  const instances = new Map(state.requirementInstances.map((instance) => [instance.id, instance]))
+  const definitions = new Map(
+    state.requirementDefinitions.map((definition) => [definition.id, definition]),
+  )
+  const participations = new Map(
+    state.participations.map((participation) => [participation.id, participation]),
+  )
+  const people = new Map(state.people.map((person) => [person.id, person]))
+  const usedPaths = new Set<string>()
+
+  return latestAssets
+    .map((asset) => {
+      const instance = instances.get(asset.owner.id)
+      const definition = instance ? definitions.get(instance.definitionId) : undefined
+      const participation = instance ? participations.get(instance.participationId) : undefined
+      const person = participation ? people.get(participation.personId) : undefined
+      const speaker = safeZipPathSegment(
+        person ? `${person.firstName} ${person.lastName}` : 'Unknown speaker',
+        'Unknown speaker',
+      )
+      const task = safeZipPathSegment(definition?.label ?? 'Other files', 'Other files')
+      const filename = safeZipPathSegment(asset.filename, 'upload')
+      const basePath = `${speaker}/${task}/${filename}`
+      let path = basePath
+      if (usedPaths.has(path.toLocaleLowerCase())) {
+        const extensionAt = filename.lastIndexOf('.')
+        const stem = extensionAt > 0 ? filename.slice(0, extensionAt) : filename
+        const extension = extensionAt > 0 ? filename.slice(extensionAt) : ''
+        path = `${speaker}/${task}/${stem}-${safeZipPathSegment(asset.id, 'file')}${extension}`
+      }
+      usedPaths.add(path.toLocaleLowerCase())
+      return {
+        assetId: asset.id,
+        storageKey: asset.storageKey,
+        path,
+        sizeBytes: asset.sizeBytes,
+      }
+    })
+    .sort((left, right) => left.path.localeCompare(right.path))
+}
+
 export function createStoredZip(files: readonly ZipFile[], modifiedAt: Date) {
   const encoder = new TextEncoder()
   const localChunks: Uint8Array[] = []

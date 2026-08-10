@@ -21,7 +21,7 @@ coverage rather than treating seeded data as evidence.
 | CNT-11 | Verified       | Every session edit snapshots a restorable revision with actor and timestamp. The history drawer restores an exact earlier version rather than applying a blanket undo.                                                       |
 | CNT-12 | Verified       | Session content status is explicit: `ready` is presented as Approved. Public agenda selection includes only approved sessions from the latest published schedule release.                                                    |
 | CNT-13 | Verified       | `/files` aggregates latest deliverables with filename, speaker, session, upload time, review status, and total version count. Its drawer exposes all versions and the cross-role comment thread.                             |
-| CNT-14 | Verified       | Organizers can multi-select latest files, review or deselect them in the export dialog, and generate a ZIP grouped by speaker and task. Archive tests verify only the selected latest versions are included.                 |
+| CNT-14 | Verified       | Organizers can multi-select latest files, review or deselect them in the export dialog, and generate a ZIP grouped as `Speaker/Task/Filename`. The shared server plan rejects stale version IDs and handles path collisions. |
 
 ## File lifecycle
 

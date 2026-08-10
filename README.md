@@ -110,11 +110,11 @@ pnpm deploy
 
 The official environments use the same code with isolated runtime state:
 
-| Host                                               | Purpose                                          |
-| -------------------------------------------------- | ------------------------------------------------ |
-| [programkit.dev](https://programkit.dev)           | Project homepage                                 |
-| [demo.programkit.dev](https://demo.programkit.dev) | Anonymous, disposable seven-day workspaces       |
-| [app.programkit.dev](https://app.programkit.dev)   | Passwordless staff accounts and event workspaces |
+| Host                                               | Purpose                                            |
+| -------------------------------------------------- | -------------------------------------------------- |
+| [programkit.dev](https://programkit.dev)           | Project homepage                                   |
+| [demo.programkit.dev](https://demo.programkit.dev) | Anonymous, disposable seven-day workspaces         |
+| [app.programkit.dev](https://app.programkit.dev)   | Staff accounts, event workspaces, and public flows |
 
 The one-click Cloudflare button uses the public GitHub mirror because Cloudflare's deploy flow does
 not currently accept Forge repositories. Forge is the primary collaboration host; the two remotes

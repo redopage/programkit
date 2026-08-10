@@ -41,9 +41,11 @@ The public surface exposes only one open form and its event. A submitter starts 
 answers and asset references, and submits only after visible required fields validate. Conditional
 questions are evaluated from earlier answers.
 
-ProgramKit currently models asset references, but the reference host does not yet provide a real
-private upload pipeline. File restrictions, scanning, signed download, and lifecycle policy are a
-production milestone, not an implied capability.
+The hosted Worker provides a private R2 pipeline for accepted-speaker headshots and requested
+deliverables. It validates event ownership, file type, and size; records immutable versions and
+comments; serves scoped downloads; and exports selected latest versions in speaker and task
+folders. Direct attachment upload from the public CFP, malware scanning, and a configurable
+retention policy remain production milestones rather than implied capabilities.
 
 ## 3. Review consistently
 

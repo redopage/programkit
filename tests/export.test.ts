@@ -4,6 +4,7 @@ import {
   createAcceleventsExport,
   createReviewResultsCsv,
   createSeedState,
+  createStoredAssetExportPlan,
   createWorkspaceExportArchive,
   recordsToCsv,
 } from '@programkit/core'
@@ -77,6 +78,105 @@ describe('workspace export archive', () => {
     expect(csv).toContain('"The boring parts of trustworthy agents"')
     expect(csv).toContain('"4.7"')
     expect(csv).toContain('"recommendations.accept"')
+  })
+})
+
+describe('selected file export plan', () => {
+  it('keeps only selected latest versions and groups them by speaker and task', () => {
+    const state = createSeedState()
+    const firstInstance = state.requirementInstances[1]
+    const secondInstance = state.requirementInstances[2]
+    state.assets.push(
+      {
+        id: 'ast_bio_old',
+        eventId: state.activeEventId,
+        owner: { type: 'requirement', id: firstInstance.id },
+        kind: 'supporting_document',
+        filename: 'speaker-bio.txt',
+        contentType: 'text/plain',
+        sizeBytes: 120,
+        storageKey: 'requirements/bio/v1',
+        version: 1,
+        isLatest: false,
+        createdAt: '2026-08-01T12:00:00.000Z',
+      },
+      {
+        id: 'ast_bio_latest',
+        eventId: state.activeEventId,
+        owner: { type: 'requirement', id: firstInstance.id },
+        kind: 'supporting_document',
+        filename: 'speaker-bio.txt',
+        contentType: 'text/plain',
+        sizeBytes: 180,
+        storageKey: 'requirements/bio/v2',
+        version: 2,
+        isLatest: true,
+        createdAt: '2026-08-02T12:00:00.000Z',
+      },
+      {
+        id: 'ast_unselected',
+        eventId: state.activeEventId,
+        owner: { type: 'requirement', id: secondInstance.id },
+        kind: 'headshot',
+        filename: 'headshot.png',
+        contentType: 'image/png',
+        sizeBytes: 1_024,
+        storageKey: 'requirements/headshot/v1',
+        version: 1,
+        isLatest: true,
+        createdAt: '2026-08-02T13:00:00.000Z',
+      },
+    )
+
+    expect(createStoredAssetExportPlan(state, new Set(['ast_bio_latest']))).toEqual([
+      {
+        assetId: 'ast_bio_latest',
+        storageKey: 'requirements/bio/v2',
+        path: 'Robin Sloan/Speaker bio/speaker-bio.txt',
+        sizeBytes: 180,
+      },
+    ])
+    expect(createStoredAssetExportPlan(state, new Set(['ast_bio_old']))).toEqual([])
+  })
+
+  it('uses the newest legacy upload when explicit latest flags are absent', () => {
+    const state = createSeedState()
+    const instance = state.requirementInstances[1]
+    state.assets.push(
+      {
+        id: 'ast_legacy_1',
+        eventId: state.activeEventId,
+        owner: { type: 'requirement', id: instance.id },
+        kind: 'supporting_document',
+        filename: 'bio.txt',
+        contentType: 'text/plain',
+        sizeBytes: 100,
+        storageKey: 'legacy/1',
+        version: 1,
+        createdAt: '2026-08-01T12:00:00.000Z',
+      },
+      {
+        id: 'ast_legacy_2',
+        eventId: state.activeEventId,
+        owner: { type: 'requirement', id: instance.id },
+        kind: 'supporting_document',
+        filename: 'bio.txt',
+        contentType: 'text/plain',
+        sizeBytes: 110,
+        storageKey: 'legacy/2',
+        version: 2,
+        createdAt: '2026-08-02T12:00:00.000Z',
+      },
+    )
+
+    expect(createStoredAssetExportPlan(state, new Set())).toEqual([
+      {
+        assetId: 'ast_legacy_2',
+        storageKey: 'legacy/2',
+        path: 'Robin Sloan/Speaker bio/bio.txt',
+        sizeBytes: 110,
+      },
+    ])
   })
 })
 

@@ -2,6 +2,7 @@ import { handleMcpRequest } from '@programkit/agent'
 import { WorkspaceDurableObject } from '@programkit/core/cloudflare'
 import {
   createAirtableOAuthAuthorization,
+  createStoredAssetExportPlan,
   createStoredZip,
   exchangeAirtableAuthorizationCode,
   listAirtableBases,
@@ -1738,13 +1739,8 @@ async function exportStoredAssets(
     return Response.json({ ok: false, error: 'File storage is not configured.' }, { status: 503 })
   }
   const state = await readWorkspace(stub)
-  const candidates = state.assets.filter(
-    (asset) =>
-      asset.eventId === state.activeEventId &&
-      asset.owner.type === 'requirement' &&
-      (requestedIds.size > 0 ? requestedIds.has(asset.id) : asset.isLatest),
-  )
-  if (candidates.length === 0) {
+  const plan = createStoredAssetExportPlan(state, requestedIds)
+  if (plan.length === 0) {
     return Response.json(
       { ok: false, error: 'Choose at least one uploaded file.' },
       { status: 400 },
@@ -1752,8 +1748,8 @@ async function exportStoredAssets(
   }
   let totalBytes = 0
   const files: Array<{ name: string; data: Uint8Array }> = []
-  for (const asset of candidates) {
-    const object = await env.PROGRAMKIT_FILES.get(asset.storageKey)
+  for (const entry of plan) {
+    const object = await env.PROGRAMKIT_FILES.get(entry.storageKey)
     if (!object) continue
     totalBytes += object.size
     if (totalBytes > 100_000_000) {
@@ -1762,23 +1758,8 @@ async function exportStoredAssets(
         { status: 413 },
       )
     }
-    const instance = state.requirementInstances.find((entry) => entry.id === asset.owner.id)
-    const definition = instance
-      ? state.requirementDefinitions.find((entry) => entry.id === instance.definitionId)
-      : null
-    const participation = instance
-      ? state.participations.find((entry) => entry.id === instance.participationId)
-      : null
-    const person = participation
-      ? state.people.find((entry) => entry.id === participation.personId)
-      : null
-    const prefix = safeAssetFilename(
-      [person ? `${person.firstName}-${person.lastName}` : 'speaker', definition?.label ?? 'file']
-        .filter(Boolean)
-        .join('-'),
-    )
     files.push({
-      name: `${prefix}/${safeAssetFilename(asset.filename)}`,
+      name: entry.path,
       data: new Uint8Array(await object.arrayBuffer()),
     })
   }
