@@ -1260,6 +1260,7 @@ function applyHandler(
         slug: form.slug,
         title: form.title,
         status: form.status,
+        allowedKinds: [...form.allowedKinds],
         fieldCount: state.submissionFormFields.filter((field) => field.formId === form.id).length,
       }
       if (typeof input.name === 'string') form.name = assertString(input.name, 'name')
@@ -1287,8 +1288,23 @@ function applyHandler(
         input.fields !== undefined &&
         state.submissions.some((submission) => submission.formId === form.id)
       ) {
+        const formSubmissions = state.submissions.filter(
+          (submission) => submission.formId === form.id,
+        )
+        const removedSubmissionKind = previous.allowedKinds.find(
+          (kind) =>
+            formSubmissions.some((submission) => submission.kind === kind) &&
+            !form.allowedKinds.includes(kind),
+        )
+        if (removedSubmissionKind) {
+          throw new OperationError(
+            'INVALID_INPUT',
+            `The ${removedSubmissionKind.replaceAll('_', ' ')} submission type cannot be removed after responses are received.`,
+          )
+        }
         const currentFields = state.submissionFormFields.filter((field) => field.formId === form.id)
         const nextFieldsById = new Map(fields.map((field) => [field.id, field]))
+        const currentFieldIds = new Set(currentFields.map((field) => field.id))
         for (const currentField of currentFields) {
           const nextField = nextFieldsById.get(currentField.id)
           if (!nextField) {
@@ -1297,16 +1313,37 @@ function applyHandler(
               `“${currentField.label}” cannot be removed after the form receives submissions.`,
             )
           }
-          if (
-            nextField.key !== currentField.key ||
-            nextField.purpose !== currentField.purpose ||
-            nextField.kind !== currentField.kind
-          ) {
+          const currentAnswerContract = {
+            key: currentField.key,
+            purpose: currentField.purpose,
+            kind: currentField.kind,
+            required: currentField.required,
+            optionValues: currentField.options.map((option) => option.value),
+            visibleWhen: currentField.visibleWhen,
+          }
+          const nextAnswerContract = {
+            key: nextField.key,
+            purpose: nextField.purpose,
+            kind: nextField.kind,
+            required: nextField.required,
+            optionValues: nextField.options.map((option) => option.value),
+            visibleWhen: nextField.visibleWhen,
+          }
+          if (JSON.stringify(nextAnswerContract) !== JSON.stringify(currentAnswerContract)) {
             throw new OperationError(
               'INVALID_INPUT',
-              `The answer mapping for “${currentField.label}” cannot change after the form receives submissions.`,
+              `The answer contract for “${currentField.label}” cannot change after the form receives submissions.`,
             )
           }
+        }
+        const newRequiredField = fields.find(
+          (field) => !currentFieldIds.has(field.id) && field.required,
+        )
+        if (newRequiredField) {
+          throw new OperationError(
+            'INVALID_INPUT',
+            `“${newRequiredField.label}” cannot be added as required after the form receives submissions.`,
+          )
         }
       }
       validateSubmissionForm(form, fields, { forPublish: form.status === 'open' })
@@ -1717,18 +1754,7 @@ function applyHandler(
           'A review round with assignments cannot be removed.',
         )
       }
-      const reviewedRoundIds = new Set(
-        state.scorecards
-          .map((scorecard) =>
-            state.reviewerAssignments.find(
-              (assignment) =>
-                assignment.evaluationPlanId === plan.id && assignment.id === scorecard.assignmentId,
-            ),
-          )
-          .filter((assignment) => assignment !== undefined)
-          .map((assignment) => assignment.roundId),
-      )
-      for (const roundId of reviewedRoundIds) {
+      for (const roundId of assignedRoundIds) {
         const currentRound = plan.rounds.find((round) => round.id === roundId)
         const nextRound = rounds.find((round) => round.id === roundId)
         if (!currentRound || !nextRound) continue
@@ -1769,7 +1795,7 @@ function applyHandler(
         if (JSON.stringify(currentPolicy) !== JSON.stringify(nextPolicy)) {
           throw new OperationError(
             'INVALID_INPUT',
-            `The review policy for “${currentRound.name}” cannot change after scorecards are submitted.`,
+            `The review policy for “${currentRound.name}” cannot change after assignments are created.`,
           )
         }
       }

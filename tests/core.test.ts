@@ -1251,6 +1251,50 @@ describe('ProgramKit operation engine', () => {
     expect(
       relabeled.state.submissionFormFields.find((field) => field.id === titleField.id)?.label,
     ).toBe('Session title')
+
+    for (const changedField of [
+      { ...titleField, required: !titleField.required },
+      {
+        ...titleField,
+        visibleWhen: { fieldId: fields[0].id, operator: 'equals' as const, value: 'yes' },
+      },
+    ]) {
+      const changedContract = executeOperation(state, 'submission-form.update', {
+        input: {
+          formId: form.id,
+          fields: fields.map((field) => (field.id === titleField.id ? changedField : field)),
+        },
+        expectedVersions: { [form.id]: form.version },
+      })
+      expect(changedContract.response).toMatchObject({
+        ok: false,
+        error: { code: 'INVALID_INPUT', message: expect.stringContaining('cannot change') },
+      })
+    }
+
+    const addedRequiredField = executeOperation(state, 'submission-form.update', {
+      input: {
+        formId: form.id,
+        fields: [
+          ...fields,
+          {
+            key: 'new_required_answer',
+            label: 'New required answer',
+            purpose: 'custom',
+            kind: 'short_text',
+            required: true,
+          },
+        ],
+      },
+      expectedVersions: { [form.id]: form.version },
+    })
+    expect(addedRequiredField.response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'INVALID_INPUT',
+        message: expect.stringContaining('cannot be added as required'),
+      },
+    })
   })
 
   it('validates visible required answers before assigning a submission', () => {
@@ -1671,6 +1715,7 @@ describe('ProgramKit operation engine', () => {
   it('configures independent review rounds with typed scorecards', () => {
     let state = createSeedState()
     state.scorecards = []
+    state.reviewerAssignments = []
     const addedReviewer = executeOperation(state, 'reviewer.create', {
       input: { name: 'Sam Rodriguez', email: 'sam@example.com' },
     })
@@ -1804,7 +1849,19 @@ describe('ProgramKit operation engine', () => {
       expect.objectContaining({ kind: 'long_text' }),
     ])
 
-    const assignment = state.reviewerAssignments.find((entry) => entry.id === 'rva_007')!
+    const assigned = executeOperation(state, 'review.assign', {
+      input: {
+        evaluationPlanId: savedPlan.id,
+        roundId: 'rnd_program_review',
+        reviewerId: 'rev_001',
+        submissionIds: ['sub_005'],
+      },
+    })
+    expect(assigned.response.ok).toBe(true)
+    state = assigned.state
+    const assignment = state.reviewerAssignments.find(
+      (entry) => entry.roundId === 'rnd_program_review' && entry.submissionId === 'sub_005',
+    )!
     const scored = executeOperation(state, 'review.submit-scorecard', {
       input: {
         assignmentId: assignment.id,
@@ -1832,7 +1889,7 @@ describe('ProgramKit operation engine', () => {
     })
   })
 
-  it('keeps submitted scorecards tied to an immutable review policy', () => {
+  it('keeps assigned reviews tied to an immutable review policy', () => {
     const state = createSeedState()
     const plan = state.evaluationPlans[0]
     const round = plan.rounds[0]
@@ -1858,7 +1915,7 @@ describe('ProgramKit operation engine', () => {
       ok: false,
       error: {
         code: 'INVALID_INPUT',
-        message: expect.stringContaining('cannot change after scorecards are submitted'),
+        message: expect.stringContaining('cannot change after assignments are created'),
       },
     })
     expect(changed.state).toBe(state)
