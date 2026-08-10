@@ -215,8 +215,8 @@ export function submissionReviewSummary(
         ? null
         : Math.round(
             (scorecardAverages.reduce((sum, score) => sum + score, 0) / scorecardAverages.length) *
-              10,
-          ) / 10,
+              100,
+          ) / 100,
     criterionAverages,
     recommendations,
   }

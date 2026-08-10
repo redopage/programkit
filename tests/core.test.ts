@@ -103,7 +103,7 @@ describe('ProgramKit operation engine', () => {
     expect(submissionReviewSummary(state, 'sub_002')).toMatchObject({
       assigned: 2,
       completed: 2,
-      averageScore: 4.7,
+      averageScore: 4.67,
     })
     expect(reviewerQueue(state, 'rev_001')).toHaveLength(3)
     expect(

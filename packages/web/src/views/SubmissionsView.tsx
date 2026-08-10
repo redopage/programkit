@@ -8,6 +8,8 @@ import {
 import { useMemo, useState } from 'react'
 
 import {
+  evaluationCriterionKind,
+  evaluationRoundCriteria,
   submissionAnswerByPurpose,
   submissionAnswerDisplayByPurpose,
   submissionDecisionReadiness,
@@ -341,17 +343,24 @@ function SubmissionDrawer({
   const { state } = payload
   const title = answerText(submissionAnswerByPurpose(state, submission, 'proposal_title'))
   const review = submissionReviewSummary(state, submission.id)
-  const assignmentIds = new Set(
-    state.reviewerAssignments
-      .filter((entry) => entry.submissionId === submission.id)
-      .map((entry) => entry.id),
+  const assignments = state.reviewerAssignments.filter(
+    (entry) => entry.submissionId === submission.id && entry.status !== 'recused',
   )
+  const assignmentIds = new Set(assignments.map((entry) => entry.id))
   const scorecards = state.scorecards.filter((entry) => assignmentIds.has(entry.assignmentId))
   const plan = state.evaluationPlans.find(
     (entry) =>
       entry.id ===
       state.reviewerAssignments.find((a) => a.submissionId === submission.id)?.evaluationPlanId,
   )
+  const numericCriteria = [
+    ...new Map(
+      assignments
+        .flatMap((assignment) => evaluationRoundCriteria(plan, assignment.roundId))
+        .filter((criterion) => evaluationCriterionKind(criterion) === 'numeric')
+        .map((criterion) => [criterion.id, criterion]),
+    ).values(),
+  ]
   const decisionReadiness = submissionDecisionReadiness(state, submission)
   const decisionReady = decisionReadiness.ready
   const canDecide =
@@ -520,9 +529,7 @@ function SubmissionDrawer({
               [
                 'Format',
                 sentenceCase(
-                  answerText(
-                    submissionAnswerDisplayByPurpose(state, submission, 'session_format'),
-                  ),
+                  answerText(submissionAnswerDisplayByPurpose(state, submission, 'session_format')),
                 ),
               ],
               ['Track', trackLabel],
@@ -599,7 +606,7 @@ function SubmissionDrawer({
           </div>
           {plan ? (
             <dl className="flex flex-col gap-3 pt-5">
-              {plan.criteria.map((criterion) => {
+              {numericCriteria.map((criterion) => {
                 const value = review.criterionAverages[criterion.id] ?? 0
                 return (
                   <div key={criterion.id}>
