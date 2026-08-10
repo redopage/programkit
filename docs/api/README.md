@@ -14,14 +14,18 @@ implemented. None of these surfaces are safe for real participant data yet; see
 
 These browser endpoints are available only on the hosted app. Mutations require the same origin.
 
-| Method | Path                           | Purpose                                     |
-| ------ | ------------------------------ | ------------------------------------------- |
-| `POST` | `/api/v1/auth/magic-link`      | Request a one-time staff sign-in link       |
-| `GET`  | `/auth/verify?token=...`       | Exchange the link for a secure session      |
-| `POST` | `/api/v1/auth/logout`          | Revoke the current session                  |
-| `GET`  | `/api/v1/account`              | Read the signed-in user's accessible events |
-| `POST` | `/api/v1/events`               | Create and select an isolated empty event   |
-| `POST` | `/api/v1/account/active-event` | Select an event from verified membership    |
+| Method | Path                           | Purpose                                              |
+| ------ | ------------------------------ | ---------------------------------------------------- |
+| `POST` | `/api/v1/auth/password`        | Create an account or sign in with email and password |
+| `POST` | `/api/v1/auth/magic-link`      | Request a one-time staff sign-in link                |
+| `GET`  | `/auth/verify?token=...`       | Exchange the link for a secure session               |
+| `POST` | `/api/v1/auth/logout`          | Revoke the current session                           |
+| `GET`  | `/api/v1/account`              | Read the signed-in user's accessible events          |
+| `POST` | `/api/v1/events`               | Create and select an isolated empty event            |
+| `POST` | `/api/v1/account/active-event` | Select an event from verified membership             |
+
+Password requests include `email`, `password`, and `intent`, where intent is `signup` or `signin`.
+Passwords must contain 10 to 128 characters. Passwords are never returned or stored directly.
 
 Event team access uses these same-origin browser endpoints:
 
@@ -31,7 +35,7 @@ Event team access uses these same-origin browser endpoints:
 | `POST`   | `/api/v1/events/{eventId}/invitations`                | Email a seven-day, single-use invitation    |
 | `DELETE` | `/api/v1/events/{eventId}/invitations/{invitationId}` | Cancel a pending invitation                 |
 | `DELETE` | `/api/v1/events/{eventId}/members/{membershipId}`     | Revoke event access                         |
-| `GET`    | `/auth/invite?token=...`                              | Accept after passwordless sign-in           |
+| `GET`    | `/auth/invite?token=...`                              | Accept after account sign-in                |
 
 Owners can manage administrators and viewers. Administrators can manage viewers. Viewers receive
 read scopes only. The raw invitation token is emailed and is never returned by a team-list read.

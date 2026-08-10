@@ -109,4 +109,73 @@ describe('AuthDurableObject membership projections', () => {
     expect(after.account!.events).toHaveLength(1)
     expect(after.account!.events[0].id).not.toBe(eventId)
   })
+
+  it('creates and returns to a password account without exposing password state', async () => {
+    const signupResponse = await auth.fetch(
+      request('/internal/auth/password', {
+        email: 'jordan@example.com',
+        password: 'correct horse battery staple',
+        intent: 'signup',
+        ipHash: 'local-test',
+      }),
+    )
+    expect(signupResponse.status).toBe(201)
+    const signup = (await signupResponse.json()) as {
+      ok: boolean
+      sessionToken: string
+      account: { user: { email: string }; events: unknown[] }
+    }
+    expect(signup.ok).toBe(true)
+    expect(signup.sessionToken).toMatch(/^[a-f0-9]{64}$/u)
+    expect(signup.account.user.email).toBe('jordan@example.com')
+    expect(signup.account.events).toHaveLength(1)
+    expect(JSON.stringify(signup)).not.toContain('correct horse')
+
+    vi.advanceTimersByTime(1_000)
+    const signinResponse = await auth.fetch(
+      request('/internal/auth/password', {
+        email: 'JORDAN@example.com',
+        password: 'correct horse battery staple',
+        intent: 'signin',
+        ipHash: 'second-test',
+      }),
+    )
+    expect(signinResponse.status).toBe(200)
+    const signin = (await signinResponse.json()) as { ok: boolean; sessionToken: string }
+    expect(signin.ok).toBe(true)
+    expect(signin.sessionToken).not.toBe(signup.sessionToken)
+
+    const invalidResponse = await auth.fetch(
+      request('/internal/auth/password', {
+        email: 'jordan@example.com',
+        password: 'incorrect password',
+        intent: 'signin',
+        ipHash: 'third-test',
+      }),
+    )
+    expect(invalidResponse.status).toBe(401)
+    await expect(invalidResponse.json()).resolves.toEqual({ ok: false })
+  })
+
+  it('does not let password signup claim an existing passwordless account', async () => {
+    const issuedResponse = await auth.fetch(
+      request('/internal/auth/request', {
+        email: 'existing@example.com',
+        ipHash: 'existing-test',
+      }),
+    )
+    const issued = await body(issuedResponse)
+    await auth.fetch(request('/internal/auth/consume', { token: issued.token }))
+
+    const response = await auth.fetch(
+      request('/internal/auth/password', {
+        email: 'existing@example.com',
+        password: 'correct horse battery staple',
+        intent: 'signup',
+        ipHash: 'claim-test',
+      }),
+    )
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ ok: false })
+  })
 })

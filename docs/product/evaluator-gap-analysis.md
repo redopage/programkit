@@ -49,7 +49,8 @@ event ID is validated before the public page loads and is exchanged for an HTTP-
 That cookie selects only the event's public projections and does not grant organizer access. The
 program exposes agenda, session, speaker, itinerary, and gallery views on the same `/agenda` route.
 Each view reads the same immutable release and can be linked or embedded with query parameters. The
-seven-day demo remains the preferred evaluator target until deterministic role sessions exist.
+The hosted app now supports deterministic organizer password signup and sign-in. The seven-day demo
+remains the preferred target for seeded role switching until participant sessions are account-backed.
 
 Airtable, the Cloudflare runtime, API breadth, repository hosting, and performance are not scored by
 the V1 browser rubric. They remain useful bonus or product-quality work, but should not displace a

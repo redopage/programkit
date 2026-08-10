@@ -3,6 +3,9 @@ import { DurableObject } from 'cloudflare:workers'
 const magicLinkLifetimeMs = 15 * 60 * 1_000
 const sessionLifetimeMs = 30 * 24 * 60 * 60 * 1_000
 const requestWindowMs = 60 * 60 * 1_000
+const passwordIterations = 210_000
+const minimumPasswordLength = 10
+const maximumPasswordLength = 128
 
 interface AuthUser {
   id: string
@@ -41,6 +44,14 @@ interface SessionRecord {
   expiresAt: string
 }
 
+interface PasswordRecord {
+  userId: string
+  salt: string
+  hash: string
+  iterations: number
+  createdAt: string
+}
+
 interface RateRecord {
   attempts: number[]
 }
@@ -60,6 +71,48 @@ function randomHex(bytes: number) {
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
   return Array.from(new Uint8Array(digest), (entry) => entry.toString(16).padStart(2, '0')).join('')
+}
+
+function bytesToHex(value: Uint8Array) {
+  return Array.from(value, (entry) => entry.toString(16).padStart(2, '0')).join('')
+}
+
+async function passwordHash(password: string, salt: string, iterations: number) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  )
+  const derived = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      hash: 'SHA-256',
+      salt: new TextEncoder().encode(salt),
+      iterations,
+    },
+    key,
+    256,
+  )
+  return bytesToHex(new Uint8Array(derived))
+}
+
+function equalHex(left: string, right: string) {
+  if (left.length !== right.length) return false
+  let difference = 0
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index)
+  }
+  return difference === 0
+}
+
+function validPassword(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length >= minimumPasswordLength &&
+    value.length <= maximumPasswordLength
+  )
 }
 
 export function normalizeEmail(value: unknown) {
@@ -148,6 +201,14 @@ export class AuthDurableObject extends DurableObject {
     return user
   }
 
+  async #existingUserForEmail(email: string) {
+    const emailHash = await sha256(email)
+    const existingId = await this.#ctx.storage.get<string>(`email:${emailHash}`)
+    return existingId
+      ? ((await this.#ctx.storage.get<AuthUser>(`user:${existingId}`)) ?? null)
+      : null
+  }
+
   async #account(user: AuthUser, preferredEventId?: string | null): Promise<AuthAccount> {
     const events = (
       await Promise.all(
@@ -173,19 +234,73 @@ export class AuthDurableObject extends DurableObject {
     const user = await this.#userForEmail(record.email)
     const updatedUser = { ...user, lastSignedInAt: new Date().toISOString() }
     await this.#ctx.storage.put(`user:${user.id}`, updatedUser)
-    const sessionToken = randomHex(32)
-    const sessionHash = await sha256(sessionToken)
-    const session: SessionRecord = {
+    const session = await this.#createSession(updatedUser)
+    return {
+      ok: true as const,
+      sessionToken: session.token,
+      sessionExpiresAt: session.record.expiresAt,
+      account: await this.#account(updatedUser),
+    }
+  }
+
+  async #createSession(user: AuthUser) {
+    const token = randomHex(32)
+    const tokenHash = await sha256(token)
+    const record: SessionRecord = {
       userId: user.id,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + sessionLifetimeMs).toISOString(),
     }
-    await this.#ctx.storage.put(`session:${sessionHash}`, session)
+    await this.#ctx.storage.put(`session:${tokenHash}`, record)
     await this.#scheduleCleanup()
+    return { token, record }
+  }
+
+  async #authenticatePassword(
+    email: string,
+    password: string,
+    intent: 'signin' | 'signup',
+    ipHash: string,
+  ) {
+    const emailHash = await sha256(email)
+    const emailAllowed = await this.#rateAllows(`password-email:${emailHash}`, 10, 750)
+    const ipAllowed = await this.#rateAllows(`password-ip:${ipHash}`, 40)
+    if (!emailAllowed || !ipAllowed) return { ok: false as const }
+
+    let user = await this.#existingUserForEmail(email)
+    const existingPassword = user
+      ? await this.#ctx.storage.get<PasswordRecord>(`password:${user.id}`)
+      : null
+
+    if (intent === 'signup') {
+      if (user || existingPassword) return { ok: false as const }
+      user = await this.#userForEmail(email)
+      const salt = randomHex(16)
+      const passwordRecord: PasswordRecord = {
+        userId: user.id,
+        salt,
+        hash: await passwordHash(password, salt, passwordIterations),
+        iterations: passwordIterations,
+        createdAt: new Date().toISOString(),
+      }
+      await this.#ctx.storage.put(`password:${user.id}`, passwordRecord)
+    } else {
+      if (!user || !existingPassword) return { ok: false as const }
+      const candidate = await passwordHash(
+        password,
+        existingPassword.salt,
+        existingPassword.iterations,
+      )
+      if (!equalHex(candidate, existingPassword.hash)) return { ok: false as const }
+    }
+
+    const updatedUser = { ...user, lastSignedInAt: new Date().toISOString() }
+    await this.#ctx.storage.put(`user:${updatedUser.id}`, updatedUser)
+    const session = await this.#createSession(updatedUser)
     return {
       ok: true as const,
-      sessionToken,
-      sessionExpiresAt: session.expiresAt,
+      sessionToken: session.token,
+      sessionExpiresAt: session.record.expiresAt,
       account: await this.#account(updatedUser),
     }
   }
@@ -320,6 +435,20 @@ export class AuthDurableObject extends DurableObject {
     if (url.pathname === '/internal/auth/consume') {
       const token = typeof input.token === 'string' ? input.token : ''
       return Response.json(await this.#consumeMagicLink(token))
+    }
+
+    if (url.pathname === '/internal/auth/password') {
+      const email = normalizeEmail(input.email)
+      const password = input.password
+      const intent = input.intent === 'signup' ? 'signup' : 'signin'
+      const ipHash = typeof input.ipHash === 'string' ? input.ipHash : 'unknown'
+      if (!email || !validPassword(password)) {
+        return Response.json({ ok: false }, { status: 401 })
+      }
+      const authenticated = await this.#authenticatePassword(email, password, intent, ipHash)
+      return authenticated.ok
+        ? Response.json(authenticated, { status: intent === 'signup' ? 201 : 200 })
+        : Response.json({ ok: false }, { status: 401 })
     }
 
     if (url.pathname === '/internal/auth/session') {

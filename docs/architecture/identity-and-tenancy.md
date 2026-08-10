@@ -4,7 +4,7 @@ ProgramKit has one recommended hosted shape. Identity is account-scoped, busines
 event-scoped, and file bytes are kept out of both.
 
 ```text
-passwordless session
+account session
         │
         ▼
 account Auth Durable Object
@@ -19,7 +19,16 @@ file metadata       ── event records
 
 ## Hosted staff sign-in
 
-`app.programkit.dev` uses passwordless email sign-in through Cloudflare Email Service.
+`app.programkit.dev` supports email and password plus passwordless email links. Both paths resolve
+the same account object, event memberships, and 30-day session format.
+
+Password signup derives a 256-bit key with PBKDF2-SHA-256, a random per-account salt, and 210,000
+iterations. Only the derived value is stored. Password attempts have account and IP limits, and
+sign-in failures do not disclose whether the account or password was wrong. An existing
+passwordless account cannot be claimed through open password signup. Its owner must continue with
+an email link until an authenticated password-setting flow is added.
+
+Passwordless sign-in works as follows:
 
 1. The Worker normalizes the email address and routes the request to an account-sharded
    `AuthDurableObject`.
@@ -45,6 +54,7 @@ account read through one global serialized object.
 The account object owns:
 
 - the user identity;
+- salted password derivations where configured;
 - magic-link hashes and expiry;
 - session hashes and expiry;
 - a repairable projection of the user's event memberships; and
@@ -61,8 +71,8 @@ normalized email, usable once, and expired after seven days. Accepting an invita
 account switcher projection. Revocation removes that projection after the authoritative event
 membership is disabled.
 
-Account recovery, ownership transfer, and deployment-specific MFA or external OIDC policy are
-still required before teams use real participant data.
+Authenticated password changes, account recovery, ownership transfer, and deployment-specific MFA
+or external OIDC policy remain future hardening.
 
 ## One workspace object per event
 
@@ -118,5 +128,7 @@ uses `?event={eventId}` on the initial document request. The Worker validates st
 sets an HTTP-only routing cookie, and serves only the public form or immutable published-program
 projection from that event object. The event ID is routing context, not organizer authorization.
 
-Reviewer and speaker routes remain behind the staff session until verified per-person identities
-are implemented. The demo remains the safe place to evaluate those sample-data flows.
+Reviewer and speaker links use separate, record-scoped capability keys. They can read and mutate
+only the matching reviewer queue or participation portal and cannot call operator endpoints.
+Account-backed participant sessions remain future work; the demo remains the safest place to
+evaluate sample-data role switching.

@@ -521,6 +521,67 @@ function unavailablePublicEvent(request: Request) {
   )
 }
 
+interface HostedAuthenticationResult {
+  ok: boolean
+  sessionToken?: string
+  sessionExpiresAt?: string
+  account?: AuthAccount
+}
+
+async function establishHostedSession(
+  env: Env,
+  url: URL,
+  authShard: string,
+  authenticated: HostedAuthenticationResult,
+  response: { destination?: string; status?: number } = {},
+) {
+  if (!authenticated.ok || !authenticated.sessionToken || !authenticated.account) return null
+  const firstEvent = authenticated.account.events.find(
+    (event) => event.id === authenticated.account!.activeEventId,
+  )
+  if (!firstEvent) return null
+  await initializeHostedEvent(env, firstEvent)
+  const principal: HostedSessionPrincipal = {
+    authShard,
+    sessionToken: authenticated.sessionToken,
+    account: authenticated.account,
+  }
+  const membership = await initializeHostedEventAccess(env, firstEvent, eventAccessActor(principal))
+  await linkHostedMembership(env, principal, firstEvent, membership)
+  const maxAge = Math.max(
+    0,
+    Math.floor((Date.parse(authenticated.sessionExpiresAt ?? '') - Date.now()) / 1_000),
+  )
+  const headers = new Headers({ 'cache-control': 'no-store' })
+  headers.append(
+    'set-cookie',
+    authCookie(
+      sessionCookieName,
+      scopedAuthToken(authShard, authenticated.sessionToken),
+      url,
+      maxAge,
+    ),
+  )
+  headers.append(
+    'set-cookie',
+    authCookie(eventCookieName, authenticated.account.activeEventId, url, maxAge),
+  )
+  if (response.destination) {
+    headers.set('location', response.destination)
+    return new Response(null, { status: 302, headers })
+  }
+  return Response.json(
+    {
+      ok: true,
+      account: {
+        user: authenticated.account.user,
+        activeEventId: authenticated.account.activeEventId,
+      },
+    },
+    { status: response.status ?? 200, headers },
+  )
+}
+
 async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
   if (!env.PROGRAMKIT_AUTH)
     return Response.json({ ok: false, error: 'Authentication is unavailable.' }, { status: 503 })
@@ -589,6 +650,61 @@ async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
     )
   }
 
+  if (request.method === 'POST' && url.pathname === '/api/v1/auth/password') {
+    if (!sameOrigin(request, url)) {
+      return Response.json(
+        { ok: false, error: 'Cross-origin requests are not allowed.' },
+        { status: 403 },
+      )
+    }
+    const input = (await request.json()) as {
+      email?: unknown
+      password?: unknown
+      intent?: unknown
+    }
+    const email = normalizeEmail(input.email)
+    const password = typeof input.password === 'string' ? input.password : ''
+    const intent = input.intent === 'signup' ? 'signup' : 'signin'
+    if (!email || password.length < 10 || password.length > 128) {
+      return Response.json(
+        { ok: false, error: 'Enter a valid email and a password with at least 10 characters.' },
+        { status: 400, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const shard = (await hashValue(email)).slice(0, 32)
+    const ipHash = await hashValue(request.headers.get('cf-connecting-ip') ?? 'local')
+    const authenticatedResponse = await authStub(env, shard)!.fetch(
+      new Request('http://auth.internal/internal/auth/password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password, intent, ipHash }),
+      }),
+    )
+    const authenticated = (await authenticatedResponse.json()) as HostedAuthenticationResult
+    if (!authenticatedResponse.ok || !authenticated.ok) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            intent === 'signup'
+              ? 'That account already exists. Sign in or use an email link.'
+              : 'The email or password is incorrect.',
+        },
+        { status: 401, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const sessionResponse = await establishHostedSession(env, url, shard, authenticated, {
+      status: intent === 'signup' ? 201 : 200,
+    })
+    return (
+      sessionResponse ??
+      Response.json(
+        { ok: false, error: 'That account could not be opened.' },
+        { status: 500, headers: { 'cache-control': 'no-store' } },
+      )
+    )
+  }
+
   if (request.method === 'GET' && url.pathname === '/auth/verify') {
     const token = parseScopedAuthToken(url.searchParams.get('token'))
     if (!token) return redirect(url, '/login?error=expired')
@@ -600,50 +716,11 @@ async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
         body: JSON.stringify({ token: token.secret }),
       }),
     )
-    const consumed = (await consumedResponse.json()) as {
-      ok: boolean
-      sessionToken?: string
-      sessionExpiresAt?: string
-      account?: AuthAccount
-    }
-    if (!consumed.ok || !consumed.sessionToken || !consumed.account) {
-      return redirect(url, '/login?error=expired')
-    }
-    const firstEvent = consumed.account.events.find(
-      (event) => event.id === consumed.account!.activeEventId,
-    )
-    if (!firstEvent) return redirect(url, '/login?error=account')
-    await initializeHostedEvent(env, firstEvent)
-    const principal: HostedSessionPrincipal = {
-      authShard: token.shard,
-      sessionToken: consumed.sessionToken,
-      account: consumed.account,
-    }
-    const membership = await initializeHostedEventAccess(
-      env,
-      firstEvent,
-      eventAccessActor(principal),
-    )
-    await linkHostedMembership(env, principal, firstEvent, membership)
-    const maxAge = Math.max(
-      0,
-      Math.floor((Date.parse(consumed.sessionExpiresAt ?? '') - Date.now()) / 1_000),
-    )
-    const headers = new Headers({ location: '/', 'cache-control': 'no-store' })
-    headers.append(
-      'set-cookie',
-      authCookie(
-        sessionCookieName,
-        scopedAuthToken(token.shard, consumed.sessionToken),
-        url,
-        maxAge,
-      ),
-    )
-    headers.append(
-      'set-cookie',
-      authCookie(eventCookieName, consumed.account.activeEventId, url, maxAge),
-    )
-    return new Response(null, { status: 302, headers })
+    const consumed = (await consumedResponse.json()) as HostedAuthenticationResult
+    const sessionResponse = await establishHostedSession(env, url, token.shard, consumed, {
+      destination: '/',
+    })
+    return sessionResponse ?? redirect(url, '/login?error=expired')
   }
 
   if (request.method === 'POST' && url.pathname === '/api/v1/auth/logout') {

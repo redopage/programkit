@@ -52,8 +52,10 @@ withdrawn assignments, and uses the durable trigger key to avoid queueing the sa
 
 ## Hosted app sign-in
 
-`app.programkit.dev` now uses passwordless email sign-in through the same app-only Cloudflare Email
-Service binding. The demo host remains anonymous and never receives an outbound mail binding.
+`app.programkit.dev` offers passwordless email sign-in through the same app-only Cloudflare Email
+Service binding alongside email and password. The demo host remains anonymous and never receives
+an outbound mail binding. A self-hosted deployment can therefore start without an email provider,
+while a configured deployment can offer the lower-friction email-link path.
 
 The Worker creates a 256-bit, 15-minute, single-use token and stores only its hash. A successful
 callback exchanges it for a 30-day HTTP-only, secure, same-site session cookie whose secret is also
@@ -68,10 +70,10 @@ examples. Those examples demonstrate delivery, not the complete security boundar
 and [session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
 guidance for token handling, enumeration resistance, session rotation, logout, and expiry.
 
-The hosted app sign-in screen, delivery, one-time exchange, session validation, event membership,
-event creation, switching, and logout are implemented. Team invitations and participant,
-reviewer, public-link, MCP, and file authorization remain incomplete, so the hosted app must not
-accept real participant data yet. See
+The hosted app sign-in screen, password derivation, email delivery, one-time exchange, session
+validation, event membership, team invitations, event creation, switching, and logout are
+implemented. Reviewer and speaker access uses record-scoped capabilities rather than account
+sessions. Authenticated password changes, account recovery, and optional MFA remain. See
 [Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).
 
 ## Required delivery path
