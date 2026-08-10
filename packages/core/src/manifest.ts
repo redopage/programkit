@@ -751,7 +751,7 @@ export const operationManifest = [
     reversible: false,
     supportsDryRun: false,
     requiredInput: ['changeSetId'],
-    emits: ['change-set.committed'],
+    emits: ['change-set.committed', 'change-set.stale'],
   },
   {
     name: 'workspace.reset-demo',

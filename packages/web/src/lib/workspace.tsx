@@ -87,6 +87,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       try {
         const response = await mutateAsync({ operation, input, options })
         if (!response.ok) {
+          if (response.stateRevision > (workspacePayload?.state.revision ?? 0)) {
+            await queryClient.invalidateQueries({ queryKey: workspaceQueryKey, exact: true })
+          }
           setToast({
             id: crypto.randomUUID(),
             tone: 'error',

@@ -74,6 +74,18 @@ export interface ExecutionResult {
   response: OperationResponse
 }
 
+class PersistedOperationError extends OperationError {
+  constructor(
+    code: string,
+    message: string,
+    readonly state: WorkspaceState,
+    readonly eventIds: string[],
+    fields?: Record<string, string>,
+  ) {
+    super(code, message, fields)
+  }
+}
+
 interface ApplyContext {
   actor: Actor
   operation: string
@@ -4417,8 +4429,7 @@ function applyHandler(
           'Approve this proposal before committing it.',
         )
       }
-      const nestedEventIds: string[] = []
-      for (const item of changeSet.operations) {
+      const resolvedOperations = changeSet.operations.map((item) => {
         if (item.operation.startsWith('change-set.')) {
           throw new OperationError(
             'INVALID_INPUT',
@@ -4431,7 +4442,43 @@ function applyHandler(
         }
         assertRequiredInput(nestedDefinition, item.input)
         assertScopes(context.actor, nestedDefinition.scopes)
-        assertExpectedVersions(state, item.expectedVersions)
+        return { item, nestedDefinition }
+      })
+
+      const validationState = cloneState(state)
+      try {
+        for (const { item } of resolvedOperations) {
+          assertExpectedVersions(validationState, item.expectedVersions)
+          applyHandler(validationState, item.operation, item.input, {
+            actor: context.actor,
+            operation: item.operation,
+            emittedEventIds: [],
+          })
+        }
+      } catch (error) {
+        if (!(error instanceof OperationError)) throw error
+        const warning = `This proposal can no longer be applied: ${error.message}`
+        changeSet.status = 'stale'
+        changeSet.warnings = [warning]
+        changeSet.updatedAt = timestamp
+        changeSet.version += 1
+        appendEvent(state, context, {
+          type: 'change-set.stale',
+          aggregate: { type: 'change-set', id: changeSet.id, version: changeSet.version },
+          summary: `Marked proposal “${changeSet.title}” as stale.`,
+          data: { causeCode: error.code, cause: error.message },
+        })
+        throw new PersistedOperationError(
+          'STALE_WRITE',
+          warning,
+          state,
+          [...context.emittedEventIds],
+          error.fields,
+        )
+      }
+
+      const nestedEventIds: string[] = []
+      for (const { item } of resolvedOperations) {
         const nestedContext: ApplyContext = {
           actor: context.actor,
           operation: item.operation,
@@ -4615,15 +4662,17 @@ export function executeOperation(
             'INTERNAL_ERROR',
             error instanceof Error ? error.message : 'The operation failed.',
           )
+    const persistedState = error instanceof PersistedOperationError ? error.state : null
+    if (persistedState) persistedState.revision += 1
     return {
-      state: currentState,
+      state: persistedState ?? currentState,
       response: {
         ok: false,
         error: { code: known.code, message: known.message, fields: known.fields },
-        eventIds: [],
+        eventIds: error instanceof PersistedOperationError ? error.eventIds : [],
         warnings: [],
         approvalRequired: known.code === 'APPROVAL_REQUIRED',
-        stateRevision: currentState.revision,
+        stateRevision: persistedState?.revision ?? currentState.revision,
         traceId,
       },
     }

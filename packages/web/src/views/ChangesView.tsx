@@ -150,6 +150,13 @@ function ChangeDrawer({
         </div>
         <p className="text-pretty text-base text-zinc-600 sm:text-sm">{changeSet.description}</p>
 
+        {changeSet.status === 'stale' ? (
+          <Callout tone="warning" title="This proposal is out of date">
+            Review the latest workspace state, then create a new proposal if the change is still
+            needed.
+          </Callout>
+        ) : null}
+
         <section aria-labelledby="impact-heading">
           <h3 id="impact-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
             Expected impact
@@ -165,7 +172,10 @@ function ChangeDrawer({
         </section>
 
         {changeSet.warnings.length > 0 ? (
-          <Callout tone="warning" title="Before you approve">
+          <Callout
+            tone="warning"
+            title={changeSet.status === 'stale' ? 'Why it became stale' : 'Before you approve'}
+          >
             <ul role="list" className="flex flex-col gap-1 pt-1">
               {changeSet.warnings.map((warning) => (
                 <li key={warning} className="text-pretty">

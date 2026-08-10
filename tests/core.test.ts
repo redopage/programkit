@@ -1002,6 +1002,74 @@ describe('ProgramKit operation engine', () => {
     ).toBe(true)
   })
 
+  it('persists a stale proposal when its guarded records changed before commit', () => {
+    let state = createSeedState()
+    const placement = state.placements.find((entry) => entry.id === 'plc_007')!
+    const created = executeOperation(state, 'change-set.create', {
+      input: {
+        title: 'Move the opening session',
+        operations: [
+          {
+            operation: 'schedule.move-session',
+            input: {
+              placementId: placement.id,
+              roomId: 'rom_main',
+              startsAt: '2026-10-04T17:00:00.000Z',
+            },
+            expectedVersions: { [placement.id]: placement.version },
+          },
+        ],
+      },
+    })
+    expect(created.response.ok, JSON.stringify(created.response)).toBe(true)
+    state = created.state
+
+    const changeSet = state.changeSets[0]
+    const approved = executeOperation(state, 'change-set.approve', {
+      input: { changeSetId: changeSet.id },
+      expectedVersions: { [changeSet.id]: changeSet.version },
+    })
+    expect(approved.response.ok, JSON.stringify(approved.response)).toBe(true)
+    state = approved.state
+
+    const changed = executeOperation(state, 'schedule.move-session', {
+      input: {
+        placementId: placement.id,
+        roomId: 'rom_studio',
+        startsAt: '2026-10-04T18:00:00.000Z',
+      },
+      expectedVersions: { [placement.id]: placement.version },
+    })
+    expect(changed.response.ok, JSON.stringify(changed.response)).toBe(true)
+    state = changed.state
+    const revisionBeforeCommit = state.revision
+    const approvedChangeSet = state.changeSets.find((entry) => entry.id === changeSet.id)!
+
+    const committed = executeOperation(state, 'change-set.commit', {
+      input: { changeSetId: changeSet.id },
+      expectedVersions: { [changeSet.id]: approvedChangeSet.version },
+    })
+
+    expect(committed.response).toMatchObject({
+      ok: false,
+      error: { code: 'STALE_WRITE', message: expect.stringContaining('can no longer be applied') },
+      stateRevision: revisionBeforeCommit + 1,
+    })
+    expect(committed.state.changeSets.find((entry) => entry.id === changeSet.id)).toMatchObject({
+      status: 'stale',
+      warnings: [expect.stringContaining('changed after this action was prepared')],
+    })
+    expect(committed.state.placements.find((entry) => entry.id === placement.id)).toMatchObject({
+      roomId: 'rom_studio',
+      startsAt: '2026-10-04T18:00:00.000Z',
+    })
+    expect(
+      committed.state.domainEvents.some(
+        (event) => event.type === 'change-set.stale' && event.aggregate.id === changeSet.id,
+      ),
+    ).toBe(true)
+  })
+
   it('separates campaign drafting, approval, and sending', () => {
     let state = createSeedState()
     const pending = state.campaigns.find((campaign) => campaign.status === 'awaiting_approval')!
