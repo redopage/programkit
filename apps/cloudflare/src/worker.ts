@@ -332,10 +332,12 @@ function isHostedPublicDocument(pathname: string) {
   )
 }
 
-function hostedPublicEventId(request: Request, url: URL) {
+export function hostedPublicEventId(request: Request, url: URL) {
   if (isDocumentNavigation(request) && isHostedPublicDocument(url.pathname)) {
     const requested = url.searchParams.get('event')
-    return requested && hostedEventIdPattern.test(requested) ? requested : null
+    if (requested && hostedEventIdPattern.test(requested)) return requested
+    const selected = cookie(request, publicEventCookieName)
+    return selected && hostedEventIdPattern.test(selected) ? selected : null
   }
   if (url.pathname.startsWith('/public/')) {
     const requested = url.searchParams.get('event')

@@ -18,6 +18,7 @@ import {
 } from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
+import { publicSubmissionPath } from '../lib/public-links.ts'
 import {
   Button,
   Dialog,
@@ -96,14 +97,24 @@ export function SubmissionsView({
             <Button
               size="compact"
               onClick={() => {
-                const url = `${window.location.origin}/submit/${form?.slug ?? 'call-for-speakers'}`
+                const path = publicSubmissionPath(
+                  state.activeEventId,
+                  form?.slug ?? 'call-for-speakers',
+                )
+                const url = new URL(path, window.location.origin).toString()
                 void navigator.clipboard.writeText(url)
               }}
             >
               <LinkIcon className="size-4 h-lh shrink-0 fill-current" />
               Copy public link
             </Button>
-            <Button onClick={() => navigate(`/submit/${form?.slug ?? 'call-for-speakers'}`)}>
+            <Button
+              onClick={() =>
+                navigate(
+                  publicSubmissionPath(state.activeEventId, form?.slug ?? 'call-for-speakers'),
+                )
+              }
+            >
               Open submission form
               <ArrowTopRightOnSquareIcon className="size-4 h-lh shrink-0 fill-current" />
             </Button>
