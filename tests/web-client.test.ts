@@ -11,6 +11,7 @@ import {
   speakerSubmissionsPath,
   surfaceFromPathname,
   surfaceKey,
+  withPublicEventScope,
   type WorkspacePayload,
 } from '@programkit/web'
 
@@ -31,6 +32,16 @@ const emptyPayload = {
 } as unknown as WorkspacePayload
 
 describe('ProgramKit web client', () => {
+  it('carries hosted public event scope into state and operation requests', () => {
+    expect(
+      withPublicEventScope(
+        '/public/v1/submission-forms/cfp/state?speakerAccessKey=speaker_1',
+        'evt_123',
+      ),
+    ).toBe('/public/v1/submission-forms/cfp/state?speakerAccessKey=speaker_1&event=evt_123')
+    expect(withPublicEventScope('/public/v1/program/state', null)).toBe('/public/v1/program/state')
+  })
+
   it('adds the event capability to public links only on the hosted app', () => {
     const eventId = 'evt_1234567890abcdef12345678'
     expect(publicProgramPath(eventId, 'hosted-app')).toBe(

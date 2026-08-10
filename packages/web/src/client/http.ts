@@ -84,6 +84,24 @@ function operationEndpoint(surface: ProgramKitSurface, operation: string) {
   }
 }
 
+export function withPublicEventScope(endpoint: string, eventId: string | null) {
+  if (!eventId) return endpoint
+  const url = new URL(endpoint, 'https://programkit.local')
+  url.searchParams.set('event', eventId)
+  return `${url.pathname}${url.search}`
+}
+
+function currentPublicEventId() {
+  if (typeof window === 'undefined') return null
+  return new URLSearchParams(window.location.search).get('event')
+}
+
+function scopedEndpoint(surface: ProgramKitSurface, endpoint: string) {
+  return surface.kind === 'operator'
+    ? endpoint
+    : withPublicEventScope(endpoint, currentPublicEventId())
+}
+
 export function createProgramKitHttpClient(
   options: ProgramKitHttpClientOptions = {},
 ): ProgramKitClient {
@@ -109,7 +127,7 @@ export function createProgramKitHttpClient(
   return {
     async readSurface(surface, signal) {
       return parseJson<WorkspacePayload>(
-        await fetcher(resolveUrl(stateEndpoint(surface)), {
+        await fetcher(resolveUrl(scopedEndpoint(surface, stateEndpoint(surface))), {
           headers: surfaceHeaders(surface, { accept: 'application/json' }),
           signal,
         }),
@@ -123,7 +141,7 @@ export function createProgramKitHttpClient(
       }
       const { actor: _untrustedActor, ...publicOptions } = operationOptions ?? {}
       return parseOperationResponse(
-        await fetcher(resolveUrl(operationEndpoint(surface, operation)), {
+        await fetcher(resolveUrl(scopedEndpoint(surface, operationEndpoint(surface, operation))), {
           method: 'POST',
           headers: surfaceHeaders(surface, { 'content-type': 'application/json' }),
           body: JSON.stringify({

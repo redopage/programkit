@@ -1,6 +1,6 @@
 export { App, ProgramKitApp } from './App.tsx'
 export { ProgramKitMark } from './components/brand.tsx'
-export { createProgramKitHttpClient } from './client/http.ts'
+export { createProgramKitHttpClient, withPublicEventScope } from './client/http.ts'
 export {
   externalAccessPath,
   publicProgramPath,
