@@ -4041,13 +4041,25 @@ function applyHandler(
       placement.endsAt = addMinutes(placement.startsAt, session.durationMinutes)
       placement.published = false
       placement.version += 1
+      const conflicts = scheduleConflicts(state).filter((conflict) =>
+        conflict.placementIds.includes(placement.id),
+      )
+      const blocking = conflicts.find(
+        (conflict) => conflict.severity === 'error' && conflict.type !== 'person_overlap',
+      )
+      if (blocking) {
+        throw new OperationError(
+          blocking.type === 'room_overlap' ? 'ROOM_CONFLICT' : 'SCHEDULE_CONFLICT',
+          blocking.message,
+        )
+      }
       appendEvent(state, context, {
         type: 'schedule.session-moved',
         aggregate: { type: 'placement', id: placement.id, version: placement.version },
         summary: `Moved ${session.title} to ${room.name}.`,
         data: { previous, next: { roomId: room.id, startsAt: placement.startsAt } },
       })
-      return { placement, conflicts: scheduleConflicts(state) }
+      return { placement, conflicts }
     }
 
     case 'schedule.auto-place': {

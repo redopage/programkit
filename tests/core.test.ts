@@ -373,6 +373,25 @@ describe('ProgramKit operation engine', () => {
     const overlappingPlacement = second.state.placements.find(
       (placement) => placement.sessionId === second.state.sessions[1].id,
     )!
+    const firstPlacement = second.state.placements.find(
+      (placement) => placement.sessionId === second.state.sessions[0].id,
+    )!
+    const rejectedMove = executeOperation(second.state, 'schedule.move-session', {
+      input: {
+        placementId: overlappingPlacement.id,
+        roomId: firstPlacement.roomId,
+        startsAt: firstPlacement.startsAt,
+      },
+      expectedVersions: { [overlappingPlacement.id]: overlappingPlacement.version },
+    })
+    expect(rejectedMove.response).toMatchObject({
+      ok: false,
+      error: { code: 'ROOM_CONFLICT' },
+    })
+    expect(
+      rejectedMove.state.placements.find((placement) => placement.id === overlappingPlacement.id),
+    ).toEqual(overlappingPlacement)
+
     const moved = executeOperation(second.state, 'schedule.move-session', {
       input: {
         placementId: overlappingPlacement.id,

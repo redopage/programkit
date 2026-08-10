@@ -302,7 +302,9 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       target.roomId,
       target.startsAt,
     )
-    const blocking = previewConflicts.filter((conflict) => conflict.severity === 'error')
+    const blocking = previewConflicts.filter(
+      (conflict) => conflict.severity === 'error' && conflict.type !== 'person_overlap',
+    )
     if (blocking.length > 0) {
       setMoveFeedback({
         tone: 'danger',
@@ -312,7 +314,9 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       stopDragging()
       return
     }
-    const warnings = previewConflicts.filter((conflict) => conflict.severity === 'warning')
+    const warnings = previewConflicts.filter(
+      (conflict) => conflict.severity === 'warning' || conflict.type === 'person_overlap',
+    )
     const response = await execute(
       'schedule.move-session',
       { placementId, roomId: target.roomId, startsAt: target.startsAt },
@@ -994,7 +998,12 @@ function MoveSessionDrawer({
   const previewConflicts = previewStartsAt
     ? previewPlacementMove(state, placement.id, roomId, previewStartsAt)
     : []
-  const previewHardConflicts = previewConflicts.filter((conflict) => conflict.severity === 'error')
+  const previewHardConflicts = previewConflicts.filter(
+    (conflict) => conflict.severity === 'error' && conflict.type !== 'person_overlap',
+  )
+  const previewSpeakerConflicts = previewConflicts.filter(
+    (conflict) => conflict.type === 'person_overlap',
+  )
   const previewWarnings = previewConflicts.filter((conflict) => conflict.severity === 'warning')
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -1093,6 +1102,10 @@ function MoveSessionDrawer({
         {previewHardConflicts.length > 0 ? (
           <Callout tone="danger" title="This placement creates a conflict">
             <p>{previewHardConflicts[0].message}</p>
+          </Callout>
+        ) : previewSpeakerConflicts.length > 0 ? (
+          <Callout tone="warning" title="Speaker conflict">
+            <p>{previewSpeakerConflicts[0].message}</p>
           </Callout>
         ) : previewWarnings.length > 0 ? (
           <Callout tone="warning" title="This placement has a capacity warning">
