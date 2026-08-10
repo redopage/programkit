@@ -289,7 +289,7 @@ export function IntegrationsView() {
                 <dl className="grid gap-3 sm:grid-cols-3">
                   {[
                     ['Worker', 'App + API'],
-                    ['SQLite DO', 'Hot cache'],
+                    ['SQLite DO', 'Source of truth'],
                     ['Static Assets', 'Vite build'],
                   ].map(([term, detail]) => (
                     <div key={term} className="min-w-0">
