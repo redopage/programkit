@@ -715,17 +715,77 @@ async function initializeHostedEvent(
   env: Env,
   event: AuthEventSummary,
   createdAt = event.createdAt,
+  settings?: Omit<NormalizedHostedEventCreateInput, 'name'>,
 ) {
   const response = await workspaceStub(env, eventWorkspaceKey(event.id)).fetch(
     new Request('http://workspace.internal/internal/event/initialize', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: event.id, name: event.name, slug: event.slug, createdAt }),
+      body: JSON.stringify({
+        id: event.id,
+        name: event.name,
+        slug: event.slug,
+        createdAt,
+        ...settings,
+      }),
     }),
   )
   if (!response.ok && response.status !== 409) {
     throw new Error('The event workspace could not be initialized.')
   }
+}
+
+interface NormalizedHostedEventCreateInput {
+  name: string
+  startsAt?: string
+  endsAt?: string
+  timezone: string
+  venue: string
+  city: string
+}
+
+function optionalEventText(value: unknown, field: string, maximumLength: number) {
+  if (value === undefined || value === null) return ''
+  if (typeof value !== 'string') throw new Error(`${field} must be text.`)
+  const normalized = value.trim()
+  if (normalized.length > maximumLength) {
+    throw new Error(`${field} must be ${maximumLength} characters or fewer.`)
+  }
+  return normalized
+}
+
+export function normalizeHostedEventCreateInput(input: unknown): NormalizedHostedEventCreateInput {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('Enter the event details.')
+  }
+  const candidate = input as Record<string, unknown>
+  const name = optionalEventText(candidate.name, 'Event name', 120)
+  if (name.length < 2) throw new Error('Enter an event name with at least 2 characters.')
+  const venue = optionalEventText(candidate.venue, 'Venue', 200)
+  const city = optionalEventText(candidate.city, 'City', 120)
+  const timezone = optionalEventText(candidate.timezone, 'Timezone', 100) || 'UTC'
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format()
+  } catch {
+    throw new Error('Choose a valid timezone.')
+  }
+
+  const hasStartsAt = candidate.startsAt !== undefined && candidate.startsAt !== null
+  const hasEndsAt = candidate.endsAt !== undefined && candidate.endsAt !== null
+  if (hasStartsAt !== hasEndsAt) throw new Error('Choose both a start date and an end date.')
+  if (!hasStartsAt) return { name, timezone, venue, city }
+  if (typeof candidate.startsAt !== 'string' || typeof candidate.endsAt !== 'string') {
+    throw new Error('Choose valid event dates.')
+  }
+  const startsAt = candidate.startsAt.trim()
+  const endsAt = candidate.endsAt.trim()
+  if (!Number.isFinite(Date.parse(startsAt)) || !Number.isFinite(Date.parse(endsAt))) {
+    throw new Error('Choose valid event dates.')
+  }
+  if (Date.parse(startsAt) >= Date.parse(endsAt)) {
+    throw new Error('The event end must be after its start.')
+  }
+  return { name, startsAt, endsAt, timezone, venue, city }
 }
 
 type HostedSessionPrincipal = Pick<HostedPrincipal, 'authShard' | 'sessionToken' | 'account'>
@@ -2327,7 +2387,18 @@ export default {
 
       if (request.method === 'POST' && url.pathname === '/api/v1/events') {
         if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
-        const input = (await request.json()) as { name?: unknown }
+        let input: NormalizedHostedEventCreateInput
+        try {
+          input = normalizeHostedEventCreateInput(await request.json())
+        } catch (caught) {
+          return Response.json(
+            {
+              ok: false,
+              error: caught instanceof Error ? caught.message : 'Enter valid event details.',
+            },
+            { status: 400, headers: { 'cache-control': 'no-store' } },
+          )
+        }
         const stub = authStub(env, hostedPrincipal.authShard)!
         const createdResponse = await stub.fetch(
           new Request('http://auth.internal/internal/events/create', {
@@ -2335,7 +2406,7 @@ export default {
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               token: hostedPrincipal.sessionToken,
-              name: typeof input.name === 'string' ? input.name : '',
+              name: input.name,
             }),
           }),
         )
@@ -2350,7 +2421,14 @@ export default {
             { status: createdResponse.status },
           )
         }
-        await initializeHostedEvent(env, created.event)
+        const settings = {
+          startsAt: input.startsAt,
+          endsAt: input.endsAt,
+          timezone: input.timezone,
+          venue: input.venue,
+          city: input.city,
+        }
+        await initializeHostedEvent(env, created.event, created.event.createdAt, settings)
         const membership = await initializeHostedEventAccess(
           env,
           created.event,

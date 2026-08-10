@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   hostedPublicEventId,
   isApiKeyAccessiblePath,
+  normalizeHostedEventCreateInput,
   parseApiKeyToken,
 } from '../apps/cloudflare/src/worker.ts'
 
@@ -70,5 +71,43 @@ describe('hosted API key routing', () => {
     expect(isApiKeyAccessiblePath(`/api/v1/events/${eventId}/api-keys`)).toBe(false)
     expect(isApiKeyAccessiblePath('/api/v1/assets/export')).toBe(false)
     expect(isApiKeyAccessiblePath('/api/v1/integrations/airtable/status')).toBe(false)
+  })
+})
+
+describe('hosted event creation', () => {
+  it('normalizes complete event details before provisioning a workspace', () => {
+    expect(
+      normalizeHostedEventCreateInput({
+        name: '  DevFlow Conf 2027 ',
+        startsAt: '2027-05-12T16:00:00.000Z',
+        endsAt: '2027-05-15T00:00:00.000Z',
+        timezone: 'America/Los_Angeles',
+        venue: ' Moscone West ',
+        city: ' San Francisco ',
+      }),
+    ).toEqual({
+      name: 'DevFlow Conf 2027',
+      startsAt: '2027-05-12T16:00:00.000Z',
+      endsAt: '2027-05-15T00:00:00.000Z',
+      timezone: 'America/Los_Angeles',
+      venue: 'Moscone West',
+      city: 'San Francisco',
+    })
+  })
+
+  it('rejects incomplete or inverted dates', () => {
+    expect(() =>
+      normalizeHostedEventCreateInput({
+        name: 'DevFlow Conf 2027',
+        startsAt: '2027-05-12T16:00:00.000Z',
+      }),
+    ).toThrow('both a start date and an end date')
+    expect(() =>
+      normalizeHostedEventCreateInput({
+        name: 'DevFlow Conf 2027',
+        startsAt: '2027-05-15T00:00:00.000Z',
+        endsAt: '2027-05-12T16:00:00.000Z',
+      }),
+    ).toThrow('end must be after its start')
   })
 })

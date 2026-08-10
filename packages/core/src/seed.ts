@@ -1404,11 +1404,21 @@ export function createEmptyWorkspaceState({
   eventName,
   eventSlug,
   createdAt,
+  startsAt: requestedStartsAt,
+  endsAt: requestedEndsAt,
+  timezone: requestedTimezone,
+  venue = '',
+  city = '',
 }: {
   eventId: string
   eventName: string
   eventSlug: string
   createdAt: string
+  startsAt?: string
+  endsAt?: string
+  timezone?: string
+  venue?: string
+  city?: string
 }): WorkspaceState {
   const template = createSeedState()
   const start = new Date(createdAt)
@@ -1416,6 +1426,16 @@ export function createEmptyWorkspaceState({
   start.setUTCHours(9, 0, 0, 0)
   const end = new Date(start)
   end.setUTCHours(17, 0, 0, 0)
+  const startsAt = requestedStartsAt ?? start.toISOString()
+  const endsAt = requestedEndsAt ?? end.toISOString()
+  const timezone = requestedTimezone?.trim() || 'UTC'
+  if (!Number.isFinite(Date.parse(startsAt)) || !Number.isFinite(Date.parse(endsAt))) {
+    throw new Error('Event dates must be valid ISO date-times.')
+  }
+  if (Date.parse(startsAt) >= Date.parse(endsAt)) {
+    throw new Error('The event end must be after its start.')
+  }
+  new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date(startsAt))
   return {
     schemaVersion: template.schemaVersion,
     revision: 1,
@@ -1423,7 +1443,7 @@ export function createEmptyWorkspaceState({
       id: `wrk_${eventId.replace(/^evt_/u, '')}`,
       name: `${eventName} team`,
       slug: eventSlug,
-      timezone: 'UTC',
+      timezone,
     },
     activeEventId: eventId,
     events: [
@@ -1431,11 +1451,11 @@ export function createEmptyWorkspaceState({
         id: eventId,
         name: eventName,
         slug: eventSlug,
-        venue: '',
-        city: '',
-        startsAt: start.toISOString(),
-        endsAt: end.toISOString(),
-        timezone: 'UTC',
+        venue,
+        city,
+        startsAt,
+        endsAt,
+        timezone,
         status: 'planning',
         publishedScheduleVersion: null,
         version: 1,

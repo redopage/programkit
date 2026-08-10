@@ -28,6 +28,11 @@ interface EventMetadata {
   name: string
   slug: string
   createdAt: string
+  startsAt?: string
+  endsAt?: string
+  timezone?: string
+  venue?: string
+  city?: string
 }
 
 const demoMetadataKey = 'programkit-demo:metadata'
@@ -63,6 +68,11 @@ function initializeEventState(metadata: EventMetadata) {
     eventName: metadata.name,
     eventSlug: metadata.slug,
     createdAt: metadata.createdAt,
+    startsAt: metadata.startsAt,
+    endsAt: metadata.endsAt,
+    timezone: metadata.timezone,
+    venue: metadata.venue,
+    city: metadata.city,
   })
 }
 

@@ -32,11 +32,12 @@ import { createPortal } from 'react-dom'
 import { submissionPipelineSummary } from '@programkit/core'
 
 import type { DemoStatus } from '../lib/demo.ts'
+import { zonedDateTimeInputToIso } from '../lib/date.ts'
 import { publicProgramPath, publicSubmissionPath } from '../lib/public-links.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 import { CommandCenter, type CommandMode, type ProgramCommand } from './CommandCenter.tsx'
 import { DemoBanner } from './DemoBanner.tsx'
-import { cx, IconButton } from './ui.tsx'
+import { Button, cx, Dialog, IconButton } from './ui.tsx'
 
 interface ShellProps {
   pathname: string
@@ -364,6 +365,40 @@ interface AccountSummary {
   activeEventId: string
 }
 
+interface NewEventDraft {
+  name: string
+  startsOn: string
+  endsOn: string
+  timezone: string
+  venue: string
+  city: string
+}
+
+function dateInputValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function newEventDraft(): NewEventDraft {
+  const starts = new Date()
+  starts.setDate(starts.getDate() + 90)
+  const ends = new Date(starts)
+  ends.setDate(ends.getDate() + 2)
+  return {
+    name: '',
+    startsOn: dateInputValue(starts),
+    endsOn: dateInputValue(ends),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    venue: '',
+    city: '',
+  }
+}
+
+const eventCreationControl =
+  'focus-ring min-h-11 w-full rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:min-h-10 sm:text-sm'
+
 function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
   const { payload } = useWorkspace()
   const state = payload?.state
@@ -371,12 +406,20 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
   const [open, setOpen] = useState(false)
   const [account, setAccount] = useState<AccountSummary | null>(null)
   const [creating, setCreating] = useState(false)
-  const [eventName, setEventName] = useState('')
+  const [eventDraft, setEventDraft] = useState<NewEventDraft>(newEventDraft)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const eventNameRef = useRef<HTMLInputElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const popoverId = useId()
+  const timeZones = useMemo(() => {
+    try {
+      return Intl.supportedValuesOf('timeZone')
+    } catch {
+      return ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles']
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -443,11 +486,23 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
     setSaving(true)
     setError(null)
     try {
+      const startsAt = zonedDateTimeInputToIso(`${eventDraft.startsOn}T09:00`, eventDraft.timezone)
+      const endsAt = zonedDateTimeInputToIso(`${eventDraft.endsOn}T17:00`, eventDraft.timezone)
+      if (Date.parse(startsAt) >= Date.parse(endsAt)) {
+        throw new Error('The event end must be after its start.')
+      }
       const response = await fetch('/api/v1/events', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: eventName }),
+        body: JSON.stringify({
+          name: eventDraft.name,
+          startsAt,
+          endsAt,
+          timezone: eventDraft.timezone,
+          venue: eventDraft.venue,
+          city: eventDraft.city,
+        }),
       })
       const body = (await response.json()) as { ok?: boolean; error?: string }
       if (!response.ok || !body.ok) {
@@ -473,117 +528,214 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
     .toLocaleUpperCase()
 
   return (
-    <div className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={open ? popoverId : undefined}
-        onClick={() => setOpen((current) => !current)}
-        className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
-      >
-        <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
-          {initials}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-base font-medium text-zinc-950 sm:text-sm">
-          {event?.name ?? 'Choose an event'}
-        </span>
-        <ChevronDownIcon
-          className={cx(
-            'size-4 shrink-0 fill-zinc-400 motion-safe:transition-transform',
-            open && 'rotate-180',
-          )}
-        />
-      </button>
-
-      {open ? (
-        <div
-          ref={popoverRef}
-          id={popoverId}
-          role="dialog"
-          aria-label="Choose an event"
-          className="absolute top-full left-0 z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-(--popover-radius) bg-zinc-900/90 p-(--popover-padding) shadow-2xl ring-1 ring-white/15 backdrop-blur-xl [--popover-padding:--spacing(1.5)] [--popover-radius:var(--radius-2xl)] motion-safe:animate-rise-in"
+    <>
+      <div className="relative">
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls={open ? popoverId : undefined}
+          onClick={() => setOpen((current) => !current)}
+          className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
         >
-          <div className="grid gap-1">
-            {events.map((candidate) => (
-              <button
-                key={candidate.id}
-                type="button"
-                className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-200 hover:bg-white/8 hover:text-white disabled:cursor-wait sm:min-h-9 sm:text-sm"
-                onClick={() => void selectEvent(candidate.id)}
-                disabled={saving}
-              >
-                <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-500/20 text-xs font-semibold text-blue-200 ring-1 ring-blue-300/15">
-                  {candidate.name.slice(0, 2).toLocaleUpperCase()}
-                </span>
-                <span className="min-w-0 flex-1 truncate">{candidate.name}</span>
-                {candidate.id === activeEventId ? (
-                  <CheckIcon className="size-4 shrink-0 fill-blue-300" />
-                ) : null}
-              </button>
-            ))}
-          </div>
-          {account ? (
-            <div className="mt-1 border-t border-white/10 pt-1">
-              {creating ? (
-                <form
-                  className="p-1"
-                  onSubmit={(submitEvent) => {
-                    submitEvent.preventDefault()
-                    void createEvent()
-                  }}
+          <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
+            {initials}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-base font-medium text-zinc-950 sm:text-sm">
+            {event?.name ?? 'Choose an event'}
+          </span>
+          <ChevronDownIcon
+            className={cx(
+              'size-4 shrink-0 fill-zinc-400 motion-safe:transition-transform',
+              open && 'rotate-180',
+            )}
+          />
+        </button>
+
+        {open ? (
+          <div
+            ref={popoverRef}
+            id={popoverId}
+            role="dialog"
+            aria-label="Choose an event"
+            className="absolute top-full left-0 z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-(--popover-radius) bg-zinc-900/90 p-(--popover-padding) shadow-2xl ring-1 ring-white/15 backdrop-blur-xl [--popover-padding:--spacing(1.5)] [--popover-radius:var(--radius-2xl)] motion-safe:animate-rise-in"
+          >
+            <div className="grid gap-1">
+              {events.map((candidate) => (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-200 hover:bg-white/8 hover:text-white disabled:cursor-wait sm:min-h-9 sm:text-sm"
+                  onClick={() => void selectEvent(candidate.id)}
+                  disabled={saving}
                 >
-                  <label htmlFor="new-event-name" className="sr-only">
-                    Event name
-                  </label>
-                  <input
-                    id="new-event-name"
-                    autoFocus
-                    required
-                    value={eventName}
-                    onChange={(changeEvent) => setEventName(changeEvent.currentTarget.value)}
-                    placeholder="Event name"
-                    className="focus-ring min-h-10 w-full rounded-xl bg-white/8 px-3 text-base text-white ring-1 ring-white/12 placeholder:text-zinc-500 sm:text-sm"
-                  />
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      className="focus-ring min-h-9 flex-1 rounded-lg text-sm font-medium text-zinc-300 hover:bg-white/8 hover:text-white"
-                      onClick={() => {
-                        setCreating(false)
-                        setEventName('')
-                        setError(null)
-                      }}
-                      disabled={saving}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="focus-ring min-h-9 flex-1 rounded-lg bg-white text-sm font-medium text-zinc-950 hover:bg-zinc-100 disabled:opacity-50"
-                      disabled={saving || eventName.trim().length < 2}
-                    >
-                      {saving ? 'Creating…' : 'Create'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
+                  <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-500/20 text-xs font-semibold text-blue-200 ring-1 ring-blue-300/15">
+                    {candidate.name.slice(0, 2).toLocaleUpperCase()}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{candidate.name}</span>
+                  {candidate.id === activeEventId ? (
+                    <CheckIcon className="size-4 shrink-0 fill-blue-300" />
+                  ) : null}
+                </button>
+              ))}
+            </div>
+            {account ? (
+              <div className="mt-1 border-t border-white/10 pt-1">
                 <button
                   type="button"
                   className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white sm:min-h-9 sm:text-sm"
-                  onClick={() => setCreating(true)}
+                  onClick={() => {
+                    setOpen(false)
+                    setError(null)
+                    setCreating(true)
+                  }}
                 >
                   <PlusIcon className="size-4 shrink-0 fill-zinc-500" />
                   New event
                 </button>
-              )}
-              {error ? <p className="px-2 py-1 text-sm text-red-300">{error}</p> : null}
-            </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <Dialog
+        open={creating}
+        onClose={() => {
+          if (saving) return
+          setCreating(false)
+          setEventDraft(newEventDraft())
+          setError(null)
+        }}
+        title="Create an event"
+        description="Add the basics now. Rooms, tracks, and forms come next."
+        initialFocusRef={eventNameRef}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setCreating(false)
+                setEventDraft(newEventDraft())
+                setError(null)
+              }}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="new-event-form"
+              disabled={saving || eventDraft.name.trim().length < 2}
+            >
+              {saving ? 'Creating…' : 'Create event'}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="new-event-form"
+          className="grid gap-4 sm:grid-cols-2"
+          onSubmit={(submitEvent) => {
+            submitEvent.preventDefault()
+            void createEvent()
+          }}
+        >
+          <label className="grid gap-1.5 sm:col-span-2">
+            <span className="text-sm font-medium text-zinc-800">Event name</span>
+            <input
+              ref={eventNameRef}
+              required
+              value={eventDraft.name}
+              onChange={(changeEvent) =>
+                setEventDraft((current) => ({ ...current, name: changeEvent.currentTarget.value }))
+              }
+              placeholder="DevFlow Conf 2027"
+              className={eventCreationControl}
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-zinc-800">Starts</span>
+            <input
+              type="date"
+              required
+              value={eventDraft.startsOn}
+              onChange={(changeEvent) =>
+                setEventDraft((current) => ({
+                  ...current,
+                  startsOn: changeEvent.currentTarget.value,
+                }))
+              }
+              className={eventCreationControl}
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-zinc-800">Ends</span>
+            <input
+              type="date"
+              required
+              min={eventDraft.startsOn}
+              value={eventDraft.endsOn}
+              onChange={(changeEvent) =>
+                setEventDraft((current) => ({
+                  ...current,
+                  endsOn: changeEvent.currentTarget.value,
+                }))
+              }
+              className={eventCreationControl}
+            />
+          </label>
+          <label className="grid gap-1.5 sm:col-span-2">
+            <span className="text-sm font-medium text-zinc-800">Timezone</span>
+            <select
+              value={eventDraft.timezone}
+              onChange={(changeEvent) =>
+                setEventDraft((current) => ({
+                  ...current,
+                  timezone: changeEvent.currentTarget.value,
+                }))
+              }
+              className={eventCreationControl}
+            >
+              {timeZones.map((timeZone) => (
+                <option key={timeZone} value={timeZone}>
+                  {timeZone.replaceAll('_', ' ')}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-zinc-800">Venue</span>
+            <input
+              value={eventDraft.venue}
+              onChange={(changeEvent) =>
+                setEventDraft((current) => ({ ...current, venue: changeEvent.currentTarget.value }))
+              }
+              placeholder="Moscone West"
+              className={eventCreationControl}
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-zinc-800">City</span>
+            <input
+              value={eventDraft.city}
+              onChange={(changeEvent) =>
+                setEventDraft((current) => ({ ...current, city: changeEvent.currentTarget.value }))
+              }
+              placeholder="San Francisco"
+              className={eventCreationControl}
+            />
+          </label>
+          {error ? (
+            <p role="alert" className="text-sm text-red-700 sm:col-span-2">
+              {error}
+            </p>
           ) : null}
-        </div>
-      ) : null}
-    </div>
+        </form>
+      </Dialog>
+    </>
   )
 }
 

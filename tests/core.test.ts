@@ -52,6 +52,30 @@ describe('ProgramKit operation engine', () => {
     ])
   })
 
+  it('provisions a hosted event with its chosen dates and location', () => {
+    const state = createEmptyWorkspaceState({
+      eventId: 'evt_devflow_2027',
+      eventName: 'DevFlow Conf 2027',
+      eventSlug: 'devflow-conf-2027',
+      createdAt: '2026-08-10T12:00:00.000Z',
+      startsAt: '2027-05-12T16:00:00.000Z',
+      endsAt: '2027-05-15T00:00:00.000Z',
+      timezone: 'America/Los_Angeles',
+      venue: 'Moscone West',
+      city: 'San Francisco',
+    })
+
+    expect(state.workspace.timezone).toBe('America/Los_Angeles')
+    expect(state.events[0]).toMatchObject({
+      name: 'DevFlow Conf 2027',
+      startsAt: '2027-05-12T16:00:00.000Z',
+      endsAt: '2027-05-15T00:00:00.000Z',
+      timezone: 'America/Los_Angeles',
+      venue: 'Moscone West',
+      city: 'San Francisco',
+    })
+  })
+
   it('creates a useful deterministic workspace', () => {
     const state = createSeedState()
     expect(state.people).toHaveLength(16)
