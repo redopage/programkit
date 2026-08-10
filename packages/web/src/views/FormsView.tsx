@@ -579,11 +579,11 @@ export function FormsView({
                       ? toZonedDateTimeInput(activeForm.opensAt, event.timezone)
                       : ''
                   }
-                  onChange={(inputEvent) =>
+                  onInput={(inputEvent) =>
                     updateForm({
                       opensAt:
-                        inputEvent.target.value && event
-                          ? zonedDateTimeInputToIso(inputEvent.target.value, event.timezone)
+                        inputEvent.currentTarget.value && event
+                          ? zonedDateTimeInputToIso(inputEvent.currentTarget.value, event.timezone)
                           : null,
                     })
                   }
@@ -600,11 +600,11 @@ export function FormsView({
                       ? toZonedDateTimeInput(activeForm.closesAt, event.timezone)
                       : ''
                   }
-                  onChange={(inputEvent) =>
+                  onInput={(inputEvent) =>
                     updateForm({
                       closesAt:
-                        inputEvent.target.value && event
-                          ? zonedDateTimeInputToIso(inputEvent.target.value, event.timezone)
+                        inputEvent.currentTarget.value && event
+                          ? zonedDateTimeInputToIso(inputEvent.currentTarget.value, event.timezone)
                           : null,
                     })
                   }

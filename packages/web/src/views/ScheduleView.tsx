@@ -947,8 +947,8 @@ function PlaceSessionDialog({
             required
             value={startsAt}
             aria-invalid={Boolean(timeError || blocking.length > 0)}
-            onChange={(event) => {
-              setStartsAt(event.target.value)
+            onInput={(event) => {
+              setStartsAt(event.currentTarget.value)
               setTimeError(null)
             }}
             className={textControl}
@@ -1107,8 +1107,8 @@ function MoveSessionDrawer({
             value={startsAt}
             aria-invalid={Boolean(timeError)}
             aria-describedby={timeError ? 'move-session-time-error' : undefined}
-            onChange={(event) => {
-              setStartsAt(event.target.value)
+            onInput={(event) => {
+              setStartsAt(event.currentTarget.value)
               setTimeError(null)
             }}
             className={textControl}

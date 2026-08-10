@@ -446,7 +446,7 @@ function PlanEditor({
                   type="date"
                   required
                   value={round.opensOn}
-                  onChange={(event) => updateRound(round.id, { opensOn: event.target.value })}
+                  onInput={(event) => updateRound(round.id, { opensOn: event.currentTarget.value })}
                   className={textControl}
                 />
               </label>
@@ -456,7 +456,9 @@ function PlanEditor({
                   type="date"
                   required
                   value={round.closesOn}
-                  onChange={(event) => updateRound(round.id, { closesOn: event.target.value })}
+                  onInput={(event) =>
+                    updateRound(round.id, { closesOn: event.currentTarget.value })
+                  }
                   className={textControl}
                 />
               </label>
