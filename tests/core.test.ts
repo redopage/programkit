@@ -370,12 +370,39 @@ describe('ProgramKit operation engine', () => {
     })
     expect(roomConflict.state.placements).toHaveLength(2)
 
-    const autoPlaced = executeOperation(second.state, 'schedule.auto-place', { input: {} })
+    const overlappingPlacement = second.state.placements.find(
+      (placement) => placement.sessionId === second.state.sessions[1].id,
+    )!
+    const moved = executeOperation(second.state, 'schedule.move-session', {
+      input: {
+        placementId: overlappingPlacement.id,
+        roomId: second.state.rooms[1].id,
+        startsAt: new Date(Date.parse(startsAt) + 60 * 60_000).toISOString(),
+      },
+      expectedVersions: { [overlappingPlacement.id]: overlappingPlacement.version },
+    })
+    expect(moved.response.ok).toBe(true)
+    expect(
+      scheduleConflicts(moved.state).filter((conflict) => conflict.type === 'person_overlap'),
+    ).toHaveLength(0)
+
+    const autoPlaced = executeOperation(moved.state, 'schedule.auto-place', { input: {} })
     expect(autoPlaced.response.ok).toBe(true)
     expect(autoPlaced.state.placements).toHaveLength(3)
     expect(
       scheduleConflicts(autoPlaced.state).filter((conflict) => conflict.type === 'room_overlap'),
     ).toHaveLength(0)
+
+    const published = executeOperation(autoPlaced.state, 'schedule.publish', { input: {} })
+    expect(published.response.ok).toBe(true)
+    expect(published.state.scheduleReleases).toHaveLength(1)
+    expect(publicAgenda(published.state).map((entry) => entry.session?.title)).toEqual(
+      expect.arrayContaining([
+        'CI in forty minutes',
+        'An honest pair programmer',
+        'Docs answer back',
+      ]),
+    )
   })
 
   it('finds schedule boundary, duration, and missing-record failures deterministically', () => {

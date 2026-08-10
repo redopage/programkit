@@ -161,6 +161,11 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const conflicts = scheduleConflicts(state)
   const hardConflicts = conflicts.filter((conflict) => conflict.severity === 'error')
   const event = state.events.find((entry) => entry.id === state.activeEventId)!
+  const activeRooms = state.rooms.filter((room) => room.eventId === state.activeEventId)
+  const activeTracks = state.tracks.filter((track) => track.eventId === state.activeEventId)
+  const activePlacements = state.placements.filter(
+    (placement) => placement.eventId === state.activeEventId,
+  )
   const timeLabel = (iso: string) =>
     eventDateTime(iso, event.timezone, { hour: 'numeric', minute: '2-digit' })
   const days = calendarDays(event.startsAt, event.endsAt, event.timezone)
@@ -182,18 +187,14 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         Date.parse(startsAt!) >= Date.parse(event.startsAt) &&
         Date.parse(startsAt!) + 5 * 60_000 <= Date.parse(event.endsAt),
     )
-  const dayPlacements = state.placements.filter(
+  const dayPlacements = activePlacements.filter(
     (placement) =>
       toZonedDateTimeInput(placement.startsAt, event.timezone).slice(0, 10) === activeDay,
   )
   const startTimes = [
     ...new Set([...generatedStartTimes, ...dayPlacements.map((placement) => placement.startsAt)]),
   ].sort()
-  const placedSessionIds = new Set(
-    state.placements
-      .filter((placement) => placement.eventId === state.activeEventId)
-      .map((placement) => placement.sessionId),
-  )
+  const placedSessionIds = new Set(activePlacements.map((placement) => placement.sessionId))
   const unscheduled = state.sessions.filter(
     (session) =>
       session.eventId === state.activeEventId &&
@@ -203,8 +204,9 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const draggedSession = draggedPlacementId
     ? state.sessions.find(
         (session) =>
+          session.eventId === state.activeEventId &&
           session.id ===
-          state.placements.find((placement) => placement.id === draggedPlacementId)?.sessionId,
+            activePlacements.find((placement) => placement.id === draggedPlacementId)?.sessionId,
       )
     : undefined
   const targetConflicts =
@@ -254,7 +256,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
     event.preventDefault()
     const placementId = draggedPlacementId ?? event.dataTransfer.getData('text/plain')
     if (!placementId) return
-    const placement = state.placements.find((entry) => entry.id === placementId)
+    const placement = activePlacements.find((entry) => entry.id === placementId)
     const session = placement
       ? state.sessions.find((entry) => entry.id === placement.sessionId)
       : undefined
@@ -399,7 +401,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
           </div>
           {unscheduled.length > 0 ? (
             <Button
-              disabled={mutating || state.rooms.length === 0}
+              disabled={mutating || activeRooms.length === 0}
               onClick={() =>
                 void execute('schedule.auto-place', {}, undefined, 'Unscheduled sessions placed.')
               }
@@ -446,15 +448,15 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
           'hidden min-w-0 grid-cols-[4.5rem_repeat(var(--room-count),minmax(0,1fr))]',
           mode === 'grid' && 'lg:grid',
         )}
-        style={{ '--room-count': state.rooms.length } as CSSProperties}
+        style={{ '--room-count': activeRooms.length } as CSSProperties}
       >
         <div className="border-b border-zinc-950/10 pb-3" />
-        {state.rooms.map((room) => (
+        {activeRooms.map((room) => (
           <div key={room.id} className="min-w-0 border-b border-zinc-950/10 px-1.5 pb-3">
             <h2 className="truncate text-base font-medium text-zinc-950 sm:text-sm">{room.name}</h2>
             <p className="truncate text-sm tabular-nums text-zinc-500">
               Capacity {room.capacity} ·{' '}
-              {state.placements.filter((entry) => entry.roomId === room.id).length} sessions
+              {activePlacements.filter((entry) => entry.roomId === room.id).length} sessions
             </p>
           </div>
         ))}
@@ -466,8 +468,8 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                 {timeLabel(startsAt)}
               </p>
             </div>
-            {state.rooms.map((room, roomIndex) => {
-              const placement = state.placements.find(
+            {activeRooms.map((room, roomIndex) => {
+              const placement = activePlacements.find(
                 (entry) => entry.roomId === room.id && entry.startsAt === startsAt,
               )
               const session = placement
@@ -494,7 +496,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                   onDrop={(event) => void dropPlacement(event, { roomId: room.id, startsAt })}
                   className={cx(
                     'min-w-0 border-t border-zinc-950/5 px-1.5 py-2',
-                    roomIndex < state.rooms.length - 1 && 'border-r border-r-zinc-950/5',
+                    roomIndex < activeRooms.length - 1 && 'border-r border-r-zinc-950/5',
                     draggedPlacementId && 'bg-blue-50/30',
                   )}
                 >
@@ -670,7 +672,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                 className="focus-ring-control min-h-11 rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
               >
                 <option value="all">All tracks</option>
-                {state.tracks.map((track) => (
+                {activeTracks.map((track) => (
                   <option key={track.id} value={track.id}>
                     {track.name}
                   </option>
@@ -688,7 +690,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                 className="focus-ring-control min-h-11 rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
               >
                 <option value="all">All rooms</option>
-                {state.rooms.map((room) => (
+                {activeRooms.map((room) => (
                   <option key={room.id} value={room.id}>
                     {room.name}
                   </option>
@@ -748,7 +750,9 @@ function PlaceSessionDialog({
 
   useEffect(() => {
     if (!payload || !open) return
-    setRoomId(payload.state.rooms[0]?.id ?? '')
+    setRoomId(
+      payload.state.rooms.find((room) => room.eventId === payload.state.activeEventId)?.id ?? '',
+    )
     setStartsAt(`${defaultDay}T10:00`)
     setTimeError(null)
   }, [defaultDay, open, payload])
@@ -823,11 +827,13 @@ function PlaceSessionDialog({
             className={selectControl}
           >
             <option value="">Choose a room</option>
-            {payload.state.rooms.map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.name} · {room.capacity} seats
-              </option>
-            ))}
+            {payload.state.rooms
+              .filter((room) => room.eventId === payload.state.activeEventId)
+              .map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name} · {room.capacity} seats
+                </option>
+              ))}
           </select>
         </Field>
         <Field label="Starts" htmlFor="place-session-starts">
@@ -879,7 +885,9 @@ function MoveSessionDrawer({
   onClose: () => void
 }) {
   const { payload, execute, mutating } = useWorkspace()
-  const placement = payload?.state.placements.find((entry) => entry.id === placementId)
+  const placement = payload?.state.placements.find(
+    (entry) => entry.id === placementId && entry.eventId === payload.state.activeEventId,
+  )
   const timeZone =
     payload?.state.events.find((entry) => entry.id === payload.state.activeEventId)?.timezone ??
     'UTC'
@@ -970,11 +978,13 @@ function MoveSessionDrawer({
               onChange={(event) => setRoomId(event.target.value)}
               className="focus-ring min-h-11 w-full appearance-none rounded-xl bg-white py-2 pr-9 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
             >
-              {state.rooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.name} · {room.capacity}
-                </option>
-              ))}
+              {state.rooms
+                .filter((room) => room.eventId === state.activeEventId)
+                .map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {room.name} · {room.capacity}
+                  </option>
+                ))}
             </select>
             <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 fill-zinc-400" />
           </span>

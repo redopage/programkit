@@ -18,8 +18,10 @@ not maintain a second version of product or architecture facts.
    to working evidence and missing end-to-end depth.
 5. [Evaluator runbook](product/evaluator-runbook.md) explains how to produce repeatable browser
    evidence without overstating a seeded screen.
-6. [Abstract management evaluator coverage](product/evals/02-abstract-management.md) records the
-   exercised organizer and reviewer workflow for the second evaluator spec.
+6. Evaluator coverage records exercised behavior for [abstract management](product/evals/02-abstract-management.md),
+   [speaker management](product/evals/03-speaker-management.md),
+   [content management](product/evals/04-content-management.md), and
+   [AI agenda](product/evals/05-ai-agenda.md).
 7. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
    competition brief.
 8. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
