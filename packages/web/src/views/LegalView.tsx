@@ -12,7 +12,7 @@ export function LegalView({
   children: ReactNode
 }) {
   return (
-    <main className="min-h-dvh bg-white px-5 py-12 text-zinc-700 sm:px-8 sm:py-16">
+    <main className="min-h-dvh bg-white px-5 pt-[max(--spacing(12),env(safe-area-inset-top))] pb-[max(--spacing(12),env(safe-area-inset-bottom))] text-zinc-700 sm:px-8 sm:pt-[max(--spacing(16),env(safe-area-inset-top))] sm:pb-[max(--spacing(16),env(safe-area-inset-bottom))]">
       <article className="mx-auto max-w-2xl">
         <a
           href="/"

@@ -2747,11 +2747,34 @@ export default {
     }
     const response = new Response(assetResponse.body, assetResponse)
     for (const [name, value] of headers) response.headers.set(name, value)
+    // Only the workspace itself is worth installing to a home screen, so the
+    // manifest and the iOS standalone tags are withheld from the marketing site
+    // and the demo. Without them iOS never enters standalone mode, which also
+    // keeps `black-translucent`, and the safe-area padding it demands, off
+    // pages that were never laid out for it.
+    const installable =
+      renderedProfile === 'single-workspace' ||
+      renderedProfile === 'hosted-app' ||
+      renderedProfile === 'hosted-app-entry'
     return new HTMLRewriter()
       .on('head', {
         element(element) {
           element.append(
             `<meta name="programkit-deployment-profile" content="${renderedProfile}">`,
+            { html: true },
+          )
+          if (!installable) return
+          element.append(
+            [
+              '<link rel="manifest" href="/site.webmanifest">',
+              '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">',
+              '<meta name="apple-mobile-web-app-capable" content="yes">',
+              '<meta name="mobile-web-app-capable" content="yes">',
+              '<meta name="apple-mobile-web-app-title" content="ProgramKit">',
+              // Translucent hands us the status bar strip: the workspace header
+              // paints white behind the clock instead of iOS drawing its own bar.
+              '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
+            ].join(''),
             { html: true },
           )
         },

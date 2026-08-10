@@ -180,7 +180,7 @@ function PortalWorkspace() {
 
   return (
     <div className="min-h-dvh bg-white">
-      <header className="border-b border-zinc-950/5 bg-white">
+      <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <a
             href="#"

@@ -79,7 +79,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
 
   if (!payload || !form || !event) {
     return (
-      <div className="grid min-h-dvh place-items-center bg-white p-6">
+      <div className="grid min-h-dvh place-items-center bg-white px-6 pt-[max(--spacing(6),env(safe-area-inset-top))] pb-[max(--spacing(6),env(safe-area-inset-bottom))]">
         <div className="max-w-md text-center">
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-zinc-950">
             This call for proposals is unavailable
@@ -476,7 +476,7 @@ function PublicHeader({
   onSignOut?: () => Promise<void>
 }) {
   return (
-    <header className="border-b border-zinc-950/5 bg-white">
+    <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <a
           href="/"

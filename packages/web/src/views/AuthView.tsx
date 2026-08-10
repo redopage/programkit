@@ -74,7 +74,7 @@ export function AuthView() {
   }
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-white px-6 py-10 text-center">
+    <main className="grid min-h-dvh place-items-center bg-white px-6 pt-[max(--spacing(10),env(safe-area-inset-top))] pb-[max(--spacing(10),env(safe-area-inset-bottom))] text-center">
       <div className="w-full max-w-xs">
         <a
           href="https://programkit.dev"

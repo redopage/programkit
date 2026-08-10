@@ -121,7 +121,7 @@ function ReviewerWorkspace({
 
   if (!reviewer) {
     return (
-      <div className="grid min-h-dvh place-items-center bg-white p-6">
+      <div className="grid min-h-dvh place-items-center bg-white px-6 pt-[max(--spacing(6),env(safe-area-inset-top))] pb-[max(--spacing(6),env(safe-area-inset-bottom))]">
         <div className="max-w-md text-center">
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-zinc-950">
             This review link is unavailable
@@ -186,7 +186,7 @@ function ReviewerWorkspace({
 
   return (
     <div className="min-h-dvh bg-white">
-      <header className="border-b border-zinc-950/5 bg-white">
+      <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-2 text-base font-semibold tracking-tight text-zinc-950">
             <ProgramKitMark className="size-6" />

@@ -126,6 +126,15 @@ body {
   min-height: 100%;
   margin: 0;
   background: var(--color-canvas);
+
+  /* Safari flashes a grey rectangle over anything you touch; our controls already
+     carry their own pressed states, and the rectangle reads as a web page. */
+  -webkit-tap-highlight-color: transparent;
+
+  /* Installed to a home screen there is no browser chrome to rubber-band against,
+     so a stray overscroll just detaches the whole workspace from the top of the
+     screen. Scrolling regions inside the page keep their own bounce. */
+  overscroll-behavior-y: none;
 }
 
 button,
@@ -134,6 +143,17 @@ select,
 input,
 textarea {
   font: inherit;
+}
+
+/* Kills the double-tap-to-zoom delay on controls without taking pinch-to-zoom
+   away from anyone who needs it. */
+button,
+a,
+label,
+select,
+summary,
+[role='button'] {
+  touch-action: manipulation;
 }
 
 button:not(:disabled),

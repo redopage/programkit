@@ -8,7 +8,7 @@ import {
   UserGroupIcon,
 } from '@heroicons/react/16/solid'
 
-import { ProgramKitMark, ProgramKitMarkBars } from '../components/brand.tsx'
+import { ProgramKitMark } from '../components/brand.tsx'
 
 const programJobs = [
   {
@@ -43,76 +43,115 @@ const programJobs = [
 const programFeatures = [
   {
     title: 'Submission forms',
-    description: 'Build the CFP, add conditional questions, and map every answer.',
+    description:
+      'Build the call for proposals once. Conditional questions mean nobody fills in a field that has nothing to do with their talk.',
     image: '/assets/marketing/forms.png',
-    imageAlt: 'ProgramKit submission form builder',
+    imageAlt: 'Editing questions in the ProgramKit submission form builder',
+    zoom: 2.4,
+    focus: [0.005, 0.015],
     icon: DocumentTextIcon,
     iconColor: 'text-blue-600',
-    surface: 'bg-blue-50',
+    surface: 'bg-blue-100',
   },
   {
     title: 'Submissions',
-    description: 'Triage every proposal from one clear queue.',
+    description:
+      'Every proposal lands in one queue you can actually work through, instead of a shared inbox nobody is quite responsible for.',
     image: '/assets/marketing/submissions.png',
-    imageAlt: 'ProgramKit submissions queue',
+    imageAlt: 'The ProgramKit proposal queue showing review status for each submission',
+    zoom: 2.0,
+    focus: [0.37, 0.315],
     icon: InboxStackIcon,
     iconColor: 'text-amber-500',
-    surface: 'bg-amber-50',
+    surface: 'bg-amber-100',
   },
   {
     title: 'Review',
-    description: 'Keep scoring, assignments, and decisions together.',
+    description:
+      'Write down what a good talk means, weight it, and let the committee score against it. The rules stay visible to everyone reviewing.',
     image: '/assets/marketing/reviews.png',
-    imageAlt: 'ProgramKit committee review workspace',
+    imageAlt: 'ProgramKit evaluation plan showing weighted scoring criteria',
+    zoom: 2.15,
+    focus: [0.5, 0.435],
     icon: ClipboardDocumentCheckIcon,
     iconColor: 'text-violet-600',
-    surface: 'bg-violet-50',
+    surface: 'bg-violet-100',
   },
   {
     title: 'Readiness',
-    description: 'See what every speaker still owes.',
+    description:
+      'See who still owes you a bio, a headshot, or a signed release in week three, not the week of the event.',
     image: '/assets/marketing/readiness.png',
-    imageAlt: 'ProgramKit speaker readiness dashboard',
+    imageAlt: 'ProgramKit speaker readiness table tracking outstanding items per speaker',
+    zoom: 2.1,
+    focus: [0.005, 0.27],
     icon: UserGroupIcon,
     iconColor: 'text-rose-500',
-    surface: 'bg-rose-50',
+    surface: 'bg-rose-100',
   },
   {
     title: 'Schedule',
-    description: 'Place sessions and catch conflicts before they publish.',
+    description:
+      'Drag sessions into rooms and hear about the double-booked speaker or the over-capacity room right then, not on the day.',
     image: '/assets/marketing/schedule.png',
-    imageAlt: 'ProgramKit schedule studio',
+    imageAlt: 'The ProgramKit room grid with sessions placed across three rooms',
+    zoom: 2.0,
+    focus: [0.03, 0.23],
     icon: CalendarDaysIcon,
     iconColor: 'text-cyan-600',
-    surface: 'bg-cyan-50',
+    surface: 'bg-cyan-100',
   },
   {
     title: 'Public agenda',
-    description: 'Give attendees a fast, shareable program.',
+    description:
+      'Publish a program that loads fast on the venue wifi and updates the moment you move something.',
     image: '/assets/marketing/agenda.png',
-    imageAlt: 'ProgramKit public conference agenda',
+    imageAlt: 'The published ProgramKit public agenda for an event',
+    zoom: 2.4,
+    focus: [0.03, 0.115],
     icon: GlobeAltIcon,
     iconColor: 'text-emerald-600',
-    surface: 'bg-emerald-50',
+    surface: 'bg-emerald-100',
   },
 ]
 
+// Every screenshot is a full 1440x1010 capture, far too wide to read at card
+// size, so each card shows one detail of it instead. `zoom` is the image width
+// as a multiple of the frame width; `focus` is the point of the image, as a
+// fraction of its own width and height, parked at the frame's top-left corner.
+const featureImageWidth = 1440
+const featureImageHeight = 1010
+const featureFrameAspect = 4 / 3
+// `top` percentages resolve against the frame's height, not its width, so the
+// vertical offset carries the frame-to-image aspect correction.
+const featureVerticalFactor = (featureFrameAspect / (featureImageWidth / featureImageHeight)) * 100
+
 function ProgramFeature({ feature }: { feature: (typeof programFeatures)[number] }) {
+  const [focusX, focusY] = feature.focus
+
   return (
-    <div className="min-w-0">
+    // Radii stay concentric as they nest: the 2rem card holds 0.5rem of padding
+    // around a 1.5rem frame, which holds 1rem around the 0.5rem screenshot. The
+    // caption's 1.5rem of inset lands it on the screenshot's own left edge.
+    <div className="min-w-0 rounded-[2rem] bg-zinc-50 p-2 outline outline-zinc-950/6">
       <div
-        className={`relative aspect-[4/3] overflow-hidden rounded-[min(1.25vw,1.25rem)] outline outline-zinc-950/8 ${feature.surface}`}
+        className={`relative aspect-[4/3] overflow-hidden rounded-[1.5rem] inset-ring inset-ring-zinc-950/8 ${feature.surface}`}
       >
         <img
           src={feature.image}
           alt={feature.imageAlt}
-          width="1440"
-          height="1010"
+          width={featureImageWidth}
+          height={featureImageHeight}
           loading="lazy"
-          className="absolute inset-x-5 bottom-0 w-[calc(100%-2.5rem)] rounded-t-[min(0.9vw,0.875rem)] bg-white shadow-xl shadow-zinc-950/8 outline outline-zinc-950/8 sm:inset-x-6 sm:w-[calc(100%-3rem)]"
+          className="absolute max-w-none rounded-lg bg-white shadow-xl shadow-zinc-950/10 outline outline-zinc-950/8"
+          style={{
+            width: `${feature.zoom * 100}%`,
+            left: `calc(1rem - ${focusX * feature.zoom * 100}%)`,
+            top: `calc(1rem - ${focusY * feature.zoom * featureVerticalFactor}%)`,
+          }}
         />
       </div>
-      <div className="pt-5">
+      <div className="px-4 pb-4 pt-5">
         <div className="flex items-baseline gap-2.5">
           <feature.icon
             aria-hidden="true"
@@ -125,55 +164,6 @@ function ProgramFeature({ feature }: { feature: (typeof programFeatures)[number]
     </div>
   )
 }
-
-type ScheduleSlot = {
-  x: number
-  y: number
-  width: number
-  booked: boolean
-}
-
-const scheduleTrackWidth = 2400
-const scheduleRowOffsets = [0, 12, 24, 36, 48]
-// Slots sit on a shared column grid — a 24-wide cell plus a 12 gutter — so the
-// field reads as booked time rather than as noise.
-const scheduleColumnPitch = 36
-const scheduleColumnStart = 3
-
-// The agenda drifts off to the right and thins as it goes, so it is generated
-// once from a fixed seed: the same rhythm on every render and every visit.
-function buildScheduleSlots(): ScheduleSlot[] {
-  let seed = 20260809
-  const next = () => {
-    seed = (seed * 1103515245 + 12345) % 2147483648
-    return seed / 2147483648
-  }
-
-  return scheduleRowOffsets.flatMap((y, row) => {
-    const slots: ScheduleSlot[] = []
-    // Stagger each row's first column so the left edge doesn't march in step.
-    let column = scheduleColumnStart + (row % 3)
-
-    while (column * scheduleColumnPitch < scheduleTrackWidth) {
-      const span = next() < 0.55 ? 1 : next() < 0.75 ? 2 : 3
-      const x = column * scheduleColumnPitch
-      // Density falls off across the track, so the field dissolves rather than
-      // stopping at a hard edge.
-      const density = 0.66 - 0.32 * (x / scheduleTrackWidth)
-
-      if (next() < density) {
-        slots.push({ x, y, width: span * scheduleColumnPitch - 12, booked: next() < 0.14 })
-        column += span
-      }
-
-      column += 1
-    }
-
-    return slots
-  })
-}
-
-const scheduleSlots = buildScheduleSlots()
 
 function BackgroundProgramMark({ active = false }) {
   const surface = active ? 'bg-blue-500/10 ring-blue-400/20' : 'bg-transparent'
@@ -202,44 +192,6 @@ function FooterProgramField() {
         ))}
       </div>
       <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/70 to-transparent" />
-    </div>
-  )
-}
-
-function ProgramKitScheduleTrack() {
-  return (
-    <svg
-      viewBox="-2 -2 2404 62"
-      aria-hidden="true"
-      focusable="false"
-      className="h-9 w-auto shrink-0 sm:h-10"
-    >
-      <ProgramKitMarkBars />
-      {scheduleSlots.map((slot) => (
-        <rect
-          key={`${slot.x}-${slot.y}`}
-          className={`stroke-blue-600/20 ${slot.booked ? 'fill-blue-600/8' : 'fill-none'}`}
-          strokeWidth="2.5"
-          x={slot.x}
-          y={slot.y}
-          width={slot.width}
-          height="10"
-          rx="3"
-        />
-      ))}
-    </svg>
-  )
-}
-
-function ProgramKitRhythmBand() {
-  return (
-    <div
-      aria-hidden="true"
-      className="select-none overflow-hidden border-y border-zinc-950/8 py-4 [mask-image:linear-gradient(to_right,black_0%,black_35%,transparent_100%)]"
-    >
-      <div className="flex w-max items-center px-5 sm:px-8">
-        <ProgramKitScheduleTrack />
-      </div>
     </div>
   )
 }
@@ -353,10 +305,12 @@ export function SiteView() {
           <div className="mx-auto max-w-7xl">
             <div className="max-w-3xl">
               <h2 className="max-w-[15ch] text-balance text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                Every part, in one place.
+                From first proposal to published program.
               </h2>
               <p className="max-w-xl pt-5 text-pretty text-base/7 text-zinc-600 sm:text-lg/8">
-                Move from intake to a published agenda without losing the thread.
+                Six parts of the job that already know about each other. No exports between them, no
+                re-keying the same speaker into a fourth tool, no spreadsheet that went stale on
+                Tuesday.
               </p>
             </div>
 
@@ -396,8 +350,6 @@ export function SiteView() {
             </div>
           </div>
         </section>
-
-        <ProgramKitRhythmBand />
 
         <footer>
           <div className="mx-auto flex min-h-24 max-w-7xl flex-col justify-center gap-5 px-5 py-6 text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
