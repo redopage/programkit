@@ -1421,6 +1421,7 @@ describe('ProgramKit operation engine', () => {
 
   it('configures independent review rounds with typed scorecards', () => {
     let state = createSeedState()
+    state.scorecards = []
     const addedReviewer = executeOperation(state, 'reviewer.create', {
       input: { name: 'Sam Rodriguez', email: 'sam@example.com' },
     })
@@ -1580,6 +1581,122 @@ describe('ProgramKit operation engine', () => {
       scores: { crt_originality: 5, crt_relevance: 3 },
       recommendation: 'accept',
     })
+  })
+
+  it('keeps submitted scorecards tied to an immutable review policy', () => {
+    const state = createSeedState()
+    const plan = state.evaluationPlans[0]
+    const round = plan.rounds[0]
+    const changed = executeOperation(state, 'evaluation-plan.update', {
+      input: {
+        planId: plan.id,
+        rounds: [
+          {
+            ...round,
+            reviewerTeamId: plan.reviewerTeamId,
+            blindReview: plan.blindReview,
+            criteria: plan.criteria.map((criterion, index) => ({
+              ...criterion,
+              weight: index === 0 ? criterion.weight + 1 : criterion.weight,
+            })),
+          },
+        ],
+      },
+      expectedVersions: { [plan.id]: plan.version },
+    })
+
+    expect(changed.response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'INVALID_INPUT',
+        message: expect.stringContaining('cannot change after scorecards are submitted'),
+      },
+    })
+    expect(changed.state).toBe(state)
+  })
+
+  it('requires every configured review round before a final decision', () => {
+    let state = createSeedState()
+    const plan = state.evaluationPlans[0]
+    const firstRound = plan.rounds[0]
+    const configured = executeOperation(state, 'evaluation-plan.update', {
+      input: {
+        planId: plan.id,
+        rounds: [
+          {
+            ...firstRound,
+            reviewerTeamId: plan.reviewerTeamId,
+            blindReview: plan.blindReview,
+            criteria: plan.criteria,
+          },
+          {
+            id: 'rnd_final_decision',
+            name: 'Final committee review',
+            reviewerTeamId: plan.reviewerTeamId,
+            blindReview: false,
+            reviewersPerSubmission: 1,
+            minimumCompletedReviews: 1,
+            criteria: [
+              {
+                id: 'crt_final_score',
+                label: 'Final score',
+                kind: 'numeric',
+                minimum: 1,
+                maximum: 5,
+                weight: 1,
+              },
+            ],
+          },
+        ],
+      },
+      expectedVersions: { [plan.id]: plan.version },
+    })
+    expect(configured.response.ok, JSON.stringify(configured.response)).toBe(true)
+    state = configured.state
+
+    const submission = state.submissions.find((entry) => entry.id === 'sub_002')!
+    const blocked = executeOperation(state, 'review.decide', {
+      input: { submissionId: submission.id, decision: 'accepted' },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+    expect(blocked.response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'REVIEWS_INCOMPLETE',
+        message: expect.stringContaining('Final committee review'),
+      },
+    })
+
+    const assigned = executeOperation(state, 'review.assign', {
+      input: {
+        evaluationPlanId: plan.id,
+        roundId: 'rnd_final_decision',
+        reviewerId: 'rev_001',
+        submissionIds: [submission.id],
+      },
+    })
+    expect(assigned.response.ok).toBe(true)
+    state = assigned.state
+    const finalAssignment = state.reviewerAssignments.find(
+      (entry) => entry.roundId === 'rnd_final_decision' && entry.submissionId === submission.id,
+    )!
+    const scored = executeOperation(state, 'review.submit-scorecard', {
+      input: { assignmentId: finalAssignment.id, answers: { crt_final_score: 5 } },
+      expectedVersions: { [finalAssignment.id]: finalAssignment.version },
+    })
+    expect(scored.response.ok).toBe(true)
+    state = scored.state
+
+    const currentSubmission = state.submissions.find((entry) => entry.id === submission.id)!
+    const decided = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: currentSubmission.id,
+        decision: 'accepted',
+        reason: 'Both review rounds are complete.',
+      },
+      expectedVersions: { [currentSubmission.id]: currentSubmission.version },
+    })
+    expect(decided.response.ok).toBe(true)
   })
 
   it('bulk assigns only eligible proposals with reviewer caps and track filters', () => {
@@ -1773,6 +1890,61 @@ describe('ProgramKit operation engine', () => {
       version: recusedAssignment.version + 1,
     })
     expect(restored.state.domainEvents.at(-1)?.type).toBe('reviewer-assignment.recusal-restored')
+  })
+
+  it('does not count recused reviews against a reviewer assignment cap', () => {
+    let state = createSeedState()
+    const created = executeOperation(state, 'reviewer.create', {
+      input: { name: 'Morgan Lee', email: 'morgan.reviewer@example.com' },
+    })
+    state = created.state
+    const reviewer = state.reviewers.find(
+      (entry) => entry.email === 'morgan.reviewer@example.com',
+    )!
+    const team = state.reviewerTeams.find((entry) => entry.id === 'rvt_program')!
+    state = executeOperation(state, 'reviewer-team.update', {
+      input: { teamId: team.id, reviewerIds: [...team.reviewerIds, reviewer.id] },
+      expectedVersions: { [team.id]: team.version },
+    }).state
+    const plan = state.evaluationPlans[0]
+    const round = plan.rounds[0]
+
+    const first = executeOperation(state, 'review.assign', {
+      input: {
+        evaluationPlanId: plan.id,
+        roundId: round.id,
+        reviewerId: reviewer.id,
+        submissionIds: ['sub_005'],
+        maxAssignments: 1,
+      },
+    })
+    state = first.state
+    const firstAssignment = state.reviewerAssignments.find(
+      (entry) => entry.reviewerId === reviewer.id,
+    )!
+    const recused = executeOperation(state, 'review.recuse', {
+      input: { assignmentId: firstAssignment.id, reason: 'I work with this speaker.' },
+      expectedVersions: { [firstAssignment.id]: firstAssignment.version },
+      actor: {
+        type: 'reviewer',
+        id: reviewer.id,
+        name: reviewer.name,
+        scopes: ['reviews:write'],
+      },
+    })
+    expect(recused.response.ok).toBe(true)
+
+    const replacement = executeOperation(recused.state, 'review.assign', {
+      input: {
+        evaluationPlanId: plan.id,
+        roundId: round.id,
+        reviewerId: reviewer.id,
+        submissionIds: ['sub_002'],
+        maxAssignments: 1,
+      },
+    })
+    expect(replacement.response.ok).toBe(true)
+    expect((replacement.response.data as { assignments: unknown[] }).assignments).toHaveLength(1)
   })
 })
 

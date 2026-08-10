@@ -1454,7 +1454,7 @@ function applyHandler(
             submissionId: submission.id,
             reviewerId,
             status: 'assigned' as const,
-            dueAt: form.closesAt,
+            dueAt: round.closesAt ?? null,
             updatedAt: timestamp,
             version: 1,
           }
@@ -1606,6 +1606,63 @@ function applyHandler(
           'A review round with assignments cannot be removed.',
         )
       }
+      const reviewedRoundIds = new Set(
+        state.scorecards
+          .map((scorecard) =>
+            state.reviewerAssignments.find(
+              (assignment) =>
+                assignment.evaluationPlanId === plan.id &&
+                assignment.id === scorecard.assignmentId,
+            ),
+          )
+          .filter((assignment) => assignment !== undefined)
+          .map((assignment) => assignment.roundId),
+      )
+      for (const roundId of reviewedRoundIds) {
+        const currentRound = plan.rounds.find((round) => round.id === roundId)
+        const nextRound = rounds.find((round) => round.id === roundId)
+        if (!currentRound || !nextRound) continue
+        const currentPolicy = {
+          reviewerTeamId: currentRound.reviewerTeamId ?? plan.reviewerTeamId,
+          blindReview: currentRound.blindReview ?? plan.blindReview,
+          reviewersPerSubmission: currentRound.reviewersPerSubmission,
+          minimumCompletedReviews: currentRound.minimumCompletedReviews,
+          criteria: (currentRound.criteria ?? plan.criteria).map((criterion) => ({
+            id: criterion.id,
+            label: criterion.label,
+            description: criterion.description,
+            kind: evaluationCriterionKind(criterion),
+            required: criterion.required ?? true,
+            minimum: criterion.minimum ?? null,
+            maximum: criterion.maximum ?? null,
+            weight: criterion.weight,
+            options: criterion.options ?? null,
+          })),
+        }
+        const nextPolicy = {
+          reviewerTeamId: nextRound.reviewerTeamId,
+          blindReview: nextRound.blindReview,
+          reviewersPerSubmission: nextRound.reviewersPerSubmission,
+          minimumCompletedReviews: nextRound.minimumCompletedReviews,
+          criteria: (nextRound.criteria ?? []).map((criterion) => ({
+            id: criterion.id,
+            label: criterion.label,
+            description: criterion.description,
+            kind: evaluationCriterionKind(criterion),
+            required: criterion.required ?? true,
+            minimum: criterion.minimum ?? null,
+            maximum: criterion.maximum ?? null,
+            weight: criterion.weight,
+            options: criterion.options ?? null,
+          })),
+        }
+        if (JSON.stringify(currentPolicy) !== JSON.stringify(nextPolicy)) {
+          throw new OperationError(
+            'INVALID_INPUT',
+            `The review policy for “${currentRound.name}” cannot change after scorecards are submitted.`,
+          )
+        }
+      }
       if (input.name !== undefined) plan.name = assertString(input.name, 'name')
       if (input.submissionKinds !== undefined) {
         plan.submissionKinds = assertStringArray(input.submissionKinds, 'submissionKinds').map(
@@ -1663,7 +1720,10 @@ function applyHandler(
           ? 500
           : boundedInteger(input.maxAssignments, 'maxAssignments', 1, 500)
       const existingForReviewer = state.reviewerAssignments.filter(
-        (entry) => entry.roundId === round.id && entry.reviewerId === reviewer.id,
+        (entry) =>
+          entry.roundId === round.id &&
+          entry.reviewerId === reviewer.id &&
+          entry.status !== 'recused',
       ).length
       let available = Math.max(0, maxAssignments - existingForReviewer)
       const assignments = []
@@ -2062,17 +2122,23 @@ function applyHandler(
           entry.formId === submission.formId && entry.submissionKinds.includes(submission.kind),
       )
       if (plan && input.override !== true) {
-        const round = [...plan.rounds].sort((left, right) => left.order - right.order)[0]
-        const completed = state.reviewerAssignments.filter(
-          (entry) =>
-            entry.submissionId === submission.id &&
-            entry.roundId === round.id &&
-            entry.status === 'completed',
-        ).length
-        if (completed < round.minimumCompletedReviews) {
+        const incompleteRounds = [...plan.rounds]
+          .sort((left, right) => left.order - right.order)
+          .map((round) => ({
+            round,
+            completed: state.reviewerAssignments.filter(
+              (entry) =>
+                entry.submissionId === submission.id &&
+                entry.roundId === round.id &&
+                entry.status === 'completed',
+            ).length,
+          }))
+          .filter(({ round, completed }) => completed < round.minimumCompletedReviews)
+        if (incompleteRounds.length > 0) {
+          const nextIncomplete = incompleteRounds[0]
           throw new OperationError(
             'REVIEWS_INCOMPLETE',
-            `Complete ${round.minimumCompletedReviews} reviews before deciding this submission.`,
+            `Complete ${nextIncomplete.round.minimumCompletedReviews} reviews in “${nextIncomplete.round.name}” before deciding this submission.`,
           )
         }
       }
