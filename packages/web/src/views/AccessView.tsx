@@ -22,10 +22,6 @@ export function AccessView() {
   const formSlug = search.get('form') ?? undefined
   const access = useExternalAccess(eventId, formSlug)
 
-  if (!eventId) {
-    return <AccessUnavailable />
-  }
-
   return (
     <div className="min-h-dvh bg-white">
       <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
@@ -58,6 +54,7 @@ export function AccessView() {
               Your event access
             </h1>
             <p className="pt-2 text-pretty text-base text-zinc-500">
+              {access.session.eventName ? `${access.session.eventName} · ` : ''}
               Signed in as {access.session.identity?.email}
             </p>
             {(access.session.destinations ?? []).length > 0 ? (
@@ -114,7 +111,8 @@ export function AccessView() {
           </div>
         ) : (
           <ExternalAccessForm
-            title="Sign in to your event"
+            title={eventId ? 'Sign in to your event' : 'Speaker and reviewer access'}
+            defaultIntent="signin"
             onSubmit={async (input) => {
               await access.authenticate(input)
             }}
@@ -122,20 +120,5 @@ export function AccessView() {
         )}
       </main>
     </div>
-  )
-}
-
-function AccessUnavailable() {
-  return (
-    <main className="grid min-h-dvh place-items-center bg-white p-6 text-center">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">
-          This event link is unavailable
-        </h1>
-        <p className="pt-2 text-pretty text-base text-zinc-500 sm:text-sm">
-          Ask the program team for a current access link.
-        </p>
-      </div>
-    </main>
   )
 }

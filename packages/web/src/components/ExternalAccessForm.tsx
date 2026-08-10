@@ -4,16 +4,18 @@ import { Button, cx } from './ui.tsx'
 
 export function ExternalAccessForm({
   title,
+  defaultIntent = 'signup',
   onSubmit,
 }: {
   title: string
+  defaultIntent?: 'signin' | 'signup'
   onSubmit: (input: {
     email: string
     password: string
     intent: 'signin' | 'signup'
   }) => Promise<void>
 }) {
-  const [intent, setIntent] = useState<'signin' | 'signup'>('signup')
+  const [intent, setIntent] = useState<'signin' | 'signup'>(defaultIntent)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')

@@ -259,6 +259,11 @@ function authStub(env: Env, shard: string) {
   return env.PROGRAMKIT_AUTH.get(env.PROGRAMKIT_AUTH.idFromName(`account_${shard}`))
 }
 
+function externalDirectoryStub(env: Env) {
+  if (!env.PROGRAMKIT_AUTH) return null
+  return env.PROGRAMKIT_AUTH.get(env.PROGRAMKIT_AUTH.idFromName('external-directory'))
+}
+
 function eventAccessStub(env: Env, eventId: string) {
   if (!env.PROGRAMKIT_EVENT_ACCESS) return null
   return env.PROGRAMKIT_EVENT_ACCESS.get(env.PROGRAMKIT_EVENT_ACCESS.idFromName(eventId))
@@ -448,6 +453,13 @@ interface ExternalAccessResponse {
   sessionExpiresAt?: string
 }
 
+interface ExternalDirectoryEvent {
+  id: string
+  name: string
+  slug: string
+  updatedAt: string
+}
+
 function externalSessionCookie(eventId: string, token: string, url: URL, expiresAt: string) {
   const maxAge = Math.max(0, Math.floor((Date.parse(expiresAt) - Date.now()) / 1_000))
   return authCookie(externalSessionCookieName, `${eventId}.${token}`, url, maxAge)
@@ -456,6 +468,11 @@ function externalSessionCookie(eventId: string, token: string, url: URL, expires
 function parseExternalSession(value: string | null, eventId: string) {
   const match = value?.match(externalSessionPattern)
   return match?.[1] === eventId ? match[2] : null
+}
+
+function parseAnyExternalSession(value: string | null) {
+  const match = value?.match(externalSessionPattern)
+  return match ? { eventId: match[1], token: match[2] } : null
 }
 
 function externalAccessHref(pathname: string, eventId: string) {
@@ -558,6 +575,218 @@ async function externalAccessPayload(
       )
     : null
   return { identity, destinations, submissionAccessKey: accessKey || null }
+}
+
+function workspaceExternalEmails(state: WorkspaceState) {
+  const emails = new Set<string>()
+  for (const reviewer of state.reviewers) {
+    if (reviewer.eventId === state.activeEventId && reviewer.status !== 'inactive') {
+      const email = normalizeEmail(reviewer.email)
+      if (email) emails.add(email)
+    }
+  }
+  for (const participation of state.participations) {
+    if (participation.eventId !== state.activeEventId) continue
+    const person = state.people.find((entry) => entry.id === participation.personId)
+    const email = normalizeEmail(person?.email)
+    if (email) emails.add(email)
+  }
+  for (const submission of state.submissions) {
+    if (submission.eventId !== state.activeEventId) continue
+    const email = normalizeEmail(submissionAnswerByPurpose(state, submission, 'email'))
+    if (email) emails.add(email)
+  }
+  return [...emails]
+}
+
+async function syncExternalAccessDirectory(
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+) {
+  const directory = externalDirectoryStub(env)
+  if (!directory) return
+  const state = await readWorkspace(stub)
+  const event = state.events.find((entry) => entry.id === state.activeEventId)
+  if (!event) return
+  const response = await directory.fetch(
+    new Request('http://auth.internal/internal/external-directory/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        eventId: event.id,
+        name: event.name,
+        slug: event.slug,
+        emails: workspaceExternalEmails(state),
+      }),
+    }),
+  )
+  if (!response.ok) throw new Error('Participant access directory could not be updated.')
+}
+
+async function externalDirectoryEvents(env: Env, email: string) {
+  const directory = externalDirectoryStub(env)
+  if (!directory) return []
+  const response = await directory.fetch(
+    new Request('http://auth.internal/internal/external-directory/lookup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+    }),
+  )
+  if (!response.ok) return []
+  const body = (await response.json()) as { ok?: boolean; events?: ExternalDirectoryEvent[] }
+  return body.ok ? (body.events ?? []) : []
+}
+
+async function externalSessionPayload(
+  env: Env,
+  eventId: string,
+  token: string,
+  formSlug?: string | null,
+) {
+  const access = eventAccessStub(env, eventId)
+  if (!access) return null
+  const response = await access.fetch(
+    new Request('http://event-access.internal/internal/event-access/external/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ eventId, token }),
+    }),
+  )
+  const body = (await response.json()) as ExternalAccessResponse
+  if (!response.ok || !body.identity) return null
+  const workspace = workspaceStub(env, eventWorkspaceKey(eventId))
+  const state = await readWorkspace(workspace)
+  const event = state.events.find((entry) => entry.id === eventId)
+  return {
+    eventId,
+    eventName: event?.name ?? 'Event',
+    ...(await externalAccessPayload(workspace, body.identity, eventId, formSlug)),
+  }
+}
+
+async function handleExternalAccessDiscovery(request: Request, env: Env, url: URL) {
+  const savedSession = parseAnyExternalSession(cookie(request, externalSessionCookieName))
+
+  if (request.method === 'GET' && url.pathname === '/public/v1/access/discover/session') {
+    if (!savedSession) {
+      return Response.json(
+        { ok: true, authenticated: false },
+        { headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const payload = await externalSessionPayload(env, savedSession.eventId, savedSession.token)
+    if (payload) {
+      return Response.json(
+        { ok: true, authenticated: true, ...payload },
+        { headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    return Response.json(
+      { ok: true, authenticated: false },
+      {
+        headers: {
+          'cache-control': 'no-store',
+          'set-cookie': clearAuthCookie(externalSessionCookieName, url),
+        },
+      },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/public/v1/access/discover/password') {
+    if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+    const input = (await request.json()) as Record<string, unknown>
+    const email = normalizeEmail(input.email)
+    const password = typeof input.password === 'string' ? input.password : ''
+    const intent = input.intent === 'signup' ? 'signup' : 'signin'
+    if (!email || password.length < 10 || password.length > 128) {
+      return Response.json(
+        { ok: false, error: 'Enter a valid email and a password with at least 10 characters.' },
+        { status: 400, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const events = await externalDirectoryEvents(env, email)
+    const candidates = intent === 'signup' ? events.slice(0, 1) : events
+    const ipHash = await hashValue(request.headers.get('cf-connecting-ip') ?? 'local')
+    for (const event of candidates) {
+      const access = eventAccessStub(env, event.id)
+      if (!access) continue
+      const authenticatedResponse = await access.fetch(
+        new Request('http://event-access.internal/internal/event-access/external/password', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            eventId: event.id,
+            email,
+            password,
+            intent,
+            ipHash,
+          }),
+        }),
+      )
+      const authenticated = (await authenticatedResponse.json()) as ExternalAccessResponse
+      if (
+        !authenticatedResponse.ok ||
+        !authenticated.identity ||
+        !authenticated.sessionToken ||
+        !authenticated.sessionExpiresAt
+      ) {
+        continue
+      }
+      const payload = await externalSessionPayload(env, event.id, authenticated.sessionToken)
+      if (!payload) continue
+      return Response.json(
+        { ok: true, authenticated: true, ...payload },
+        {
+          status: intent === 'signup' ? 201 : 200,
+          headers: {
+            'cache-control': 'no-store',
+            'set-cookie': externalSessionCookie(
+              event.id,
+              authenticated.sessionToken,
+              url,
+              authenticated.sessionExpiresAt,
+            ),
+          },
+        },
+      )
+    }
+    return Response.json(
+      {
+        ok: false,
+        error:
+          intent === 'signup'
+            ? 'No event invitation was found for this email.'
+            : 'The email or password is incorrect.',
+      },
+      { status: 401, headers: { 'cache-control': 'no-store' } },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/public/v1/access/discover/logout') {
+    if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+    if (savedSession) {
+      const access = eventAccessStub(env, savedSession.eventId)
+      await access?.fetch(
+        new Request('http://event-access.internal/internal/event-access/external/logout', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ eventId: savedSession.eventId, token: savedSession.token }),
+        }),
+      )
+    }
+    return Response.json(
+      { ok: true },
+      {
+        headers: {
+          'cache-control': 'no-store',
+          'set-cookie': clearAuthCookie(externalSessionCookieName, url),
+        },
+      },
+    )
+  }
+
+  return null
 }
 
 async function handleExternalAccessRequest(request: Request, env: Env, url: URL, eventId: string) {
@@ -1078,7 +1307,8 @@ async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
     const email = normalizeEmail(input.email)
     const password = typeof input.password === 'string' ? input.password : ''
     const intent = input.intent === 'signup' ? 'signup' : 'signin'
-    const name = typeof input.name === 'string' ? input.name.trim().replace(/\s+/gu, ' ').slice(0, 80) : ''
+    const name =
+      typeof input.name === 'string' ? input.name.trim().replace(/\s+/gu, ' ').slice(0, 80) : ''
     if (!email || password.length < 10 || password.length > 128) {
       return Response.json(
         { ok: false, error: 'Enter a valid email and a password with at least 10 characters.' },
@@ -1813,10 +2043,15 @@ export default {
     let apiKeyPrincipal: ApiKeyPrincipal | null = null
     const publicEventId = profile === 'hosted-app' ? hostedPublicEventId(request, url) : null
     const hostedPublicDocument =
-      Boolean(publicEventId) &&
       isDocumentNavigation(request) &&
-      isHostedPublicDocument(url.pathname)
+      isHostedPublicDocument(url.pathname) &&
+      (Boolean(publicEventId) || url.pathname === '/access')
     const hostedPublicApi = Boolean(publicEventId) && url.pathname.startsWith('/public/')
+
+    if (profile === 'hosted-app' && url.pathname.startsWith('/public/v1/access/discover/')) {
+      const discoveryResponse = await handleExternalAccessDiscovery(request, env, url)
+      if (discoveryResponse) return discoveryResponse
+    }
 
     if (
       profile === 'hosted-app' &&
@@ -2488,6 +2723,10 @@ export default {
     }
     const stub = workspaceStub(env, key)
 
+    if (profile === 'hosted-app' && hostedPrincipal && isDocumentNavigation(request)) {
+      context.waitUntil(syncExternalAccessDirectory(env, stub).catch(() => undefined))
+    }
+
     if (apiKeyPrincipal && !isApiKeyAccessiblePath(url.pathname)) {
       return Response.json(
         { ok: false, error: 'This endpoint is not available to API keys.' },
@@ -2728,7 +2967,16 @@ export default {
                 : url.pathname.startsWith('/public/')
                   ? publicReaderActor
                   : demoStaffActor
-      return stub.fetch(withActor(request, actor))
+      const proxiedResponse = await stub.fetch(withActor(request, actor))
+      if (
+        profile === 'hosted-app' &&
+        request.method === 'POST' &&
+        proxiedResponse.ok &&
+        url.pathname.includes('/operations/')
+      ) {
+        context.waitUntil(syncExternalAccessDirectory(env, stub).catch(() => undefined))
+      }
+      return proxiedResponse
     }
 
     const assetResponse = await env.ASSETS.fetch(request)
@@ -2739,7 +2987,7 @@ export default {
         ? 'hosted-site-entry'
         : profile === 'hosted-demo' && !isDemoId(cookie(request, demoCookieName))
           ? 'hosted-demo-entry'
-          : profile === 'hosted-app' && !hostedPrincipal
+          : profile === 'hosted-app' && !hostedPrincipal && !hostedPublicDocument
             ? 'hosted-app-entry'
             : profile
     const headers = new Headers(assetResponse.headers)

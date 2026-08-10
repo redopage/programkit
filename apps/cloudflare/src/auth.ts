@@ -8,6 +8,8 @@ const requestWindowMs = 60 * 60 * 1_000
 export const cloudflarePasswordIterations = 100_000
 const minimumPasswordLength = 10
 const maximumPasswordLength = 128
+const maximumDirectoryEventsPerEmail = 50
+const hostedEventIdPattern = /^evt_[a-f0-9]{24}$/u
 
 interface AuthUser {
   id: string
@@ -57,6 +59,13 @@ interface PasswordRecord {
 
 interface RateRecord {
   attempts: number[]
+}
+
+interface ExternalDirectoryEvent {
+  id: string
+  name: string
+  slug: string
+  updatedAt: string
 }
 
 export interface AuthAccount {
@@ -428,6 +437,56 @@ export class AuthDurableObject extends DurableObject {
     if (current == null || current > next) await this.#ctx.storage.setAlarm(next)
   }
 
+  async #registerExternalDirectoryEvent(input: Record<string, unknown>) {
+    const eventId = typeof input.eventId === 'string' ? input.eventId : ''
+    const name = typeof input.name === 'string' ? input.name.trim().slice(0, 120) : ''
+    const slug = typeof input.slug === 'string' ? input.slug.trim().slice(0, 80) : ''
+    const emails = Array.isArray(input.emails)
+      ? [
+          ...new Set(
+            input.emails.map(normalizeEmail).filter((email): email is string => Boolean(email)),
+          ),
+        ]
+      : []
+    if (!hostedEventIdPattern.test(eventId) || !name || !slug || emails.length > 20_000) {
+      return { ok: false as const }
+    }
+
+    const nextEmailHashes = new Set(await Promise.all(emails.map((email) => sha256(email))))
+    const previousEmailHashes =
+      (await this.#ctx.storage.get<string[]>(`external-event:${eventId}`)) ?? []
+    const event: ExternalDirectoryEvent = {
+      id: eventId,
+      name,
+      slug,
+      updatedAt: new Date().toISOString(),
+    }
+
+    await this.#ctx.storage.transaction(async (transaction) => {
+      for (const emailHash of nextEmailHashes) {
+        await transaction.put(`external-email:${emailHash}:${eventId}`, event)
+      }
+      await transaction.put(`external-event:${eventId}`, [...nextEmailHashes])
+
+      const staleKeys = previousEmailHashes
+        .filter((emailHash) => !nextEmailHashes.has(emailHash))
+        .map((emailHash) => `external-email:${emailHash}:${eventId}`)
+      if (staleKeys.length > 0) await transaction.delete(staleKeys)
+    })
+    return { ok: true as const, indexed: nextEmailHashes.size }
+  }
+
+  async #lookupExternalDirectoryEvents(email: string) {
+    const emailHash = await sha256(email)
+    const records = await this.#ctx.storage.list<ExternalDirectoryEvent>({
+      prefix: `external-email:${emailHash}:`,
+      limit: maximumDirectoryEventsPerEmail,
+    })
+    return [...records.values()].sort((left, right) =>
+      right.updatedAt.localeCompare(left.updatedAt),
+    )
+  }
+
   async alarm() {
     const now = Date.now()
     let next: number | null = null
@@ -502,6 +561,20 @@ export class AuthDurableObject extends DurableObject {
         await this.#ctx.storage.delete(`session:${await sha256(token)}`)
       }
       return Response.json({ ok: true })
+    }
+
+    if (url.pathname === '/internal/external-directory/register') {
+      const result = await this.#registerExternalDirectoryEvent(input)
+      return result.ok ? Response.json(result) : Response.json({ ok: false }, { status: 400 })
+    }
+
+    if (url.pathname === '/internal/external-directory/lookup') {
+      const email = normalizeEmail(input.email)
+      if (!email) return Response.json({ ok: true, events: [] })
+      return Response.json({
+        ok: true,
+        events: await this.#lookupExternalDirectoryEvents(email),
+      })
     }
 
     if (url.pathname === '/internal/events/create') {

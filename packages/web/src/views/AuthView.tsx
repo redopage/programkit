@@ -200,6 +200,12 @@ export function AuthView() {
                 {intent === 'signup' ? 'Sign in' : 'Create account'}
               </button>
             </p>
+            <a
+              href="/access"
+              className="focus-ring mt-4 inline-block rounded-md text-sm font-medium text-zinc-950 underline decoration-zinc-300 underline-offset-4 hover:decoration-zinc-950"
+            >
+              Speaker or reviewer? Access your event
+            </a>
             <div className="my-5 flex items-center gap-3 text-xs text-zinc-400" aria-hidden="true">
               <span className="h-px flex-1 bg-zinc-200" />
               or

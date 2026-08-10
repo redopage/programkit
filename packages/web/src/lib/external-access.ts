@@ -10,6 +10,8 @@ export interface ExternalAccessDestination {
 
 export interface ExternalAccessSession {
   authenticated: boolean
+  eventId?: string
+  eventName?: string
   identity?: { id: string; email: string }
   destinations?: ExternalAccessDestination[]
   submissionAccessKey?: string | null
@@ -29,10 +31,12 @@ function hostedApp() {
   )
 }
 
-function endpoint(pathname: string, eventId: string, formSlug?: string) {
-  const search = new URLSearchParams({ event: eventId })
+function endpoint(pathname: string, eventId?: string, formSlug?: string) {
+  const search = new URLSearchParams()
+  if (eventId) search.set('event', eventId)
   if (formSlug) search.set('form', formSlug)
-  return `${pathname}?${search}`
+  const query = search.toString()
+  return query ? `${pathname}?${query}` : pathname
 }
 
 async function responseBody(response: Response) {
@@ -48,7 +52,7 @@ export function useExternalAccess(eventId: string, formSlug?: string) {
   const [error, setError] = useState('')
 
   const refresh = useCallback(async () => {
-    if (!enabled || !eventId) {
+    if (!enabled) {
       setLoading(false)
       return { ok: true, authenticated: false } satisfies ExternalAccessResult
     }
@@ -56,9 +60,16 @@ export function useExternalAccess(eventId: string, formSlug?: string) {
     setError('')
     try {
       const result = await responseBody(
-        await fetch(endpoint('/public/v1/access/session', eventId, formSlug), {
-          headers: { accept: 'application/json' },
-        }),
+        await fetch(
+          endpoint(
+            eventId ? '/public/v1/access/session' : '/public/v1/access/discover/session',
+            eventId,
+            formSlug,
+          ),
+          {
+            headers: { accept: 'application/json' },
+          },
+        ),
       )
       setSession(result)
       return result
@@ -80,11 +91,18 @@ export function useExternalAccess(eventId: string, formSlug?: string) {
     async (input: { email: string; password: string; intent: 'signin' | 'signup' }) => {
       setError('')
       const result = await responseBody(
-        await fetch(endpoint('/public/v1/access/password', eventId, formSlug), {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(input),
-        }),
+        await fetch(
+          endpoint(
+            eventId ? '/public/v1/access/password' : '/public/v1/access/discover/password',
+            eventId,
+            formSlug,
+          ),
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(input),
+          },
+        ),
       )
       setSession(result)
       return result
@@ -93,14 +111,21 @@ export function useExternalAccess(eventId: string, formSlug?: string) {
   )
 
   const logout = useCallback(async () => {
+    const resolvedEventId = eventId || session.eventId
     await responseBody(
-      await fetch(endpoint('/public/v1/access/logout', eventId), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-      }),
+      await fetch(
+        endpoint(
+          eventId ? '/public/v1/access/logout' : '/public/v1/access/discover/logout',
+          resolvedEventId,
+        ),
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
     )
     setSession({ authenticated: false })
-  }, [eventId])
+  }, [eventId, session.eventId])
 
   return { enabled, loading, session, error, setError, refresh, authenticate, logout }
 }

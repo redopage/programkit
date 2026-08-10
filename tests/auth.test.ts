@@ -31,14 +31,13 @@ async function body(response: Response) {
 
 describe('AuthDurableObject membership projections', () => {
   let auth: AuthDurableObject
+  let storage: MemoryStorage
 
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-09T12:00:00.000Z'))
-    auth = new AuthDurableObject(
-      { storage: new MemoryStorage() } as unknown as DurableObjectState,
-      {} as Cloudflare.Env,
-    )
+    storage = new MemoryStorage()
+    auth = new AuthDurableObject({ storage } as unknown as DurableObjectState, {} as Cloudflare.Env)
   })
 
   afterEach(() => vi.useRealTimers())
@@ -182,6 +181,84 @@ describe('AuthDurableObject membership projections', () => {
       }),
     )
     expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ ok: false })
+  })
+
+  it('indexes participant emails without leaking them into the directory keys', async () => {
+    const eventId = 'evt_abcdefabcdefabcdefabcdef'
+    const registration = await auth.fetch(
+      request('/internal/external-directory/register', {
+        eventId,
+        name: 'Shared conference',
+        slug: 'shared-conference',
+        emails: ['Speaker@Example.com', 'speaker@example.com', 'reviewer@example.com'],
+      }),
+    )
+    expect(registration.status).toBe(200)
+    await expect(registration.json()).resolves.toMatchObject({ ok: true, indexed: 2 })
+
+    const lookup = await auth.fetch(
+      request('/internal/external-directory/lookup', { email: 'SPEAKER@example.com' }),
+    )
+    await expect(lookup.json()).resolves.toMatchObject({
+      ok: true,
+      events: [
+        {
+          id: eventId,
+          name: 'Shared conference',
+          slug: 'shared-conference',
+        },
+      ],
+    })
+
+    expect([...storage.values.keys()].some((key) => key.includes('speaker@example.com'))).toBe(
+      false,
+    )
+  })
+
+  it('removes stale participant access when an event roster changes', async () => {
+    const eventId = 'evt_abcdefabcdefabcdefabcdef'
+    await auth.fetch(
+      request('/internal/external-directory/register', {
+        eventId,
+        name: 'Shared conference',
+        slug: 'shared-conference',
+        emails: ['former@example.com', 'current@example.com'],
+      }),
+    )
+    await auth.fetch(
+      request('/internal/external-directory/register', {
+        eventId,
+        name: 'Shared conference',
+        slug: 'shared-conference',
+        emails: ['current@example.com'],
+      }),
+    )
+
+    const former = await auth.fetch(
+      request('/internal/external-directory/lookup', { email: 'former@example.com' }),
+    )
+    await expect(former.json()).resolves.toEqual({ ok: true, events: [] })
+
+    const current = await auth.fetch(
+      request('/internal/external-directory/lookup', { email: 'current@example.com' }),
+    )
+    await expect(current.json()).resolves.toMatchObject({
+      ok: true,
+      events: [expect.objectContaining({ id: eventId })],
+    })
+  })
+
+  it('rejects malformed participant directory registrations', async () => {
+    const response = await auth.fetch(
+      request('/internal/external-directory/register', {
+        eventId: 'default',
+        name: 'Shared conference',
+        slug: 'shared-conference',
+        emails: ['speaker@example.com'],
+      }),
+    )
+    expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({ ok: false })
   })
 })
