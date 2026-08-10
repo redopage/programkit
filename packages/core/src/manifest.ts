@@ -678,6 +678,20 @@ export const operationManifest = [
     emits: ['schedule.published'],
   },
   {
+    name: 'campaign.send-portal-invite',
+    title: 'Send speaker portal invitation',
+    description:
+      'Queue one personalized speaker portal invitation and record it in communications history.',
+    kind: 'command',
+    scopes: ['communications:send'],
+    risk: 'external',
+    agentPolicy: 'denied',
+    reversible: false,
+    supportsDryRun: true,
+    requiredInput: ['participationId'],
+    emits: ['campaign.sent'],
+  },
+  {
     name: 'campaign.create-draft',
     title: 'Draft campaign',
     description: 'Create a targeted message draft with a calculated audience.',

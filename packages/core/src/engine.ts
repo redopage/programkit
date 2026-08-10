@@ -4400,6 +4400,70 @@ function applyHandler(
       return { release, version, warnings: conflicts }
     }
 
+    case 'campaign.send-portal-invite': {
+      const participation = findRequired(
+        state.participations,
+        input.participationId,
+        'participation',
+      )
+      if (participation.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'That speaker belongs to another event.')
+      }
+      const person = findRequired(state.people, participation.personId, 'person')
+      const event = findRequired(state.events, state.activeEventId, 'event')
+      if (!participation.portalAccessKey) {
+        throw new OperationError('INVALID_INPUT', 'This speaker does not have a portal yet.')
+      }
+      const portalPath = `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}?event=${encodeURIComponent(event.id)}`
+      const campaign: Campaign = {
+        id: createId('cam'),
+        eventId: state.activeEventId,
+        name: `Portal invitation: ${person.firstName} ${person.lastName}`,
+        subject: `Your ${event.name} speaker portal`,
+        body: `Hi ${person.firstName},\n\nYour speaker portal is ready. Use this private link to confirm your participation, update your profile, and complete your tasks:\n\n${portalPath}\n\nPlease keep this link private.`,
+        audience: 'custom',
+        recipientParticipationIds: [participation.id],
+        includeCalendarInvite: false,
+        status: 'sent',
+        createdAt: timestamp,
+        approvedAt: timestamp,
+        sentAt: timestamp,
+        createdBy: context.actor.name,
+        version: 1,
+      }
+      state.campaigns.unshift(campaign)
+      const preview = campaignPreview(state, campaign, participation.id)
+      if (!preview) {
+        throw new OperationError('INVALID_INPUT', 'This speaker cannot receive email.')
+      }
+      const message = queueOutboundMessage(
+        state,
+        {
+          campaignId: campaign.id,
+          submissionId: null,
+          kind: 'campaign',
+          trigger: 'campaign.send-portal-invite',
+          recipientName: preview.recipientName,
+          recipientEmail: preview.recipientEmail,
+          subject: preview.subject,
+          body: preview.body,
+          calendarAttachment: null,
+        },
+        timestamp,
+      )
+      appendEvent(state, context, {
+        type: 'campaign.sent',
+        aggregate: { type: 'campaign', id: campaign.id, version: campaign.version },
+        summary: `Queued a speaker portal invitation for ${person.firstName} ${person.lastName}.`,
+        data: {
+          recipientCount: 1,
+          messageIds: [message.id],
+          deliveryMode: 'durable-outbox',
+        },
+      })
+      return { campaign, messages: [message] }
+    }
+
     case 'campaign.create-draft': {
       const audience = assertOneOf(input.audience, 'audience', [
         'all_active',

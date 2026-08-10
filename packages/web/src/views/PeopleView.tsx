@@ -74,7 +74,7 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="People"
+        title="Speakers"
         actions={
           <>
             <Button variant="secondary" onClick={() => window.open('/api/v1/export', '_blank')}>
@@ -82,12 +82,12 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
               Export
             </Button>
             <Button variant="secondary" onClick={() => setImporting(true)}>
-              <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
+              <ArrowUpTrayIcon className="size-4 h-lh shrink-0 fill-current" />
               Import CSV
             </Button>
             <Button variant="primary" onClick={() => setAdding(true)}>
               <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
-              Add person
+              Add speaker
             </Button>
           </>
         }
@@ -95,7 +95,7 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
 
       <Toolbar>
         <FilterTabs
-          label="People views"
+          label="Speaker views"
           value={filter}
           onChange={setFilter}
           options={[
@@ -106,9 +106,9 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
           ]}
         />
         <SearchInput
-          label="Search people"
+          label="Search speakers"
           name="people-search"
-          placeholder="Search people"
+          placeholder="Search speakers"
           value={search}
           onChange={setSearch}
         />
@@ -116,11 +116,11 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
 
       <p className="text-base text-zinc-500 sm:text-sm">
         <span className="font-medium tabular-nums text-zinc-950">{records.length}</span>{' '}
-        {records.length === 1 ? 'person' : 'people'} in this view
+        {records.length === 1 ? 'speaker' : 'speakers'} in this view
       </p>
 
       {records.length === 0 ? (
-        <EmptyState title="No people found" description="Try a different search or saved view." />
+        <EmptyState title="No speakers found" description="Try a different search or view." />
       ) : (
         <>
           <div className="hidden sm:block">
@@ -275,7 +275,7 @@ function PersonDrawer({
   const [tab, setTab] = useState<'details' | 'requirements' | 'activity'>('details')
   const [editing, setEditing] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [inviteDrafted, setInviteDrafted] = useState(false)
+  const [inviteSent, setInviteSent] = useState(false)
   const [uploadingHeadshot, setUploadingHeadshot] = useState(false)
   const [headshotError, setHeadshotError] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({
@@ -368,25 +368,17 @@ function PersonDrawer({
     window.setTimeout(() => setCopied(false), 1800)
   }
 
-  async function draftPortalInvite() {
+  async function sendPortalInvite() {
     if (!portalHref) return
-    const event = state.events.find((entry) => entry.id === state.activeEventId)
-    const portalUrl = new URL(portalHref, window.location.origin).toString()
     const response = await execute(
-      'campaign.create-draft',
-      {
-        name: `Portal invitation: ${currentPerson.firstName} ${currentPerson.lastName}`,
-        subject: `Your ${event?.name ?? 'event'} speaker portal`,
-        body: `Hi ${currentPerson.firstName},\n\nYour speaker portal is ready. Use this private link to confirm your participation, update your profile, and complete your tasks:\n\n${portalUrl}\n\nPlease keep this link private.`,
-        audience: 'custom',
-        recipientParticipationIds: [participation.id],
-      },
+      'campaign.send-portal-invite',
+      { participationId: participation.id },
       undefined,
-      'Portal invitation drafted in Communications.',
+      'Portal invitation queued for delivery.',
     )
     if (!response.ok) return
-    setInviteDrafted(true)
-    window.setTimeout(() => setInviteDrafted(false), 1800)
+    setInviteSent(true)
+    window.setTimeout(() => setInviteSent(false), 1800)
   }
 
   async function uploadHeadshot(event: FormEvent<HTMLFormElement>) {
@@ -501,10 +493,10 @@ function PersonDrawer({
           <Button
             size="compact"
             disabled={!portalHref || mutating}
-            onClick={() => void draftPortalInvite()}
+            onClick={() => void sendPortalInvite()}
           >
             <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
-            {inviteDrafted ? 'Draft created' : 'Draft portal invite'}
+            {inviteSent ? 'Invitation sent' : 'Send portal invite'}
           </Button>
           <Button size="compact" disabled={!portalHref} onClick={() => void copyPortalLink()}>
             <ClipboardDocumentIcon className="size-4 h-lh shrink-0 fill-current" />
@@ -851,14 +843,14 @@ function AddPersonDrawer({
     <Drawer
       open={open}
       onClose={onClose}
-      title="Add person"
+      title="Add speaker"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
           <Button variant="primary" type="submit" form="add-person-form" disabled={mutating}>
-            Add person
+            Add speaker
           </Button>
         </>
       }
@@ -869,7 +861,7 @@ function AddPersonDrawer({
         onSubmit={(event) => void submit(event)}
       >
         <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-          This creates a persistent person and a prospect participation for the active event.
+          Add a speaker to this event. You can invite them to their portal after saving.
         </p>
         {[
           ['firstName', 'First name', 'Robin'],
@@ -989,7 +981,7 @@ function ImportSpeakersDrawer({
           <span className="text-base font-medium text-zinc-950 sm:text-sm">
             {fileName || 'Choose a CSV file'}
           </span>
-          <span className="text-base text-zinc-500 sm:text-sm">Up to 500 people</span>
+          <span className="text-base text-zinc-500 sm:text-sm">Up to 500 speakers</span>
           <input
             type="file"
             accept=".csv,text/csv"
@@ -1006,7 +998,7 @@ function ImportSpeakersDrawer({
           <div className="overflow-hidden rounded-2xl ring-1 ring-zinc-950/10">
             <div className="flex items-center justify-between bg-zinc-950/2 px-4 py-3">
               <p className="text-sm font-medium text-zinc-950">Preview</p>
-              <p className="text-sm tabular-nums text-zinc-500">{rows.length} people</p>
+              <p className="text-sm tabular-nums text-zinc-500">{rows.length} speakers</p>
             </div>
             <ul role="list" className="max-h-80 divide-y divide-zinc-950/5 overflow-y-auto">
               {rows.slice(0, 20).map((row) => (

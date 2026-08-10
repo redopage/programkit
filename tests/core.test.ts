@@ -1255,6 +1255,36 @@ describe('ProgramKit operation engine', () => {
     expect(`${messages?.[0]?.subject}${messages?.[0]?.body}`).not.toContain('{{')
   })
 
+  it('sends one personalized speaker portal invitation and records it in communications', () => {
+    const state = createSeedState()
+    const participation = state.participations.find(
+      (entry) => entry.eventId === state.activeEventId && Boolean(entry.portalAccessKey),
+    )!
+    const person = state.people.find((entry) => entry.id === participation.personId)!
+
+    const sent = executeOperation(state, 'campaign.send-portal-invite', {
+      input: { participationId: participation.id },
+    })
+
+    expect(sent.response.ok, JSON.stringify(sent.response)).toBe(true)
+    expect(sent.state.campaigns[0]).toMatchObject({
+      audience: 'custom',
+      recipientParticipationIds: [participation.id],
+      status: 'sent',
+    })
+    expect(sent.state.outboundMessages?.[0]).toMatchObject({
+      campaignId: sent.state.campaigns[0]?.id,
+      kind: 'campaign',
+      trigger: 'campaign.send-portal-invite',
+      recipientEmail: person.email,
+      status: 'queued',
+    })
+    expect(sent.state.outboundMessages?.[0]?.body).toContain(
+      `/portal/${participation.id}/${participation.portalAccessKey}?event=${state.activeEventId}`,
+    )
+    expect(sent.state.outboundMessages?.[0]?.body).not.toContain('{{')
+  })
+
   it('freezes each scheduled speaker calendar into the approved campaign outbox', () => {
     let state = createSeedState()
     const participation = state.participations.find((entry) =>
