@@ -1,5 +1,5 @@
 import { CheckCircleIcon, ClockIcon } from '@heroicons/react/16/solid'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
   submissionFormAvailability,
@@ -57,6 +57,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
   const [kind, setKind] = useState<SubmissionKind | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [confirmationId, setConfirmationId] = useState<string | null>(null)
+  const focusErrorsRef = useRef(false)
   const activeKind = kind ?? form?.allowedKinds[0] ?? 'abstract'
   const visibleFields = useMemo(
     () => (state && form ? visibleSubmissionFormFields(state, form.id, answers) : []),
@@ -83,6 +84,14 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
       setSpeakerAccessKey(externalAccess.session.submissionAccessKey)
     }
   }, [externalAccess.session, form, state])
+
+  useEffect(() => {
+    if (!focusErrorsRef.current) return
+    const firstInvalidField = visibleFields.find((field) => fieldErrors[field.key])
+    if (!firstInvalidField) return
+    document.getElementById(`submission-answer-${firstInvalidField.id}`)?.focus()
+    focusErrorsRef.current = false
+  }, [fieldErrors, visibleFields])
 
   if (!payload || !form || !event) {
     return (
@@ -176,13 +185,8 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     event.preventDefault()
     const errors = submissionAnswerErrors(state!, form!.id, answers)
     if (Object.keys(errors).length > 0) {
+      focusErrorsRef.current = true
       setFieldErrors(errors)
-      const firstInvalidField = visibleFields.find((field) => errors[field.key])
-      window.requestAnimationFrame(() => {
-        if (firstInvalidField) {
-          document.getElementById(`submission-answer-${firstInvalidField.id}`)?.focus()
-        }
-      })
       return
     }
     const created = await createDraft('Draft saved.')
