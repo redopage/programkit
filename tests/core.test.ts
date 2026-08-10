@@ -116,6 +116,55 @@ describe('ProgramKit operation engine', () => {
     ).toHaveLength(0)
   })
 
+  it('normalizes mixed review scales into one five-point aggregate', () => {
+    const state = createSeedState()
+    const plan = state.evaluationPlans[0]!
+    plan.rounds.push({
+      id: 'rnd_final_review',
+      name: 'Final review',
+      order: 2,
+      reviewersPerSubmission: 2,
+      minimumCompletedReviews: 2,
+      criteria: [
+        {
+          id: 'crt_final_score',
+          label: 'Final score',
+          description: 'Overall final-round assessment.',
+          kind: 'numeric',
+          minimum: 1,
+          maximum: 10,
+          weight: 1,
+        },
+      ],
+    })
+    const sourceAssignment = state.reviewerAssignments.find(
+      (entry) => entry.submissionId === 'sub_002',
+    )!
+    for (const [index, score] of [8, 10].entries()) {
+      const assignmentId = `rva_final_${index}`
+      state.reviewerAssignments.push({
+        ...sourceAssignment,
+        id: assignmentId,
+        roundId: 'rnd_final_review',
+        reviewerId: state.reviewers[index]!.id,
+        status: 'completed',
+      })
+      state.scorecards.push({
+        id: `sco_final_${index}`,
+        assignmentId,
+        answers: { crt_final_score: score },
+        scores: { crt_final_score: score },
+        recommendation: 'accept',
+        comments: '',
+        submittedAt: '2026-08-10T00:00:00.000Z',
+        updatedAt: '2026-08-10T00:00:00.000Z',
+        version: 1,
+      })
+    }
+
+    expect(submissionReviewSummary(state, 'sub_002').averageScore).toBe(4.58)
+  })
+
   it('updates event settings with validation and version checks', () => {
     const state = createSeedState()
     const event = state.events[0]

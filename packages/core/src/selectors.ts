@@ -194,10 +194,12 @@ export function submissionReviewSummary(
     const roundCriteria = evaluationRoundCriteria(plan, assignment?.roundId).filter(
       (criterion) => evaluationCriterionKind(criterion) === 'numeric',
     )
-    const weighted = roundCriteria.reduce(
-      (total, criterion) => total + (scorecard.scores[criterion.id] ?? 0) * criterion.weight,
-      0,
-    )
+    const weighted = roundCriteria.reduce((total, criterion) => {
+      const maximum = criterion.maximum ?? 5
+      const score = scorecard.scores[criterion.id] ?? 0
+      const normalizedScore = maximum > 0 ? (score / maximum) * 5 : 0
+      return total + normalizedScore * criterion.weight
+    }, 0)
     const totalWeight = roundCriteria.reduce((total, criterion) => total + criterion.weight, 0)
     return totalWeight === 0 ? 0 : weighted / totalWeight
   })
