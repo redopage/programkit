@@ -6,6 +6,7 @@ import {
   DocumentDuplicateIcon,
   DocumentPlusIcon,
   EyeIcon,
+  PlusIcon,
   TrashIcon,
 } from '@heroicons/react/16/solid'
 import { useBlocker } from '@tanstack/react-router'
@@ -33,6 +34,7 @@ import {
   textControl,
 } from '../components/ui.tsx'
 import { toZonedDateTimeInput, zonedDateTimeInputToIso } from '../lib/date.ts'
+import { starterSubmissionFields, submissionFormSlug } from '../lib/starter-form.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 import { publicSubmissionPath } from '../lib/public-links.ts'
 
@@ -117,6 +119,10 @@ export function FormsView({
   const [dirty, setDirty] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [questionPickerOpen, setQuestionPickerOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [newFormName, setNewFormName] = useState('Call for proposals')
+  const [newFormSlug, setNewFormSlug] = useState('call-for-proposals')
+  const [createErrors, setCreateErrors] = useState<Record<string, string>>({})
   const navigationBlocker = useBlocker({
     shouldBlockFn: ({ current, next }) =>
       dirty &&
@@ -134,22 +140,132 @@ export function FormsView({
     // Background query refreshes must not wipe an organizer's unsaved edits.
   }, [form?.id, form?.version])
 
-  if (!payload || !form) {
+  if (!payload) return null
+  const event = state?.events.find((entry) => entry.id === state.activeEventId)
+
+  async function createForm() {
+    const name = newFormName.trim()
+    const slug = submissionFormSlug(newFormSlug)
+    const nextErrors: Record<string, string> = {}
+    if (name.length < 2) nextErrors.name = 'Enter a form name.'
+    if (!slug) nextErrors.slug = 'Enter a public URL path.'
+    if (Object.keys(nextErrors).length > 0) {
+      setCreateErrors(nextErrors)
+      return
+    }
+    const response = await execute(
+      'submission-form.create',
+      {
+        name,
+        slug,
+        title: event ? `${event.name} call for proposals` : name,
+        description: 'Share your session idea with the program committee.',
+        allowedKinds: ['abstract'],
+        confirmationMessage:
+          'Thanks for sharing your proposal. We sent a confirmation to your email address.',
+        fields: starterSubmissionFields(
+          (state?.tracks ?? []).filter((track) => track.eventId === state?.activeEventId),
+        ),
+      },
+      undefined,
+      'Submission form created.',
+    )
+    if (!response.ok) {
+      setCreateErrors(response.error?.fields ?? { form: response.error?.message ?? 'Try again.' })
+      return
+    }
+    const data = response.data as { form?: { id?: string } } | undefined
+    setCreateOpen(false)
+    setCreateErrors({})
+    if (data?.form?.id) onSelectionChange(data.form.id)
+  }
+
+  if (!form) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
           title="Submission forms"
-          description="Create the public entry point for your program."
+          actions={
+            <Button variant="primary" onClick={() => setCreateOpen(true)}>
+              <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
+              Create form
+            </Button>
+          }
         />
-        <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-          No submission form has been configured for this event yet.
-        </p>
+        <div className="mx-auto flex w-full max-w-xl flex-col items-center rounded-2xl border border-dashed border-zinc-300 px-6 py-14 text-center">
+          <span className="grid size-11 place-items-center rounded-xl bg-blue-50 text-blue-600">
+            <DocumentPlusIcon className="size-5 fill-current" />
+          </span>
+          <h2 className="pt-4 text-base font-semibold text-zinc-950">
+            Open your call for proposals
+          </h2>
+          <p className="max-w-sm pt-1 text-pretty text-base text-zinc-500 sm:text-sm">
+            Start with the speaker and session questions a program committee needs. You can change
+            every field before publishing.
+          </p>
+          <Button className="mt-5" variant="primary" onClick={() => setCreateOpen(true)}>
+            Create your first form
+          </Button>
+        </div>
+        <Dialog
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          title="Create submission form"
+          description={`Set up the public entry point for ${event?.name ?? 'this event'}.`}
+          footer={
+            <>
+              <Button onClick={() => setCreateOpen(false)} disabled={mutating}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={() => void createForm()} disabled={mutating}>
+                {mutating ? 'Creating…' : 'Create form'}
+              </Button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            <label className="grid gap-1.5">
+              <span className="text-base font-medium text-zinc-950 sm:text-sm">Form name</span>
+              <input
+                autoFocus
+                value={newFormName}
+                onChange={(changeEvent) => {
+                  const next = changeEvent.target.value
+                  setNewFormName(next)
+                  setNewFormSlug(submissionFormSlug(next))
+                  setCreateErrors((current) => ({ ...current, name: '', slug: '' }))
+                }}
+                className={textControl}
+              />
+              {createErrors.name ? (
+                <p className="text-sm text-red-600">{createErrors.name}</p>
+              ) : null}
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-base font-medium text-zinc-950 sm:text-sm">Public URL</span>
+              <span className="flex min-w-0 items-center rounded-xl bg-white ring-1 ring-zinc-950/10 focus-within:ring-2 focus-within:ring-blue-600">
+                <span className="shrink-0 pl-3 text-sm text-zinc-400">/submit/</span>
+                <input
+                  value={newFormSlug}
+                  onChange={(changeEvent) => {
+                    setNewFormSlug(changeEvent.target.value)
+                    setCreateErrors((current) => ({ ...current, slug: '' }))
+                  }}
+                  className="min-h-10 min-w-0 flex-1 rounded-r-xl border-0 bg-transparent px-1.5 pr-3 text-base text-zinc-950 outline-none sm:min-h-9 sm:text-sm"
+                />
+              </span>
+              {createErrors.slug ? (
+                <p className="text-sm text-red-600">{createErrors.slug}</p>
+              ) : null}
+            </label>
+            {createErrors.form ? <p className="text-sm text-red-600">{createErrors.form}</p> : null}
+          </div>
+        </Dialog>
       </div>
     )
   }
 
   const activeForm = formDraft ?? form
-  const event = state?.events.find((entry) => entry.id === activeForm.eventId)
   const selected = fields.find((field) => field.id === selectedFieldId) ?? fields[0]
   const publishReadiness = submissionFormPublishReadiness(fields)
   const speakerPurposes = ['first_name', 'last_name', 'email', 'company', 'job_title', 'biography']
