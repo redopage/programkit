@@ -421,6 +421,13 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
     }
   }, [])
 
+  const updateEventDraft = <Key extends keyof NewEventDraft>(
+    key: Key,
+    value: NewEventDraft[Key],
+  ) => {
+    setEventDraft((current) => ({ ...current, [key]: value }))
+  }
+
   useEffect(() => {
     if (!open) return
     const handlePointerDown = (pointerEvent: PointerEvent) => {
@@ -649,9 +656,7 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
               ref={eventNameRef}
               required
               value={eventDraft.name}
-              onChange={(changeEvent) =>
-                setEventDraft((current) => ({ ...current, name: changeEvent.currentTarget.value }))
-              }
+              onChange={(changeEvent) => updateEventDraft('name', changeEvent.currentTarget.value)}
               placeholder="DevFlow Conf 2027"
               className={eventCreationControl}
             />
@@ -663,10 +668,7 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
               required
               value={eventDraft.startsOn}
               onChange={(changeEvent) =>
-                setEventDraft((current) => ({
-                  ...current,
-                  startsOn: changeEvent.currentTarget.value,
-                }))
+                updateEventDraft('startsOn', changeEvent.currentTarget.value)
               }
               className={eventCreationControl}
             />
@@ -679,10 +681,7 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
               min={eventDraft.startsOn}
               value={eventDraft.endsOn}
               onChange={(changeEvent) =>
-                setEventDraft((current) => ({
-                  ...current,
-                  endsOn: changeEvent.currentTarget.value,
-                }))
+                updateEventDraft('endsOn', changeEvent.currentTarget.value)
               }
               className={eventCreationControl}
             />
@@ -692,10 +691,7 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
             <select
               value={eventDraft.timezone}
               onChange={(changeEvent) =>
-                setEventDraft((current) => ({
-                  ...current,
-                  timezone: changeEvent.currentTarget.value,
-                }))
+                updateEventDraft('timezone', changeEvent.currentTarget.value)
               }
               className={eventCreationControl}
             >
@@ -710,9 +706,7 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
             <span className="text-sm font-medium text-zinc-800">Venue</span>
             <input
               value={eventDraft.venue}
-              onChange={(changeEvent) =>
-                setEventDraft((current) => ({ ...current, venue: changeEvent.currentTarget.value }))
-              }
+              onChange={(changeEvent) => updateEventDraft('venue', changeEvent.currentTarget.value)}
               placeholder="Moscone West"
               className={eventCreationControl}
             />
@@ -721,9 +715,7 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
             <span className="text-sm font-medium text-zinc-800">City</span>
             <input
               value={eventDraft.city}
-              onChange={(changeEvent) =>
-                setEventDraft((current) => ({ ...current, city: changeEvent.currentTarget.value }))
-              }
+              onChange={(changeEvent) => updateEventDraft('city', changeEvent.currentTarget.value)}
               placeholder="San Francisco"
               className={eventCreationControl}
             />
