@@ -8,6 +8,7 @@ export function AuthView() {
   const search = new URLSearchParams(window.location.search)
   const invited = search.get('invite') === '1'
   const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [intent, setIntent] = useState<'signin' | 'signup'>('signin')
   const [sending, setSending] = useState(false)
@@ -58,7 +59,7 @@ export function AuthView() {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, password, intent }),
+        body: JSON.stringify({ email, password, intent, name }),
       })
       const body = (await response.json()) as { ok?: boolean; error?: string }
       if (!response.ok || !body.ok) {
@@ -124,6 +125,26 @@ export function AuthView() {
                   : 'Welcome back.'}
             </p>
             <div className="pt-7 text-left">
+              {intent === 'signup' ? (
+                <>
+                  <label htmlFor="auth-name" className="text-sm font-medium text-zinc-800">
+                    Full name
+                  </label>
+                  <input
+                    id="auth-name"
+                    name="name"
+                    type="text"
+                    autoComplete="name"
+                    required
+                    autoFocus
+                    maxLength={80}
+                    value={name}
+                    onChange={(event) => setName(event.currentTarget.value)}
+                    className="focus-ring mt-2 min-h-11 w-full rounded-xl bg-white px-3.5 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/12 placeholder:text-zinc-400 sm:min-h-10 sm:text-sm"
+                    placeholder="Jordan Alvarez"
+                  />
+                </>
+              ) : null}
               <label htmlFor="auth-email" className="text-sm font-medium text-zinc-800">
                 Email address
               </label>
@@ -134,10 +155,10 @@ export function AuthView() {
                 autoComplete="email"
                 inputMode="email"
                 required
-                autoFocus
+                autoFocus={intent === 'signin'}
                 value={email}
                 onChange={(event) => setEmail(event.currentTarget.value)}
-                className="focus-ring mt-2 min-h-11 w-full rounded-xl bg-white px-3.5 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/12 placeholder:text-zinc-400 sm:min-h-10 sm:text-sm"
+                className={`focus-ring min-h-11 w-full rounded-xl bg-white px-3.5 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/12 placeholder:text-zinc-400 sm:min-h-10 sm:text-sm ${intent === 'signup' ? 'mt-4' : 'mt-2'}`}
                 placeholder="you@example.com"
               />
               <label

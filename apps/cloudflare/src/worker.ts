@@ -383,7 +383,7 @@ function hostedStaffActor(principal: HostedPrincipal) {
   return {
     type: 'staff' as const,
     id: principal.account.user.id,
-    name: principal.account.user.email,
+    name: principal.account.user.name,
     scopes: principal.scopes,
   }
 }
@@ -1073,10 +1073,12 @@ async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
       email?: unknown
       password?: unknown
       intent?: unknown
+      name?: unknown
     }
     const email = normalizeEmail(input.email)
     const password = typeof input.password === 'string' ? input.password : ''
     const intent = input.intent === 'signup' ? 'signup' : 'signin'
+    const name = typeof input.name === 'string' ? input.name.trim().replace(/\s+/gu, ' ').slice(0, 80) : ''
     if (!email || password.length < 10 || password.length > 128) {
       return Response.json(
         { ok: false, error: 'Enter a valid email and a password with at least 10 characters.' },
@@ -1089,7 +1091,7 @@ async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
       new Request('http://auth.internal/internal/auth/password', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, password, intent, ipHash }),
+        body: JSON.stringify({ email, password, intent, ipHash, name }),
       }),
     )
     const authenticated = (await authenticatedResponse.json()) as HostedAuthenticationResult
@@ -2285,8 +2287,8 @@ export default {
               from: env.PROGRAMKIT_EMAIL_FROM,
               replyTo: env.PROGRAMKIT_SUPPORT_EMAIL,
               subject: `Join ${event.name} in ProgramKit`,
-              text: `${hostedPrincipal.account.user.email} invited you to help manage ${event.name} in ProgramKit.\n\nAccept the invitation: ${invitationUrl.toString()}\n\nThis invitation expires in seven days.`,
-              html: `<div style="font-family:Inter,system-ui,sans-serif;color:#18181b;line-height:1.5"><h1 style="font-size:22px">Join ${safeEventName}</h1><p>${escapeHtml(hostedPrincipal.account.user.email)} invited you to help manage this event in ProgramKit.</p><p><a href="${safeInvitationUrl}" style="display:inline-block;border-radius:999px;background:#2563eb;color:white;padding:10px 16px;text-decoration:none">Accept invitation</a></p><p style="color:#71717a;font-size:14px">This invitation expires in seven days.</p></div>`,
+              text: `${hostedPrincipal.account.user.name} invited you to help manage ${event.name} in ProgramKit.\n\nAccept the invitation: ${invitationUrl.toString()}\n\nThis invitation expires in seven days.`,
+              html: `<div style="font-family:Inter,system-ui,sans-serif;color:#18181b;line-height:1.5"><h1 style="font-size:22px">Join ${safeEventName}</h1><p>${escapeHtml(hostedPrincipal.account.user.name)} invited you to help manage this event in ProgramKit.</p><p><a href="${safeInvitationUrl}" style="display:inline-block;border-radius:999px;background:#2563eb;color:white;padding:10px 16px;text-decoration:none">Accept invitation</a></p><p style="color:#71717a;font-size:14px">This invitation expires in seven days.</p></div>`,
             })
           } catch {
             await access.fetch(

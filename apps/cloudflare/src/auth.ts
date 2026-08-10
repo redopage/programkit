@@ -11,6 +11,7 @@ const maximumPasswordLength = 128
 
 interface AuthUser {
   id: string
+  name: string
   email: string
   eventIds: string[]
   createdAt: string
@@ -59,7 +60,7 @@ interface RateRecord {
 }
 
 export interface AuthAccount {
-  user: Pick<AuthUser, 'id' | 'email'>
+  user: Pick<AuthUser, 'id' | 'name' | 'email'>
   events: AuthEventSummary[]
   activeEventId: string
 }
@@ -125,6 +126,26 @@ export function normalizeEmail(value: unknown) {
   return email
 }
 
+function fallbackName(email: string) {
+  const localPart = email.split('@')[0] ?? ''
+  const words = localPart
+    .replace(/[^a-z0-9]+/giu, ' ')
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean)
+  const name = words
+    .slice(0, 4)
+    .map((word) => `${word[0]?.toLocaleUpperCase('en-US') ?? ''}${word.slice(1)}`)
+    .join(' ')
+  return name || 'Organizer'
+}
+
+function normalizeName(value: unknown, email: string) {
+  if (typeof value !== 'string') return fallbackName(email)
+  const name = value.trim().replace(/\s+/gu, ' ').slice(0, 80)
+  return name || fallbackName(email)
+}
+
 function eventSlug(name: string) {
   const slug = name
     .normalize('NFKD')
@@ -172,7 +193,7 @@ export class AuthDurableObject extends DurableObject {
     return { ok: true, deliver: true as const, token, expiresAt, email }
   }
 
-  async #userForEmail(email: string) {
+  async #userForEmail(email: string, name?: string) {
     const emailHash = await sha256(email)
     const existingId = await this.#ctx.storage.get<string>(`email:${emailHash}`)
     if (existingId) {
@@ -192,6 +213,7 @@ export class AuthDurableObject extends DurableObject {
     }
     const user: AuthUser = {
       id: userId,
+      name: normalizeName(name, email),
       email,
       eventIds: [eventId],
       createdAt: now,
@@ -221,7 +243,11 @@ export class AuthDurableObject extends DurableObject {
     const activeEventId = events.some((event) => event.id === preferredEventId)
       ? preferredEventId!
       : events[0].id
-    return { user: { id: user.id, email: user.email }, events, activeEventId }
+    return {
+      user: { id: user.id, name: user.name || fallbackName(user.email), email: user.email },
+      events,
+      activeEventId,
+    }
   }
 
   async #consumeMagicLink(token: string) {
@@ -263,6 +289,7 @@ export class AuthDurableObject extends DurableObject {
     password: string,
     intent: 'signin' | 'signup',
     ipHash: string,
+    name?: string,
   ) {
     const emailHash = await sha256(email)
     const emailAllowed = await this.#rateAllows(`password-email:${emailHash}`, 10, 750)
@@ -276,12 +303,13 @@ export class AuthDurableObject extends DurableObject {
 
     if (intent === 'signup') {
       if (user || existingPassword) return { ok: false as const }
-      user = await this.#userForEmail(email)
       const salt = randomHex(16)
+      const hash = await passwordHash(password, salt, cloudflarePasswordIterations)
+      user = await this.#userForEmail(email, name)
       const passwordRecord: PasswordRecord = {
         userId: user.id,
         salt,
-        hash: await passwordHash(password, salt, cloudflarePasswordIterations),
+        hash,
         iterations: cloudflarePasswordIterations,
         createdAt: new Date().toISOString(),
       }
@@ -296,7 +324,11 @@ export class AuthDurableObject extends DurableObject {
       if (!equalHex(candidate, existingPassword.hash)) return { ok: false as const }
     }
 
-    const updatedUser = { ...user, lastSignedInAt: new Date().toISOString() }
+    const updatedUser = {
+      ...user,
+      name: user.name || fallbackName(user.email),
+      lastSignedInAt: new Date().toISOString(),
+    }
     await this.#ctx.storage.put(`user:${updatedUser.id}`, updatedUser)
     const session = await this.#createSession(updatedUser)
     return {
@@ -444,10 +476,11 @@ export class AuthDurableObject extends DurableObject {
       const password = input.password
       const intent = input.intent === 'signup' ? 'signup' : 'signin'
       const ipHash = typeof input.ipHash === 'string' ? input.ipHash : 'unknown'
+      const name = intent === 'signup' ? normalizeName(input.name, email ?? '') : undefined
       if (!email || !validPassword(password)) {
         return Response.json({ ok: false }, { status: 401 })
       }
-      const authenticated = await this.#authenticatePassword(email, password, intent, ipHash)
+      const authenticated = await this.#authenticatePassword(email, password, intent, ipHash, name)
       return authenticated.ok
         ? Response.json(authenticated, { status: intent === 'signup' ? 201 : 200 })
         : Response.json({ ok: false }, { status: 401 })

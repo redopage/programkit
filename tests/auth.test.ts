@@ -17,7 +17,7 @@ async function body(response: Response) {
     token?: string
     sessionToken?: string
     account?: {
-      user: { id: string; email: string }
+      user: { id: string; name: string; email: string }
       events: Array<{
         id: string
         membershipId?: string
@@ -118,6 +118,7 @@ describe('AuthDurableObject membership projections', () => {
     const signupResponse = await auth.fetch(
       request('/internal/auth/password', {
         email: 'jordan@example.com',
+        name: 'Jordan Alvarez',
         password: 'correct horse battery staple',
         intent: 'signup',
         ipHash: 'local-test',
@@ -127,11 +128,12 @@ describe('AuthDurableObject membership projections', () => {
     const signup = (await signupResponse.json()) as {
       ok: boolean
       sessionToken: string
-      account: { user: { email: string }; events: unknown[] }
+      account: { user: { name: string; email: string }; events: unknown[] }
     }
     expect(signup.ok).toBe(true)
     expect(signup.sessionToken).toMatch(/^[a-f0-9]{64}$/u)
     expect(signup.account.user.email).toBe('jordan@example.com')
+    expect(signup.account.user.name).toBe('Jordan Alvarez')
     expect(signup.account.events).toHaveLength(1)
     expect(JSON.stringify(signup)).not.toContain('correct horse')
 
