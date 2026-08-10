@@ -3331,11 +3331,21 @@ function applyHandler(
     case 'schedule.move-session': {
       const placement = findRequired(state.placements, input.placementId, 'placement')
       const room = findRequired(state.rooms, input.roomId, 'room')
+      const session = findRequired(state.sessions, placement.sessionId, 'session')
+      if (
+        placement.eventId !== state.activeEventId ||
+        room.eventId !== state.activeEventId ||
+        session.eventId !== state.activeEventId
+      ) {
+        throw new OperationError(
+          'FORBIDDEN',
+          'The placement, session, and room must belong to the active event.',
+        )
+      }
       const startsAt = assertString(input.startsAt, 'startsAt')
       if (Number.isNaN(new Date(startsAt).getTime())) {
         throw new OperationError('INVALID_INPUT', 'startsAt must be an ISO date and time.')
       }
-      const session = findRequired(state.sessions, placement.sessionId, 'session')
       const previous = { roomId: placement.roomId, startsAt: placement.startsAt }
       placement.roomId = room.id
       placement.startsAt = new Date(startsAt).toISOString()

@@ -896,6 +896,28 @@ describe('ProgramKit operation engine', () => {
     expect(redrafted.state.scheduleReleases[1]).toEqual(latestRelease)
   })
 
+  it('prevents schedule moves across event boundaries', () => {
+    const state = createSeedState()
+    state.rooms.push({
+      id: 'rom_foreign',
+      eventId: 'evt_foreign',
+      name: 'Foreign room',
+      capacity: 100,
+    })
+    const placement = state.placements.find((entry) => entry.id === 'plc_007')!
+    const moved = executeOperation(state, 'schedule.move-session', {
+      input: {
+        placementId: placement.id,
+        roomId: 'rom_foreign',
+        startsAt: placement.startsAt,
+      },
+      expectedVersions: { [placement.id]: placement.version },
+    })
+
+    expect(moved.response).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+    expect(moved.state).toBe(state)
+  })
+
   it('commits approved change sets and records the full audit chain', () => {
     let state = createSeedState()
     const changeSet = state.changeSets[0]
