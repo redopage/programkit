@@ -27,9 +27,16 @@ The `demo` profile intentionally has no email binding. An anonymous capability w
 send external mail. The official sending domain has Cloudflare-managed bounce, SPF, DKIM, and
 DMARC records, and a one-time direct delivery test succeeded on 2026-08-09.
 
-The binding is ready, but product notifications are not yet connected to it. `campaign.send`
-currently records a `demo-outbox` result and contacts no provider. This distinction is deliberate:
-delivery should not happen inside a domain transaction or become a best-effort side effect.
+The binding is ready, but product notifications are not yet connected to it. Submission
+confirmations, decisions, reviewer reminders, and approved campaigns now create one resolved
+outbox record per recipient. The operator can inspect the exact recipient, subject, body, trigger,
+and queued time in Communications, and workspace exports include the same records in
+`csv/outbound-messages.csv`. These records are deliberately marked `queued`: no provider is
+contacted and ProgramKit does not claim delivery.
+
+This durable product-facing outbox closes the rendering and audit half of delivery. The remaining
+provider worker must drain these records outside the domain transaction, attach a stable
+idempotency key, and record the provider result before changing a message to `sent`.
 
 ## Hosted app sign-in
 

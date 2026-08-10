@@ -965,6 +965,16 @@ describe('ProgramKit operation engine', () => {
     })
     expect(sent.response.ok).toBe(true)
     expect(sent.state.campaigns.find((campaign) => campaign.id === pending.id)?.status).toBe('sent')
+    const messages = sent.state.outboundMessages?.filter(
+      (message) => message.campaignId === pending.id,
+    )
+    expect(messages).toHaveLength(pending.recipientParticipationIds.length)
+    expect(messages?.[0]).toMatchObject({
+      kind: 'campaign',
+      trigger: 'campaign.send',
+      status: 'queued',
+    })
+    expect(`${messages?.[0]?.subject}${messages?.[0]?.body}`).not.toContain('{{')
   })
 
   it('renders campaign merge fields for a real event participant', () => {
@@ -1228,6 +1238,13 @@ describe('ProgramKit operation engine', () => {
     expect(
       submitted.state.reviewerAssignments.filter((entry) => entry.submissionId === submission.id),
     ).toHaveLength(2)
+    expect(submitted.state.outboundMessages?.[0]).toMatchObject({
+      kind: 'submission_confirmation',
+      trigger: 'submission.submit',
+      recipientEmail: 'nia@example.com',
+      subject: expect.stringContaining('A workshop with a missing plan'),
+      status: 'queued',
+    })
   })
 
   it('keeps co-speaker roles attached to a speaker-owned submission', () => {
@@ -1434,6 +1451,14 @@ describe('ProgramKit operation engine', () => {
         'review.decision-recorded',
       ]),
     )
+    expect(state.outboundMessages?.[0]).toMatchObject({
+      kind: 'decision_notice',
+      trigger: 'review.decide',
+      recipientEmail: 'mina@plainspoken.systems',
+      subject: expect.stringContaining('The boring parts of trustworthy agents'),
+      body: expect.stringContaining(`/portal/${participation.id}/${participation.portalAccessKey}`),
+      status: 'queued',
+    })
   })
 
   it('converts every accepted co-speaker into the session and onboarding workflow', () => {
@@ -1967,6 +1992,12 @@ describe('ProgramKit operation engine', () => {
         outstandingAssignmentIds: outstanding.map((assignment) => assignment.id),
         deliveryMode: 'demo-outbox',
       },
+    })
+    expect(reminded.state.outboundMessages?.[0]).toMatchObject({
+      kind: 'reviewer_reminder',
+      recipientEmail: reviewer.email,
+      subject: expect.stringContaining(`${outstanding.length} review`),
+      status: 'queued',
     })
 
     const completedReviewer = reminded.state.reviewers.find((entry) => entry.id === 'rev_003')!

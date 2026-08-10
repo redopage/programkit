@@ -111,6 +111,7 @@ function participantState(state: WorkspaceState, participationId: string, portal
   )
   clone.scheduleReleases = []
   clone.campaigns = []
+  clone.outboundMessages = []
   clone.changeSets = []
   clone.integrations = []
   clone.domainEvents = []
@@ -142,6 +143,7 @@ function projectionBase(state: WorkspaceState) {
   clone.placements = []
   clone.scheduleReleases = []
   clone.campaigns = []
+  clone.outboundMessages = []
   clone.changeSets = []
   clone.integrations = []
   clone.domainEvents = []

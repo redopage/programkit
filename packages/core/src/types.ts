@@ -364,6 +364,22 @@ export interface Campaign {
   version: number
 }
 
+export interface OutboundMessage {
+  id: Id
+  eventId: Id
+  campaignId: Id | null
+  kind: 'submission_confirmation' | 'decision_notice' | 'reviewer_reminder' | 'campaign'
+  trigger: string
+  recipientName: string
+  recipientEmail: string
+  subject: string
+  body: string
+  status: 'queued' | 'sent' | 'failed'
+  queuedAt: ISODateTime
+  sentAt: ISODateTime | null
+  providerMessageId: string | null
+}
+
 export interface Integration {
   id: Id
   name: string
@@ -461,6 +477,7 @@ export interface WorkspaceState {
   placements: Placement[]
   scheduleReleases: ScheduleRelease[]
   campaigns: Campaign[]
+  outboundMessages?: OutboundMessage[]
   changeSets: ChangeSet[]
   integrations: Integration[]
   domainEvents: DomainEvent[]

@@ -12,6 +12,7 @@ import {
   participationPerson,
   readinessRows,
   type Campaign,
+  type OutboundMessage,
 } from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -74,6 +75,7 @@ export function CommunicationsView({
   const { payload } = useWorkspace()
   const [filter, setFilter] = useState<CampaignFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
   const [composeTemplateId, setComposeTemplateId] = useState(
     initialCompose === 'reminder' ? 'requirements' : 'welcome',
   )
@@ -84,6 +86,10 @@ export function CommunicationsView({
     (campaign) => filter === 'all' || campaign.status === filter,
   )
   const selected = state.campaigns.find((campaign) => campaign.id === selectedId) ?? null
+  const messages = (state.outboundMessages ?? []).filter(
+    (message) => message.eventId === state.activeEventId,
+  )
+  const selectedMessage = messages.find((message) => message.id === selectedMessageId) ?? null
 
   return (
     <div className="flex flex-col gap-6">
@@ -206,10 +212,111 @@ export function CommunicationsView({
         ))}
       </ul>
 
+      <section aria-labelledby="delivery-log-heading" className="pt-2">
+        <div className="flex items-center justify-between gap-4 border-b border-zinc-950/10 pb-3">
+          <h2 id="delivery-log-heading" className="text-lg font-semibold text-zinc-950">
+            Delivery log
+          </h2>
+          <span className="text-sm tabular-nums text-zinc-500">
+            {messages.length} message{messages.length === 1 ? '' : 's'}
+          </span>
+        </div>
+        {messages.length > 0 ? (
+          <>
+            <div className="hidden sm:block">
+              <div className="-mx-6 overflow-x-auto whitespace-nowrap px-6">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-zinc-950/10">
+                      {['Recipient', 'Subject', 'Trigger', 'Status', 'Queued'].map((heading) => (
+                        <th
+                          key={heading}
+                          scope="col"
+                          className="whitespace-nowrap py-2.5 pr-4 text-left text-sm font-medium text-zinc-500"
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-950/5">
+                    {messages.map((message) => (
+                      <tr key={message.id} className="hover:bg-zinc-950/2">
+                        <td className="py-3 pr-4">
+                          <button
+                            type="button"
+                            className="focus-ring rounded-lg text-left"
+                            onClick={() => setSelectedMessageId(message.id)}
+                          >
+                            <span className="block text-sm font-medium text-zinc-950">
+                              {message.recipientName}
+                            </span>
+                            <span className="block text-sm text-zinc-500">
+                              {message.recipientEmail}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="max-w-md py-3 pr-4 text-sm text-zinc-700">
+                          <span className="block truncate">{message.subject}</span>
+                        </td>
+                        <td className="py-3 pr-4 text-sm text-zinc-500">
+                          {sentenceCase(message.kind)}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <StatusBadge status={message.status} />
+                        </td>
+                        <td className="py-3 text-sm text-zinc-500">
+                          {new Intl.DateTimeFormat('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          }).format(new Date(message.queuedAt))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <ul role="list" className="divide-y divide-zinc-950/5 sm:hidden">
+              {messages.map((message) => (
+                <li key={message.id}>
+                  <button
+                    type="button"
+                    className="focus-ring flex w-full items-start justify-between gap-3 rounded-lg py-4 text-left"
+                    onClick={() => setSelectedMessageId(message.id)}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-base font-medium text-zinc-950">
+                        {message.subject}
+                      </span>
+                      <span className="block truncate text-base text-zinc-500">
+                        {message.recipientName} · {message.recipientEmail}
+                      </span>
+                    </span>
+                    <StatusBadge status={message.status} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="py-6 text-sm text-zinc-500">
+            Submitted proposals, decisions, reminders, and campaigns will appear here.
+          </p>
+        )}
+      </section>
+
       <CampaignDrawer
         campaign={selected}
         open={Boolean(selected)}
         onClose={() => setSelectedId(null)}
+      />
+      <MessageDrawer
+        message={selectedMessage}
+        open={Boolean(selectedMessage)}
+        onClose={() => setSelectedMessageId(null)}
       />
       <ComposeDrawer
         key={composeTemplateId}
@@ -218,6 +325,54 @@ export function CommunicationsView({
         onClose={() => setComposing(false)}
       />
     </div>
+  )
+}
+
+function MessageDrawer({
+  message,
+  open,
+  onClose,
+}: {
+  message: OutboundMessage | null
+  open: boolean
+  onClose: () => void
+}) {
+  if (!message) return null
+  return (
+    <Drawer open={open} onClose={onClose} title={message.subject}>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between gap-3">
+          <StatusBadge status={message.status} />
+          <span className="text-sm text-zinc-500">{sentenceCase(message.kind)}</span>
+        </div>
+        <dl className="grid gap-4">
+          <div>
+            <dt className="text-sm font-medium text-zinc-950">Recipient</dt>
+            <dd className="text-sm text-zinc-500">
+              {message.recipientName} · {message.recipientEmail}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm font-medium text-zinc-950">Queued</dt>
+            <dd className="text-sm text-zinc-500">
+              {new Intl.DateTimeFormat('en-US', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              }).format(new Date(message.queuedAt))}
+            </dd>
+          </div>
+        </dl>
+        <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
+          <p className="whitespace-pre-wrap text-pretty text-sm text-zinc-700">{message.body}</p>
+        </div>
+        <Callout tone="info" title="Queued safely">
+          <p>
+            ProgramKit recorded the resolved recipient and message. External provider delivery is
+            not enabled for this workspace.
+          </p>
+        </Callout>
+      </div>
+    </Drawer>
   )
 }
 

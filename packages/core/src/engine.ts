@@ -11,6 +11,7 @@ import {
 } from './submission-forms.ts'
 import {
   audienceForCampaign,
+  campaignPreview,
   scheduleConflicts,
   submissionAnswerByPurpose,
   submissionDecisionReadiness,
@@ -32,6 +33,7 @@ import type {
   OperationRequest,
   OperationDefinition,
   OperationResponse,
+  OutboundMessage,
   Participation,
   ParticipationStatus,
   Person,
@@ -82,6 +84,7 @@ function initializeProgramCollections(state: WorkspaceState) {
   state.reviewerAssignments ??= []
   state.scorecards ??= []
   state.reviewDecisions ??= []
+  state.outboundMessages ??= []
   for (const submission of state.submissions) {
     submission.contributors ??= []
     submission.speakerAccessKey ??= createId('speaker')
@@ -120,6 +123,28 @@ function initializeProgramCollections(state: WorkspaceState) {
     asset.uploadedBy ??= { type: 'staff', id: 'system', name: 'ProgramKit' }
   }
   state.schemaVersion = Math.max(state.schemaVersion, 9)
+}
+
+function queueOutboundMessage(
+  state: WorkspaceState,
+  input: Omit<
+    OutboundMessage,
+    'id' | 'eventId' | 'status' | 'queuedAt' | 'sentAt' | 'providerMessageId'
+  >,
+  timestamp: string,
+) {
+  state.outboundMessages ??= []
+  const message: OutboundMessage = {
+    id: createId('msg'),
+    eventId: state.activeEventId,
+    ...input,
+    status: 'queued',
+    queuedAt: timestamp,
+    sentAt: null,
+    providerMessageId: null,
+  }
+  state.outboundMessages.unshift(message)
+  return message
 }
 
 function assertRecord(value: unknown, field: string) {
@@ -1492,13 +1517,34 @@ function applyHandler(
           createdAssignments.push(assignment)
         }
       }
+      const submissionTitle = stringAnswer(state, submission, 'proposal_title')
+      const submitterFirstName = stringAnswer(state, submission, 'first_name')
+      const submitterLastName = stringAnswer(state, submission, 'last_name')
+      const event = findRequired(state.events, submission.eventId, 'event')
+      const confirmationMessage = queueOutboundMessage(
+        state,
+        {
+          campaignId: null,
+          kind: 'submission_confirmation',
+          trigger: 'submission.submit',
+          recipientName: `${submitterFirstName} ${submitterLastName}`.trim(),
+          recipientEmail: assertEmail(stringAnswer(state, submission, 'email')),
+          subject: `We received “${submissionTitle}”`,
+          body: `Hi ${submitterFirstName},\n\nYour proposal “${submissionTitle}” was submitted to ${event.name}. We will share a decision when the program team finishes reviewing it.`,
+        },
+        timestamp,
+      )
       appendEvent(state, context, {
         type: 'submission.submitted',
         aggregate: { type: 'submission', id: submission.id, version: submission.version },
-        summary: `Submitted “${stringAnswer(state, submission, 'proposal_title')}” for review.`,
-        data: { formId: form.id, assignmentIds: createdAssignments.map((entry) => entry.id) },
+        summary: `Submitted “${submissionTitle}” for review.`,
+        data: {
+          formId: form.id,
+          assignmentIds: createdAssignments.map((entry) => entry.id),
+          confirmationMessageId: confirmationMessage.id,
+        },
       })
-      return { submission, assignments: createdAssignments }
+      return { submission, assignments: createdAssignments, confirmationMessage }
     }
 
     case 'reviewer.create': {
@@ -1907,7 +1953,21 @@ function applyHandler(
         }
         reviewer.lastRemindedAt = timestamp
         reviewer.version += 1
-        reminded.push({ reviewer, outstanding: outstanding.length })
+        const event = findRequired(state.events, reviewer.eventId, 'event')
+        const message = queueOutboundMessage(
+          state,
+          {
+            campaignId: null,
+            kind: 'reviewer_reminder',
+            trigger: 'review.remind',
+            recipientName: reviewer.name,
+            recipientEmail: reviewer.email,
+            subject: `${outstanding.length} review${outstanding.length === 1 ? '' : 's'} waiting in ${event.name}`,
+            body: `Hi ${reviewer.name.split(' ')[0]},\n\nYou have ${outstanding.length} outstanding review${outstanding.length === 1 ? '' : 's'} for ${event.name}. Open your reviewer workspace to finish the assigned scorecards.`,
+          },
+          timestamp,
+        )
+        reminded.push({ reviewer, outstanding: outstanding.length, message })
         appendEvent(state, context, {
           type: 'reviewer.reminder-sent',
           aggregate: { type: 'reviewer', id: reviewer.id, version: reviewer.version },
@@ -1921,11 +1981,12 @@ function applyHandler(
         })
       }
       return {
-        reviewers: reminded.map(({ reviewer, outstanding }) => ({
+        reviewers: reminded.map(({ reviewer, outstanding, message }) => ({
           id: reviewer.id,
           email: reviewer.email,
           outstanding,
           sentAt: timestamp,
+          messageId: message.id,
         })),
       }
     }
@@ -2397,12 +2458,36 @@ function applyHandler(
           sessionId: session?.id,
         },
       })
+      const decisionLabel =
+        decision === 'accepted'
+          ? 'accepted'
+          : decision === 'rejected'
+            ? 'not selected'
+            : 'waitlisted'
+      const submitterFirstName = stringAnswer(state, submission, 'first_name')
+      const submitterLastName = stringAnswer(state, submission, 'last_name')
+      const submissionTitle = stringAnswer(state, submission, 'proposal_title')
+      const event = findRequired(state.events, submission.eventId, 'event')
+      const decisionMessage = queueOutboundMessage(
+        state,
+        {
+          campaignId: null,
+          kind: 'decision_notice',
+          trigger: 'review.decide',
+          recipientName: `${submitterFirstName} ${submitterLastName}`.trim(),
+          recipientEmail: assertEmail(stringAnswer(state, submission, 'email')),
+          subject: `${event.name} decision for “${submissionTitle}”`,
+          body: `Hi ${submitterFirstName},\n\nYour proposal “${submissionTitle}” has been ${decisionLabel} for ${event.name}.${decision === 'accepted' && participation ? `\n\nYour speaker portal is ready: /portal/${participation.id}/${participation.portalAccessKey}?event=${event.id}` : ''}`,
+        },
+        timestamp,
+      )
       return {
         submission,
         decision: reviewDecision,
         person,
         participation,
         session,
+        decisionMessage,
       }
     }
 
@@ -3592,16 +3677,36 @@ function applyHandler(
       campaign.status = 'sent'
       campaign.sentAt = timestamp
       campaign.version += 1
+      const messages = campaign.recipientParticipationIds
+        .map((participationId) => {
+          const preview = campaignPreview(state, campaign, participationId)
+          if (!preview) return null
+          return queueOutboundMessage(
+            state,
+            {
+              campaignId: campaign.id,
+              kind: 'campaign',
+              trigger: 'campaign.send',
+              recipientName: preview.recipientName,
+              recipientEmail: preview.recipientEmail,
+              subject: preview.subject,
+              body: preview.body,
+            },
+            timestamp,
+          )
+        })
+        .filter((message): message is OutboundMessage => Boolean(message))
       appendEvent(state, context, {
         type: 'campaign.sent',
         aggregate: { type: 'campaign', id: campaign.id, version: campaign.version },
         summary: `Queued ${campaign.name} for ${campaign.recipientParticipationIds.length} recipients.`,
         data: {
           recipientCount: campaign.recipientParticipationIds.length,
+          messageIds: messages.map((message) => message.id),
           deliveryMode: 'demo-outbox',
         },
       })
-      return { campaign }
+      return { campaign, messages }
     }
 
     case 'change-set.create': {

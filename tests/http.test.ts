@@ -144,6 +144,7 @@ describe('operation HTTP surface', () => {
     expect(body.state.participations).toHaveLength(1)
     expect(body.state.participations[0].internalNotes).toBe('')
     expect(body.state.campaigns).toHaveLength(0)
+    expect(body.state.outboundMessages).toHaveLength(0)
     expect(body.state.integrations).toHaveLength(0)
     expect(body.state.changeSets).toHaveLength(0)
     expect(body.state.domainEvents).toHaveLength(0)
@@ -190,9 +191,7 @@ describe('operation HTTP surface', () => {
     expect(formBody.state.domainEvents).toHaveLength(0)
 
     const closedState = createSeedState()
-    closedState.submissionForms.find(
-      (entry) => entry.id === 'frm_cfp_2026',
-    )!.status = 'closed'
+    closedState.submissionForms.find((entry) => entry.id === 'frm_cfp_2026')!.status = 'closed'
     const closedFormResponse = await handleCoreRequest(
       new Request('http://local/public/v1/submission-forms/aie-nyc-2026-cfp/state'),
       new MemoryWorkspaceRepository(closedState),
@@ -213,6 +212,7 @@ describe('operation HTTP surface', () => {
     expect(programBody.state.placements).toHaveLength(0)
     expect(programBody.state.submissions).toHaveLength(0)
     expect(programBody.state.campaigns).toHaveLength(0)
+    expect(programBody.state.outboundMessages).toHaveLength(0)
     expect(programBody.state.people.every((entry) => entry.email === '')).toBe(true)
     expect(programBody.state.participations.every((entry) => entry.internalNotes === '')).toBe(true)
 
@@ -240,6 +240,7 @@ describe('operation HTTP surface', () => {
     expect(reviewerBody.state.participations).toHaveLength(0)
     expect(reviewerBody.state.reviewDecisions).toHaveLength(0)
     expect(reviewerBody.state.campaigns).toHaveLength(0)
+    expect(reviewerBody.state.outboundMessages).toHaveLength(0)
     expect(reviewerBody.state.domainEvents).toHaveLength(0)
   })
 

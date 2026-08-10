@@ -29,6 +29,7 @@ const csvCollectionKeys = [
   'placements',
   'scheduleReleases',
   'campaigns',
+  'outboundMessages',
   'changeSets',
   'integrations',
   'domainEvents',
@@ -257,6 +258,21 @@ const fallbackColumns: Record<CsvCollectionKey, readonly string[]> = {
     'sentAt',
     'createdBy',
     'version',
+  ],
+  outboundMessages: [
+    'id',
+    'eventId',
+    'campaignId',
+    'kind',
+    'trigger',
+    'recipientName',
+    'recipientEmail',
+    'subject',
+    'body',
+    'status',
+    'queuedAt',
+    'sentAt',
+    'providerMessageId',
   ],
   changeSets: [
     'id',
@@ -557,7 +573,7 @@ export function createWorkspaceExportArchive(state: WorkspaceState, exportedAt: 
     state: cleanState,
   }
   const csvFiles = csvCollectionKeys.map((key) => {
-    const records = cleanState[key] as unknown as readonly Record<string, unknown>[]
+    const records = (cleanState[key] ?? []) as unknown as readonly Record<string, unknown>[]
     return {
       name: `csv/${kebabCase(key)}.csv`,
       kind: 'csv' as const,

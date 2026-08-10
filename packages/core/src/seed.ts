@@ -1275,6 +1275,7 @@ export function createSeedState(): WorkspaceState {
     placements: structuredClone(placements),
     scheduleReleases: [structuredClone(initialScheduleRelease)],
     campaigns: structuredClone(campaigns),
+    outboundMessages: [],
     changeSets: [
       {
         id: 'chg_agent_001',
@@ -1412,6 +1413,7 @@ export function createEmptyWorkspaceState({
     placements: [],
     scheduleReleases: [],
     campaigns: [],
+    outboundMessages: [],
     changeSets: [],
     integrations: structuredClone(template.integrations),
     domainEvents: [

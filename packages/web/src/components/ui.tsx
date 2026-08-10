@@ -141,6 +141,8 @@ const statusLabels: Record<string, string> = {
   waitlisted: 'Waitlisted',
   committed: 'Committed',
   stale: 'Stale',
+  queued: 'Queued',
+  failed: 'Failed',
 }
 
 export function StatusBadge({
@@ -148,7 +150,13 @@ export function StatusBadge({
   label,
 }: {
   status:
-    ParticipationStatus | RequirementStatus | CampaignStatus | ChangeSetStatus | SubmissionStatus
+    | ParticipationStatus
+    | RequirementStatus
+    | CampaignStatus
+    | ChangeSetStatus
+    | SubmissionStatus
+    | 'queued'
+    | 'failed'
   label?: string
 }) {
   return (
@@ -165,9 +173,10 @@ export function StatusBadge({
         (status === 'invited' ||
           status === 'submitted' ||
           status === 'in_review' ||
-          status === 'awaiting_approval') &&
+          status === 'awaiting_approval' ||
+          status === 'queued') &&
           'bg-amber-50 text-amber-700 ring-1 ring-amber-700/10',
-        (status === 'revision_requested' || status === 'stale') &&
+        (status === 'revision_requested' || status === 'stale' || status === 'failed') &&
           'bg-rose-50 text-rose-700 ring-1 ring-rose-700/10',
         (status === 'prospect' ||
           status === 'draft' ||
