@@ -74,9 +74,10 @@ program is close to best-in-class for this field.
 The brief lists six firm requirements. Two are not scored by the evaluator but are explicitly named
 by the buyer, and the stated tiebreaker is "the product we would actually use":
 
-- **Calendar invites delivered to each speaker's own calendar** (Gmail, Outlook, iCal). We generate
-  ICS for the public itinerary only. No speaker-directed invite exists.
-- **One-way Accelevents integration.** Zero references in the codebase.
+- **Calendar invites delivered to each speaker's own calendar** (Gmail, Outlook, iCal). Personalized
+  speaker calendar attachments now ship with approved campaign delivery.
+- **One-way Accelevents integration.** Integrations can now export the published program as official
+  speaker and session CSVs, a room mapping sheet, and an import guide.
 - **Resource / wiki pages in the speaker portal with HTML embed support.** Not started.
 
 The Cloudflare deployment, Forge hosting, HTTP API, and fast page loads are already banked. Airtable

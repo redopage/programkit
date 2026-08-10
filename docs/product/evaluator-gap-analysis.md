@@ -108,5 +108,5 @@ Before claiming an evaluator area, its fixtures and tests should prove:
 
 The original buyer brief also calls for a one-way Accelevents integration and speaker-portal
 resource pages that can include trusted organizer HTML embeds. The V1 evaluator does not currently
-score either capability. Track them after the required CFP, review, portal, file, schedule, and
-public-program flows are dependable.
+score either capability. The Accelevents handoff is implemented as a published-program export with
+official speaker and session CSV shapes. Portal resource pages remain follow-up buyer-brief work.

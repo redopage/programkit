@@ -8,6 +8,7 @@ import {
   MinusCircleIcon,
   TableCellsIcon,
 } from '@heroicons/react/16/solid'
+import { createAcceleventsExport } from '@programkit/core'
 import { useEffect, useState } from 'react'
 
 import { ProgramKitMark } from '../components/brand.tsx'
@@ -33,6 +34,7 @@ export function IntegrationsView() {
   const [selectedBaseId, setSelectedBaseId] = useState('')
   const [setupBusy, setSetupBusy] = useState(false)
   const [setupError, setSetupError] = useState<string | null>(null)
+  const [acceleventsMessage, setAcceleventsMessage] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -66,6 +68,33 @@ export function IntegrationsView() {
   const airtable = state.integrations.find((integration) => integration.kind === 'airtable')
   const connections = state.integrations.filter((integration) => integration.kind !== 'airtable')
   const airtableConnected = setup?.connected ?? airtable?.status === 'connected'
+  const activeEvent = state.events.find((event) => event.id === state.activeEventId)
+  const publishedRelease = state.scheduleReleases
+    .filter((release) => release.eventId === state.activeEventId)
+    .sort((left, right) => right.version - left.version)[0]
+
+  function downloadAcceleventsExport() {
+    setAcceleventsMessage(null)
+    try {
+      const result = createAcceleventsExport(state, new Date().toISOString())
+      const bytes = new Uint8Array(result.archive.byteLength)
+      bytes.set(result.archive)
+      const blob = new Blob([bytes.buffer], { type: 'application/zip' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = result.filename
+      anchor.click()
+      URL.revokeObjectURL(url)
+      setAcceleventsMessage(
+        `${result.sessionCount} sessions and ${result.speakerCount} speakers are ready to import.`,
+      )
+    } catch (error) {
+      setAcceleventsMessage(
+        error instanceof Error ? error.message : 'The Accelevents package could not be created.',
+      )
+    }
+  }
 
   async function connectAirtable() {
     if (!selectedBaseId) return
@@ -315,6 +344,42 @@ export function IntegrationsView() {
               writes only the workspace revision and changed native record.
             </p>
           </Callout>
+        </div>
+      </section>
+
+      <section aria-labelledby="accelevents-heading">
+        <div className="border-b border-zinc-950/5 pb-2">
+          <h2 id="accelevents-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+            Accelevents handoff
+          </h2>
+          <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+            Move a published program into Accelevents without changing where it is managed.
+          </p>
+        </div>
+        <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-base font-medium text-zinc-950 sm:text-sm">
+              {activeEvent?.name ?? 'Current event'}
+            </p>
+            <p className="max-w-2xl text-pretty text-base text-zinc-500 sm:text-sm">
+              Download Accelevents-ready speaker and session CSVs, a room mapping sheet, and a short
+              import guide. The package uses the latest published schedule.
+            </p>
+            {acceleventsMessage ? (
+              <p role="status" className="pt-2 text-sm font-medium text-zinc-700">
+                {acceleventsMessage}
+              </p>
+            ) : null}
+          </div>
+          <Button
+            variant="secondary"
+            className="shrink-0"
+            disabled={!publishedRelease}
+            onClick={downloadAcceleventsExport}
+          >
+            <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
+            {publishedRelease ? 'Download Accelevents package' : 'Publish agenda first'}
+          </Button>
         </div>
       </section>
 

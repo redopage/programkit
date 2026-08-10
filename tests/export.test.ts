@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  createAcceleventsExport,
   createReviewResultsCsv,
   createSeedState,
   createWorkspaceExportArchive,
@@ -74,5 +75,48 @@ describe('workspace export archive', () => {
     expect(csv).toContain('"The boring parts of trustworthy agents"')
     expect(csv).toContain('"4.7"')
     expect(csv).toContain('"recommendations.accept"')
+  })
+})
+
+describe('Accelevents export', () => {
+  it('packages the published program using Accelevents speaker and session templates', () => {
+    const exported = createAcceleventsExport(createSeedState(), '2026-08-09T17:00:00.000Z')
+    const files = storedZipFiles(exported.archive)
+
+    expect(exported.filename).toBe('aie-nyc-2026-accelevents-2026-08-09.zip')
+    expect(exported.sessionCount).toBe(10)
+    expect(exported.speakerCount).toBeGreaterThan(10)
+    expect(files.get('README.txt')).toContain('Import speakers.csv')
+    expect(files.get('README.txt')).toContain('America/New_York')
+    expect(files.get('speakers.csv')).toContain('"Speaker Id","First Name","Last Name","Email"')
+    expect(files.get('sessions.csv')).toContain(
+      '"ID","Title","Format","Session Type","Start Date","Start Time","End Time"',
+    )
+    expect(files.get('sessions.csv')).toContain('"Opening the useful frontier"')
+    expect(files.get('sessions.csv')).toContain('"MAIN_STAGE_SESSION"')
+    expect(files.get('sessions.csv')).toContain('"04/10/2026","09:00","09:40"')
+    expect(files.get('sessions.csv')).toContain('"Location Id"')
+    expect(files.get('rooms-reference.csv')).toContain('"Main stage"')
+
+    const manifest = JSON.parse(files.get('manifest.json')!) as {
+      format: string
+      releaseVersion: number
+      counts: { sessions: number }
+    }
+    expect(manifest).toMatchObject({
+      format: 'programkit.accelevents.v1',
+      releaseVersion: 3,
+      counts: { sessions: 10 },
+    })
+  })
+
+  it('requires a published schedule release', () => {
+    const state = createSeedState()
+    state.scheduleReleases = []
+    state.events[0]!.publishedScheduleVersion = null
+
+    expect(() => createAcceleventsExport(state, '2026-08-09T17:00:00.000Z')).toThrow(
+      'Publish the agenda before exporting to Accelevents.',
+    )
   })
 })
