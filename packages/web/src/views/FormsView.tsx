@@ -284,6 +284,12 @@ export function FormsView({
     setDirty(true)
   }
 
+  function updateSubmissionWindow(field: 'opensAt' | 'closesAt', value: string) {
+    const nextValue = value && event ? zonedDateTimeInputToIso(value, event.timezone) : null
+    if (activeForm[field] === nextValue) return
+    updateForm({ [field]: nextValue })
+  }
+
   function deleteSelected() {
     if (!selected) return
     const remaining = fields
@@ -580,12 +586,10 @@ export function FormsView({
                       : ''
                   }
                   onInput={(inputEvent) =>
-                    updateForm({
-                      opensAt:
-                        inputEvent.currentTarget.value && event
-                          ? zonedDateTimeInputToIso(inputEvent.currentTarget.value, event.timezone)
-                          : null,
-                    })
+                    updateSubmissionWindow('opensAt', inputEvent.currentTarget.value)
+                  }
+                  onBlur={(inputEvent) =>
+                    updateSubmissionWindow('opensAt', inputEvent.currentTarget.value)
                   }
                   className={textControl}
                 />
@@ -601,12 +605,10 @@ export function FormsView({
                       : ''
                   }
                   onInput={(inputEvent) =>
-                    updateForm({
-                      closesAt:
-                        inputEvent.currentTarget.value && event
-                          ? zonedDateTimeInputToIso(inputEvent.currentTarget.value, event.timezone)
-                          : null,
-                    })
+                    updateSubmissionWindow('closesAt', inputEvent.currentTarget.value)
+                  }
+                  onBlur={(inputEvent) =>
+                    updateSubmissionWindow('closesAt', inputEvent.currentTarget.value)
                   }
                   className={textControl}
                 />
