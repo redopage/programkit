@@ -27,16 +27,22 @@ The `demo` profile intentionally has no email binding. An anonymous capability w
 send external mail. The official sending domain has Cloudflare-managed bounce, SPF, DKIM, and
 DMARC records, and a one-time direct delivery test succeeded on 2026-08-09.
 
-The binding is ready, but product notifications are not yet connected to it. Submission
-confirmations, decisions, reviewer reminders, and approved campaigns now create one resolved
-outbox record per recipient. The operator can inspect the exact recipient, subject, body, trigger,
-and queued time in Communications, and workspace exports include the same records in
-`csv/outbound-messages.csv`. These records are deliberately marked `queued`: no provider is
-contacted and ProgramKit does not claim delivery.
+Product notifications are connected to the binding through the event Durable Object. Submission
+confirmations, decisions, reviewer reminders, portal invitations, approved campaigns, and
+automatic task reminders create one resolved outbox record per recipient as part of the domain
+operation. The object alarm drains queued messages after the transaction, records each attempt and
+provider message ID, and retries failures after 1, 5, 30, and 120 minutes up to five attempts.
 
-This durable product-facing outbox closes the rendering and audit half of delivery. The remaining
-provider worker must drain these records outside the domain transaction, attach a stable
-idempotency key, and record the provider result before changing a message to `sent`.
+The operator can inspect the exact recipient, subject, body, trigger, queued or sent time, attempt
+count, provider ID, and last delivery error in Communications. Workspace exports include the same
+records in `csv/outbound-messages.csv`. A message is marked `sent` only after Cloudflare Email
+accepts it. The anonymous demo has no outbound binding, so its messages remain safe, inspectable
+outbox examples instead of contacting real recipients.
+
+Automatic speaker-task reminders are enabled by default when an organizer creates a task. The
+scheduler considers four windows: seven days before, two days before, when due, and one day
+overdue. It sends only the latest newly reached window, skips complete, waived, declined, and
+withdrawn assignments, and uses the durable trigger key to avoid queueing the same reminder twice.
 
 ## Hosted app sign-in
 
@@ -77,9 +83,10 @@ queue or Durable Object alarm
       └── retry or expose a terminal failure
 ```
 
-The outbox must cover submission confirmations, decision notices, reminders, and calendar invite
-delivery. It needs suppression state, retry limits, provider response storage, and an operator view
-for failed or delayed mail. Do not mark a communication delivered when it is only queued.
+The outbox covers submission confirmations, decision notices, invitations, reminders, and approved
+campaigns. Calendar attachment delivery, suppression and unsubscribe state, a dead-letter action,
+and provider-level idempotency across a crash immediately after provider acceptance remain before
+using bulk mail for a production event.
 
 ## Self-hosting
 
@@ -100,6 +107,6 @@ Cloudflare's official documentation covers [Email Sending](https://developers.cl
 ## Safety boundary
 
 Outbound mail remains disabled for anonymous demos. The hosted staff sign-in has verified identity,
-workspace-scoped event selection, and application resend limits. Edge abuse controls, participant
-identity, unsubscribe and suppression handling where applicable, and auditable product-delivery
-history are still required before sending to real participants.
+workspace-scoped event selection, application resend limits, and auditable product-delivery
+history. Edge abuse controls, participant identity, unsubscribe and suppression handling where
+applicable, and a final live-inbox acceptance run are still required before sending to a real event.

@@ -9,7 +9,9 @@ import {
 import { AIRTABLE_SCHEMA_VERSION } from './airtable-schema.ts'
 import { AirtableWorkspaceStore, type AirtableWebhookRegistration } from './airtable-store.ts'
 import { verifyAirtableWebhookMac } from './airtable-webhook.ts'
+import { executeOperation } from './engine.ts'
 import { handleCoreRequest } from './http.ts'
+import { nextRequirementReminderAt } from './reminders.ts'
 import type { WorkspaceRepository } from './repository.ts'
 import { createEmptyWorkspaceState, createSeedState } from './seed.ts'
 import type { Actor, WorkspaceState } from './types.ts'
@@ -129,6 +131,18 @@ export class WorkspaceDurableObject extends DurableObject {
     AIRTABLE_BASE_ID?: string
     AIRTABLE_OAUTH_CLIENT_ID?: string
     AIRTABLE_OAUTH_CLIENT_SECRET?: string
+    PROGRAMKIT_APP_ORIGIN?: string
+    PROGRAMKIT_EMAIL_FROM?: string
+    PROGRAMKIT_SUPPORT_EMAIL?: string
+    EMAIL?: {
+      send(message: {
+        to: string | string[]
+        from: string
+        subject: string
+        text?: string
+        replyTo?: string
+      }): Promise<{ messageId: string }>
+    }
   }
   #airtableRepository: AirtableCachedWorkspaceRepository | null = null
   #repositoryFingerprint = 'cache'
@@ -144,6 +158,18 @@ export class WorkspaceDurableObject extends DurableObject {
       AIRTABLE_BASE_ID?: string
       AIRTABLE_OAUTH_CLIENT_ID?: string
       AIRTABLE_OAUTH_CLIENT_SECRET?: string
+      PROGRAMKIT_APP_ORIGIN?: string
+      PROGRAMKIT_EMAIL_FROM?: string
+      PROGRAMKIT_SUPPORT_EMAIL?: string
+      EMAIL?: {
+        send(message: {
+          to: string | string[]
+          from: string
+          subject: string
+          text?: string
+          replyTo?: string
+        }): Promise<{ messageId: string }>
+      }
     }
   }
 
@@ -166,6 +192,26 @@ export class WorkspaceDurableObject extends DurableObject {
     )
     if (connection?.webhook?.expirationTime) {
       due.push(Date.parse(connection.webhook.expirationTime) - 24 * 60 * 60 * 1_000)
+    }
+
+    const state = await this.#cache.read()
+    const reminderAt = nextRequirementReminderAt(state)
+    if (reminderAt != null) due.push(reminderAt)
+    if (this.#env.EMAIL && this.#env.PROGRAMKIT_EMAIL_FROM) {
+      for (const message of state.outboundMessages ?? []) {
+        const attempts = message.attempts ?? 0
+        if (message.status === 'queued') due.push(Date.now())
+        if (
+          message.status === 'failed' &&
+          attempts < 5 &&
+          message.nextAttemptAt &&
+          Date.parse(message.nextAttemptAt) <= Date.now()
+        ) {
+          due.push(Date.now())
+        } else if (message.status === 'failed' && attempts < 5 && message.nextAttemptAt) {
+          due.push(Date.parse(message.nextAttemptAt))
+        }
+      }
     }
 
     const next = due.filter(Number.isFinite).sort((left, right) => left - right)[0]
@@ -477,12 +523,108 @@ export class WorkspaceDurableObject extends DurableObject {
     return next
   }
 
+  async #processRequirementReminders(at: string) {
+    const repository = await this.#repository()
+    return repository.mutate((state) => {
+      const result = executeOperation(state, 'requirement.process-reminders', {
+        input: { at },
+        actor: {
+          type: 'system',
+          id: 'automatic-reminder-scheduler',
+          name: 'Automatic reminder scheduler',
+          scopes: ['requirements:write'],
+        },
+      })
+      return { state: result.state, result: result.response }
+    })
+  }
+
+  #absoluteMessageBody(body: string) {
+    const origin = this.#env.PROGRAMKIT_APP_ORIGIN
+    if (!origin) return body
+    return body.replace(/\/portal\/[^\s]+/gu, (path) => new URL(path, origin).toString())
+  }
+
+  async #deliverOutboundMessages(at: string) {
+    if (!this.#env.EMAIL || !this.#env.PROGRAMKIT_EMAIL_FROM) return
+    const repository = await this.#repository()
+    const now = Date.parse(at)
+    const state = await repository.read()
+    const due = (state.outboundMessages ?? []).filter((message) => {
+      const attempts = message.attempts ?? 0
+      if (attempts >= 5) return false
+      if (message.status === 'queued') return true
+      return (
+        message.status === 'failed' &&
+        Boolean(message.nextAttemptAt) &&
+        Date.parse(message.nextAttemptAt!) <= now
+      )
+    })
+
+    for (const candidate of due) {
+      const attempt = await repository.mutate((current) => {
+        const next = structuredClone(current)
+        const message = next.outboundMessages?.find((entry) => entry.id === candidate.id)
+        if (!message || message.status === 'sent' || (message.attempts ?? 0) >= 5) {
+          return { state: current, result: null }
+        }
+        message.attempts = (message.attempts ?? 0) + 1
+        message.lastAttemptAt = at
+        message.nextAttemptAt = null
+        message.lastError = null
+        next.revision += 1
+        return { state: next, result: structuredClone(message) }
+      })
+      if (!attempt) continue
+
+      try {
+        const delivered = await this.#env.EMAIL.send({
+          to: attempt.recipientEmail,
+          from: this.#env.PROGRAMKIT_EMAIL_FROM,
+          replyTo: this.#env.PROGRAMKIT_SUPPORT_EMAIL,
+          subject: attempt.subject,
+          text: this.#absoluteMessageBody(attempt.body),
+        })
+        await repository.mutate((current) => {
+          const next = structuredClone(current)
+          const message = next.outboundMessages?.find((entry) => entry.id === attempt.id)
+          if (!message) return { state: current, result: undefined }
+          message.status = 'sent'
+          message.sentAt = at
+          message.providerMessageId = delivered.messageId
+          message.nextAttemptAt = null
+          message.lastError = null
+          next.revision += 1
+          return { state: next, result: undefined }
+        })
+      } catch (error) {
+        await repository.mutate((current) => {
+          const next = structuredClone(current)
+          const message = next.outboundMessages?.find((entry) => entry.id === attempt.id)
+          if (!message) return { state: current, result: undefined }
+          const attempts = message.attempts ?? 1
+          const retryMinutes = [1, 5, 30, 120][Math.min(attempts - 1, 3)] ?? 120
+          message.status = 'failed'
+          message.lastError = error instanceof Error ? error.message : 'Email delivery failed.'
+          message.nextAttemptAt =
+            attempts < 5 ? new Date(now + retryMinutes * 60_000).toISOString() : null
+          next.revision += 1
+          return { state: next, result: undefined }
+        })
+      }
+    }
+  }
+
   async alarm() {
     const demo = await this.#demoMetadata()
     if (demo && Date.parse(demo.expiresAt) <= Date.now()) {
       await this.#expireDemo(demo)
       return
     }
+
+    const now = new Date().toISOString()
+    await this.#processRequirementReminders(now)
+    await this.#deliverOutboundMessages(now)
 
     const refreshAt = await this.#ctx.storage.get<number>(webhookRefreshAtKey)
     const retryAt = await this.#ctx.storage.get<number>(webhookRetryAtKey)
@@ -717,6 +859,7 @@ export class WorkspaceDurableObject extends DurableObject {
     const response = await handleCoreRequest(request, repository, {
       actor: actorFromRequest(request),
     })
+    if (request.method === 'POST') await this.#scheduleNextAlarm()
     return response ?? new Response('Not found.', { status: 404 })
   }
 }

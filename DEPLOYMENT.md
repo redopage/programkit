@@ -22,7 +22,7 @@ Cloudflare Worker ── Workers Static Assets (Vite web build)
   ├── event Durable Object    ── authoritative event records and serialized mutations
   ├── Airtable                 ── optional experimental team integration
   ├── R2                      ── private uploads and generated files (next)
-  ├── Queue / object alarm    ── email, webhooks, and mirrors (next)
+  ├── Durable Object alarm   ── email delivery, retries, and task reminders
   └── Email Service           ── sending domain and app binding (configured)
 ```
 
@@ -223,10 +223,11 @@ uses the dedicated `mail.programkit.dev` sending domain so application reputatio
 normal human mail. Only the `app` profile receives the `EMAIL` binding, and Wrangler restricts it
 to `notifications@mail.programkit.dev`.
 
-Magic-link sign-in now uses this binding. This is not a claim that campaign delivery is complete. The current
-domain operation records a demo outbox event and does not invoke the binding. The next delivery
-slice must persist an outbox entry with the domain transaction, process it asynchronously, retry
-with idempotency, and record provider results. See the [email guide](docs/integrations/email.md).
+Magic-link sign-in and product notifications use this binding. Product operations persist one
+resolved outbox record per recipient with the domain transaction. The event Durable Object alarm
+delivers outside the transaction, stores the provider message ID and attempt history, and retries
+failures up to five times. Anonymous demos have no outbound binding. See the
+[email guide](docs/integrations/email.md).
 
 ## Production bindings, in order
 
@@ -237,9 +238,9 @@ The golden-path production work should land in this sequence:
 2. Add OAuth and workspace-scoped authorization to MCP and API tokens.
 3. Add R2 upload initiation, direct upload, finalize/scanning, private download, and lifecycle
    cleanup.
-4. Connect the existing app-only Cloudflare Email Service binding to a transactional delivery
-   outbox for submission confirmations and accepted-speaker reminders.
-5. Add webhook delivery from the same outbox, with signed payloads, retries, and delivery history.
+4. Add suppression, unsubscribe, dead-letter recovery, and calendar attachment support to the
+   transactional email outbox.
+5. Add webhook delivery from a durable outbox, with signed payloads, retries, and delivery history.
 6. Move Airtable toward a non-blocking mirror, then add webhook payload cursors, durable retry,
    inbound change sets, and actual last-success, quota, lag, conflict, and error state.
 7. Add scheduled encrypted logical exports and test restore into a separate workspace key.

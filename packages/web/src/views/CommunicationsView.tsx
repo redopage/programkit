@@ -353,24 +353,55 @@ function MessageDrawer({
             </dd>
           </div>
           <div>
-            <dt className="text-sm font-medium text-zinc-950">Queued</dt>
+            <dt className="text-sm font-medium text-zinc-950">
+              {message.status === 'sent' ? 'Sent' : 'Queued'}
+            </dt>
             <dd className="text-sm text-zinc-500">
               {new Intl.DateTimeFormat('en-US', {
                 dateStyle: 'medium',
                 timeStyle: 'short',
-              }).format(new Date(message.queuedAt))}
+              }).format(new Date(message.sentAt ?? message.queuedAt))}
             </dd>
           </div>
+          {(message.attempts ?? 0) > 0 ? (
+            <div>
+              <dt className="text-sm font-medium text-zinc-950">Delivery attempts</dt>
+              <dd className="text-sm text-zinc-500">{message.attempts}</dd>
+            </div>
+          ) : null}
+          {message.providerMessageId ? (
+            <div>
+              <dt className="text-sm font-medium text-zinc-950">Provider message</dt>
+              <dd className="break-all text-sm text-zinc-500">{message.providerMessageId}</dd>
+            </div>
+          ) : null}
         </dl>
         <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
           <p className="whitespace-pre-wrap text-pretty text-sm text-zinc-700">{message.body}</p>
         </div>
-        <Callout tone="info" title="Queued safely">
-          <p>
-            ProgramKit recorded the resolved recipient and message. External provider delivery is
-            not enabled for this workspace.
-          </p>
-        </Callout>
+        {message.status === 'sent' ? (
+          <Callout tone="success" title="Delivered">
+            <p>ProgramKit sent this message and recorded the provider result.</p>
+          </Callout>
+        ) : message.status === 'failed' ? (
+          <Callout tone="warning" title="Delivery needs attention">
+            <p>{message.lastError ?? 'The provider did not accept this message.'}</p>
+            {message.nextAttemptAt ? (
+              <p className="mt-1">
+                ProgramKit will retry at{' '}
+                {new Intl.DateTimeFormat('en-US', {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                }).format(new Date(message.nextAttemptAt))}
+                .
+              </p>
+            ) : null}
+          </Callout>
+        ) : (
+          <Callout tone="info" title="Queued safely">
+            <p>ProgramKit recorded the resolved recipient and will deliver it asynchronously.</p>
+          </Callout>
+        )}
       </div>
     </Drawer>
   )

@@ -122,7 +122,7 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
             <table className="w-full min-w-2xl">
               <thead>
                 <tr className="border-b border-zinc-950/10">
-                  {['Task', 'Due', 'Assigned to', 'Progress'].map((heading) => (
+                  {['Task', 'Due', 'Assigned to', 'Reminders', 'Progress'].map((heading) => (
                     <th
                       key={heading}
                       scope="col"
@@ -170,6 +170,9 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
                         }).format(new Date(definition.dueAt))}
                       </td>
                       <td className="py-3 pr-6 text-sm text-zinc-600">{assignees.join(', ')}</td>
+                      <td className="whitespace-nowrap py-3 pr-6 text-sm text-zinc-600">
+                        {definition.automaticReminders ? 'Automatic' : 'Off'}
+                      </td>
                       <td className="whitespace-nowrap py-3 text-right text-sm font-medium tabular-nums text-zinc-950">
                         {completed} of {instances.length}
                       </td>
@@ -352,6 +355,7 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
     kind: 'confirmation' as 'confirmation' | 'file',
     sessionId: '',
     maxSizeMb: '20',
+    automaticReminders: true,
     participationIds: [] as string[],
   })
   if (!payload) return null
@@ -391,6 +395,7 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
             : undefined,
         maxSizeBytes: form.kind === 'file' ? Number(form.maxSizeMb) * 1_000_000 : undefined,
         dueAt: `${form.dueDate}T23:59:59.000Z`,
+        automaticReminders: form.automaticReminders,
         participationIds: form.participationIds,
       },
       undefined,
@@ -406,6 +411,7 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
       kind: 'confirmation',
       sessionId: '',
       maxSizeMb: '20',
+      automaticReminders: true,
       participationIds: [],
     })
     onClose()
@@ -539,6 +545,28 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
             }
             className={textControl}
           />
+        </label>
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-zinc-50 px-4 py-3 ring-1 ring-zinc-950/5">
+          <input
+            type="checkbox"
+            name="automaticReminders"
+            checked={form.automaticReminders}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                automaticReminders: event.target.checked,
+              }))
+            }
+            className="focus-ring mt-0.5 size-4 rounded border-zinc-300 text-blue-600"
+          />
+          <span className="min-w-0">
+            <span className="block text-base font-medium text-zinc-950 sm:text-sm">
+              Send automatic reminders
+            </span>
+            <span className="block text-sm text-zinc-500">
+              Sends 7 days and 2 days before, on the due date, and once when overdue.
+            </span>
+          </span>
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-base font-medium text-zinc-950 sm:text-sm">

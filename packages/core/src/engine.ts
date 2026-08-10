@@ -1,5 +1,10 @@
 import { operationDefinition } from './manifest.ts'
 import {
+  dueRequirementReminders,
+  requirementReminderSummary,
+  requirementReminderTrigger,
+} from './reminders.ts'
+import {
   evaluationCriterionKind,
   evaluationRoundCriteria,
   evaluationRoundReviewerTeamId,
@@ -92,7 +97,13 @@ function initializeProgramCollections(state: WorkspaceState) {
   state.scorecards ??= []
   state.reviewDecisions ??= []
   state.outboundMessages ??= []
-  for (const message of state.outboundMessages) message.submissionId ??= null
+  for (const message of state.outboundMessages) {
+    message.submissionId ??= null
+    message.attempts ??= 0
+    message.lastAttemptAt ??= null
+    message.nextAttemptAt ??= null
+    message.lastError ??= null
+  }
   for (const submission of state.submissions) {
     submission.contributors ??= []
     submission.speakerAccessKey ??= createId('speaker')
@@ -123,6 +134,7 @@ function initializeProgramCollections(state: WorkspaceState) {
           ]
         : []
     definition.maxSizeBytes ??= definition.kind === 'file' ? 50_000_000 : null
+    definition.automaticReminders ??= false
   }
   for (const asset of state.assets) {
     asset.version ??= 1
@@ -130,7 +142,7 @@ function initializeProgramCollections(state: WorkspaceState) {
     asset.sessionId ??= null
     asset.uploadedBy ??= { type: 'staff', id: 'system', name: 'ProgramKit' }
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 10)
+  state.schemaVersion = Math.max(state.schemaVersion, 11)
 }
 
 function queueOutboundMessage(
@@ -150,6 +162,10 @@ function queueOutboundMessage(
     queuedAt: timestamp,
     sentAt: null,
     providerMessageId: null,
+    attempts: 0,
+    lastAttemptAt: null,
+    nextAttemptAt: null,
+    lastError: null,
   }
   state.outboundMessages.unshift(message)
   return message
@@ -3625,6 +3641,7 @@ function applyHandler(
         maxSizeBytes,
         dueAt: new Date(dueAt).toISOString(),
         required: input.required !== false,
+        automaticReminders: input.automaticReminders !== false,
       }
       const instances = participations.map((participation) => ({
         id: createId('rqi'),
@@ -3654,6 +3671,56 @@ function applyHandler(
         })
       }
       return { requirementDefinition: definition, requirementInstances: instances }
+    }
+
+    case 'requirement.process-reminders': {
+      if (context.actor.type !== 'system' && context.actor.type !== 'service') {
+        throw new OperationError('FORBIDDEN', 'Only the reminder scheduler can run this job.')
+      }
+      const at = assertString(input.at, 'at')
+      if (Number.isNaN(Date.parse(at))) {
+        throw new OperationError('INVALID_INPUT', 'at must be a valid date and time.')
+      }
+      const event = findRequired(state.events, state.activeEventId, 'active event')
+      const queued = dueRequirementReminders(state, at).map(
+        ({ instance, definition, participation, window }) => {
+          const person = findRequired(state.people, participation.personId, 'person')
+          const dueDate = new Intl.DateTimeFormat('en-US', {
+            dateStyle: 'long',
+            timeZone: event.timezone,
+          }).format(new Date(definition.dueAt))
+          const timing = requirementReminderSummary(definition, at)
+          const portalPath = `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}?event=${encodeURIComponent(event.id)}`
+          const message = queueOutboundMessage(
+            state,
+            {
+              campaignId: null,
+              submissionId: null,
+              kind: 'requirement_reminder',
+              trigger: requirementReminderTrigger(instance.id, window),
+              recipientName: `${person.firstName} ${person.lastName}`,
+              recipientEmail: person.email,
+              subject: `Reminder: ${definition.label} is ${timing}`,
+              body: `Hi ${person.firstName},\n\nThis is an automatic reminder that “${definition.label}” is ${timing} for ${event.name}. The due date is ${dueDate}.\n\nOpen your speaker portal to complete it:\n${portalPath}`,
+            },
+            timestamp,
+          )
+          appendEvent(state, context, {
+            type: 'requirement.reminder-queued',
+            aggregate: { type: 'requirement', id: instance.id, version: instance.version },
+            summary: `Queued an automatic reminder for “${definition.label}”.`,
+            data: {
+              requirementInstanceId: instance.id,
+              participationId: participation.id,
+              dueAt: definition.dueAt,
+              window: window.key,
+              messageId: message.id,
+            },
+          })
+          return message
+        },
+      )
+      return { messages: queued, queuedCount: queued.length, processedAt: at }
     }
 
     case 'requirement.set-status': {

@@ -56,6 +56,13 @@ export type {
 export { handleCoreRequest } from './http.ts'
 export { operationDefinition, operationManifest } from './manifest.ts'
 export {
+  dueRequirementReminders,
+  nextRequirementReminderAt,
+  requirementReminderSummary,
+  requirementReminderTrigger,
+  requirementReminderWindows,
+} from './reminders.ts'
+export {
   evaluationCriterionKind,
   evaluationRound,
   evaluationRoundCriteria,

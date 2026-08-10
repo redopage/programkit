@@ -132,6 +132,7 @@ export interface RequirementDefinition {
   maxSizeBytes?: number | null
   dueAt: ISODateTime
   required: boolean
+  automaticReminders: boolean
 }
 
 export interface RequirementInstance {
@@ -421,6 +422,7 @@ export interface OutboundMessage {
     | 'submission_confirmation'
     | 'decision_notice'
     | 'reviewer_reminder'
+    | 'requirement_reminder'
     | 'campaign'
     | 'crm_outreach'
   trigger: string
@@ -432,6 +434,10 @@ export interface OutboundMessage {
   queuedAt: ISODateTime
   sentAt: ISODateTime | null
   providerMessageId: string | null
+  attempts?: number
+  lastAttemptAt?: ISODateTime | null
+  nextAttemptAt?: ISODateTime | null
+  lastError?: string | null
 }
 
 export interface Integration {

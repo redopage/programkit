@@ -83,7 +83,16 @@ const fallbackColumns: Record<CsvCollectionKey, readonly string[]> = {
     'updatedAt',
     'version',
   ],
-  requirementDefinitions: ['id', 'eventId', 'label', 'description', 'kind', 'dueAt', 'required'],
+  requirementDefinitions: [
+    'id',
+    'eventId',
+    'label',
+    'description',
+    'kind',
+    'dueAt',
+    'required',
+    'automaticReminders',
+  ],
   requirementInstances: [
     'id',
     'definitionId',
@@ -274,6 +283,10 @@ const fallbackColumns: Record<CsvCollectionKey, readonly string[]> = {
     'queuedAt',
     'sentAt',
     'providerMessageId',
+    'attempts',
+    'lastAttemptAt',
+    'nextAttemptAt',
+    'lastError',
   ],
   changeSets: [
     'id',

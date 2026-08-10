@@ -213,6 +213,7 @@ const requirementDefinitions: RequirementDefinition[] = [
     selfCompletable: false,
     dueAt: '2026-08-21T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
   {
     id: 'req_bio',
@@ -224,6 +225,7 @@ const requirementDefinitions: RequirementDefinition[] = [
     selfCompletable: false,
     dueAt: '2026-09-04T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
   {
     id: 'req_headshot',
@@ -235,6 +237,7 @@ const requirementDefinitions: RequirementDefinition[] = [
     selfCompletable: false,
     dueAt: '2026-09-04T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
   {
     id: 'req_release',
@@ -246,6 +249,7 @@ const requirementDefinitions: RequirementDefinition[] = [
     selfCompletable: false,
     dueAt: '2026-09-11T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
   {
     id: 'req_av',
@@ -257,6 +261,7 @@ const requirementDefinitions: RequirementDefinition[] = [
     selfCompletable: false,
     dueAt: '2026-09-18T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
   {
     id: 'req_slides',
@@ -268,6 +273,7 @@ const requirementDefinitions: RequirementDefinition[] = [
     selfCompletable: false,
     dueAt: '2026-09-25T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
 ]
 
@@ -1230,7 +1236,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 10,
+    schemaVersion: 11,
     revision: 1,
     workspace: {
       id: 'wrk_aie',
