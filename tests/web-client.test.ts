@@ -132,4 +132,26 @@ describe('ProgramKit web client', () => {
     ).rejects.toThrow('is not available')
     expect(fetch).not.toHaveBeenCalled()
   })
+
+  it('preserves structured operation errors for field-level recovery', async () => {
+    const response = {
+      ok: false,
+      error: {
+        code: 'INVALID_INPUT',
+        message: 'Check the form and try again.',
+        fields: { abstract: 'Abstract is required.' },
+      },
+      eventIds: [],
+      warnings: [],
+      approvalRequired: false,
+      stateRevision: 1,
+      traceId: 'trace_invalid_submission',
+    }
+    const fetch = vi.fn(async () => Response.json(response, { status: 400 }))
+    const client = createProgramKitHttpClient({ fetch })
+
+    await expect(
+      client.execute({ kind: 'submission', formSlug: 'aie-nyc-2026-cfp' }, 'submission.create', {}),
+    ).resolves.toEqual(response)
+  })
 })

@@ -2,12 +2,16 @@ import { ArrowLeftIcon, PencilSquareIcon, PlusIcon } from '@heroicons/react/16/s
 import { useEffect, useMemo, useState } from 'react'
 
 import {
+  submissionFormAvailability,
   submissionAnswerByPurpose,
   submissionParticipants,
+  visibleSubmissionFormFields,
+  type SubmissionAnswers,
   type SubmissionContributor,
 } from '@programkit/core'
 
 import { ProgramKitMark } from '../components/brand.tsx'
+import { SubmissionAnswerFields } from '../components/SubmissionAnswerFields.tsx'
 import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
 import { Button, StatusBadge, sentenceCase } from '../components/ui.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -43,29 +47,60 @@ export function SpeakerSubmissionsView({
   const selectedTrackLabel =
     state?.tracks.find((entry) => entry.id === selectedTrackValue)?.name ?? selectedTrackValue
   const [editing, setEditing] = useState(false)
+  const [answers, setAnswers] = useState<SubmissionAnswers>({})
   const [contributors, setContributors] = useState<SubmissionContributor[]>([])
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const visibleFields = useMemo(
+    () => (state && form && selected ? visibleSubmissionFormFields(state, form.id, answers) : []),
+    [answers, form, selected, state],
+  )
+  const availability = form ? submissionFormAvailability(form) : 'closed'
+  const canEdit =
+    availability === 'open' && selected?.status !== 'accepted' && selected?.status !== 'withdrawn'
 
   useEffect(() => {
     if (!selected) return
+    setAnswers(structuredClone(selected.answers))
     setContributors(structuredClone(selected.contributors ?? []))
+    setFieldErrors({})
     setEditing(false)
   }, [selected])
 
   if (!state || !form || !event) return null
 
-  async function saveParticipants() {
+  function setAnswer(key: string, value: SubmissionAnswers[string]) {
+    setAnswers((current) => ({ ...current, [key]: value }))
+    setFieldErrors((current) => {
+      const next = { ...current }
+      delete next[key]
+      delete next._form
+      return next
+    })
+  }
+
+  async function saveSubmission() {
     if (!selected) return
     const response = await execute(
       'submission.update',
       {
         submissionId: selected.id,
         speakerAccessKey,
+        answers,
         contributors,
       },
       { expectedVersions: { [selected.id]: selected.version } },
-      'Participants updated.',
+      'Submission updated.',
     )
-    if (response.ok) setEditing(false)
+    if (response.ok) {
+      setEditing(false)
+      setFieldErrors({})
+      return
+    }
+    setFieldErrors(
+      response.error?.fields ?? {
+        _form: response.error?.message ?? 'Check the submission and try again.',
+      },
+    )
   }
 
   return (
@@ -94,15 +129,17 @@ export function SpeakerSubmissionsView({
               Follow each proposal from submission through the program decision.
             </p>
           </div>
-          <Button
-            variant="primary"
-            onClick={() => {
-              window.location.href = `/submit/${formSlug}`
-            }}
-          >
-            <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
-            Submit another proposal
-          </Button>
+          {availability === 'open' ? (
+            <Button
+              variant="primary"
+              onClick={() => {
+                window.location.href = `/submit/${formSlug}`
+              }}
+            >
+              <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
+              Submit another proposal
+            </Button>
+          ) : null}
         </div>
 
         {submissions.length === 0 ? (
@@ -177,33 +214,61 @@ export function SpeakerSubmissionsView({
                       {sentenceCase(selected.kind)} · Reference {selected.id}
                     </p>
                   </div>
-                  {!editing && selected.status !== 'accepted' && selected.status !== 'withdrawn' ? (
+                  {!editing && canEdit ? (
                     <Button size="compact" onClick={() => setEditing(true)}>
                       <PencilSquareIcon className="size-4 h-lh shrink-0 fill-current" />
-                      Edit participants
+                      Edit submission
                     </Button>
                   ) : null}
                 </div>
 
                 {editing ? (
-                  <div className="pt-7">
-                    <SubmissionParticipantsEditor
-                      contributors={contributors}
-                      onChange={setContributors}
-                      compact
-                    />
-                    <div className="flex flex-wrap items-center gap-3 pt-5">
+                  <div className="flex flex-col gap-8 pt-7">
+                    <fieldset>
+                      <legend className="text-lg font-semibold text-zinc-950">
+                        Submission details
+                      </legend>
+                      <div className="pt-5">
+                        <SubmissionAnswerFields
+                          fields={visibleFields}
+                          answers={answers}
+                          errors={fieldErrors}
+                          lockedPurposes={['email']}
+                          idPrefix={`edit-${selected.id}`}
+                          fileMode="preserve"
+                          onChange={setAnswer}
+                        />
+                      </div>
+                    </fieldset>
+
+                    <div className="border-t border-zinc-950/5 pt-7">
+                      <SubmissionParticipantsEditor
+                        contributors={contributors}
+                        onChange={setContributors}
+                        compact
+                      />
+                    </div>
+
+                    {fieldErrors._form ? (
+                      <p className="rounded-xl bg-rose-50 p-3 text-pretty text-base text-rose-700 ring-1 ring-rose-700/10 sm:text-sm">
+                        {fieldErrors._form}
+                      </p>
+                    ) : null}
+
+                    <div className="flex flex-wrap items-center gap-3 border-t border-zinc-950/5 pt-6">
                       <Button
                         variant="primary"
                         disabled={mutating}
-                        onClick={() => void saveParticipants()}
+                        onClick={() => void saveSubmission()}
                       >
-                        Save participants
+                        Save changes
                       </Button>
                       <Button
                         disabled={mutating}
                         onClick={() => {
+                          setAnswers(structuredClone(selected.answers))
                           setContributors(structuredClone(selected.contributors ?? []))
+                          setFieldErrors({})
                           setEditing(false)
                         }}
                       >

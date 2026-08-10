@@ -1235,9 +1235,7 @@ function applyHandler(
         input.fields !== undefined &&
         state.submissions.some((submission) => submission.formId === form.id)
       ) {
-        const currentFields = state.submissionFormFields.filter(
-          (field) => field.formId === form.id,
-        )
+        const currentFields = state.submissionFormFields.filter((field) => field.formId === form.id)
         const nextFieldsById = new Map(fields.map((field) => [field.id, field]))
         for (const currentField of currentFields) {
           const nextField = nextFieldsById.get(currentField.id)
@@ -1371,6 +1369,9 @@ function applyHandler(
           optionalString(input.speakerAccessKey) !== submission.speakerAccessKey)
       ) {
         throw new OperationError('FORBIDDEN', 'This speaker link cannot edit that submission.')
+      }
+      if (context.actor.type === 'submitter') {
+        assertSubmissionFormAccepting(form, timestamp)
       }
       if (submission.status === 'accepted' || submission.status === 'withdrawn') {
         throw new OperationError(
@@ -1639,8 +1640,7 @@ function applyHandler(
           .map((scorecard) =>
             state.reviewerAssignments.find(
               (assignment) =>
-                assignment.evaluationPlanId === plan.id &&
-                assignment.id === scorecard.assignmentId,
+                assignment.evaluationPlanId === plan.id && assignment.id === scorecard.assignmentId,
             ),
           )
           .filter((assignment) => assignment !== undefined)

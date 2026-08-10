@@ -32,6 +32,23 @@ async function parseJson<T>(response: Response) {
   return body
 }
 
+async function parseOperationResponse(response: Response) {
+  const body = (await response.json()) as
+    OperationResponse | { error?: string | { message?: string } }
+  if (typeof (body as OperationResponse).ok === 'boolean') {
+    return body as OperationResponse
+  }
+  if (!response.ok) {
+    const error = body.error
+    const message =
+      typeof error === 'string'
+        ? error
+        : (error?.message ?? `Request failed with ${response.status}.`)
+    throw new Error(message)
+  }
+  throw new Error('The operation returned an invalid response.')
+}
+
 function stateEndpoint(surface: ProgramKitSurface) {
   switch (surface.kind) {
     case 'submission':
@@ -105,7 +122,7 @@ export function createProgramKitHttpClient(
         throw new Error(`${operation} is not available on the ${surface.kind} surface.`)
       }
       const { actor: _untrustedActor, ...publicOptions } = operationOptions ?? {}
-      return parseJson<OperationResponse>(
+      return parseOperationResponse(
         await fetcher(resolveUrl(operationEndpoint(surface, operation)), {
           method: 'POST',
           headers: surfaceHeaders(surface, { 'content-type': 'application/json' }),

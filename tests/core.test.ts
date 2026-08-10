@@ -1358,6 +1358,28 @@ describe('ProgramKit operation engine', () => {
         message: 'This submission form is no longer accepting responses.',
       },
     })
+
+    const lateEdit = executeOperation(state, 'submission.update', {
+      input: {
+        submissionId: submission.id,
+        speakerAccessKey: submission.speakerAccessKey,
+        answers: { proposal_title: 'A late title change' },
+      },
+      expectedVersions: { [submission.id]: submission.version },
+      actor: {
+        type: 'submitter',
+        id: currentForm.slug,
+        name: 'Public submitter',
+        scopes: ['submissions:write', 'submissions:submit'],
+      },
+    })
+    expect(lateEdit.response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'FORM_CLOSED',
+        message: 'This submission form is no longer accepting responses.',
+      },
+    })
   })
 
   it('scores reviews and atomically converts an accepted abstract into the program', () => {
@@ -1964,9 +1986,7 @@ describe('ProgramKit operation engine', () => {
       input: { name: 'Morgan Lee', email: 'morgan.reviewer@example.com' },
     })
     state = created.state
-    const reviewer = state.reviewers.find(
-      (entry) => entry.email === 'morgan.reviewer@example.com',
-    )!
+    const reviewer = state.reviewers.find((entry) => entry.email === 'morgan.reviewer@example.com')!
     const team = state.reviewerTeams.find((entry) => entry.id === 'rvt_program')!
     state = executeOperation(state, 'reviewer-team.update', {
       input: { teamId: team.id, reviewerIds: [...team.reviewerIds, reviewer.id] },

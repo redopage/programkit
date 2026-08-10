@@ -1,4 +1,4 @@
-import { CheckCircleIcon, ChevronUpDownIcon, ClockIcon } from '@heroicons/react/16/solid'
+import { CheckCircleIcon, ClockIcon } from '@heroicons/react/16/solid'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import {
@@ -11,6 +11,7 @@ import {
 } from '@programkit/core'
 
 import { ProgramKitMark } from '../components/brand.tsx'
+import { SubmissionAnswerFields } from '../components/SubmissionAnswerFields.tsx'
 import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
 import { Button, cx } from '../components/ui.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -81,7 +82,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const created = await execute(
+    let created = await execute(
       'submission.create',
       {
         formId: form!.id,
@@ -93,8 +94,27 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
       undefined,
       'Draft saved.',
     )
+    if (!created.ok && created.error?.code === 'FORBIDDEN' && speakerAccessKey) {
+      window.localStorage.removeItem(`programkit:speaker:${slug}`)
+      setSpeakerAccessKey('')
+      created = await execute(
+        'submission.create',
+        {
+          formId: form!.id,
+          kind: activeKind,
+          answers,
+          contributors,
+        },
+        undefined,
+        'Draft saved.',
+      )
+    }
     if (!created.ok) {
-      setFieldErrors(created.error?.fields ?? {})
+      setFieldErrors(
+        created.error?.fields ?? {
+          _form: created.error?.message ?? 'Check the form and try again.',
+        },
+      )
       return
     }
     const data = created.data as
@@ -374,189 +394,14 @@ function FormSection({
     <fieldset className="min-w-0">
       <legend className="text-lg font-semibold text-zinc-950">{title}</legend>
       <p className="text-pretty text-base text-zinc-500 sm:text-sm">{description}</p>
-      <div className="grid gap-5 pt-5 sm:grid-cols-2">
-        {fields.map((field) => (
-          <FormField
-            key={field.id}
-            field={field}
-            value={answers[field.key]}
-            error={errors[field.key]}
-            onChange={(value) => onChange(field.key, value)}
-          />
-        ))}
+      <div className="pt-5">
+        <SubmissionAnswerFields
+          fields={fields}
+          answers={answers}
+          errors={errors}
+          onChange={onChange}
+        />
       </div>
     </fieldset>
-  )
-}
-
-function FormField({
-  field,
-  value,
-  error,
-  onChange,
-}: {
-  field: SubmissionFormField
-  value: SubmissionAnswers[string] | undefined
-  error?: string
-  onChange: (value: SubmissionAnswers[string]) => void
-}) {
-  const fieldId = `submission-${field.id}`
-  const spanWide =
-    field.kind === 'long_text' || field.kind === 'file' || field.kind === 'multi_select'
-  const inputClass =
-    'focus-ring min-h-11 w-full rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm'
-
-  return (
-    <div className={cx('min-w-0', spanWide && 'sm:col-span-2')}>
-      <label htmlFor={fieldId} className="flex items-baseline justify-between gap-3">
-        <span className="text-base font-medium text-zinc-950 sm:text-sm">{field.label}</span>
-        {field.required ? <span className="text-sm text-zinc-400">Required</span> : null}
-      </label>
-      {field.description ? (
-        <p
-          id={`${fieldId}-description`}
-          className="pb-1.5 text-pretty text-base text-zinc-500 sm:text-sm"
-        >
-          {field.description}
-        </p>
-      ) : (
-        <div className="h-1.5" />
-      )}
-      {field.kind === 'long_text' ? (
-        <textarea
-          id={fieldId}
-          name={field.key}
-          rows={5}
-          required={field.required}
-          value={typeof value === 'string' ? value : ''}
-          placeholder={field.placeholder}
-          aria-invalid={Boolean(error)}
-          aria-describedby={
-            error ? `${fieldId}-error` : field.description ? `${fieldId}-description` : undefined
-          }
-          onChange={(event) => onChange(event.target.value)}
-          className={`${inputClass} resize-y`}
-        />
-      ) : field.kind === 'select' ? (
-        <span className="inline-grid w-full grid-cols-[1fr_--spacing(8)]">
-          <select
-            id={fieldId}
-            name={field.key}
-            required={field.required}
-            value={typeof value === 'string' ? value : ''}
-            aria-invalid={Boolean(error)}
-            onChange={(event) => onChange(event.target.value)}
-            className={`${inputClass} col-span-full row-start-1 appearance-none pr-8`}
-          >
-            <option value="">Choose an option</option>
-            {field.options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
-        </span>
-      ) : field.kind === 'multi_select' ? (
-        <div className="flex flex-col gap-2 pt-1">
-          {field.options.map((option) => {
-            const values = Array.isArray(value) ? value : []
-            const checked = values.includes(option.value)
-            return (
-              <label key={option.value} className="flex items-center gap-3 rounded-lg py-1">
-                <span className="flex h-lh shrink-0 items-center text-base sm:text-sm">
-                  <span className="group inline-grid size-5 grid-cols-1 sm:size-4">
-                    <input
-                      type="checkbox"
-                      name={field.key}
-                      value={option.value}
-                      checked={checked}
-                      onChange={(event) =>
-                        onChange(
-                          event.target.checked
-                            ? [...values, option.value]
-                            : values.filter((entry) => entry !== option.value),
-                        )
-                      }
-                      className="col-start-1 row-start-1 appearance-none rounded-sm border border-zinc-300 bg-white checked:border-blue-600 checked:bg-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-zinc-300 disabled:bg-zinc-100 disabled:checked:bg-zinc-100 forced-colors:appearance-auto"
-                    />
-                    <svg
-                      viewBox="0 0 14 14"
-                      fill="none"
-                      className="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white group-not-has-checked:opacity-0"
-                    >
-                      <path
-                        d="M3 8L6 11L11 3.5"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                </span>
-                <span className="text-base text-zinc-700 sm:text-sm">{option.label}</span>
-              </label>
-            )
-          })}
-        </div>
-      ) : field.kind === 'checkbox' ? (
-        <label className="flex items-center gap-3 rounded-lg py-1">
-          <span className="flex h-lh shrink-0 items-center text-base sm:text-sm">
-            <span className="group inline-grid size-5 grid-cols-1 sm:size-4">
-              <input
-                id={fieldId}
-                type="checkbox"
-                name={field.key}
-                checked={value === true}
-                onChange={(event) => onChange(event.target.checked)}
-                className="col-start-1 row-start-1 appearance-none rounded-sm border border-zinc-300 bg-white checked:border-blue-600 checked:bg-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-zinc-300 disabled:bg-zinc-100 disabled:checked:bg-zinc-100 forced-colors:appearance-auto"
-              />
-              <svg
-                viewBox="0 0 14 14"
-                fill="none"
-                className="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white group-not-has-checked:opacity-0"
-              >
-                <path
-                  d="M3 8L6 11L11 3.5"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-          </span>
-          <span className="text-base text-zinc-700 sm:text-sm">Yes</span>
-        </label>
-      ) : field.kind === 'file' ? (
-        <input
-          id={fieldId}
-          type="file"
-          name={field.key}
-          required={field.required}
-          aria-invalid={Boolean(error)}
-          className="focus-ring min-h-11 w-full rounded-xl bg-white p-2 text-base text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 sm:text-sm"
-        />
-      ) : (
-        <input
-          id={fieldId}
-          type={field.kind === 'email' ? 'email' : field.kind === 'url' ? 'url' : 'text'}
-          name={field.key}
-          required={field.required}
-          value={typeof value === 'string' ? value : ''}
-          placeholder={field.placeholder}
-          aria-invalid={Boolean(error)}
-          aria-describedby={
-            error ? `${fieldId}-error` : field.description ? `${fieldId}-description` : undefined
-          }
-          onChange={(event) => onChange(event.target.value)}
-          className={inputClass}
-        />
-      )}
-      {error ? (
-        <p id={`${fieldId}-error`} className="pt-1 text-base text-rose-700 sm:text-sm">
-          {error}
-        </p>
-      ) : null}
-    </div>
   )
 }
