@@ -80,8 +80,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     })
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function createDraft(successMessage: string) {
     let created = await execute(
       'submission.create',
       {
@@ -92,7 +91,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
         speakerAccessKey: speakerAccessKey || undefined,
       },
       undefined,
-      'Draft saved.',
+      successMessage,
     )
     if (!created.ok && created.error?.code === 'FORBIDDEN' && speakerAccessKey) {
       window.localStorage.removeItem(`programkit:speaker:${slug}`)
@@ -106,9 +105,27 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
           contributors,
         },
         undefined,
-        'Draft saved.',
+        successMessage,
       )
     }
+    return created
+  }
+
+  function createdSubmissionReference(created: Awaited<ReturnType<typeof createDraft>>) {
+    const data = created.data as
+      | {
+          submissionId?: string
+          submission?: { id?: string; speakerAccessKey?: string }
+        }
+      | undefined
+    return {
+      submissionId: data?.submissionId ?? data?.submission?.id,
+      nextSpeakerAccessKey: data?.submission?.speakerAccessKey,
+    }
+  }
+
+  async function saveDraft() {
+    const created = await createDraft('Draft saved.')
     if (!created.ok) {
       setFieldErrors(
         created.error?.fields ?? {
@@ -117,14 +134,28 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
       )
       return
     }
-    const data = created.data as
-      | {
-          submissionId?: string
-          submission?: { id?: string; speakerAccessKey?: string }
-        }
-      | undefined
-    const submissionId = data?.submissionId ?? data?.submission?.id
-    const nextSpeakerAccessKey = data?.submission?.speakerAccessKey
+    const { submissionId, nextSpeakerAccessKey } = createdSubmissionReference(created)
+    if (!submissionId || !nextSpeakerAccessKey) {
+      setFieldErrors({ _form: 'The draft was saved, but its reference was not returned.' })
+      return
+    }
+    setSpeakerAccessKey(nextSpeakerAccessKey)
+    window.localStorage.setItem(`programkit:speaker:${slug}`, nextSpeakerAccessKey)
+    window.location.href = `/submit/${slug}/mine/${encodeURIComponent(nextSpeakerAccessKey)}`
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const created = await createDraft('Draft saved.')
+    if (!created.ok) {
+      setFieldErrors(
+        created.error?.fields ?? {
+          _form: created.error?.message ?? 'Check the form and try again.',
+        },
+      )
+      return
+    }
+    const { submissionId, nextSpeakerAccessKey } = createdSubmissionReference(created)
     if (!submissionId || !nextSpeakerAccessKey) {
       setFieldErrors({ _form: 'The draft was saved, but its reference was not returned.' })
       return
@@ -343,11 +374,16 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
 
             <div className="flex flex-col gap-3 border-t border-zinc-950/5 pt-6 sm:flex-row sm:items-center sm:justify-between">
               <p className="max-w-[52ch] text-pretty text-base text-zinc-500 sm:text-sm">
-                You can update your profile and materials through the speaker portal if accepted.
+                Save a private draft now, or submit when your proposal is ready for review.
               </p>
-              <Button type="submit" variant="primary" disabled={mutating}>
-                Submit proposal
-              </Button>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button type="button" disabled={mutating} onClick={() => void saveDraft()}>
+                  Save draft
+                </Button>
+                <Button type="submit" variant="primary" disabled={mutating}>
+                  Submit proposal
+                </Button>
+              </div>
             </div>
           </div>
         </form>

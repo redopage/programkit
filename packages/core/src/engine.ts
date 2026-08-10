@@ -191,7 +191,7 @@ function assertSubmissionContributors(
       { contributors: 'Add no more than 10 co-speakers.' },
     )
   }
-  const emails = new Set([primaryEmail.toLowerCase()])
+  const emails = new Set(primaryEmail ? [primaryEmail.toLowerCase()] : [])
   return value.map((entry, index) => {
     const record = assertRecord(entry, `contributors.${index}`)
     const email = assertEmail(record.email, `contributors.${index}.email`)
@@ -1358,15 +1358,19 @@ function applyHandler(
       }
       const primaryEmail = stringAnswer(state, submission, 'email')
       if (requestedAccessKey) {
-        const verifiedPrimaryEmail = assertEmail(primaryEmail)
         const ownedSubmission = state.submissions.find(
           (entry) =>
             entry.eventId === form.eventId && entry.speakerAccessKey === requestedAccessKey,
         )
-        if (
-          !ownedSubmission ||
-          stringAnswer(state, ownedSubmission, 'email').toLowerCase() !== verifiedPrimaryEmail
-        ) {
+        const verifiedPrimaryEmail = primaryEmail.trim() ? assertEmail(primaryEmail) : ''
+        if (!ownedSubmission) {
+          throw new OperationError(
+            'FORBIDDEN',
+            'This speaker access link does not match an existing submission.',
+          )
+        }
+        const ownedEmail = stringAnswer(state, ownedSubmission, 'email').toLowerCase()
+        if (verifiedPrimaryEmail && ownedEmail && ownedEmail !== verifiedPrimaryEmail) {
           throw new OperationError(
             'FORBIDDEN',
             'This speaker access link does not match the submission email.',
@@ -1376,7 +1380,10 @@ function applyHandler(
       submission.contributors =
         input.contributors === undefined
           ? []
-          : assertSubmissionContributors(input.contributors, assertEmail(primaryEmail))
+          : assertSubmissionContributors(
+              input.contributors,
+              primaryEmail.trim() ? assertEmail(primaryEmail) : '',
+            )
       state.submissions.push(submission)
       appendEvent(state, context, {
         type: 'submission.created',
@@ -1413,10 +1420,11 @@ function applyHandler(
           const emailField = state.submissionFormFields.find(
             (field) => field.formId === form.id && field.purpose === 'email',
           )
+          const currentEmail = stringAnswer(state, submission, 'email').toLowerCase()
           if (
             emailField &&
-            String(nextAnswers[emailField.key] ?? '').toLowerCase() !==
-              stringAnswer(state, submission, 'email').toLowerCase()
+            currentEmail &&
+            String(nextAnswers[emailField.key] ?? '').toLowerCase() !== currentEmail
           ) {
             throw new OperationError(
               'INVALID_INPUT',

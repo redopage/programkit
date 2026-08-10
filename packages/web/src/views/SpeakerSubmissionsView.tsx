@@ -46,6 +46,10 @@ export function SpeakerSubmissionsView({
     : ''
   const selectedTrackLabel =
     state?.tracks.find((entry) => entry.id === selectedTrackValue)?.name ?? selectedTrackValue
+  const selectedEmailValue = selected
+    ? answerText(submissionAnswerByPurpose(state!, selected, 'email'))
+    : ''
+  const hasSelectedEmail = selectedEmailValue !== 'Not provided'
   const [editing, setEditing] = useState(false)
   const [answers, setAnswers] = useState<SubmissionAnswers>({})
   const [contributors, setContributors] = useState<SubmissionContributor[]>([])
@@ -99,6 +103,31 @@ export function SpeakerSubmissionsView({
     setFieldErrors(
       response.error?.fields ?? {
         _form: response.error?.message ?? 'Check the submission and try again.',
+      },
+    )
+  }
+
+  async function submitDraft() {
+    if (!selected || selected.status !== 'draft') return
+    const response = await execute(
+      'submission.submit',
+      {
+        submissionId: selected.id,
+        speakerAccessKey,
+        answers,
+        contributors,
+      },
+      { expectedVersions: { [selected.id]: selected.version } },
+      'Proposal submitted.',
+    )
+    if (response.ok) {
+      setEditing(false)
+      setFieldErrors({})
+      return
+    }
+    setFieldErrors(
+      response.error?.fields ?? {
+        _form: response.error?.message ?? 'Complete the required fields and try again.',
       },
     )
   }
@@ -217,7 +246,7 @@ export function SpeakerSubmissionsView({
                   {!editing && canEdit ? (
                     <Button size="compact" onClick={() => setEditing(true)}>
                       <PencilSquareIcon className="size-4 h-lh shrink-0 fill-current" />
-                      Edit submission
+                      {selected.status === 'draft' ? 'Continue draft' : 'Edit submission'}
                     </Button>
                   ) : null}
                 </div>
@@ -233,7 +262,7 @@ export function SpeakerSubmissionsView({
                           fields={visibleFields}
                           answers={answers}
                           errors={fieldErrors}
-                          lockedPurposes={['email']}
+                          lockedPurposes={hasSelectedEmail ? ['email'] : []}
                           idPrefix={`edit-${selected.id}`}
                           fileMode="preserve"
                           onChange={setAnswer}
@@ -256,12 +285,17 @@ export function SpeakerSubmissionsView({
                     ) : null}
 
                     <div className="flex flex-wrap items-center gap-3 border-t border-zinc-950/5 pt-6">
-                      <Button
-                        variant="primary"
-                        disabled={mutating}
-                        onClick={() => void saveSubmission()}
-                      >
-                        Save changes
+                      {selected.status === 'draft' ? (
+                        <Button
+                          variant="primary"
+                          disabled={mutating}
+                          onClick={() => void submitDraft()}
+                        >
+                          Submit proposal
+                        </Button>
+                      ) : null}
+                      <Button disabled={mutating} onClick={() => void saveSubmission()}>
+                        {selected.status === 'draft' ? 'Save draft' : 'Save changes'}
                       </Button>
                       <Button
                         disabled={mutating}

@@ -419,6 +419,85 @@ describe('operation HTTP surface', () => {
     expect(body.state.people).toEqual([])
   })
 
+  it('creates and resumes a title-only draft through the public submission boundary', async () => {
+    const repository = new MemoryWorkspaceRepository()
+    const actor = {
+      type: 'submitter' as const,
+      id: 'aie-nyc-2026-cfp',
+      name: 'Public submitter',
+      scopes: ['submissions:write', 'submissions:submit'],
+    }
+    const created = await handleCoreRequest(
+      new Request(
+        'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations/submission.create',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              formId: 'frm_cfp_2026',
+              kind: 'abstract',
+              answers: { proposal_title: 'A private title-only draft' },
+              contributors: [],
+              speakerAccessKey: 'speaker_priya_raman',
+            },
+          }),
+        },
+      ),
+      repository,
+      { actor },
+    )
+    expect(created?.status).toBe(200)
+    const createdBody = (await created?.json()) as OperationResponse
+    const draft = (createdBody.data as { submission: { id: string; speakerAccessKey: string } })
+      .submission
+
+    const privateState = await handleCoreRequest(
+      new Request(
+        `http://local/public/v1/submission-forms/aie-nyc-2026-cfp/state?speakerAccessKey=${draft.speakerAccessKey}`,
+      ),
+      repository,
+    )
+    const privateBody = (await privateState?.json()) as { state: WorkspaceState }
+    expect(privateBody.state.submissions).toContainEqual(
+      expect.objectContaining({
+        id: draft.id,
+        status: 'draft',
+        answers: { proposal_title: 'A private title-only draft' },
+      }),
+    )
+
+    const persistedDraft = (await repository.read()).submissions.find(
+      (entry) => entry.id === draft.id,
+    )!
+    const updated = await handleCoreRequest(
+      new Request(
+        'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations/submission.update',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              submissionId: draft.id,
+              speakerAccessKey: draft.speakerAccessKey,
+              answers: {
+                ...persistedDraft.answers,
+                email: 'priya@craftwork.dev',
+              },
+            },
+            expectedVersions: { [draft.id]: persistedDraft.version },
+          }),
+        },
+      ),
+      repository,
+      { actor },
+    )
+    expect(updated?.status).toBe(200)
+    expect(
+      (await repository.read()).submissions.find((entry) => entry.id === draft.id)?.answers,
+    ).toMatchObject({ email: 'priya@craftwork.dev' })
+  })
+
   it('enforces public-form and reviewer operation boundaries', async () => {
     const repository = new MemoryWorkspaceRepository()
     const submitter = {

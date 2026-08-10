@@ -1401,6 +1401,69 @@ describe('ProgramKit operation engine', () => {
     expect(denied.response.error?.code).toBe('FORBIDDEN')
   })
 
+  it('resumes a title-only draft and completes it through an existing speaker link', () => {
+    let state = createSeedState()
+    const actor = {
+      type: 'submitter' as const,
+      id: 'aie-nyc-2026-cfp',
+      name: 'Public submitter',
+      scopes: ['submissions:write', 'submissions:submit'],
+    }
+    const created = executeOperation(state, 'submission.create', {
+      input: {
+        formId: 'frm_cfp_2026',
+        kind: 'abstract',
+        answers: { proposal_title: 'A title-only private draft' },
+        speakerAccessKey: 'speaker_priya_raman',
+      },
+      actor,
+    })
+    expect(created.response.ok).toBe(true)
+    state = created.state
+    const draft = state.submissions.at(-1)!
+    expect(draft).toMatchObject({
+      status: 'draft',
+      speakerAccessKey: 'speaker_priya_raman',
+      answers: { proposal_title: 'A title-only private draft' },
+    })
+
+    const updated = executeOperation(state, 'submission.update', {
+      input: {
+        submissionId: draft.id,
+        speakerAccessKey: draft.speakerAccessKey,
+        answers: {
+          first_name: 'Priya',
+          last_name: 'Raman',
+          email: 'priya@craftwork.dev',
+          biography: 'Priya prototypes interfaces for software with uncertain outputs.',
+          proposal_title: 'A title-only private draft',
+          abstract: 'A completed abstract that is ready for committee review.',
+          session_format: 'talk',
+          track: 'trk_build',
+        },
+      },
+      expectedVersions: { [draft.id]: draft.version },
+      actor,
+    })
+    expect(updated.response.ok).toBe(true)
+    state = updated.state
+    const completedDraft = state.submissions.find((entry) => entry.id === draft.id)!
+    expect(completedDraft.answers.email).toBe('priya@craftwork.dev')
+
+    const submitted = executeOperation(state, 'submission.submit', {
+      input: {
+        submissionId: completedDraft.id,
+        speakerAccessKey: completedDraft.speakerAccessKey,
+      },
+      expectedVersions: { [completedDraft.id]: completedDraft.version },
+      actor,
+    })
+    expect(submitted.response.ok).toBe(true)
+    expect(submitted.state.submissions.find((entry) => entry.id === draft.id)?.status).toBe(
+      'submitted',
+    )
+  })
+
   it('enforces submission form open and close times at the operation boundary', () => {
     let state = createSeedState()
     const form = state.submissionForms.find((entry) => entry.id === 'frm_cfp_2026')!

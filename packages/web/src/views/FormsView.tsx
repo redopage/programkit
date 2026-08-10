@@ -32,6 +32,7 @@ import {
   textAreaControl,
   textControl,
 } from '../components/ui.tsx'
+import { toZonedDateTimeInput, zonedDateTimeInputToIso } from '../lib/date.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 import { publicSubmissionPath } from '../lib/public-links.ts'
 
@@ -447,6 +448,59 @@ export function FormsView({
               className={textAreaControl}
             />
           </label>
+          <fieldset className="@3xl/form-builder:col-span-2">
+            <legend className="text-base font-medium text-zinc-950 sm:text-sm">
+              Submission window
+            </legend>
+            <div className="grid gap-4 pt-2 sm:grid-cols-2">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-base text-zinc-600 sm:text-sm">Opens</span>
+                <input
+                  type="datetime-local"
+                  name="form-opens-at"
+                  value={
+                    activeForm.opensAt && event
+                      ? toZonedDateTimeInput(activeForm.opensAt, event.timezone)
+                      : ''
+                  }
+                  onChange={(inputEvent) =>
+                    updateForm({
+                      opensAt:
+                        inputEvent.target.value && event
+                          ? zonedDateTimeInputToIso(inputEvent.target.value, event.timezone)
+                          : null,
+                    })
+                  }
+                  className={textControl}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-base text-zinc-600 sm:text-sm">Closes</span>
+                <input
+                  type="datetime-local"
+                  name="form-closes-at"
+                  value={
+                    activeForm.closesAt && event
+                      ? toZonedDateTimeInput(activeForm.closesAt, event.timezone)
+                      : ''
+                  }
+                  onChange={(inputEvent) =>
+                    updateForm({
+                      closesAt:
+                        inputEvent.target.value && event
+                          ? zonedDateTimeInputToIso(inputEvent.target.value, event.timezone)
+                          : null,
+                    })
+                  }
+                  className={textControl}
+                />
+              </label>
+            </div>
+            <p className="pt-2 text-pretty text-base text-zinc-500 sm:text-sm">
+              Times use {event?.timezone ?? 'the event timezone'}. Leave either field empty for no
+              limit.
+            </p>
+          </fieldset>
           <fieldset className="@3xl/form-builder:col-span-2">
             <legend className="text-base font-medium text-zinc-950 sm:text-sm">
               Accepted submission types

@@ -18,7 +18,8 @@ not maintain a second version of product or architecture facts.
    to working evidence and missing end-to-end depth.
 5. [Evaluator runbook](product/evaluator-runbook.md) explains how to produce repeatable browser
    evidence without overstating a seeded screen.
-6. Evaluator coverage records exercised behavior for [abstract management](product/evals/02-abstract-management.md),
+6. Evaluator coverage records exercised behavior for [Call for Papers](product/evals/01-call-for-papers.md),
+   [abstract management](product/evals/02-abstract-management.md),
    [speaker management](product/evals/03-speaker-management.md),
    [content management](product/evals/04-content-management.md),
    [AI agenda](product/evals/05-ai-agenda.md), and
