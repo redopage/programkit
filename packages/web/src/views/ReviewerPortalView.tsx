@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import {
   evaluationCriterionKind,
+  evaluationRound,
   evaluationRoundCriteria,
   evaluationRoundIsBlind,
   reviewerQueue,
@@ -231,6 +232,10 @@ function ReviewerWorkspace({
                     const title = submission
                       ? answerText(submissionAnswerByPurpose(state, submission, 'proposal_title'))
                       : 'Missing proposal'
+                    const entryPlan = state.evaluationPlans.find(
+                      (plan) => plan.id === entry.assignment.evaluationPlanId,
+                    )
+                    const roundName = evaluationRound(entryPlan, entry.assignment.roundId)?.name
                     const active = entry.assignment.id === selected.assignment.id
                     return (
                       <li key={entry.assignment.id} className="min-w-64 lg:min-w-0">
@@ -253,6 +258,7 @@ function ReviewerWorkspace({
                               {title}
                             </span>
                             <span className="block text-sm text-zinc-500">
+                              {roundName ? `${roundName} · ` : ''}
                               {entry.assignment.status === 'completed'
                                 ? 'Complete'
                                 : entry.assignment.status === 'recused'
@@ -283,7 +289,12 @@ function ReviewerWorkspace({
                 )}
               </h2>
               <p className="pt-1 text-base text-zinc-500 sm:text-sm">
-                {sentenceCase(selected.submission.kind)}
+                {[
+                  evaluationRound(plan, selected.assignment.roundId)?.name,
+                  sentenceCase(selected.submission.kind),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
               <dl className="grid grid-cols-2 gap-4 border-y border-zinc-950/5 py-5 mt-5">
                 <div>

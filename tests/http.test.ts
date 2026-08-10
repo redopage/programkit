@@ -368,6 +368,52 @@ describe('operation HTTP surface', () => {
     }
   })
 
+  it('reveals identity when the same reviewer has a non-blind round for the proposal', async () => {
+    const state = createSeedState()
+    const plan = state.evaluationPlans[0]!
+    plan.blindReview = true
+    plan.rounds[0] = { ...plan.rounds[0]!, blindReview: true }
+    plan.rounds.push({
+      ...plan.rounds[0]!,
+      id: 'rnd_final_review',
+      name: 'Final review',
+      order: 2,
+      blindReview: false,
+    })
+    const initialAssignment = state.reviewerAssignments.find(
+      (entry) => entry.reviewerId === 'rev_001' && entry.submissionId === 'sub_002',
+    )!
+    state.reviewerAssignments.push({
+      ...initialAssignment,
+      id: 'rva_final_visible',
+      roundId: 'rnd_final_review',
+      status: 'assigned',
+      version: 1,
+    })
+
+    const response = await handleCoreRequest(
+      new Request('http://local/public/v1/reviewers/rev_001/state', {
+        headers: { 'x-programkit-reviewer-key': 'reviewer_elena_vasquez' },
+      }),
+      new MemoryWorkspaceRepository(state),
+      {
+        actor: {
+          type: 'reviewer',
+          id: 'rev_001',
+          name: 'Elena Vasquez',
+          scopes: ['reviews:write'],
+        },
+      },
+    )
+
+    expect(response?.status).toBe(200)
+    const body = (await response?.json()) as { state: WorkspaceState }
+    const submission = body.state.submissions.find((entry) => entry.id === 'sub_002')!
+    expect(submission.answers.first_name).toBeTruthy()
+    expect(submission.answers.last_name).toBeTruthy()
+    expect(submission.answers.email).toBeTruthy()
+  })
+
   it('requires a reviewer capability and permits conflict handling', async () => {
     const repository = new MemoryWorkspaceRepository()
     const actor = {

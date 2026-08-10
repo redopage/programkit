@@ -227,8 +227,13 @@ function reviewerState(state: WorkspaceState, reviewerId: string, accessKey: str
     .filter((entry) => submissionIds.has(entry.id))
     .map((submission) => {
       const plan = plans.find((entry) => entry.formId === submission.formId)
-      const assignment = assignments.find((entry) => entry.submissionId === submission.id)
-      if (!evaluationRoundIsBlind(plan, assignment?.roundId)) return structuredClone(submission)
+      const submissionAssignments = assignments.filter(
+        (entry) => entry.submissionId === submission.id,
+      )
+      const canSeeIdentity = submissionAssignments.some(
+        (assignment) => !evaluationRoundIsBlind(plan, assignment.roundId),
+      )
+      if (canSeeIdentity) return structuredClone(submission)
       const hiddenKeys = new Set(
         fields
           .filter(
