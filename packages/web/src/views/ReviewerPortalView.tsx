@@ -97,6 +97,29 @@ function ReviewerWorkspace({
       evaluationCriterionKind(criterion) === 'long_text' && /comments?/iu.test(criterion.label),
   )
 
+  /**
+   * The same proposal can be assigned to the same reviewer in more than one
+   * round, so a queue entry is only unambiguous once its own round is named.
+   * Resolve it per assignment rather than assuming one round for the queue.
+   */
+  const roundNames = new Map<string, string>()
+  for (const entry of state.evaluationPlans ?? []) {
+    for (const round of entry.rounds) roundNames.set(`${entry.id}:${round.id}`, round.name)
+  }
+  const roundNameFor = (assignment: { evaluationPlanId: string; roundId: string }) =>
+    roundNames.get(`${assignment.evaluationPlanId}:${assignment.roundId}`) ?? 'Review round'
+  const selectedRoundName = selected ? roundNameFor(selected.assignment) : 'Review round'
+
+  const roundProgress: Array<{ key: string; name: string; total: number; complete: number }> = []
+  for (const entry of queue) {
+    const key = `${entry.assignment.evaluationPlanId}:${entry.assignment.roundId}`
+    const row = roundProgress.find((candidate) => candidate.key === key)
+    const target = row ?? { key, name: roundNameFor(entry.assignment), total: 0, complete: 0 }
+    if (!row) roundProgress.push(target)
+    target.total += 1
+    if (entry.assignment.status === 'completed') target.complete += 1
+  }
+
   useEffect(() => {
     if (!selected || !plan) return
     setAnswers(
@@ -198,7 +221,7 @@ function ReviewerWorkspace({
             <p className="truncate text-base font-medium text-zinc-950 sm:text-sm">
               {reviewer.name}
             </p>
-            <p className="truncate text-sm text-zinc-500">{event.name} review committee</p>
+            <p className="truncate text-sm text-zinc-500">{event.name} reviewer portal</p>
           </div>
         </div>
       </header>
@@ -213,9 +236,24 @@ function ReviewerWorkspace({
               Review workspace
             </h1>
             <p className="max-w-[66ch] text-pretty text-base text-zinc-500 sm:text-sm">
-              Read each proposal, apply the shared rubric, and leave enough context for the final
-              committee decision.
+              Each assignment belongs to one review round. Score the proposal against the shared
+              rubric and leave enough context for the decision that follows that round.
             </p>
+            {roundProgress.length > 1 ? (
+              <ul role="list" className="flex flex-wrap gap-2 pt-3">
+                {roundProgress.map((round) => (
+                  <li
+                    key={round.key}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-zinc-50 px-2.5 py-1 text-sm text-zinc-600 ring-1 ring-zinc-950/5"
+                  >
+                    <span className="font-medium text-zinc-950">{round.name}</span>
+                    <span className="tabular-nums">
+                      {round.complete}/{round.total}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </div>
 
@@ -257,6 +295,9 @@ function ReviewerWorkspace({
                             <span className="block truncate text-base font-medium sm:text-sm">
                               {title}
                             </span>
+                            <span className="block truncate text-sm font-medium text-zinc-600">
+                              {roundNameFor(entry.assignment)}
+                            </span>
                             <span className="block text-sm text-zinc-500">
                               {roundName ? `${roundName} · ` : ''}
                               {entry.assignment.status === 'completed'
@@ -280,6 +321,7 @@ function ReviewerWorkspace({
             </aside>
 
             <article aria-labelledby="proposal-heading" className="min-w-0">
+              <p className="text-base font-medium text-zinc-500 sm:text-sm">{selectedRoundName}</p>
               <h2
                 id="proposal-heading"
                 className="max-w-[28ch] text-balance text-2xl font-semibold tracking-tight text-zinc-950"
@@ -535,7 +577,8 @@ function ReviewerWorkspace({
             <CheckCircleIcon className="mx-auto size-10 fill-emerald-600" />
             <h2 className="pt-4 text-lg font-semibold text-zinc-950">All reviews are complete</h2>
             <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-              The program chair can now make final decisions.
+              Nothing is waiting on you. The program chair will assign you again if a later round
+              needs your scores.
             </p>
           </div>
         )}

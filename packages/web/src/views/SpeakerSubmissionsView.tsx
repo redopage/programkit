@@ -374,11 +374,7 @@ export function SpeakerSubmissionsView({
                             'Format',
                             sentenceCase(
                               answerText(
-                                submissionAnswerDisplayByPurpose(
-                                  state,
-                                  selected,
-                                  'session_format',
-                                ),
+                                submissionAnswerDisplayByPurpose(state, selected, 'session_format'),
                               ),
                             ),
                           ],

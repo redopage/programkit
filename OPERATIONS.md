@@ -202,7 +202,8 @@ The hosted app verifies staff sessions and event membership. Before pointing rea
 - add team invitation, administrator roles, revocation, and role-to-scope mapping;
 - add verified participant and reviewer identity plus event-scoped public links;
 - add OAuth and workspace-scoped authorization to `/mcp`;
-- add real outbound email and webhook adapters through a transactional outbox;
+- activate the checked-in campaign Email Service consumer only after sender verification, then
+  connect the separate submission-receipt outbox and future webhooks to equivalent consumers;
 - add private object storage, scanning, signed downloads, and lifecycle policies;
 - remove wildcard scopes and restrict administrative operations;
 - configure rate limits, alerts, structured logs, and incident procedures;
@@ -234,5 +235,5 @@ idempotency response caches are omitted. An Airtable-enabled installation can al
 encrypted logical exports outside both Airtable and the cache, record their workspace and schema
 version, and test restoration into a separate environment.
 
-File objects are not part of this demo. The R2 implementation must export and restore them alongside
-their logical record IDs. D1 and Airtable projections are rebuildable and are not backup sources.
+Private participant file objects live in R2 and must be exported and restored alongside their
+logical asset records. D1 and Airtable projections are rebuildable and are not backup sources.

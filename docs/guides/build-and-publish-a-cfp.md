@@ -76,7 +76,8 @@ clients must call those operations rather than recreating transitions.
 - tenant membership derived by the host, not a public workspace header;
 - private blob storage with type/size limits, scanning, signed access, and deletion policy;
 - rate limiting and abuse controls on public form routes;
-- durable confirmation delivery with provider results and retry state;
+- durable confirmation receipts and provider-result recording are present; connect a verified
+  sender, retrying consumer, and operator retry controls before treating them as delivered mail;
 - retention, export, backup, restore, and deletion procedures;
 - accessibility and narrow-screen testing for customized forms;
 - tests for every conditional branch and required-field combination.

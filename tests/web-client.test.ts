@@ -11,6 +11,7 @@ import {
   speakerSubmissionsPath,
   surfaceFromPathname,
   surfaceKey,
+  surfaceRefreshInterval,
   withPublicEventScope,
   type WorkspacePayload,
 } from '@programkit/web'
@@ -86,6 +87,10 @@ describe('ProgramKit web client', () => {
       portalAccessKey: 'portal_123',
     })
     expect(surfaceKey(surfaceFromPathname('/agenda'))).toBe('public-program')
+    expect(surfaceKey(surfaceFromPathname('/embed/speakers'))).toBe('public-program')
+    expect(surfaceKey(surfaceFromPathname('/embed/itinerary'))).toBe('public-program')
+    expect(surfaceRefreshInterval(surfaceFromPathname('/readiness'))).toBe(5_000)
+    expect(surfaceRefreshInterval(surfaceFromPathname('/portal/par_003'))).toBe(15_000)
   })
 
   it('parses the speaker fixture shape including quoted biographies', () => {

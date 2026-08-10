@@ -1,4 +1,5 @@
 import { createSeedState } from './seed.ts'
+import { normalizeWorkspaceState } from './migrations.ts'
 import type { WorkspaceState } from './types.ts'
 import { cloneState } from './utils.ts'
 
@@ -12,7 +13,7 @@ export class MemoryWorkspaceRepository implements WorkspaceRepository {
   #mutationTail: Promise<void> = Promise.resolve()
 
   constructor(initialState: WorkspaceState = createSeedState()) {
-    this.#state = cloneState(initialState)
+    this.#state = normalizeWorkspaceState(cloneState(initialState))
   }
 
   async read() {

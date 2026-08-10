@@ -1,7 +1,8 @@
 import {
   ArrowDownTrayIcon,
-  ArrowRightIcon,
   ArrowPathIcon,
+  ArrowRightIcon,
+  ArrowUpTrayIcon,
   CheckCircleIcon,
   ClipboardDocumentIcon,
   CloudIcon,
@@ -11,12 +12,20 @@ import {
   TableCellsIcon,
   TrashIcon,
 } from '@heroicons/react/16/solid'
-import { createAcceleventsExport } from '@programkit/core'
+import { acceleventsExportPreflight, createAcceleventsExport } from '@programkit/core'
 import { useEffect, useState } from 'react'
 
 import { ProgramKitMark } from '../components/brand.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
-import { Button, Callout, PageHeader, cx, selectControl, sentenceCase } from '../components/ui.tsx'
+import {
+  Button,
+  Callout,
+  PageHeader,
+  cx,
+  selectControl,
+  sentenceCase,
+  textControl,
+} from '../components/ui.tsx'
 
 interface AirtableSetupStatus {
   available: boolean
@@ -108,6 +117,11 @@ export function IntegrationsView() {
   const [setupBusy, setSetupBusy] = useState(false)
   const [setupError, setSetupError] = useState<string | null>(null)
   const [acceleventsMessage, setAcceleventsMessage] = useState<string | null>(null)
+  const eventSlug = payload?.state.events.find(
+    (event) => event.id === payload.state.activeEventId,
+  )?.slug
+  const [eventUrl, setEventUrl] = useState<string | null>(null)
+  const effectiveEventUrl = eventUrl ?? eventSlug ?? ''
   const activeEventId = payload?.state.activeEventId ?? ''
   const hostedApp =
     document
@@ -169,12 +183,39 @@ export function IntegrationsView() {
   if (!payload) return null
   const { state } = payload
   const airtable = state.integrations.find((integration) => integration.kind === 'airtable')
-  const connections = state.integrations.filter((integration) => integration.kind !== 'airtable')
+  const accelevents = state.integrations.find((integration) => integration.kind === 'accelevents')
+  const connections = state.integrations.filter(
+    (integration) => integration.kind !== 'airtable' && integration.kind !== 'accelevents',
+  )
   const airtableConnected = setup?.connected ?? airtable?.status === 'connected'
   const activeEvent = state.events.find((event) => event.id === state.activeEventId)
   const publishedRelease = state.scheduleReleases
     .filter((release) => release.eventId === state.activeEventId)
     .sort((left, right) => right.version - left.version)[0]
+  const acceleventsPreflight = acceleventsExportPreflight(state)
+  const latestAcceleventsExport = state.acceleventsExports[0]
+  const matchingAcceleventsExport = state.acceleventsExports.find(
+    (entry) =>
+      entry.scheduleReleaseId === acceleventsPreflight.release?.id &&
+      entry.eventUrl === effectiveEventUrl.trim().toLowerCase(),
+  )
+  const exportCounts = latestAcceleventsExport
+    ? {
+        speakers: latestAcceleventsExport.items.filter((item) => item.resource === 'speaker')
+          .length,
+        sessions: latestAcceleventsExport.items.filter((item) => item.resource === 'session')
+          .length,
+        pending: latestAcceleventsExport.items.filter((item) => item.status === 'pending_provider')
+          .length,
+        delivered: latestAcceleventsExport.items.filter((item) => item.status === 'delivered')
+          .length,
+        failed: latestAcceleventsExport.items.filter((item) => item.status === 'failed').length,
+        attempts: latestAcceleventsExport.items.reduce(
+          (total, item) => total + item.attemptCount,
+          0,
+        ),
+      }
+    : null
 
   function downloadAcceleventsExport() {
     setAcceleventsMessage(null)
@@ -250,10 +291,10 @@ export function IntegrationsView() {
         }
       />
 
-      <section aria-labelledby="deployment-heading">
+      <section aria-labelledby="runtime-heading">
         <div className="border-b border-zinc-950/5 pb-2">
-          <h2 id="deployment-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-            Deployment shape
+          <h2 id="runtime-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+            Where ProgramKit runs
           </h2>
           <p className="text-pretty text-base text-zinc-500 sm:text-sm">
             Cloudflare is the supported host. Each event lives in its own SQLite-backed Durable
@@ -450,6 +491,211 @@ export function IntegrationsView() {
         </div>
       </section>
 
+      <section aria-labelledby="native-accelevents-heading" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b border-zinc-950/5 pb-2">
+          <div className="min-w-0">
+            <h2
+              id="native-accelevents-heading"
+              className="text-base font-medium text-zinc-950 sm:text-sm"
+            >
+              Native Accelevents delivery
+            </h2>
+            <p className="max-w-3xl text-pretty text-base text-zinc-500 sm:text-sm">
+              Commit the latest published speakers and sessions to a one-way provider batch with
+              durable result and retry evidence.
+            </p>
+          </div>
+          <span
+            className={cx(
+              'rounded-full px-2.5 py-1 text-sm font-semibold ring-1 ring-inset',
+              accelevents?.status === 'connected' &&
+                'bg-emerald-50 text-emerald-700 ring-emerald-700/10',
+              accelevents?.status === 'attention' && 'bg-amber-50 text-amber-700 ring-amber-700/10',
+              (!accelevents || accelevents.status === 'not_configured') &&
+                'bg-zinc-100 text-zinc-600 ring-zinc-950/10',
+            )}
+          >
+            {accelevents ? sentenceCase(accelevents.status) : 'Not configured'}
+          </span>
+        </div>
+
+        <Callout
+          tone={
+            acceleventsPreflight.blockers.length > 0
+              ? 'danger'
+              : acceleventsPreflight.warnings.length > 0
+                ? 'warning'
+                : 'success'
+          }
+          title={
+            acceleventsPreflight.blockers.length > 0
+              ? 'The published program is not ready to export'
+              : `Published schedule version ${acceleventsPreflight.release?.version ?? 'none'} is ready`
+          }
+        >
+          <p>
+            {acceleventsPreflight.blockers[0] ??
+              acceleventsPreflight.warnings[0] ??
+              `${acceleventsPreflight.people.length} speakers and ${acceleventsPreflight.sessions.length} sessions pass the mapping preflight.`}
+          </p>
+        </Callout>
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]">
+          <div className="min-w-0">
+            <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Field mapping</h3>
+            <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+              Stable ProgramKit IDs become external keys so the provider consumer can upsert instead
+              of duplicating records.
+            </p>
+            <dl className="mt-3 divide-y divide-zinc-950/5 border-y border-zinc-950/5">
+              {[
+                ['Speaker', 'Name, email, title, company, bio, image, moderator role'],
+                ['Session', 'Title, description, local start/end, room, format, capacity, track'],
+                [
+                  'Relationships',
+                  'Session speaker keys reference the speaker records in this batch',
+                ],
+                ['Source', 'Latest immutable schedule release only; draft changes are excluded'],
+              ].map(([term, detail]) => (
+                <div key={term} className="grid gap-1 py-3 sm:grid-cols-[8rem_minmax(0,1fr)]">
+                  <dt className="text-base font-medium text-zinc-950 sm:text-sm">{term}</dt>
+                  <dd className="text-pretty text-base text-zinc-500 sm:text-sm">{detail}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <form
+            className="flex min-w-0 flex-col gap-3 rounded-xl bg-zinc-50 p-4 ring-1 ring-inset ring-zinc-950/5"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void execute(
+                'accelevents.prepare-export',
+                { eventUrl: effectiveEventUrl },
+                undefined,
+                'Export batch committed. Provider delivery state updates in the batch details below.',
+              )
+            }}
+          >
+            <div>
+              <h3 className="text-base font-medium text-zinc-950 sm:text-sm">
+                Stage a delivery batch
+              </h3>
+              <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                Enter the identifier at the end of the Accelevents event URL, not the full URL.
+              </p>
+            </div>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-base font-medium text-zinc-950 sm:text-sm">
+                Event URL identifier
+              </span>
+              <input
+                required
+                value={effectiveEventUrl}
+                onChange={(event) => setEventUrl(event.target.value)}
+                placeholder="aie-nyc-2026"
+                pattern="[A-Za-z0-9](?:[A-Za-z0-9_-]{0,98}[A-Za-z0-9])?"
+                title="Use only the Accelevents event identifier: letters, numbers, hyphens, or underscores."
+                className={textControl}
+              />
+            </label>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={
+                mutating ||
+                !effectiveEventUrl.trim() ||
+                !acceleventsPreflight.canPrepare ||
+                Boolean(matchingAcceleventsExport)
+              }
+            >
+              <ArrowUpTrayIcon className="size-4 h-lh shrink-0 fill-current" />
+              {matchingAcceleventsExport
+                ? 'Current release already staged'
+                : 'Stage Accelevents export'}
+            </Button>
+            <p className="text-pretty text-sm text-zinc-500">
+              Requires an owner-managed Enterprise API key before a provider consumer can deliver
+              the batch.
+            </p>
+          </form>
+        </div>
+
+        {latestAcceleventsExport && exportCounts ? (
+          <div className="rounded-xl ring-1 ring-inset ring-zinc-950/10">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-950/5 px-4 py-3">
+              <div>
+                <h3 className="text-base font-medium text-zinc-950 sm:text-sm">
+                  Latest delivery batch
+                </h3>
+                <p className="text-base text-zinc-500 sm:text-sm">
+                  Schedule v{latestAcceleventsExport.scheduleVersion} →{' '}
+                  {latestAcceleventsExport.eventUrl}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-sm font-semibold text-zinc-700">
+                  {sentenceCase(latestAcceleventsExport.status)}
+                </span>
+                {latestAcceleventsExport.status !== 'delivered' ? (
+                  <Button
+                    size="compact"
+                    variant="secondary"
+                    disabled={mutating}
+                    onClick={() =>
+                      void execute(
+                        'accelevents.retry-export',
+                        { exportId: latestAcceleventsExport.id },
+                        {
+                          expectedVersions: {
+                            [latestAcceleventsExport.id]: latestAcceleventsExport.version,
+                          },
+                        },
+                        'Undelivered items were queued for the Accelevents consumer.',
+                      )
+                    }
+                  >
+                    <ArrowPathIcon className="size-4 h-lh shrink-0 fill-current" />
+                    Retry undelivered
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <dl className="grid grid-cols-2 divide-x divide-y divide-zinc-950/5 sm:grid-cols-3 lg:grid-cols-6">
+              {[
+                ['Speakers', exportCounts.speakers],
+                ['Sessions', exportCounts.sessions],
+                ['Pending', exportCounts.pending],
+                ['Delivered', exportCounts.delivered],
+                ['Failed', exportCounts.failed],
+                ['Attempts', exportCounts.attempts],
+              ].map(([term, detail]) => (
+                <div key={term} className="px-4 py-3">
+                  <dt className="text-sm text-zinc-500">{term}</dt>
+                  <dd className="text-lg font-semibold tabular-nums text-zinc-950">{detail}</dd>
+                </div>
+              ))}
+            </dl>
+            {latestAcceleventsExport.items.some((item) => item.lastError) ? (
+              <ul role="list" className="divide-y divide-zinc-950/5 border-t border-zinc-950/5">
+                {latestAcceleventsExport.items
+                  .filter((item) => item.lastError)
+                  .map((item) => (
+                    <li key={item.id} className="px-4 py-3 text-base text-rose-700 sm:text-sm">
+                      {item.resource} {item.externalKey}: {item.lastError}
+                    </li>
+                  ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+            No delivery batch has been staged. The published agenda and provider state remain
+            unchanged.
+          </p>
+        )}
+      </section>
+
       <section aria-labelledby="accelevents-heading">
         <div className="border-b border-zinc-950/5 pb-2">
           <h2 id="accelevents-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
@@ -491,8 +737,8 @@ export function IntegrationsView() {
           <h2 id="connections-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
             Connections
           </h2>
-          <p className="text-base text-zinc-500 sm:text-sm">
-            Delivery services around the primary Cloudflare runtime.
+          <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+            What ProgramKit can hand off today, and what still needs setup.
           </p>
         </div>
         <ul role="list" className="divide-y divide-zinc-950/5">
@@ -503,6 +749,21 @@ export function IntegrationsView() {
                 : integration.status === 'attention'
                   ? ExclamationTriangleIcon
                   : MinusCircleIcon
+            // ProgramKit writes standard invitation files; it does not sign in to
+            // an external calendar account, so this row is named for what it does.
+            const label =
+              integration.kind === 'calendar'
+                ? {
+                    name: 'Calendar invitations',
+                    status: 'Available',
+                    detail:
+                      'Events download as standard .ics invitation files and attach to campaigns. No external calendar account is connected.',
+                  }
+                : {
+                    name: integration.name,
+                    status: sentenceCase(integration.status),
+                    detail: integration.detail,
+                  }
             return (
               <li key={integration.id} className="flex items-start gap-4 py-4">
                 <Icon
@@ -515,9 +776,7 @@ export function IntegrationsView() {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-base font-medium text-zinc-950 sm:text-sm">
-                      {integration.name}
-                    </p>
+                    <p className="text-base font-medium text-zinc-950 sm:text-sm">{label.name}</p>
                     <p
                       className={cx(
                         'shrink-0 whitespace-nowrap text-base font-medium sm:text-sm',
@@ -526,12 +785,10 @@ export function IntegrationsView() {
                         integration.status === 'not_configured' && 'text-zinc-500',
                       )}
                     >
-                      {sentenceCase(integration.status)}
+                      {label.status}
                     </p>
                   </div>
-                  <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-                    {integration.detail}
-                  </p>
+                  <p className="text-pretty text-base text-zinc-500 sm:text-sm">{label.detail}</p>
                 </div>
               </li>
             )

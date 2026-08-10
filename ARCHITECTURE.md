@@ -186,10 +186,11 @@ and verifies webhook HMACs. The experimental webhook performs a full refresh. Pr
 move mirroring out of the request path, add the Airtable payload cursor, fetch only affected
 records, durably retry, and convert direct edits to named operations or previewable change sets.
 
-R2 will own private file bytes. Domain `Asset` records store opaque object keys and safe metadata;
-upload and download routes recheck workspace and record ownership. Cloudflare Email Service will
-be the default outbound transport behind the same delivery outbox, with provider identifiers and
-attempt history stored as operational records.
+R2 owns private file bytes. Domain `Asset` records store opaque object keys and safe metadata;
+upload and download routes recheck workspace and record ownership. Cloudflare Email Service is the
+accepted-speaker outbound transport behind the delivery outbox: the full calendar attachment is
+frozen in the transaction, the host starts delivery only after commit, and provider identifiers and
+attempt history remain operational records. Sender-domain activation is a release-time host gate.
 
 The workspace object can also own hibernating WebSocket connections. After a transaction commits,
 it broadcasts a small revision and topic hint; each authorized web surface invalidates and refetches

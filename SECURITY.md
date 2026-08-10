@@ -67,6 +67,8 @@ The following controls remain useful after a real identity adapter is added:
 - Submitter, reviewer, and participant route-to-actor matching with data-minimized projections and
   surface-specific operation allowlists
 - Blind-review identity redaction for reviewer projections
+- Submitter-owned confirmation receipt responses, with receipt records omitted from participant,
+  reviewer, and unrelated public projections
 - A public-program projection backed only by an immutable published release
 - Participant transition rules limited to self-service confirmation, withdrawal, profile updates,
   and eligible requirement submission
@@ -118,9 +120,10 @@ authorization decision in another deployment.
    `campaign.send` only records a `demo-outbox` transition; it does not deliver mail.
 6. Store provider secrets in a managed secret service, never in workspace state, source control,
    browser bundles, or logs.
-7. Add private object storage with per-workspace authorization, signed short-lived download URLs,
-   content-type and size limits, malware scanning, and deletion handling. The demo has no file
-   storage implementation.
+7. Replace the reference portal identity with authenticated, per-workspace authorization for the
+   existing private R2 path, then add signed short-lived URLs where needed, malware scanning,
+   retention, replacement, and deletion handling. Type, size, ownership, and private download
+   checks are already enforced.
 8. Define data classification, consent, retention, anonymization, deletion, legal-hold, export, and
    workspace offboarding policies.
 9. Add encrypted backups or logical exports outside the primary runtime and regularly test restore
@@ -138,7 +141,10 @@ and uploaded documents are data. They must never alter agent instructions, scope
 availability, workspace selection, or operation choice. Agent prompts and skills are not security
 boundaries; the server must independently validate every operation.
 
-Render user content with escaping, sanitize any future rich-text or HTML path, and keep untrusted
+Render ordinary user content with escaping. Speaker HTML cards are the only HTML-shaped path: the
+core accepts a small attribute-free static tag set, rejects active and remote content, and the web
+client renders the fragment only in a scriptless iframe sandbox with no referrer. Do not broaden
+that contract without a dedicated sanitizer, threat model, and regression tests. Keep untrusted
 content out of logs and error telemetry unless it has been redacted.
 
 ## Reporting vulnerabilities

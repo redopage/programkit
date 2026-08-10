@@ -12,13 +12,14 @@ import {
   type SubmissionFormField,
   type SubmissionFieldPurpose,
   type SubmissionKind,
+  type SubmissionReceiptDeliveryStatus,
 } from '@programkit/core'
 
 import { ProgramKitMark } from '../components/brand.tsx'
 import { ExternalAccessForm } from '../components/ExternalAccessForm.tsx'
 import { SubmissionAnswerFields } from '../components/SubmissionAnswerFields.tsx'
 import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
-import { Button, cx } from '../components/ui.tsx'
+import { Button, StatusBadge, cx } from '../components/ui.tsx'
 import { useExternalAccess } from '../lib/external-access.ts'
 import { speakerSubmissionsPath } from '../lib/public-links.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -56,7 +57,11 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
   const [speakerAccessKey, setSpeakerAccessKey] = useState('')
   const [kind, setKind] = useState<SubmissionKind | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [confirmationId, setConfirmationId] = useState<string | null>(null)
+  const [confirmation, setConfirmation] = useState<{
+    submissionId: string
+    recipientEmail: string
+    receiptStatus: SubmissionReceiptDeliveryStatus | null
+  } | null>(null)
   const focusErrorsRef = useRef(false)
   const activeKind = kind ?? form?.allowedKinds[0] ?? 'abstract'
   const visibleFields = useMemo(
@@ -219,40 +224,122 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     }
     setSpeakerAccessKey(nextSpeakerAccessKey)
     window.localStorage.setItem(`programkit:speaker:${slug}`, nextSpeakerAccessKey)
-    setConfirmationId(submissionId)
+    const submittedData = submitted.data as
+      | {
+          receiptDelivery?: {
+            recipientEmail?: string
+            status?: SubmissionReceiptDeliveryStatus
+          }
+        }
+      | undefined
+    setConfirmation({
+      submissionId,
+      recipientEmail: submittedData?.receiptDelivery?.recipientEmail ?? '',
+      receiptStatus: submittedData?.receiptDelivery?.status ?? null,
+    })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  if (confirmationId) {
+  if (confirmation) {
+    const receiptStatus = confirmation.receiptStatus
+    const receiptBadgeLabel =
+      receiptStatus === 'delivered'
+        ? 'Delivered'
+        : receiptStatus === 'failed'
+          ? 'Not delivered'
+          : receiptStatus === 'suppressed'
+            ? 'No email receipt'
+            : 'Not sent yet'
+    const receiptSummary =
+      receiptStatus === 'delivered'
+        ? 'Your confirmation receipt was delivered.'
+        : receiptStatus === 'failed'
+          ? 'Your confirmation receipt was prepared, but the delivery attempt did not go through. The event team can retry it.'
+          : receiptStatus === 'suppressed'
+            ? 'No confirmation receipt could be prepared for this submission, so no email will arrive.'
+            : 'Your confirmation receipt is prepared and waiting in the outbox. It has not been delivered.'
+    const recipientLabel =
+      receiptStatus === 'delivered'
+        ? 'Delivered to'
+        : receiptStatus === 'failed'
+          ? 'Addressed to'
+          : 'Prepared for'
     return (
       <div className="min-h-dvh bg-white">
         <PublicHeader eventName={event.name} />
-        <main className="mx-auto flex max-w-3xl flex-col items-center px-4 py-20 text-center sm:px-6 sm:py-28">
-          <CheckCircleIcon className="size-12 shrink-0 fill-emerald-600" />
-          <h1 className="max-w-[22ch] pt-6 text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
-            Thank you for sharing your work
+        <main className="mx-auto flex max-w-xl flex-col px-4 py-12 sm:px-6 sm:py-16">
+          <CheckCircleIcon className="size-10 shrink-0 fill-emerald-600" />
+          <h1 className="pt-5 text-balance text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">
+            Proposal submitted
           </h1>
-          <p className="max-w-[62ch] pt-4 text-pretty text-base text-zinc-600">
-            {form.confirmationMessage}
+          <p className="pt-3 text-pretty text-base text-zinc-600">{form.confirmationMessage}</p>
+          <p className="pt-2 text-pretty text-base text-zinc-600">
+            It is saved for the {event.name} program committee now. Nothing further is needed from
+            you.
           </p>
-          <div className="mt-8 w-full max-w-md rounded-xl bg-zinc-50 p-5 text-left ring-1 ring-zinc-950/5">
-            <p className="text-base font-medium text-zinc-950 sm:text-sm">What happens next</p>
+
+          <div className="mt-8 rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
+            <p className="text-base font-medium text-zinc-950 sm:text-sm">Your reference</p>
+            <p className="break-all pt-1 font-mono text-lg text-zinc-950">
+              {confirmation.submissionId}
+            </p>
+            <p className="pt-2 text-pretty text-base text-zinc-500 sm:text-sm">
+              Save this now. It identifies your proposal to the event team even if no email ever
+              reaches you.
+            </p>
+          </div>
+
+          {receiptStatus ? (
+            <section
+              aria-labelledby="receipt-heading"
+              className="mt-8 border-t border-zinc-950/5 pt-6"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <h2 id="receipt-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+                  Email receipt
+                </h2>
+                <StatusBadge status={receiptStatus} label={receiptBadgeLabel} />
+              </div>
+              <p className="pt-2 text-pretty text-base text-zinc-600 sm:text-sm">
+                {receiptSummary}
+              </p>
+              {confirmation.recipientEmail ? (
+                <div className="mt-3 border-l-2 border-zinc-950/10 pl-3">
+                  <p className="text-sm text-zinc-500">{recipientLabel}</p>
+                  <p className="break-all text-base text-zinc-950 sm:text-sm">
+                    {confirmation.recipientEmail}
+                  </p>
+                </div>
+              ) : null}
+              {receiptStatus === 'pending_provider' ? (
+                <p className="pt-3 text-pretty text-base text-zinc-500 sm:text-sm">
+                  Email starts flowing only after the event team connects an email provider and
+                  verifies the sending domain. Both are required, so treat your reference above as
+                  the record of this submission.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
+          <section aria-labelledby="next-heading" className="mt-8 border-t border-zinc-950/5 pt-6">
+            <h2 id="next-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+              What happens next
+            </h2>
             <ol role="list" className="flex flex-col gap-3 pt-3">
               {[
-                'Your email is saved with the proposal for program updates.',
-                'The program committee reviews submissions after the call closes.',
-                'You will receive a decision and portal link by email.',
+                'Your proposal and contact details are saved for the program committee.',
+                'The committee reviews proposals after the call for proposals closes.',
+                'The event team contacts you about the outcome.',
               ].map((step, index) => (
                 <li key={step} className="flex items-start gap-3">
-                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-mono text-sm tabular-nums text-zinc-500 ring-1 ring-zinc-950/10">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-zinc-100 font-mono text-sm tabular-nums text-zinc-600">
                     {index + 1}
                   </span>
                   <p className="text-pretty text-base text-zinc-600 sm:text-sm">{step}</p>
                 </li>
               ))}
             </ol>
-          </div>
-          <p className="pt-6 font-mono text-sm text-zinc-400">Reference {confirmationId}</p>
+          </section>
           <div className="pt-6">
             <Button
               variant="primary"

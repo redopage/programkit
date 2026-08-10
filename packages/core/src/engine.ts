@@ -1,5 +1,11 @@
 import { operationDefinition } from './manifest.ts'
-import { calendarAttachmentForParticipation } from './calendar.ts'
+import {
+  calendarAttachmentForParticipation,
+  eventCalendarFilename,
+  eventCalendarInvitation,
+} from './calendar.ts'
+import { acceleventsExportPreflight, buildAcceleventsExportItems } from './accelevents.ts'
+import { normalizeWorkspaceState } from './migrations.ts'
 import {
   dueRequirementReminders,
   requirementReminderSummary,
@@ -18,7 +24,9 @@ import {
 import {
   audienceForCampaign,
   campaignPreview,
+  renderCampaignMessage,
   scheduleConflicts,
+  schedulePublishPreflight,
   submissionAnswerByPurpose,
   submissionAnswerDisplayByPurpose,
   submissionAnswerErrors,
@@ -28,9 +36,11 @@ import {
 import { createSeedState } from './seed.ts'
 import type {
   Actor,
+  AcceleventsExport,
   Asset,
   AssetComment,
   Campaign,
+  CampaignDelivery,
   ChangeOperation,
   ChangeSet,
   ContactNote,
@@ -46,6 +56,7 @@ import type {
   Participation,
   ParticipationStatus,
   Person,
+  PortalResource,
   PortalResourcePage,
   RequirementStatus,
   ReviewRecommendation,
@@ -93,77 +104,6 @@ interface ApplyContext {
   actor: Actor
   operation: string
   emittedEventIds: string[]
-}
-
-function initializeProgramCollections(state: WorkspaceState) {
-  for (const event of state.events) event.version ??= 1
-  state.contactNotes ??= []
-  state.crmSegments ??= []
-  state.speakerPipeline ??= []
-  state.submissionForms ??= []
-  state.submissionFormFields ??= []
-  state.submissions ??= []
-  state.assets ??= []
-  state.assetComments ??= []
-  state.reviewers ??= []
-  state.reviewerTeams ??= []
-  state.evaluationPlans ??= []
-  state.reviewerAssignments ??= []
-  state.scorecards ??= []
-  state.reviewDecisions ??= []
-  state.outboundMessages ??= []
-  state.portalResourcePages ??= []
-  for (const message of state.outboundMessages) {
-    message.submissionId ??= null
-    message.attempts ??= 0
-    message.lastAttemptAt ??= null
-    message.nextAttemptAt ??= null
-    message.lastError ??= null
-  }
-  for (const submission of state.submissions) {
-    submission.contributors ??= []
-    submission.speakerAccessKey ??= createId('speaker')
-  }
-  for (const reviewer of state.reviewers) reviewer.accessKey ??= createId('reviewer')
-  for (const participation of state.participations) {
-    participation.portalAccessKey ??= createId('portal')
-  }
-  for (const definition of state.requirementDefinitions) {
-    definition.systemKey ??=
-      definition.id === 'req_confirm'
-        ? 'participation_confirmation'
-        : definition.id === 'req_bio'
-          ? 'profile_bio'
-          : definition.id === 'req_headshot'
-            ? 'profile_headshot'
-            : definition.id === 'req_slides'
-              ? 'final_slides'
-              : null
-    definition.selfCompletable ??= false
-    definition.sessionId ??= null
-    definition.acceptedContentTypes ??=
-      definition.kind === 'file'
-        ? [
-            'application/pdf',
-            'application/vnd.ms-powerpoint',
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-          ]
-        : []
-    definition.maxSizeBytes ??= definition.kind === 'file' ? 50_000_000 : null
-    definition.automaticReminders ??= false
-  }
-  for (const asset of state.assets) {
-    asset.version ??= 1
-    asset.isLatest ??= true
-    asset.sessionId ??= null
-    asset.uploadedBy ??= { type: 'staff', id: 'system', name: 'ProgramKit' }
-  }
-  for (const campaign of state.campaigns) campaign.includeCalendarInvite ??= false
-  for (const message of state.outboundMessages ?? []) message.calendarAttachment ??= null
-  for (const plan of state.evaluationPlans) {
-    for (const round of plan.rounds) round.categoryRoutes ??= []
-  }
-  state.schemaVersion = Math.max(state.schemaVersion, 14)
 }
 
 function queueOutboundMessage(
@@ -267,6 +207,92 @@ function assertSubmissionContributors(
 
 function optionalString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+const portalEmbedTag =
+  /^<\/?(?:article|section|h1|h2|h3|p|ul|ol|li|strong|em|br|hr|blockquote|code|pre)\s*\/?>$/iu
+
+function validatedPortalEmbedHtml(value: unknown) {
+  const html = assertString(value, 'embedHtml')
+  if (html.length > 12_000) {
+    throw new OperationError('INVALID_INPUT', 'embedHtml must be 12,000 characters or fewer.', {
+      embedHtml: 'Shorten the embedded card.',
+    })
+  }
+  const tags = html.match(/<[^>]*>/gu) ?? []
+  if (
+    tags.some((tag) => !portalEmbedTag.test(tag)) ||
+    html.replaceAll(/<[^>]*>/gu, '').match(/[<>]/u)
+  ) {
+    throw new OperationError(
+      'INVALID_INPUT',
+      'Embedded cards accept only static headings, text, lists, quotes, and code.',
+      { embedHtml: 'Remove attributes, links, images, forms, scripts, and unsupported tags.' },
+    )
+  }
+  return html
+}
+
+const maximumRequirementFileBytes = 8 * 1024 * 1024
+const imageContentTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const documentContentTypes = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])
+
+function requirementAssetKind(definitionId: string): Asset['kind'] {
+  if (definitionId === 'req_headshot') return 'headshot'
+  if (definitionId === 'req_slides') return 'slides'
+  return 'supporting_document'
+}
+
+function validateRequirementFile(
+  workspaceId: string,
+  participationId: string,
+  definitionId: string,
+  input: Record<string, unknown>,
+) {
+  const filename = assertString(input.filename, 'filename')
+  if (filename.length > 160 || filename.includes('/') || filename.includes('\\')) {
+    throw new OperationError('INVALID_INPUT', 'Use a filename without folders.', {
+      filename: 'Choose a file with a name under 160 characters.',
+    })
+  }
+  const contentType = assertString(input.contentType, 'contentType').toLowerCase()
+  const allowedTypes = definitionId === 'req_headshot' ? imageContentTypes : documentContentTypes
+  if (!allowedTypes.has(contentType)) {
+    throw new OperationError(
+      'INVALID_INPUT',
+      definitionId === 'req_headshot'
+        ? 'Headshots must be JPEG, PNG, or WebP images.'
+        : 'Files must be PDF, Word, or PowerPoint documents.',
+      { contentType: 'Choose a supported file type.' },
+    )
+  }
+  const sizeBytes = input.sizeBytes
+  if (
+    typeof sizeBytes !== 'number' ||
+    !Number.isInteger(sizeBytes) ||
+    sizeBytes <= 0 ||
+    sizeBytes > maximumRequirementFileBytes
+  ) {
+    throw new OperationError('INVALID_INPUT', 'Files must be between 1 byte and 8 MB.', {
+      sizeBytes: 'Choose a file no larger than 8 MB.',
+    })
+  }
+  const storageKey = assertString(input.storageKey, 'storageKey')
+  const requiredPrefix = `workspaces/${workspaceId}/participants/${participationId}/`
+  if (
+    !storageKey.startsWith(requiredPrefix) ||
+    storageKey.includes('..') ||
+    storageKey.length > 512
+  ) {
+    throw new OperationError('FORBIDDEN', 'The file storage key is outside this participant.')
+  }
+  return { filename, contentType, sizeBytes, storageKey }
 }
 
 function assertEmail(value: unknown, field = 'email') {
@@ -804,6 +830,9 @@ function allVersionedRecords(state: WorkspaceState) {
     ...state.requirementInstances,
     ...(state.submissionForms ?? []),
     ...(state.submissions ?? []),
+    ...(state.submissionReceiptDeliveries ?? []),
+    ...(state.assets ?? []),
+    ...(state.portalResources ?? []),
     ...(state.reviewers ?? []),
     ...(state.reviewerTeams ?? []),
     ...(state.evaluationPlans ?? []),
@@ -813,6 +842,9 @@ function allVersionedRecords(state: WorkspaceState) {
     ...state.sessions,
     ...state.placements,
     ...state.campaigns,
+    ...(state.campaignDeliveries ?? []),
+    ...(state.acceleventsExports ?? []),
+    ...(state.acceleventsExports ?? []).flatMap((entry) => entry.items),
     ...(state.portalResourcePages ?? []),
     ...state.changeSets,
   ]
@@ -2332,6 +2364,63 @@ function applyHandler(
       return { assignment }
     }
 
+    case 'submission.record-receipt-delivery': {
+      const delivery = findRequired(
+        state.submissionReceiptDeliveries,
+        input.deliveryId,
+        'submission receipt delivery',
+      )
+      if (delivery.status === 'delivered' || delivery.status === 'suppressed') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'That submission receipt already reached a terminal state.',
+        )
+      }
+      const status = assertOneOf(input.status, 'status', ['delivered', 'failed'] as const)
+      const providerMessageId = optionalString(input.providerMessageId)
+      const lastError = optionalString(input.lastError)
+      if (status === 'delivered' && !providerMessageId) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'A delivered submission receipt requires its provider message ID.',
+        )
+      }
+      if (status === 'failed' && !lastError) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'A failed submission receipt requires an error summary.',
+        )
+      }
+      delivery.status = status
+      delivery.provider = 'cloudflare_email'
+      delivery.providerMessageId = providerMessageId || null
+      delivery.lastError = lastError || null
+      delivery.attemptCount += 1
+      delivery.updatedAt = timestamp
+      delivery.version += 1
+      appendEvent(state, context, {
+        type:
+          status === 'delivered'
+            ? 'submission.receipt-delivered'
+            : 'submission.receipt-delivery-failed',
+        aggregate: {
+          type: 'submission-receipt-delivery',
+          id: delivery.id,
+          version: delivery.version,
+        },
+        summary:
+          status === 'delivered'
+            ? `Delivered the submission receipt to ${delivery.recipientName}.`
+            : `Submission receipt delivery to ${delivery.recipientName} failed.`,
+        data: {
+          submissionId: delivery.submissionId,
+          deliveryStatus: status,
+          attemptCount: delivery.attemptCount,
+        },
+      })
+      return { delivery }
+    }
+
     case 'review.submit-scorecard': {
       const assignment = findRequired(
         state.reviewerAssignments,
@@ -2448,6 +2537,119 @@ function applyHandler(
         scorecard,
         review: submissionReviewSummary(state, submission.id),
       }
+    }
+
+    case 'review.advance-round': {
+      const submission = findRequired(state.submissions, input.submissionId, 'submission')
+      if (submission.status !== 'submitted' && submission.status !== 'in_review') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          `A ${submission.status} submission cannot advance to another review round.`,
+        )
+      }
+      const plan = state.evaluationPlans.find(
+        (entry) =>
+          entry.formId === submission.formId && entry.submissionKinds.includes(submission.kind),
+      )
+      if (!plan) {
+        throw new OperationError('INVALID_TRANSITION', 'This submission has no evaluation plan.')
+      }
+      const rounds = [...plan.rounds].sort((left, right) => left.order - right.order)
+      if (rounds.length === 0) {
+        throw new OperationError('INVALID_TRANSITION', 'This evaluation plan has no review rounds.')
+      }
+      const submissionAssignments = state.reviewerAssignments.filter(
+        (entry) => entry.submissionId === submission.id && entry.evaluationPlanId === plan.id,
+      )
+      const assignedRoundIds = new Set(submissionAssignments.map((entry) => entry.roundId))
+      const currentRoundIndex = rounds.reduce(
+        (highest, round, index) => (assignedRoundIds.has(round.id) ? index : highest),
+        -1,
+      )
+      if (currentRoundIndex < 0) {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Assign the first evaluation round before advancing this submission.',
+        )
+      }
+      const currentRound = rounds[currentRoundIndex]
+      const nextRound = rounds[currentRoundIndex + 1]
+      if (!nextRound) {
+        throw new OperationError(
+          'REVIEW_PLAN_COMPLETE',
+          'This submission is already in the final review round.',
+        )
+      }
+      const completed = submissionAssignments.filter(
+        (entry) => entry.roundId === currentRound.id && entry.status === 'completed',
+      ).length
+      if (completed < currentRound.minimumCompletedReviews) {
+        throw new OperationError(
+          'REVIEWS_INCOMPLETE',
+          `Complete ${currentRound.minimumCompletedReviews} reviews in ${currentRound.name} before advancing this submission.`,
+        )
+      }
+      if (submissionAssignments.some((entry) => entry.roundId === nextRound.id)) {
+        throw new OperationError(
+          'DUPLICATE',
+          `This submission already has ${nextRound.name.toLowerCase()} assignments.`,
+        )
+      }
+      const team = state.reviewerTeams.find((entry) => entry.id === plan.reviewerTeamId)
+      const activeReviewerIds = (team?.reviewerIds ?? []).filter(
+        (reviewerId) =>
+          state.reviewers.find((reviewer) => reviewer.id === reviewerId)?.status === 'active',
+      )
+      if (activeReviewerIds.length < nextRound.reviewersPerSubmission) {
+        throw new OperationError(
+          'REVIEWERS_UNAVAILABLE',
+          `${nextRound.name} needs ${nextRound.reviewersPerSubmission} active reviewers.`,
+        )
+      }
+      const previousReviewerIds = new Set(
+        submissionAssignments
+          .filter((entry) => entry.roundId === currentRound.id)
+          .map((entry) => entry.reviewerId),
+      )
+      const startIndex = Math.max(0, state.submissions.indexOf(submission)) + nextRound.order
+      const rotatedReviewerIds = activeReviewerIds.map(
+        (_, index) => activeReviewerIds[(startIndex + index) % activeReviewerIds.length],
+      )
+      const reviewerIds = [
+        ...rotatedReviewerIds.filter((reviewerId) => !previousReviewerIds.has(reviewerId)),
+        ...rotatedReviewerIds.filter((reviewerId) => previousReviewerIds.has(reviewerId)),
+      ].slice(0, nextRound.reviewersPerSubmission)
+      const form = findRequired(state.submissionForms, submission.formId, 'submission form')
+      const assignments = reviewerIds.map((reviewerId) => ({
+        id: createId('rva'),
+        eventId: submission.eventId,
+        evaluationPlanId: plan.id,
+        roundId: nextRound.id,
+        submissionId: submission.id,
+        reviewerId,
+        status: 'assigned' as const,
+        dueAt: form.closesAt,
+        updatedAt: timestamp,
+        version: 1,
+      }))
+      state.reviewerAssignments.push(...assignments)
+      const previous = submission.status
+      submission.status = 'in_review'
+      submission.updatedAt = timestamp
+      submission.version += 1
+      appendEvent(state, context, {
+        type: 'review.round-advanced',
+        aggregate: { type: 'submission', id: submission.id, version: submission.version },
+        summary: `Advanced “${stringAnswer(state, submission, 'proposal_title')}” to ${nextRound.name}.`,
+        data: {
+          previous,
+          evaluationPlanId: plan.id,
+          previousRoundId: currentRound.id,
+          roundId: nextRound.id,
+          assignmentIds: assignments.map((entry) => entry.id),
+        },
+      })
+      return { submission, previousRound: currentRound, round: nextRound, assignments }
     }
 
     case 'review.decide': {
@@ -3998,6 +4200,94 @@ function applyHandler(
       return { messages: queued, queuedCount: queued.length, processedAt: at }
     }
 
+    case 'requirement.submit-file': {
+      const instance = findRequired(
+        state.requirementInstances,
+        input.requirementInstanceId,
+        'requirement instance',
+      )
+      if (context.actor.type === 'participant' && context.actor.id !== instance.participationId) {
+        throw new OperationError(
+          'FORBIDDEN',
+          'A participant can only upload files for their own requirements.',
+        )
+      }
+      if (instance.status !== 'not_started' && instance.status !== 'revision_requested') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Only an incomplete or revision-requested file can be submitted.',
+        )
+      }
+      const definition = findRequired(
+        state.requirementDefinitions,
+        instance.definitionId,
+        'requirement definition',
+      )
+      if (definition.kind !== 'file') {
+        throw new OperationError('INVALID_INPUT', 'This requirement does not accept a file.')
+      }
+      const file = validateRequirementFile(
+        state.workspace.id,
+        instance.participationId,
+        definition.id,
+        input,
+      )
+      const asset: Asset = {
+        id: createId('ast'),
+        eventId: definition.eventId,
+        owner: { type: 'participation', id: instance.participationId },
+        kind: requirementAssetKind(definition.id),
+        ...file,
+        version: 1,
+        isLatest: true,
+        sessionId: definition.sessionId ?? null,
+        uploadedBy: {
+          type: context.actor.type === 'participant' ? 'participant' : 'staff',
+          id: context.actor.id,
+          name: context.actor.name,
+        },
+        createdAt: timestamp,
+      }
+      state.assets.push(asset)
+      const previous = instance.status
+      instance.status = 'submitted'
+      instance.value = asset.id
+      instance.submittedAt = timestamp
+      instance.reviewedAt = null
+      instance.updatedAt = timestamp
+      instance.version += 1
+      appendEvent(state, context, {
+        type: 'asset.created',
+        aggregate: { type: 'asset', id: asset.id, version: 1 },
+        summary: `Uploaded ${asset.filename} for ${definition.label}.`,
+        data: {
+          participationId: instance.participationId,
+          requirementInstanceId: instance.id,
+          assetKind: asset.kind,
+          contentType: asset.contentType,
+          sizeBytes: asset.sizeBytes,
+        },
+      })
+      appendEvent(state, context, {
+        type: 'requirement.status-changed',
+        aggregate: { type: 'requirement', id: instance.id, version: instance.version },
+        summary: `${definition.label} changed from ${previous} to submitted.`,
+        data: {
+          participationId: instance.participationId,
+          previous,
+          next: 'submitted',
+          assetId: asset.id,
+        },
+      })
+      appendEvent(state, context, {
+        type: 'participation.readiness-changed',
+        aggregate: { type: 'participation', id: instance.participationId, version: 1 },
+        summary: 'Participant readiness was recalculated.',
+        data: { requirementInstanceId: instance.id },
+      })
+      return { asset: { ...asset, storageKey: '' }, requirementInstance: instance }
+    }
+
     case 'requirement.set-status': {
       const instance = findRequired(
         state.requirementInstances,
@@ -4147,6 +4437,73 @@ function applyHandler(
         })
       }
       return { person, participation, changed }
+    }
+
+    case 'portal-resource.save': {
+      const event = findRequired(state.events, input.eventId, 'event')
+      if (event.id !== state.activeEventId) {
+        throw new OperationError('INVALID_INPUT', 'That resource belongs to another event.')
+      }
+      const title = assertString(input.title, 'title')
+      const summary = assertString(input.summary, 'summary')
+      if (title.length > 120 || summary.length > 240) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'Resource titles and summaries must stay concise.',
+        )
+      }
+      const kind = assertOneOf(input.kind, 'kind', ['guide', 'html_embed'] as const)
+      const status = assertOneOf(input.status, 'status', ['draft', 'published'] as const)
+      if (
+        typeof input.sortOrder !== 'number' ||
+        !Number.isInteger(input.sortOrder) ||
+        input.sortOrder < 0 ||
+        input.sortOrder > 10_000
+      ) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'sortOrder must be a whole number from 0 to 10,000.',
+        )
+      }
+      const body = kind === 'guide' ? assertString(input.body, 'body') : ''
+      if (body.length > 12_000) {
+        throw new OperationError('INVALID_INPUT', 'body must be 12,000 characters or fewer.')
+      }
+      const embedHtml = kind === 'html_embed' ? validatedPortalEmbedHtml(input.embedHtml) : null
+      const existing = optionalString(input.resourceId)
+        ? findRequired(state.portalResources, input.resourceId, 'portal resource')
+        : null
+      if (existing && existing.eventId !== event.id) {
+        throw new OperationError('INVALID_INPUT', 'That resource belongs to another event.')
+      }
+      const values = { title, summary, kind, body, embedHtml, status, sortOrder: input.sortOrder }
+      if (
+        existing &&
+        Object.entries(values).every(
+          ([key, value]) => existing[key as keyof typeof values] === value,
+        )
+      ) {
+        throw new OperationError('NO_CHANGES', 'That resource already matches the saved version.')
+      }
+      const resource: PortalResource = existing ?? {
+        id: createId('por'),
+        eventId: event.id,
+        ...values,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      if (existing) {
+        Object.assign(existing, values, { updatedAt: timestamp, version: existing.version + 1 })
+      } else {
+        state.portalResources.push(resource)
+      }
+      appendEvent(state, context, {
+        type: 'portal-resource.saved',
+        aggregate: { type: 'portal-resource', id: resource.id, version: resource.version },
+        summary: `${status === 'published' ? 'Published' : 'Saved'} speaker resource ${title}.`,
+        data: { kind, status, sortOrder: resource.sortOrder },
+      })
+      return { resource }
     }
 
     case 'schedule.place-session': {
@@ -4316,7 +4673,46 @@ function applyHandler(
       return { placements: placed, unplacedSessionIds: unplaced }
     }
 
+    case 'schedule.unplace-session': {
+      const placement = findRequired(state.placements, input.placementId, 'placement')
+      if (placement.eventId !== state.activeEventId) {
+        throw new OperationError('INVALID_INPUT', 'That placement belongs to another event.')
+      }
+      const session = findRequired(state.sessions, placement.sessionId, 'session')
+      const previous = cloneState(placement)
+      state.placements = state.placements.filter((entry) => entry.id !== placement.id)
+      appendEvent(state, context, {
+        type: 'schedule.session-unplaced',
+        aggregate: { type: 'placement', id: placement.id, version: placement.version + 1 },
+        summary: `Returned ${session.title} to the unscheduled tray.`,
+        data: { sessionId: session.id, previous },
+      })
+      return { session, placementId: placement.id, previous }
+    }
+
     case 'schedule.publish': {
+      const preflight = schedulePublishPreflight(state)
+      if (preflight.hardConflicts.length > 0) {
+        throw new OperationError(
+          'SCHEDULE_CONFLICTS',
+          `Resolve ${preflight.hardConflicts.length} schedule conflict${preflight.hardConflicts.length === 1 ? '' : 's'} before publishing.`,
+        )
+      }
+      if (preflight.unscheduledSessions.length > 0) {
+        throw new OperationError(
+          'SCHEDULE_INCOMPLETE',
+          `Place ${preflight.unscheduledSessions.length} unscheduled session${preflight.unscheduledSessions.length === 1 ? '' : 's'} before publishing.`,
+        )
+      }
+      if (preflight.placementCount === 0) {
+        throw new OperationError(
+          'SCHEDULE_INCOMPLETE',
+          'Place at least one session before publishing.',
+        )
+      }
+      if (preflight.changeCount === 0) {
+        throw new OperationError('NO_CHANGES', 'The draft already matches the published schedule.')
+      }
       const approvedSessionIds = new Set(
         state.sessions
           .filter(
@@ -4400,9 +4796,207 @@ function applyHandler(
       return { release, version, warnings: conflicts }
     }
 
+    case 'accelevents.prepare-export': {
+      const eventUrl = assertString(input.eventUrl, 'eventUrl').toLowerCase()
+      if (!/^[a-z0-9](?:[a-z0-9_-]{0,98}[a-z0-9])?$/u.test(eventUrl)) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'eventUrl must be the Accelevents event URL identifier, not a full URL.',
+          { eventUrl: 'Use only letters, numbers, hyphens, or underscores.' },
+        )
+      }
+      const preflight = acceleventsExportPreflight(state)
+      if (!preflight.canPrepare || !preflight.release || !preflight.event) {
+        throw new OperationError(
+          'EXPORT_NOT_READY',
+          preflight.blockers[0] ?? 'The published program is not ready to export.',
+        )
+      }
+      const existing = state.acceleventsExports.find(
+        (entry) =>
+          entry.eventId === preflight.event!.id &&
+          entry.scheduleReleaseId === preflight.release!.id &&
+          entry.eventUrl === eventUrl,
+      )
+      if (existing) {
+        throw new OperationError(
+          'NO_CHANGES',
+          'This published schedule already has an Accelevents export. Retry failed items in that batch.',
+        )
+      }
+      const items = buildAcceleventsExportItems(state, timestamp, () => createId('aci'))
+      if (items.length === 0) {
+        throw new OperationError(
+          'EXPORT_NOT_READY',
+          'The published program has no exportable items.',
+        )
+      }
+      const acceleventsExport: AcceleventsExport = {
+        id: createId('acx'),
+        eventId: preflight.event.id,
+        eventUrl,
+        scheduleReleaseId: preflight.release.id,
+        scheduleVersion: preflight.release.version,
+        status: 'pending_provider',
+        items,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      state.acceleventsExports.unshift(acceleventsExport)
+      const integration = state.integrations.find((entry) => entry.kind === 'accelevents')
+      if (integration) {
+        integration.status = 'attention'
+        integration.detail = `${items.length} frozen items await the credentialed Accelevents consumer.`
+      }
+      appendEvent(state, context, {
+        type: 'accelevents.export-prepared',
+        aggregate: {
+          type: 'accelevents-export',
+          id: acceleventsExport.id,
+          version: acceleventsExport.version,
+        },
+        summary: `Prepared Accelevents export for schedule version ${preflight.release.version}.`,
+        data: {
+          eventUrl,
+          scheduleReleaseId: preflight.release.id,
+          speakers: items.filter((item) => item.resource === 'speaker').length,
+          sessions: items.filter((item) => item.resource === 'session').length,
+          warnings: preflight.warnings,
+        },
+      })
+      return { export: acceleventsExport, warnings: preflight.warnings }
+    }
+
+    case 'accelevents.record-result': {
+      const acceleventsExport = findRequired(
+        state.acceleventsExports,
+        input.exportId,
+        'Accelevents export',
+      )
+      if (acceleventsExport.eventId !== state.activeEventId) {
+        throw new OperationError('INVALID_INPUT', 'That export belongs to another event.')
+      }
+      const item = findRequired(acceleventsExport.items, input.itemId, 'Accelevents export item')
+      if (item.status === 'delivered') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'That export item already reached a delivered state.',
+        )
+      }
+      const status = assertOneOf(input.status, 'status', ['delivered', 'failed'] as const)
+      const providerId = optionalString(input.providerId)
+      const lastError = optionalString(input.lastError)
+      if (status === 'delivered' && !providerId) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'A delivered export item requires its Accelevents resource ID.',
+        )
+      }
+      if (status === 'failed' && !lastError) {
+        throw new OperationError('INVALID_INPUT', 'A failed export item requires an error summary.')
+      }
+      item.status = status
+      if (status === 'delivered') item.providerId = providerId
+      item.lastError = status === 'failed' ? lastError : null
+      item.attemptCount += 1
+      item.updatedAt = timestamp
+      item.version += 1
+
+      const pending = acceleventsExport.items.filter(
+        (entry) => entry.status === 'pending_provider',
+      ).length
+      const delivered = acceleventsExport.items.filter(
+        (entry) => entry.status === 'delivered',
+      ).length
+      const failed = acceleventsExport.items.filter((entry) => entry.status === 'failed').length
+      acceleventsExport.status =
+        pending > 0
+          ? delivered + failed > 0
+            ? 'partial'
+            : 'pending_provider'
+          : failed === 0
+            ? 'delivered'
+            : delivered > 0
+              ? 'partial'
+              : 'failed'
+      acceleventsExport.updatedAt = timestamp
+      acceleventsExport.version += 1
+
+      const integration = state.integrations.find((entry) => entry.kind === 'accelevents')
+      if (integration) {
+        integration.status = acceleventsExport.status === 'delivered' ? 'connected' : 'attention'
+        integration.detail =
+          acceleventsExport.status === 'delivered'
+            ? `Schedule version ${acceleventsExport.scheduleVersion} is confirmed in Accelevents.`
+            : `${pending} pending, ${delivered} delivered, and ${failed} failed export items.`
+        integration.lastSeenAt = timestamp
+      }
+      appendEvent(state, context, {
+        type: status === 'delivered' ? 'accelevents.item-delivered' : 'accelevents.item-failed',
+        aggregate: { type: 'accelevents-export-item', id: item.id, version: item.version },
+        summary:
+          status === 'delivered'
+            ? `Confirmed ${item.resource} ${item.externalKey} in Accelevents.`
+            : `Accelevents export failed for ${item.resource} ${item.externalKey}.`,
+        data: {
+          exportId: acceleventsExport.id,
+          resource: item.resource,
+          sourceId: item.sourceId,
+          exportStatus: acceleventsExport.status,
+          attemptCount: item.attemptCount,
+        },
+      })
+      return { export: acceleventsExport, item }
+    }
+
+    case 'accelevents.retry-export': {
+      const acceleventsExport = findRequired(
+        state.acceleventsExports,
+        input.exportId,
+        'Accelevents export',
+      )
+      if (acceleventsExport.status === 'delivered') {
+        throw new OperationError('NO_CHANGES', 'Every item in that export is already delivered.')
+      }
+      const retryable = acceleventsExport.items.filter((entry) => entry.status !== 'delivered')
+      if (retryable.length === 0) {
+        throw new OperationError('NO_CHANGES', 'That export has no retryable items.')
+      }
+      for (const item of retryable) {
+        if (item.status === 'failed') {
+          item.status = 'pending_provider'
+          item.lastError = null
+          item.updatedAt = timestamp
+          item.version += 1
+        }
+      }
+      const delivered = acceleventsExport.items.filter(
+        (entry) => entry.status === 'delivered',
+      ).length
+      acceleventsExport.status = delivered > 0 ? 'partial' : 'pending_provider'
+      acceleventsExport.updatedAt = timestamp
+      acceleventsExport.version += 1
+      appendEvent(state, context, {
+        type: 'accelevents.export-retry-queued',
+        aggregate: {
+          type: 'accelevents-export',
+          id: acceleventsExport.id,
+          version: acceleventsExport.version,
+        },
+        summary: `Queued ${retryable.length} Accelevents export items for provider delivery.`,
+        data: {
+          exportId: acceleventsExport.id,
+          deliveryItemIds: retryable.map((entry) => entry.id),
+        },
+      })
+      return { export: acceleventsExport, items: retryable }
+    }
+
     case 'campaign.create-draft': {
       const audience = assertOneOf(input.audience, 'audience', [
         'all_active',
+        'confirmed',
         'unconfirmed',
         'missing_requirements',
         'custom',
@@ -4427,10 +5021,12 @@ function applyHandler(
           audience === 'custom'
             ? assertStringArray(input.recipientParticipationIds ?? [], 'recipientParticipationIds')
             : [],
-        includeCalendarInvite: input.includeCalendarInvite === true,
+        includeCalendarInvite:
+          input.includeCalendarInvite === true || input.includeEventInvite === true,
         status: 'draft',
         createdAt: timestamp,
         approvedAt: null,
+        queuedAt: null,
         sentAt: null,
         createdBy: context.actor.name,
         version: 1,
@@ -4485,8 +5081,72 @@ function applyHandler(
       if (campaign.status !== 'approved') {
         throw new OperationError('INVALID_TRANSITION', 'Only an approved campaign can be sent.')
       }
-      campaign.status = 'sent'
-      campaign.sentAt = timestamp
+      if (campaign.recipientParticipationIds.length === 0) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'The approved campaign has no recipients to place in the delivery outbox.',
+        )
+      }
+      const event = findRequired(state.events, campaign.eventId, 'event')
+      const calendarFilename = eventCalendarFilename(event)
+      const deliveries: CampaignDelivery[] = []
+      for (const participationId of new Set(campaign.recipientParticipationIds)) {
+        const participation = findRequired(state.participations, participationId, 'participation')
+        const person = findRequired(state.people, participation.personId, 'person')
+        const rendered = renderCampaignMessage(state, campaign, participationId)
+        if (!rendered) {
+          throw new OperationError(
+            'INVALID_INPUT',
+            'A campaign recipient could not be rendered from the approved event and profile.',
+          )
+        }
+        const email = person.email.trim().toLocaleLowerCase()
+        const suppressed =
+          participation.status === 'declined' ||
+          participation.status === 'withdrawn' ||
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)
+        const attachments =
+          campaign.includeCalendarInvite && !suppressed
+            ? [
+                {
+                  filename: calendarFilename,
+                  contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+                  content: eventCalendarInvitation(state.workspace, event, email, timestamp),
+                },
+              ]
+            : []
+        deliveries.push({
+          id: createId('dlv'),
+          campaignId: campaign.id,
+          eventId: campaign.eventId,
+          participationId,
+          personId: person.id,
+          recipientName: `${person.firstName} ${person.lastName}`.trim(),
+          recipientEmail: email,
+          subject: rendered.subject,
+          body: rendered.body,
+          status: suppressed ? 'suppressed' : 'pending_provider',
+          provider: null,
+          providerMessageId: null,
+          attachmentNames: attachments.map((attachment) => attachment.filename),
+          attachments: structuredClone(attachments),
+          attemptCount: 0,
+          lastError: suppressed ? 'Recipient is unavailable or has no deliverable email.' : null,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          version: 1,
+        })
+      }
+      if (deliveries.every((delivery) => delivery.status === 'suppressed')) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'Every approved recipient is unavailable or has an undeliverable email.',
+        )
+      }
+      state.campaignDeliveries.push(...deliveries)
+      campaign.status = 'queued'
+      campaign.queuedAt = timestamp
+      campaign.sentAt = null
       campaign.version += 1
       const messages = campaign.recipientParticipationIds
         .map((participationId) => {
@@ -4512,9 +5172,9 @@ function applyHandler(
         })
         .filter((message): message is OutboundMessage => Boolean(message))
       appendEvent(state, context, {
-        type: 'campaign.sent',
+        type: 'campaign.queued',
         aggregate: { type: 'campaign', id: campaign.id, version: campaign.version },
-        summary: `Queued ${campaign.name} for ${campaign.recipientParticipationIds.length} recipients.`,
+        summary: `Added ${campaign.name} to the delivery outbox for ${deliveries.length} recipients.`,
         data: {
           recipientCount: campaign.recipientParticipationIds.length,
           messageIds: messages.map((message) => message.id),
@@ -4523,6 +5183,114 @@ function applyHandler(
         },
       })
       return { campaign, messages }
+    }
+
+    case 'campaign.record-delivery': {
+      const delivery = findRequired(state.campaignDeliveries, input.deliveryId, 'campaign delivery')
+      if (delivery.status === 'delivered' || delivery.status === 'suppressed') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'That delivery already reached a terminal state.',
+        )
+      }
+      const status = assertOneOf(input.status, 'status', ['delivered', 'failed'] as const)
+      const providerMessageId = optionalString(input.providerMessageId)
+      const lastError = optionalString(input.lastError)
+      if (status === 'delivered' && !providerMessageId) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'A delivered message requires its provider message ID.',
+        )
+      }
+      if (status === 'failed' && !lastError) {
+        throw new OperationError('INVALID_INPUT', 'A failed message requires an error summary.')
+      }
+      delivery.status = status
+      delivery.provider = 'cloudflare_email'
+      delivery.providerMessageId = providerMessageId || null
+      delivery.lastError = lastError || null
+      delivery.attemptCount += 1
+      delivery.updatedAt = timestamp
+      delivery.version += 1
+
+      const campaign = findRequired(state.campaigns, delivery.campaignId, 'campaign')
+      const campaignDeliveries = state.campaignDeliveries.filter(
+        (entry) => entry.campaignId === campaign.id,
+      )
+      if (
+        campaignDeliveries.length > 0 &&
+        campaignDeliveries.every(
+          (entry) => entry.status === 'delivered' || entry.status === 'suppressed',
+        )
+      ) {
+        campaign.status = 'sent'
+        campaign.sentAt = timestamp
+        campaign.version += 1
+      }
+      const integration = state.integrations.find((entry) => entry.kind === 'email')
+      if (integration) {
+        const failedDeliveries = state.campaignDeliveries.filter(
+          (entry) => entry.status === 'failed',
+        ).length
+        integration.status = failedDeliveries === 0 ? 'connected' : 'attention'
+        integration.detail =
+          failedDeliveries === 0
+            ? 'Cloudflare Email Service returned a provider message ID.'
+            : `${failedDeliveries} Cloudflare Email Service delivery ${failedDeliveries === 1 ? 'failure needs' : 'failures need'} review.`
+        integration.lastSeenAt = timestamp
+      }
+      appendEvent(state, context, {
+        type: status === 'delivered' ? 'campaign.delivery-succeeded' : 'campaign.delivery-failed',
+        aggregate: { type: 'campaign-delivery', id: delivery.id, version: delivery.version },
+        summary:
+          status === 'delivered'
+            ? `Delivered ${campaign.name} to ${delivery.recipientName}.`
+            : `Delivery of ${campaign.name} to ${delivery.recipientName} failed.`,
+        data: {
+          campaignId: campaign.id,
+          deliveryStatus: status,
+          attemptCount: delivery.attemptCount,
+          campaignStatus: campaign.status,
+        },
+      })
+      return { campaign, delivery }
+    }
+
+    case 'campaign.retry-deliveries': {
+      const campaign = findRequired(state.campaigns, input.campaignId, 'campaign')
+      if (campaign.status !== 'queued') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Only a queued campaign can retry provider delivery.',
+        )
+      }
+      const retryable = state.campaignDeliveries.filter(
+        (entry) =>
+          entry.campaignId === campaign.id &&
+          (entry.status === 'pending_provider' || entry.status === 'failed'),
+      )
+      if (retryable.length === 0) {
+        throw new OperationError('NO_CHANGES', 'That campaign has no retryable deliveries.')
+      }
+      for (const delivery of retryable) {
+        if (delivery.status === 'failed') {
+          delivery.status = 'pending_provider'
+          delivery.lastError = null
+          delivery.updatedAt = timestamp
+          delivery.version += 1
+        }
+      }
+      campaign.version += 1
+      appendEvent(state, context, {
+        type: 'campaign.delivery-retry-queued',
+        aggregate: { type: 'campaign', id: campaign.id, version: campaign.version },
+        summary: `Queued ${retryable.length} ${campaign.name} deliveries for provider retry.`,
+        data: {
+          campaignId: campaign.id,
+          deliveryIds: retryable.map((entry) => entry.id),
+        },
+      })
+      return { campaign, deliveries: retryable }
     }
 
     case 'change-set.create': {
@@ -4734,7 +5502,6 @@ export function executeOperation(
   try {
     assertScopes(actor, definition.scopes)
     assertRequiredInput(definition, request.input)
-    assertExpectedVersions(currentState, request.expectedVersions)
 
     if (actor.type === 'agent') {
       if (definition.agentPolicy === 'denied') {
@@ -4773,6 +5540,8 @@ export function executeOperation(
       }
     }
 
+    assertExpectedVersions(currentState, request.expectedVersions)
+
     if (operation === 'workspace.reset-demo') {
       const reset = createSeedState()
       reset.revision = currentState.revision + 1
@@ -4789,7 +5558,7 @@ export function executeOperation(
     }
 
     const working = cloneState(currentState)
-    initializeProgramCollections(working)
+    normalizeWorkspaceState(working)
     const warnings: Array<{ code: string; message: string }> = []
     let data: unknown
     let approvalRequired = false

@@ -1,7 +1,18 @@
 export { executeOperation } from './engine.ts'
-export { createAcceleventsExport } from './accelevents.ts'
+export {
+  acceleventsExportPreflight,
+  buildAcceleventsExportItems,
+  createAcceleventsExport,
+} from './accelevents.ts'
 export type { AcceleventsExport } from './accelevents.ts'
-export { calendarAttachmentForParticipation, calendarDate, calendarEscape } from './calendar.ts'
+export {
+  calendarAttachmentForParticipation,
+  calendarDate,
+  calendarEscape,
+  eventCalendar,
+  eventCalendarFilename,
+  eventCalendarInvitation,
+} from './calendar.ts'
 export type { CalendarAttachment } from './calendar.ts'
 export {
   contactConnections,
@@ -86,8 +97,10 @@ export {
   nextActions,
   readinessRows,
   readinessSummary,
+  renderCampaignMessage,
   reviewerQueue,
   scheduleConflicts,
+  schedulePublishPreflight,
   submissionAnswerByPurpose,
   submissionAnswerDisplayByPurpose,
   submissionAnswerErrors,

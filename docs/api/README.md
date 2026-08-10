@@ -138,6 +138,47 @@ Use `expectedVersions` when updating records fetched earlier. Use an idempotency
 client may retry a request. A successful write appends one or more domain events and increments the
 workspace revision atomically.
 
+`campaign.send` is intentionally named for the human intent but records a durable delivery outbox:
+it moves an approved campaign to `queued` and creates per-recipient `pending_provider` rows with the
+fully rendered message and complete calendar attachment. No provider call occurs inside the domain
+transaction. The Cloudflare host starts the checked-in Email Service consumer after commit when its
+binding and verified sender exist. It records `delivered` or `failed` through
+`campaign.record-delivery`; only terminal recipient outcomes can move the campaign to `sent`.
+`campaign.retry-deliveries` queues pending and failed frozen rows for another consumer attempt.
+
+`submission.submit` commits the proposal, assignments, and one frozen confirmation-receipt row in
+the same workspace mutation. Its public response contains only that receipt's address, content,
+reference, and truthful delivery state. `pending_provider` means prepared in the outbox, not sent.
+A trusted consumer records `delivered` or `failed` through
+`submission.record-receipt-delivery`.
+
+Multi-round review uses `review.advance-round`. The staff-scoped operation verifies that the active
+round has its minimum completed scorecards, creates the next round's assignments atomically, and
+emits `review.round-advanced`. Stable idempotency keys make retries non-duplicating. `review.decide`
+allows rejection or waitlisting after a completed active round, but acceptance requires the final
+round to exist and meet its own completion threshold unless a staff member supplies an explicit,
+reasoned override.
+
+Schedule drafting uses `schedule.place-session`, `schedule.move-session`, and
+`schedule.unplace-session`. Each accepted change is event-scoped, version-checked, audited, and
+kept out of the public program until `schedule.publish` creates the next immutable release.
+Publication also enforces the shared preflight: every active session is placed, no hard conflicts
+or duplicate placements remain, and the draft differs from the latest release.
+
+One-way program export uses `accelevents.prepare-export` to freeze the latest immutable schedule
+release into speaker and session outbox items. After commit, the Cloudflare host uses the owner-
+managed `ACCELEVENTS_API_KEY` to create or update speakers first and then related sessions through
+the official host API. The consumer records each outcome with `accelevents.record-result`, and
+`accelevents.retry-export` queues every undelivered frozen item again. Provider IDs are carried into
+later releases so known records use updates instead of duplicate creates. The core stores no API
+key and staging a packet does not claim external delivery. See the
+[Accelevents integration guide](../integrations/accelevents.md).
+
+Speaker resource editing uses `portal-resource.save`. The operation is staff-scoped, versioned,
+and idempotent. It rejects active or remote HTML content before a static card can be published. The
+speaker projection includes only published resources for that participation's event; public and
+reviewer projections receive none. See [Portal resources and public embeds](../product/portal-resources.md).
+
 ## Domain events and export
 
 | Method | Path                             | Purpose                                            |

@@ -180,6 +180,11 @@ const commandDetails: Record<
     keywords: ['event', 'timezone', 'venue'],
     section: 'Settings',
   },
+  '/resources': {
+    description: 'Publish guides and safe cards to speaker workspaces.',
+    keywords: ['portal', 'wiki', 'guides', 'embeds'],
+    section: 'Settings',
+  },
   '/changes': {
     description: 'Review proposed operational changes.',
     keywords: ['approvals', 'agent', 'audit'],

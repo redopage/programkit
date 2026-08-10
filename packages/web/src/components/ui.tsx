@@ -20,11 +20,13 @@ import { createPortal } from 'react-dom'
 
 import type {
   CampaignStatus,
+  CampaignDeliveryStatus,
   ChangeSetStatus,
   ParticipationStatus,
   PortalResourcePage,
   RequirementStatus,
   SubmissionStatus,
+  SubmissionReceiptDeliveryStatus,
 } from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -135,15 +137,18 @@ const statusLabels: Record<string, string> = {
   waived: 'Waived',
   draft: 'Draft',
   awaiting_approval: 'Awaiting approval',
+  queued: 'In outbox',
   sent: 'Sent',
+  pending_provider: 'In outbox',
+  delivered: 'Delivered',
+  failed: 'Failed',
+  suppressed: 'Skipped',
   rejected: 'Rejected',
   accepted: 'Accepted',
   in_review: 'In review',
   waitlisted: 'Waitlisted',
   committed: 'Committed',
   stale: 'Stale',
-  queued: 'Queued',
-  failed: 'Failed',
   published: 'Published',
   archived: 'Archived',
 }
@@ -156,8 +161,10 @@ export function StatusBadge({
     | ParticipationStatus
     | RequirementStatus
     | CampaignStatus
+    | CampaignDeliveryStatus
     | ChangeSetStatus
     | SubmissionStatus
+    | SubmissionReceiptDeliveryStatus
     | PortalResourcePage['status']
     | 'queued'
     | 'failed'
@@ -195,6 +202,11 @@ export function StatusBadge({
           'bg-zinc-100 text-zinc-500 ring-1 ring-zinc-950/5',
         status === 'waived' && 'bg-sky-50 text-sky-700 ring-1 ring-sky-700/10',
         status === 'sent' && 'bg-violet-50 text-violet-700 ring-1 ring-violet-700/10',
+        status === 'queued' && 'bg-sky-50 text-sky-700 ring-1 ring-sky-700/10',
+        status === 'pending_provider' && 'bg-sky-50 text-sky-700 ring-1 ring-sky-700/10',
+        status === 'delivered' && 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-700/10',
+        status === 'failed' && 'bg-rose-50 text-rose-700 ring-1 ring-rose-700/10',
+        status === 'suppressed' && 'bg-zinc-100 text-zinc-500 ring-1 ring-zinc-950/5',
       )}
     >
       {label ?? statusLabels[status] ?? status}

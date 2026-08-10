@@ -212,9 +212,31 @@ After deploying, verify:
 curl https://YOUR_HOST/api/v1/health
 curl https://YOUR_HOST/api/v1/events
 curl https://YOUR_HOST/public/agenda.json
+curl -OJ https://YOUR_HOST/public/v1/events/evt_nyc_2026/calendar.ics
 ```
 
-Then open the operator app, public CFP, reviewer workspace, speaker portal, and public program.
+Outbound email activation is a separate release-enablement step. The binding and consumer are
+checked in. Onboard the sender domain, complete its DNS verification, confirm
+`PROGRAMKIT_EMAIL_FROM` is an allowed address, deploy, and exercise one campaign containing only
+controlled smoke recipients. Until a provider message ID returns, the product intentionally reports
+the row as pending or failed rather than sent.
+
+Accelevents activation is also external to the repository. Store the owner-managed Enterprise key
+only in the Worker secret store:
+
+```bash
+pnpm --filter @programkit/app-cloudflare exec wrangler secret put ACCELEVENTS_API_KEY
+```
+
+Use a controlled Accelevents event for the first staged release and retain its provider IDs and
+ProgramKit batch evidence. Do not put the key in `.env`, `wrangler.jsonc`, screenshots, or logs.
+
+Then open the operator app, public CFP, reviewer workspace, speaker portal, and public program. In
+the speaker portal, verify an allowed file can be uploaded and downloaded only through the owning
+participant session. Open `/embed/speakers` and `/embed/itinerary` from the intended parent site and
+verify the deployed Content Security Policy allows only that framing relationship. In the
+speaker portal, confirm published resources render and a rejected HTML card cannot execute active
+content.
 
 ### Email on the official application host
 

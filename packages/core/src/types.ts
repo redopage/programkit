@@ -6,7 +6,12 @@ export type ParticipationStatus = 'prospect' | 'invited' | 'confirmed' | 'declin
 export type RequirementStatus =
   'not_started' | 'submitted' | 'revision_requested' | 'approved' | 'waived'
 
-export type CampaignStatus = 'draft' | 'awaiting_approval' | 'approved' | 'sent'
+export type CampaignStatus = 'draft' | 'awaiting_approval' | 'approved' | 'queued' | 'sent'
+export type CampaignAudience =
+  'all_active' | 'confirmed' | 'unconfirmed' | 'missing_requirements' | 'custom'
+export type CampaignDeliveryStatus = 'pending_provider' | 'delivered' | 'failed' | 'suppressed'
+export type SubmissionReceiptDeliveryStatus =
+  'pending_provider' | 'delivered' | 'failed' | 'suppressed'
 export type ChangeSetStatus =
   'draft' | 'awaiting_approval' | 'approved' | 'rejected' | 'committed' | 'stale'
 
@@ -232,6 +237,25 @@ export interface Submission {
   version: number
 }
 
+export interface SubmissionReceiptDelivery {
+  id: Id
+  submissionId: Id
+  eventId: Id
+  formId: Id
+  recipientName: string
+  recipientEmail: string
+  subject: string
+  body: string
+  status: SubmissionReceiptDeliveryStatus
+  provider: 'cloudflare_email' | null
+  providerMessageId: string | null
+  attemptCount: number
+  lastError: string | null
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
+}
+
 export interface Asset {
   id: Id
   eventId: Id
@@ -255,6 +279,23 @@ export interface AssetComment {
   body: string
   author: { type: 'participant' | 'staff'; id: Id; name: string }
   createdAt: ISODateTime
+}
+
+export type PortalResourceKind = 'guide' | 'html_embed'
+export type PortalResourceStatus = 'draft' | 'published'
+
+export interface PortalResource {
+  id: Id
+  eventId: Id
+  title: string
+  summary: string
+  kind: PortalResourceKind
+  body: string
+  embedHtml: string | null
+  status: PortalResourceStatus
+  sortOrder: number
+  updatedAt: ISODateTime
+  version: number
 }
 
 export interface Reviewer {
@@ -407,14 +448,43 @@ export interface Campaign {
   name: string
   subject: string
   body: string
-  audience: 'all_active' | 'unconfirmed' | 'missing_requirements' | 'custom'
+  audience: CampaignAudience
   recipientParticipationIds: Id[]
   includeCalendarInvite: boolean
   status: CampaignStatus
   createdAt: ISODateTime
   approvedAt: ISODateTime | null
+  queuedAt: ISODateTime | null
   sentAt: ISODateTime | null
   createdBy: string
+  version: number
+}
+
+export interface CampaignDeliveryAttachment {
+  filename: string
+  contentType: string
+  content: string
+}
+
+export interface CampaignDelivery {
+  id: Id
+  campaignId: Id
+  eventId: Id
+  participationId: Id
+  personId: Id
+  recipientName: string
+  recipientEmail: string
+  subject: string
+  body: string
+  status: CampaignDeliveryStatus
+  provider: 'cloudflare_email' | null
+  providerMessageId: string | null
+  attachmentNames: string[]
+  attachments: CampaignDeliveryAttachment[]
+  attemptCount: number
+  lastError: string | null
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
   version: number
 }
 
@@ -469,10 +539,82 @@ export interface PortalResourcePage {
 export interface Integration {
   id: Id
   name: string
-  kind: 'email' | 'webhook' | 'calendar' | 'storage' | 'api' | 'airtable'
+  kind: 'email' | 'webhook' | 'calendar' | 'storage' | 'api' | 'airtable' | 'accelevents'
   status: 'connected' | 'attention' | 'not_configured'
   detail: string
   lastSeenAt: ISODateTime | null
+}
+
+export type AcceleventsExportItemStatus = 'pending_provider' | 'delivered' | 'failed'
+export type AcceleventsExportStatus = 'pending_provider' | 'partial' | 'delivered' | 'failed'
+
+export interface AcceleventsSpeakerPayload {
+  sourceId: Id
+  externalKey: string
+  firstName: string
+  lastName: string
+  email: string
+  title: string
+  company: string
+  bio: string
+  imageUrl: string
+  moderator: boolean
+}
+
+export interface AcceleventsSessionPayload {
+  sourceId: Id
+  externalKey: string
+  title: string
+  description: string
+  startTime: string
+  endTime: string
+  location: string
+  format: 'MAIN_STAGE' | 'BREAKOUT_SESSION' | 'MEET_UP' | 'WORKSHOP' | 'EXPO' | 'BREAK' | 'OTHER'
+  status: 'VISIBLE'
+  capacity: number
+  track: string
+  speakerExternalKeys: string[]
+}
+
+export type AcceleventsExportItem =
+  | {
+      id: Id
+      resource: 'speaker'
+      sourceId: Id
+      externalKey: string
+      payload: AcceleventsSpeakerPayload
+      status: AcceleventsExportItemStatus
+      providerId: string | null
+      attemptCount: number
+      lastError: string | null
+      updatedAt: ISODateTime
+      version: number
+    }
+  | {
+      id: Id
+      resource: 'session'
+      sourceId: Id
+      externalKey: string
+      payload: AcceleventsSessionPayload
+      status: AcceleventsExportItemStatus
+      providerId: string | null
+      attemptCount: number
+      lastError: string | null
+      updatedAt: ISODateTime
+      version: number
+    }
+
+export interface AcceleventsExport {
+  id: Id
+  eventId: Id
+  eventUrl: string
+  scheduleReleaseId: Id
+  scheduleVersion: number
+  status: AcceleventsExportStatus
+  items: AcceleventsExportItem[]
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
 }
 
 export interface Actor {
@@ -552,8 +694,10 @@ export interface WorkspaceState {
   submissionForms: SubmissionForm[]
   submissionFormFields: SubmissionFormField[]
   submissions: Submission[]
+  submissionReceiptDeliveries: SubmissionReceiptDelivery[]
   assets: Asset[]
   assetComments: AssetComment[]
+  portalResources: PortalResource[]
   reviewers: Reviewer[]
   reviewerTeams: ReviewerTeam[]
   evaluationPlans: EvaluationPlan[]
@@ -566,10 +710,12 @@ export interface WorkspaceState {
   placements: Placement[]
   scheduleReleases: ScheduleRelease[]
   campaigns: Campaign[]
+  campaignDeliveries: CampaignDelivery[]
   outboundMessages?: OutboundMessage[]
   portalResourcePages: PortalResourcePage[]
   changeSets: ChangeSet[]
   integrations: Integration[]
+  acceleventsExports: AcceleventsExport[]
   domainEvents: DomainEvent[]
   recentCommandResults: StoredCommandResult[]
 }
@@ -639,6 +785,7 @@ export interface ScheduleConflict {
     | 'event_boundary'
     | 'duration_mismatch'
     | 'cancelled_session'
+    | 'duplicate_session'
   message: string
   placementIds: Id[]
 }

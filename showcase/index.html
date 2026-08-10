@@ -62,8 +62,8 @@
           <h2>The direction is right. The next phase is production depth.</h2>
           <p>
             The six firm workflow areas exist as connected product surfaces, not isolated mockups.
-            The system still needs real files, delivery providers, authentication, richer schedule
-            tooling, and the optional integrations before a live pilot should handle real data.
+            The system still needs real authentication, upload scanning, delivery-provider
+            activation, and the optional integrations before a live pilot should handle real data.
           </p>
         </div>
         <dl class="verdict-grid">
@@ -224,15 +224,22 @@
               </tr>
               <tr>
                 <td>Speaker portal</td>
-                <td><span class="status status-partial">Partial</span></td>
-                <td>Scoped profile, confirmation, due tasks, organizer review states</td>
-                <td>Real headshot/slides uploads, richer task forms, resource pages</td>
+                <td><span class="status status-working">Working</span></td>
+                <td>
+                  Scoped profile, confirmation, tasks, private R2 files, guides, sandboxed cards
+                </td>
+                <td>Upload scanning, revision conversations, release documents</td>
               </tr>
               <tr>
                 <td>Communications</td>
                 <td><span class="status status-partial">Partial</span></td>
-                <td>Audience preview, approval, frozen recipients, idempotent demo transition</td>
-                <td>Email provider, calendar files, reminders, delivery history and failures</td>
+                <td>
+                  Templates, frozen personalized outbox, provider results, submission receipts,
+                  calendar files
+                </td>
+                <td>
+                  Verified sender and provider consumer, test sends, scheduling, retry controls
+                </td>
               </tr>
               <tr>
                 <td>Evaluation and scoring</td>
@@ -244,12 +251,14 @@
               </tr>
               <tr>
                 <td>Scheduling</td>
-                <td><span class="status status-partial">Partial</span></td>
+                <td><span class="status status-working">Working</span></td>
                 <td>
-                  Drag-and-drop, precise move form, conflict previews, room/list views, immutable
-                  publish
+                  Unscheduled tray, place/move forms, drag-and-drop, undo, filters, complete
+                  preflight, immutable publish
                 </td>
-                <td>Unscheduled tray, undo, day/track filters and fuller publish preflight</td>
+                <td>
+                  Time-block templates, buffer constraints, track locking, richer draft history
+                </td>
               </tr>
               <tr>
                 <td>Readiness dashboard</td>
@@ -259,15 +268,20 @@
               </tr>
               <tr>
                 <td>Accelevents</td>
-                <td><span class="status status-missing">Not built</span></td>
-                <td>Stable export and API are suitable foundations</td>
-                <td>Native one-way adapter, mapping, cursor, retries, operator status</td>
+                <td><span class="status status-partial">Partial</span></td>
+                <td>
+                  Published-release mapping, stable keys, frozen item outbox, retry/result evidence,
+                  operator status
+                </td>
+                <td>Owner API key, credentialed consumer, provider-confirmed smoke test</td>
               </tr>
               <tr>
                 <td>Portal resources and embeds</td>
-                <td><span class="status status-missing">Not built</span></td>
-                <td>Public agenda route and published read model exist</td>
-                <td>Wiki/resources, HTML embeds, speaker gallery, itinerary widget</td>
+                <td><span class="status status-working">Working</span></td>
+                <td>
+                  Versioned resources, restricted HTML sandbox, mobile gallery, local itinerary
+                </td>
+                <td>Host-site theme controls and deployed CSP/frame smoke test</td>
               </tr>
               <tr>
                 <td>Cloudflare deployment</td>
@@ -367,12 +381,13 @@
 
           <article class="evidence-block">
             <div class="evidence-copy">
-              <span class="status status-partial">Partial</span>
+              <span class="status status-working">Working</span>
               <h3>Give accepted speakers one clear workspace.</h3>
               <p>
                 The portal is correctly scoped and supports confirmation, public profile editing,
-                requirement submission, and progress. R2-backed uploads and resource/wiki content
-                are the main missing pieces.
+                typed and form requirements, private R2-backed uploads and downloads, progress,
+                published guides, and sandboxed static HTML cards. Upload scanning, revision
+                conversations, and release documents remain as production-depth work.
               </p>
               <a href="http://localhost:4173/portal/par_003">Open speaker portal</a>
             </div>
@@ -413,12 +428,14 @@
 
           <article class="evidence-block">
             <div class="evidence-copy">
-              <span class="status status-partial">Partial</span>
+              <span class="status status-working">Working</span>
               <h3>Keep the draft separate from the published program.</h3>
               <p>
                 A conflicting room move was accepted into the draft and immediately blocked
                 publication with a plain-language explanation. After resolution, publishing created
-                a new immutable release. Drag and drop and alternate views remain to build.
+                a new immutable release. The studio now includes an unscheduled tray, safe undo,
+                day/room/track filters, accessible drag-and-drop, precise place/move forms, and a
+                complete draft-versus-published preflight.
               </p>
               <a href="http://localhost:4173/schedule">Open schedule studio</a>
             </div>
@@ -434,16 +451,17 @@
             </div>
           </article>
 
-          <article class="evidence-block evidence-gap">
+          <article class="evidence-block">
             <div class="evidence-copy">
-              <span class="status status-missing">Gap</span>
-              <h3>Event settings, resources, and embeds need their own slice.</h3>
+              <span class="status status-working">Working</span>
+              <h3>Reuse the published program without exposing the workspace.</h3>
               <p>
-                The domain seed proves event configuration and the public agenda route proves a
-                publishable read model, but the brief’s admin settings screen, portal resources,
-                HTML embeds, speaker gallery, and itinerary widget do not yet exist as product
-                flows.
+                Organizers publish versioned portal guides and static HTML cards through a narrow
+                safe contract. The mobile speaker gallery and itinerary use the immutable public
+                release; itinerary choices stay on the attendee’s device. The final host still needs
+                a real Content Security Policy and framing smoke test.
               </p>
+              <a href="http://localhost:4173/resources">Open speaker resources</a>
             </div>
             <div class="comparison-grid comparison-grid-three">
               <figure>
@@ -527,20 +545,18 @@
             <p class="eyebrow">Recommended next milestone</p>
             <h2>Make one pilot trustworthy.</h2>
             <p>
-              Finish identity, one R2 asset pipeline, submission confirmation plus accepted-speaker
-              reminders, and the unscheduled schedule tray before broadening the product. Then add
-              Airtable reconciliation and Accelevents as explicit adapters around the stable core.
+              Finish identity, upload scanning, and provider activation before broadening the
+              product. Then add Airtable reconciliation and Accelevents as explicit adapters around
+              the stable core.
             </p>
           </div>
           <ol>
             <li>Real organizer, reviewer, and participant authentication</li>
-            <li>Private R2 uploads for headshots, slides, videos, and supporting files</li>
-            <li>
-              Transactional outbox with Cloudflare Email Service or Resend and calendar attachments
-            </li>
-            <li>Unscheduled tray, accessible drag and drop, undo, and schedule view controls</li>
+            <li>Authenticated private uploads with scanning, retention, and lifecycle controls</li>
+            <li>Provider activation plus retry controls for the existing communication outboxes</li>
+            <li>Activate the Accelevents consumer with Andrew's owner-managed API key</li>
+            <li>Verify public embed framing and CSP on Andrew's final host</li>
             <li>Airtable base template, webhook/poll adapter, and reconciliation queue</li>
-            <li>Accelevents export, portal resources, speaker gallery, and embed package</li>
           </ol>
         </div>
       </section>

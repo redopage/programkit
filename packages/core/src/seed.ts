@@ -1,11 +1,15 @@
+import { eventCalendarInvitation } from './calendar.ts'
 import type {
   Asset,
   Campaign,
+  CampaignDelivery,
+  Event,
   EvaluationPlan,
   Integration,
   Participation,
   Person,
   Placement,
+  PortalResource,
   ReviewDecision,
   Reviewer,
   ReviewerAssignment,
@@ -19,12 +23,33 @@ import type {
   Submission,
   SubmissionForm,
   SubmissionFormField,
+  SubmissionReceiptDelivery,
   Track,
   WorkspaceState,
+  Workspace,
 } from './types.ts'
 
 const seededAt = '2026-08-07T14:00:00.000Z'
 const eventId = 'evt_nyc_2026'
+const seededWorkspace: Workspace = {
+  id: 'wrk_aie',
+  name: 'AIE Program Team',
+  slug: 'aie',
+  timezone: 'America/New_York',
+}
+const seededEvent: Event = {
+  id: eventId,
+  name: 'AIE NYC 2026',
+  slug: 'aie-nyc-2026',
+  venue: 'Brooklyn Navy Yard',
+  city: 'Brooklyn, New York',
+  startsAt: '2026-10-04T13:00:00.000Z',
+  endsAt: '2026-10-05T22:00:00.000Z',
+  timezone: 'America/New_York',
+  status: 'active',
+  publishedScheduleVersion: 3,
+  version: 1,
+}
 
 const peopleInput = [
   ['Robin', 'Sloan', 'robin@axiom.dev', 'Axiom', 'Founder', 'Austin, TX', 'America/Chicago'],
@@ -383,7 +408,7 @@ const submissionFormFields: SubmissionFormField[] = [
     formId: 'frm_cfp_2026',
     key: 'email',
     label: 'Email',
-    description: 'We will use this address for proposal and speaker updates.',
+    description: 'We use this to identify your submission in our records.',
     kind: 'email',
     purpose: 'email',
     required: true,
@@ -786,6 +811,36 @@ const submissions: Submission[] = [
   },
 ]
 
+const submissionReceiptDeliveries: SubmissionReceiptDelivery[] = [
+  {
+    id: 'rcp_001',
+    submissionId: 'sub_005',
+    eventId,
+    formId: 'frm_cfp_2026',
+    recipientName: 'Priya Raman',
+    recipientEmail: 'priya@craftwork.dev',
+    subject: 'We received your proposal for AIE NYC 2026',
+    body: [
+      'Hi Priya,',
+      '',
+      'We received “Designing the human handoff” for AIE NYC 2026.',
+      'Your proposal is in. The program team will contact you after committee review.',
+      '',
+      'Reference: sub_005',
+      '',
+      'Keep this reference if you need to follow up with the program team.',
+    ].join('\n'),
+    status: 'pending_provider',
+    provider: null,
+    providerMessageId: null,
+    attemptCount: 0,
+    lastError: null,
+    createdAt: '2026-08-07T12:10:00.000Z',
+    updatedAt: '2026-08-07T12:10:00.000Z',
+    version: 1,
+  },
+]
+
 const assets: Asset[] = [
   {
     id: 'ast_001',
@@ -808,6 +863,36 @@ const assets: Asset[] = [
     sizeBytes: 2_842_000,
     storageKey: 'demo/submissions/sub_002/agent-reliability-case-study.pdf',
     createdAt: '2026-08-01T18:40:00.000Z',
+  },
+]
+
+const portalResources: PortalResource[] = [
+  {
+    id: 'por_speaker_guide',
+    eventId,
+    title: 'Speaker guide',
+    summary: 'Arrival, green room, and production notes for your event days.',
+    kind: 'guide',
+    body: 'Arrival\nCheck in at Building 77 at least 45 minutes before your first session. Bring a photo ID for the venue desk.\n\nGreen room\nThe speaker green room is on the third floor. Program staff can review slides, microphones, and accessibility needs with you there.\n\nOn stage\nA confidence monitor, presentation remote, and water will be ready. Please keep the final five minutes open for audience questions.',
+    embedHtml: null,
+    status: 'published',
+    sortOrder: 10,
+    updatedAt: '2026-08-07T14:00:00.000Z',
+    version: 1,
+  },
+  {
+    id: 'por_venue_card',
+    eventId,
+    title: 'Venue quick card',
+    summary: 'A safe embedded briefing you can keep open on arrival.',
+    kind: 'html_embed',
+    body: '',
+    embedHtml:
+      '<article><h2>Brooklyn Navy Yard</h2><p>Building 77, first-floor check-in.</p><ul><li>Doors open at 8:00 AM.</li><li>Bring a photo ID.</li><li>Ask for the AIE speaker desk.</li></ul></article>',
+    status: 'published',
+    sortOrder: 20,
+    updatedAt: '2026-08-07T14:00:00.000Z',
+    version: 1,
   },
 ]
 
@@ -870,6 +955,13 @@ const evaluationPlans: EvaluationPlan[] = [
         order: 1,
         opensAt: '2026-07-15T04:00:00.000Z',
         closesAt: '2026-08-12T03:59:00.000Z',
+        reviewersPerSubmission: 2,
+        minimumCompletedReviews: 2,
+      },
+      {
+        id: 'rnd_finalist_review',
+        name: 'Finalist review',
+        order: 2,
         reviewersPerSubmission: 2,
         minimumCompletedReviews: 2,
       },
@@ -1087,6 +1179,16 @@ const sessionInputs = [
     340,
     'The threads that ran through both days, and the open problems worth carrying into next year.',
   ],
+  [
+    'ses_011',
+    'Ask me anything: operating trustworthy AI',
+    'panel',
+    'trk_operate',
+    [12, 14],
+    45,
+    130,
+    'A candid closing conversation about the operational decisions teams still disagree on.',
+  ],
 ] as const
 
 const sessionRecords: Session[] = sessionInputs.map((session) => ({
@@ -1196,10 +1298,11 @@ const campaigns: Campaign[] = [
     recipientParticipationIds: participations
       .filter((participation) => participation.status === 'invited')
       .map((participation) => participation.id),
-    includeCalendarInvite: false,
+    includeCalendarInvite: true,
     status: 'awaiting_approval',
     createdAt: seededAt,
     approvedAt: null,
+    queuedAt: null,
     sentAt: null,
     createdBy: 'Alex Morgan',
     version: 1,
@@ -1209,18 +1312,66 @@ const campaigns: Campaign[] = [
     eventId,
     name: 'Welcome confirmed speakers',
     subject: 'Your AIE NYC speaker workspace is ready',
-    body: 'Hi {{first_name}},\n\nYour speaker workspace is ready. Start with your profile and recording release.',
+    body: 'Hi {{first_name}},\n\nWe’re delighted to confirm you as a speaker at {{event_name}}. Your speaker workspace is ready for your bio, headshot, and session materials.\n\nThe event is {{event_date}} at {{event_venue}}. We’ve included a calendar invite.\n\nOpen your workspace: {{portal_url}}\n\nThank you,\nThe program team',
     audience: 'custom',
     recipientParticipationIds: participations.slice(0, 6).map((participation) => participation.id),
-    includeCalendarInvite: false,
+    includeCalendarInvite: true,
     status: 'sent',
     createdAt: '2026-07-21T15:00:00.000Z',
     approvedAt: '2026-07-21T15:30:00.000Z',
-    sentAt: '2026-07-21T16:00:00.000Z',
+    queuedAt: '2026-07-21T16:00:00.000Z',
+    sentAt: null,
     createdBy: 'Alex Morgan',
     version: 3,
   },
 ]
+
+const campaignDeliveries: CampaignDelivery[] = campaigns[1].recipientParticipationIds.flatMap(
+  (participationId, index) => {
+    const participation = participations.find((entry) => entry.id === participationId)
+    const person = people.find((entry) => entry.id === participation?.personId)
+    if (!participation || !person) return []
+    return [
+      {
+        id: `dlv_welcome_${String(index + 1).padStart(2, '0')}`,
+        campaignId: campaigns[1].id,
+        eventId,
+        participationId,
+        personId: person.id,
+        recipientName: `${person.firstName} ${person.lastName}`,
+        recipientEmail: person.email,
+        subject: campaigns[1].subject,
+        body: campaigns[1].body
+          .replaceAll('{{first_name}}', person.firstName)
+          .replaceAll('{{event_name}}', 'AIE NYC 2026')
+          .replaceAll('{{event_date}}', 'October 4, 2026')
+          .replaceAll('{{event_venue}}', 'Brooklyn Navy Yard, Brooklyn, New York')
+          .replaceAll('{{portal_url}}', `/portal/${participationId}`),
+        status: 'pending_provider' as const,
+        provider: null,
+        providerMessageId: null,
+        attachmentNames: ['aie-nyc-2026-invite.ics'],
+        attachments: [
+          {
+            filename: 'aie-nyc-2026-invite.ics',
+            contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+            content: eventCalendarInvitation(
+              seededWorkspace,
+              seededEvent,
+              person.email,
+              '2026-07-21T16:00:00.000Z',
+            ),
+          },
+        ],
+        attemptCount: 0,
+        lastError: null,
+        createdAt: '2026-07-21T16:00:00.000Z',
+        updatedAt: '2026-07-21T16:00:00.000Z',
+        version: 1,
+      },
+    ]
+  },
+)
 
 const integrations: Integration[] = [
   {
@@ -1228,7 +1379,8 @@ const integrations: Integration[] = [
     name: 'Transactional email',
     kind: 'email',
     status: 'not_configured',
-    detail: 'Demo campaign state only. Add Cloudflare Email Service before real delivery.',
+    detail:
+      'The durable outbox is ready. Cloudflare Email Service awaits sender-domain verification.',
     lastSeenAt: null,
   },
   {
@@ -1243,16 +1395,17 @@ const integrations: Integration[] = [
     id: 'int_calendar',
     name: 'Calendar sync',
     kind: 'calendar',
-    status: 'not_configured',
-    detail: 'Calendar export and availability sync are not configured.',
-    lastSeenAt: null,
+    status: 'connected',
+    detail: 'RFC 5545 event invites are available for campaign attachments and direct download.',
+    lastSeenAt: seededAt,
   },
   {
     id: 'int_storage',
     name: 'Asset storage',
     kind: 'storage',
-    status: 'not_configured',
-    detail: 'Using demo file metadata. Connect object storage before production.',
+    status: 'attention',
+    detail:
+      'Private R2 upload and download are wired; create the production bucket before release.',
     lastSeenAt: null,
   },
   {
@@ -1261,6 +1414,15 @@ const integrations: Integration[] = [
     kind: 'airtable',
     status: 'not_configured',
     detail: 'Optional OAuth, schema, persistence, and webhook testing with scoped credentials.',
+    lastSeenAt: null,
+  },
+  {
+    id: 'int_accelevents',
+    name: 'Accelevents program export',
+    kind: 'accelevents',
+    status: 'not_configured',
+    detail:
+      'The versioned export outbox is ready; an enterprise API key and target event URL are not connected.',
     lastSeenAt: null,
   },
   {
@@ -1277,28 +1439,9 @@ export function createSeedState(): WorkspaceState {
   return {
     schemaVersion: 14,
     revision: 1,
-    workspace: {
-      id: 'wrk_aie',
-      name: 'AIE Program Team',
-      slug: 'aie',
-      timezone: 'America/New_York',
-    },
+    workspace: structuredClone(seededWorkspace),
     activeEventId: eventId,
-    events: [
-      {
-        id: eventId,
-        name: 'AIE NYC 2026',
-        slug: 'aie-nyc-2026',
-        venue: 'Brooklyn Navy Yard',
-        city: 'Brooklyn, New York',
-        startsAt: '2026-10-04T13:00:00.000Z',
-        endsAt: '2026-10-05T22:00:00.000Z',
-        timezone: 'America/New_York',
-        status: 'active',
-        publishedScheduleVersion: 3,
-        version: 1,
-      },
-    ],
+    events: [structuredClone(seededEvent)],
     people: structuredClone(people),
     contactNotes: [],
     crmSegments: [],
@@ -1309,6 +1452,7 @@ export function createSeedState(): WorkspaceState {
     submissionForms: structuredClone(submissionForms),
     submissionFormFields: structuredClone(submissionFormFields),
     submissions: structuredClone(submissions),
+    submissionReceiptDeliveries: structuredClone(submissionReceiptDeliveries),
     assets: structuredClone(assets),
     assetComments: [],
     reviewers: structuredClone(reviewers),
@@ -1323,7 +1467,9 @@ export function createSeedState(): WorkspaceState {
     placements: structuredClone(placements),
     scheduleReleases: [structuredClone(initialScheduleRelease)],
     campaigns: structuredClone(campaigns),
+    campaignDeliveries: structuredClone(campaignDeliveries),
     outboundMessages: [],
+    portalResources: structuredClone(portalResources),
     portalResourcePages: structuredClone(portalResourcePages),
     changeSets: [
       {
@@ -1360,6 +1506,7 @@ export function createSeedState(): WorkspaceState {
       },
     ],
     integrations: structuredClone(integrations),
+    acceleventsExports: [],
     domainEvents: [
       {
         id: 'dev_001',
@@ -1471,8 +1618,10 @@ export function createEmptyWorkspaceState({
     submissionForms: [],
     submissionFormFields: [],
     submissions: [],
+    submissionReceiptDeliveries: [],
     assets: [],
     assetComments: [],
+    portalResources: [],
     reviewers: [],
     reviewerTeams: [],
     evaluationPlans: [],
@@ -1485,10 +1634,12 @@ export function createEmptyWorkspaceState({
     placements: [],
     scheduleReleases: [],
     campaigns: [],
+    campaignDeliveries: [],
     outboundMessages: [],
     portalResourcePages: [],
     changeSets: [],
     integrations: structuredClone(template.integrations),
+    acceleventsExports: [],
     domainEvents: [
       {
         id: `dev_${eventId.replace(/^evt_/u, '')}_created`,

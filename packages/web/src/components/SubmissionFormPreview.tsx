@@ -53,13 +53,7 @@ export function SubmissionFormPreview({
 
   return (
     <div className="@container/form-preview flex min-w-0 flex-col gap-4">
-      <div className="flex flex-col gap-3 @2xl/form-preview:flex-row @2xl/form-preview:items-center @2xl/form-preview:justify-between">
-        <div className="min-w-0">
-          <p className="text-base font-medium text-zinc-950 sm:text-sm">Interactive draft</p>
-          <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-            Unsaved copy and conditional questions are included in this preview.
-          </p>
-        </div>
+      <div className="flex">
         <div
           className="inline-flex w-fit shrink-0 rounded-full bg-zinc-100 p-1 ring-1 ring-zinc-950/5"
           role="group"
@@ -214,7 +208,8 @@ export function SubmissionFormPreview({
 
               <div className="flex flex-col gap-3 border-t border-zinc-950/5 pt-5 @2xl/form-preview:flex-row @2xl/form-preview:items-center @2xl/form-preview:justify-between">
                 <p className="max-w-[42ch] text-pretty text-base text-zinc-500 sm:text-sm">
-                  Accepted speakers receive a portal for profile updates and materials.
+                  The details you share become part of your proposal and, if it's accepted, your
+                  speaker record.
                 </p>
                 <div
                   aria-hidden="true"

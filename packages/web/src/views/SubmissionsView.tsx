@@ -24,6 +24,7 @@ import { useWorkspace } from '../lib/workspace.tsx'
 import { publicSubmissionPath } from '../lib/public-links.ts'
 import {
   Button,
+  Callout,
   Dialog,
   Drawer,
   EmptyState,
@@ -341,21 +342,46 @@ function SubmissionDrawer({
   if (!payload || !submission) return null
 
   const { state } = payload
+  const receiptDelivery = state.submissionReceiptDeliveries.find(
+    (entry) => entry.submissionId === submission.id,
+  )
+  const receiptRows: Array<[string, string]> = receiptDelivery
+    ? [
+        ['Recipient', receiptDelivery.recipientEmail || 'No deliverable email'],
+        ['Subject', receiptDelivery.subject],
+        ['Attempts', String(receiptDelivery.attemptCount)],
+        ...(receiptDelivery.provider
+          ? ([['Provider', sentenceCase(receiptDelivery.provider)]] as Array<[string, string]>)
+          : []),
+        ...(receiptDelivery.providerMessageId
+          ? ([['Provider reference', receiptDelivery.providerMessageId]] as Array<[string, string]>)
+          : []),
+      ]
+    : []
   const title = answerText(submissionAnswerByPurpose(state, submission, 'proposal_title'))
   const review = submissionReviewSummary(state, submission.id)
-  const assignments = state.reviewerAssignments.filter(
+  const submissionAssignments = state.reviewerAssignments.filter(
     (entry) => entry.submissionId === submission.id && entry.status !== 'recused',
   )
-  const assignmentIds = new Set(assignments.map((entry) => entry.id))
-  const scorecards = state.scorecards.filter((entry) => assignmentIds.has(entry.assignmentId))
   const plan = state.evaluationPlans.find(
     (entry) =>
-      entry.id ===
-      state.reviewerAssignments.find((a) => a.submissionId === submission.id)?.evaluationPlanId,
+      entry.formId === submission.formId && entry.submissionKinds.includes(submission.kind),
+  )
+  const rounds = [...(plan?.rounds ?? [])].sort((left, right) => left.order - right.order)
+  const assignedRoundIds = new Set(submissionAssignments.map((entry) => entry.roundId))
+  const currentRound = [...rounds].reverse().find((round) => assignedRoundIds.has(round.id))
+  const finalRound = rounds.at(-1)
+  const currentAssignmentIds = new Set(
+    submissionAssignments
+      .filter((entry) => !currentRound || entry.roundId === currentRound.id)
+      .map((entry) => entry.id),
+  )
+  const scorecards = state.scorecards.filter((entry) =>
+    currentAssignmentIds.has(entry.assignmentId),
   )
   const numericCriteria = [
     ...new Map(
-      assignments
+      submissionAssignments
         .flatMap((assignment) => evaluationRoundCriteria(plan, assignment.roundId))
         .filter((criterion) => evaluationCriterionKind(criterion) === 'numeric')
         .map((criterion) => [criterion.id, criterion]),
@@ -369,6 +395,8 @@ function SubmissionDrawer({
       submission.status === 'in_review' ||
       submission.status === 'rejected' ||
       submission.status === 'waitlisted')
+  const canResolve = canDecide
+  const canAccept = canDecide
   const hasDecision =
     submission.status === 'accepted' ||
     submission.status === 'rejected' ||
@@ -388,7 +416,7 @@ function SubmissionDrawer({
         decision,
         reason:
           decision === 'accepted'
-            ? 'Selected for the program after committee review.'
+            ? 'Selected for the program after review.'
             : decision === 'waitlisted'
               ? 'Held for a later program decision.'
               : 'Not selected for this program edition.',
@@ -548,6 +576,59 @@ function SubmissionDrawer({
           </div>
         </section>
 
+        {receiptDelivery ? (
+          <section
+            aria-labelledby="submission-receipt-heading"
+            className="border-t border-zinc-950/5 pt-6"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <h3
+                id="submission-receipt-heading"
+                className="text-base font-medium text-zinc-950 sm:text-sm"
+              >
+                Submission receipt
+              </h3>
+              <StatusBadge status={receiptDelivery.status} />
+            </div>
+            <p className="pt-1 text-pretty text-base text-zinc-500 sm:text-sm">
+              {receiptDelivery.status === 'pending_provider'
+                ? 'Prepared and frozen in the outbox when the proposal was submitted. It has not been delivered.'
+                : receiptDelivery.status === 'delivered'
+                  ? 'The email provider confirmed delivery of this receipt.'
+                  : receiptDelivery.status === 'failed'
+                    ? 'The provider returned a failure. A retry reuses this same frozen receipt rather than creating a second one.'
+                    : 'Skipped: the submission had no deliverable address, so no receipt will be sent.'}
+            </p>
+            <dl className="divide-y divide-zinc-950/5 pt-3">
+              {receiptRows.map(([term, detail]) => (
+                <div
+                  key={term}
+                  className="grid gap-1 py-2.5 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4"
+                >
+                  <dt className="text-base font-medium text-zinc-950 sm:text-sm">{term}</dt>
+                  <dd className="break-words text-base text-zinc-500 sm:text-sm">{detail}</dd>
+                </div>
+              ))}
+            </dl>
+            {receiptDelivery.status === 'pending_provider' ? (
+              <div className="pt-3">
+                <Callout tone="info" title="Delivery is gated">
+                  Nothing leaves until an email provider is connected and the sending domain is
+                  verified. Both are required. Until then the submitter relies on the reference
+                  shown on their confirmation.
+                </Callout>
+              </div>
+            ) : null}
+            {receiptDelivery.lastError ? (
+              <div className="pt-3">
+                <Callout tone="danger" title="Last provider error">
+                  {receiptDelivery.lastError}
+                </Callout>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         <section
           aria-labelledby="submission-participants-heading"
           className="border-t border-zinc-950/5 pt-6"
@@ -591,17 +672,17 @@ function SubmissionDrawer({
                 id="review-summary-heading"
                 className="text-base font-medium text-zinc-950 sm:text-sm"
               >
-                Committee review
+                {currentRound?.name ?? 'Review'}
               </h3>
-              <p className="text-base text-zinc-500 sm:text-sm">
-                {review.completed} of {review.assigned} assignments complete.
+              <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                Across all rounds · {review.completed} of {review.assigned} assignments complete.
               </p>
             </div>
             <div className="text-right">
               <p className="text-3xl font-semibold tracking-tight tabular-nums text-zinc-950">
                 {review.averageScore?.toFixed(1) ?? '—'}
               </p>
-              <p className="text-sm text-zinc-500">out of 5</p>
+              <p className="text-sm text-zinc-500">out of 5, all rounds</p>
             </div>
           </div>
           {plan ? (
@@ -650,22 +731,40 @@ function SubmissionDrawer({
               </p>
             </div>
           ) : null}
+          {canResolve && !canAccept && finalRound ? (
+            <div className="mt-5 rounded-lg bg-blue-50 p-3 text-blue-800 ring-1 ring-blue-800/10">
+              <p className="text-pretty text-base sm:text-sm">
+                {currentRound?.name ?? 'This round'} is complete, but acceptance is decided in{' '}
+                {finalRound.name}. Advance the proposal from the Review workspace first. Decline and
+                Waitlist stay available now.
+              </p>
+            </div>
+          ) : null}
+          {decisionReady && !canResolve ? (
+            <p className="mt-5 text-pretty text-base text-zinc-500 sm:text-sm">
+              {submission.status === 'draft'
+                ? 'This proposal has not been submitted yet, so there is nothing to decide.'
+                : `A decision is already recorded (${sentenceCase(submission.status).toLowerCase()}), so the review actions are closed.`}
+            </p>
+          ) : null}
           {scorecards.length > 0 ? (
-            <ul role="list" className="divide-y divide-zinc-950/5 pt-5">
-              {scorecards.map((scorecard) => (
-                <li key={scorecard.id} className="py-3">
-                  <div className="flex items-center justify-between gap-3">
+            <>
+              <p className="pt-5 text-base font-medium text-zinc-950 sm:text-sm">
+                Reviewer feedback from {currentRound?.name ?? 'this round'}
+              </p>
+              <ul role="list" className="divide-y divide-zinc-950/5 pt-1">
+                {scorecards.map((scorecard) => (
+                  <li key={scorecard.id} className="py-3">
                     <p className="text-base font-medium text-zinc-950 sm:text-sm">
                       {sentenceCase(scorecard.recommendation)}
                     </p>
-                    <p className="text-sm text-zinc-500">Reviewer feedback</p>
-                  </div>
-                  <p className="pt-1 text-pretty text-base text-zinc-600 sm:text-sm">
-                    {scorecard.comments}
-                  </p>
-                </li>
-              ))}
-            </ul>
+                    <p className="pt-1 text-pretty text-base text-zinc-600 sm:text-sm">
+                      {scorecard.comments}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : null}
         </section>
       </div>

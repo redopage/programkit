@@ -210,15 +210,27 @@ export function submissionReviewSummary(
   state: WorkspaceState,
   submissionId: string,
 ): SubmissionReviewSummary {
-  const assignments = (state.reviewerAssignments ?? []).filter(
+  const allAssignments = (state.reviewerAssignments ?? []).filter(
     (entry) => entry.submissionId === submissionId && entry.status !== 'recused',
   )
+  const submission = (state.submissions ?? []).find((entry) => entry.id === submissionId)
+  const plan = (state.evaluationPlans ?? []).find(
+    (entry) =>
+      entry.id === allAssignments[0]?.evaluationPlanId ||
+      (submission !== undefined &&
+        entry.formId === submission.formId &&
+        entry.submissionKinds.includes(submission.kind)),
+  )
+  const assignedRoundIds = new Set(allAssignments.map((entry) => entry.roundId))
+  const activeRound = [...(plan?.rounds ?? [])]
+    .sort((left, right) => right.order - left.order)
+    .find((round) => assignedRoundIds.has(round.id))
+  const assignments = activeRound
+    ? allAssignments.filter((entry) => entry.roundId === activeRound.id)
+    : allAssignments
   const assignmentIds = new Set(assignments.map((entry) => entry.id))
   const scorecards = (state.scorecards ?? []).filter((entry) =>
     assignmentIds.has(entry.assignmentId),
-  )
-  const plan = (state.evaluationPlans ?? []).find(
-    (entry) => entry.id === assignments[0]?.evaluationPlanId,
   )
   const criteria = [
     ...new Map(
@@ -407,6 +419,23 @@ export function scheduleConflicts(state: WorkspaceState): ScheduleConflict[] {
   const placements = state.placements.filter(
     (placement) => placement.eventId === state.activeEventId,
   )
+  const firstPlacementBySession = new Map<string, (typeof placements)[number]>()
+
+  for (const placement of placements) {
+    const firstPlacement = firstPlacementBySession.get(placement.sessionId)
+    if (firstPlacement) {
+      const session = state.sessions.find((entry) => entry.id === placement.sessionId)
+      conflicts.push({
+        id: `duplicate-${firstPlacement.id}-${placement.id}`,
+        severity: 'error',
+        type: 'duplicate_session',
+        message: `${session?.title ?? 'A session'} appears more than once in the draft schedule.`,
+        placementIds: [firstPlacement.id, placement.id],
+      })
+    } else {
+      firstPlacementBySession.set(placement.sessionId, placement)
+    }
+  }
 
   for (let index = 0; index < placements.length; index += 1) {
     const left = placements[index]
@@ -552,6 +581,64 @@ export function scheduleConflicts(state: WorkspaceState): ScheduleConflict[] {
   return conflicts
 }
 
+export function schedulePublishPreflight(state: WorkspaceState) {
+  const event = activeEvent(state)
+  const sessions = state.sessions.filter(
+    (session) => session.eventId === event.id && session.status !== 'cancelled',
+  )
+  const placements = state.placements.filter((placement) => placement.eventId === event.id)
+  const placedSessionIds = new Set(placements.map((placement) => placement.sessionId))
+  const unscheduledSessions = sessions.filter((session) => !placedSessionIds.has(session.id))
+  const conflicts = scheduleConflicts(state)
+  const hardConflicts = conflicts.filter((conflict) => conflict.severity === 'error')
+  const warnings = conflicts.filter((conflict) => conflict.severity === 'warning')
+  const latestRelease = (state.scheduleReleases ?? [])
+    .filter((release) => release.eventId === event.id)
+    .sort((left, right) => right.version - left.version)[0]
+  const publishedBySession = new Map(
+    (latestRelease?.placements ?? []).map((placement) => [placement.sessionId, placement]),
+  )
+  const draftBySession = new Map(placements.map((placement) => [placement.sessionId, placement]))
+  const addedSessionIds = placements
+    .filter((placement) => !publishedBySession.has(placement.sessionId))
+    .map((placement) => placement.sessionId)
+  const movedSessionIds = placements
+    .filter((placement) => {
+      const published = publishedBySession.get(placement.sessionId)
+      return (
+        published &&
+        (published.roomId !== placement.roomId ||
+          published.startsAt !== placement.startsAt ||
+          published.endsAt !== placement.endsAt)
+      )
+    })
+    .map((placement) => placement.sessionId)
+  const removedSessionIds = [...publishedBySession.keys()].filter(
+    (sessionId) => !draftBySession.has(sessionId),
+  )
+  const changeCount = addedSessionIds.length + movedSessionIds.length + removedSessionIds.length
+
+  return {
+    eventId: event.id,
+    latestPublishedVersion: latestRelease?.version ?? null,
+    sessionCount: sessions.length,
+    placementCount: placements.length,
+    unscheduledSessions,
+    conflicts,
+    hardConflicts,
+    warnings,
+    addedSessionIds,
+    movedSessionIds,
+    removedSessionIds,
+    changeCount,
+    canPublish:
+      placements.length > 0 &&
+      unscheduledSessions.length === 0 &&
+      hardConflicts.length === 0 &&
+      changeCount > 0,
+  }
+}
+
 export function audienceForCampaign(state: WorkspaceState, campaign: Campaign) {
   const rows = readinessRows(state)
   const active = state.participations.filter(
@@ -563,6 +650,10 @@ export function audienceForCampaign(state: WorkspaceState, campaign: Campaign) {
   )
 
   if (campaign.audience === 'all_active') return active.map((participation) => participation.id)
+  if (campaign.audience === 'confirmed')
+    return active
+      .filter((participation) => participation.status === 'confirmed')
+      .map((participation) => participation.id)
   if (campaign.audience === 'unconfirmed')
     return active
       .filter((participation) => participation.status === 'invited')
@@ -609,9 +700,17 @@ export function campaignPreview(
     full_name: `${person.firstName} ${person.lastName}`,
     company: person.company,
     event_name: event.name,
+    event_date: new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: event.timezone,
+    }).format(new Date(event.startsAt)),
+    event_venue: [event.venue, event.city].filter(Boolean).join(', '),
     session: sessions.join(', ') || 'your session',
     outstanding_tasks: outstandingTasks.join('\n') || 'No outstanding tasks',
     portal_link: `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}?event=${encodeURIComponent(event.id)}`,
+    portal_url: `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}?event=${encodeURIComponent(event.id)}`,
   }
   const render = (value: string) =>
     Object.entries(replacements).reduce(
@@ -625,6 +724,25 @@ export function campaignPreview(
     recipientEmail: person.email,
     subject: render(template.subject),
     body: render(template.body),
+  }
+}
+
+export function renderCampaignMessage(
+  state: WorkspaceState,
+  campaign: Campaign,
+  participationId: string,
+) {
+  const preview = campaignPreview(state, campaign, participationId)
+  const participation = state.participations.find((entry) => entry.id === participationId)
+  const person = participation
+    ? state.people.find((entry) => entry.id === participation.personId)
+    : undefined
+  if (!preview || !participation || !person) return null
+  return {
+    participation,
+    person,
+    subject: preview.subject,
+    body: preview.body,
   }
 }
 

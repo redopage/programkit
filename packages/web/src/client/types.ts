@@ -36,6 +36,13 @@ export interface ProgramKitClient {
     input: Record<string, unknown>,
     options?: Omit<OperationRequest, 'input'>,
   ): Promise<OperationResponse>
+  uploadRequirementFile(
+    surface: ProgramKitSurface,
+    requirementInstanceId: string,
+    file: File,
+  ): Promise<OperationResponse>
+  assetUrl(surface: ProgramKitSurface, assetId: string): string
+  eventCalendarUrl(eventId: string): string
 }
 
 export interface ProgramKitHttpClientOptions {

@@ -1,5 +1,5 @@
 import { executeOperation } from './engine.ts'
-import { calendarDate, calendarEscape } from './calendar.ts'
+import { calendarDate, calendarEscape, eventCalendar, eventCalendarFilename } from './calendar.ts'
 import { evaluationRoundIsBlind } from './reviews.ts'
 import { createWorkspaceExportArchive, workspaceExportFilename } from './export.ts'
 import { operationManifest } from './manifest.ts'
@@ -80,6 +80,7 @@ function participantState(state: WorkspaceState, participationId: string, portal
   clone.submissionFormFields = (state.submissionFormFields ?? []).filter((entry) =>
     formIds.has(entry.formId),
   )
+  clone.submissionReceiptDeliveries = []
   const submissionIds = new Set(clone.submissions.map((entry) => entry.id))
   const requirementIds = new Set(clone.requirementInstances.map((entry) => entry.id))
   clone.assets = (state.assets ?? []).filter(
@@ -113,11 +114,15 @@ function participantState(state: WorkspaceState, participationId: string, portal
   clone.scheduleReleases = []
   clone.campaigns = []
   clone.outboundMessages = []
+  clone.portalResources = (state.portalResources ?? [])
+    .filter((entry) => entry.eventId === participation.eventId && entry.status === 'published')
+    .sort((left, right) => left.sortOrder - right.sortOrder)
   clone.portalResourcePages = (state.portalResourcePages ?? [])
     .filter((entry) => entry.eventId === participation.eventId && entry.status === 'published')
     .sort((left, right) => left.sortOrder - right.sortOrder)
   clone.changeSets = []
   clone.integrations = []
+  clone.acceleventsExports = []
   clone.domainEvents = []
   clone.recentCommandResults = []
   return clone
@@ -133,6 +138,7 @@ function projectionBase(state: WorkspaceState) {
   clone.submissionForms = []
   clone.submissionFormFields = []
   clone.submissions = []
+  clone.submissionReceiptDeliveries = []
   clone.assets = []
   clone.assetComments = []
   clone.reviewers = []
@@ -148,9 +154,11 @@ function projectionBase(state: WorkspaceState) {
   clone.scheduleReleases = []
   clone.campaigns = []
   clone.outboundMessages = []
+  clone.portalResources = []
   clone.portalResourcePages = []
   clone.changeSets = []
   clone.integrations = []
+  clone.acceleventsExports = []
   clone.domainEvents = []
   clone.recentCommandResults = []
   return clone
@@ -684,6 +692,24 @@ export async function handleCoreRequest(
     const state = await repository.read()
     return json(projectionPayload(publicProgramState(state)), {
       headers: { 'cache-control': 'public, max-age=60' },
+    })
+  }
+
+  const publicEventCalendarMatch = path.match(/^\/public\/v1\/events\/([^/]+)\/calendar\.ics$/u)
+  if (request.method === 'GET' && publicEventCalendarMatch) {
+    const eventId = decodeURIComponent(publicEventCalendarMatch[1])
+    const state = await repository.read()
+    const event = state.events.find(
+      (entry) => entry.id === eventId && entry.id === state.activeEventId,
+    )
+    if (!event) return json({ error: 'Event not found.' }, { status: 404 })
+    return new Response(eventCalendar(state.workspace, event), {
+      headers: {
+        'cache-control': 'public, max-age=60',
+        'content-disposition': `attachment; filename="${eventCalendarFilename(event)}"`,
+        'content-type': 'text/calendar; charset=utf-8',
+        'x-content-type-options': 'nosniff',
+      },
     })
   }
 

@@ -84,6 +84,20 @@ function operationEndpoint(surface: ProgramKitSurface, operation: string) {
   }
 }
 
+function requirementUploadEndpoint(surface: ProgramKitSurface, requirementInstanceId: string) {
+  if (surface.kind !== 'speaker') {
+    throw new Error('Requirement uploads are only available in a speaker portal.')
+  }
+  return `/public/v1/portal/${encodeURIComponent(surface.participationId)}/requirements/${encodeURIComponent(requirementInstanceId)}/assets`
+}
+
+function assetEndpoint(surface: ProgramKitSurface, assetId: string) {
+  if (surface.kind !== 'speaker') {
+    throw new Error('Private assets are only available in a speaker portal.')
+  }
+  return `/public/v1/portal/${encodeURIComponent(surface.participationId)}/assets/${encodeURIComponent(assetId)}`
+}
+
 export function withPublicEventScope(endpoint: string, eventId: string | null) {
   if (!eventId) return endpoint
   const url = new URL(endpoint, 'https://programkit.local')
@@ -151,6 +165,27 @@ export function createProgramKitHttpClient(
           }),
         }),
       )
+    },
+
+    async uploadRequirementFile(surface, requirementInstanceId, file) {
+      const body = new FormData()
+      body.set('requirementInstanceId', requirementInstanceId)
+      body.set('file', file)
+      return parseJson<OperationResponse>(
+        await fetcher(resolveUrl(requirementUploadEndpoint(surface, requirementInstanceId)), {
+          method: 'POST',
+          headers: surfaceHeaders(surface),
+          body,
+        }),
+      )
+    },
+
+    assetUrl(surface, assetId) {
+      return resolveUrl(assetEndpoint(surface, assetId))
+    },
+
+    eventCalendarUrl(eventId) {
+      return resolveUrl(`/public/v1/events/${encodeURIComponent(eventId)}/calendar.ics`)
     },
   }
 }

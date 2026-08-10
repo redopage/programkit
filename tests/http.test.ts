@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createSeedState,
+  executeOperation,
   handleCoreRequest,
   MemoryWorkspaceRepository,
   type OperationResponse,
@@ -9,6 +10,42 @@ import {
 } from '@programkit/core'
 
 describe('operation HTTP surface', () => {
+  it('normalizes a persisted pre-outbox workspace before serving it', async () => {
+    const legacy = createSeedState()
+    legacy.schemaVersion = 4
+    delete (legacy as Partial<WorkspaceState>).campaignDeliveries
+    delete (legacy as Partial<WorkspaceState>).submissionReceiptDeliveries
+    delete (legacy as Partial<WorkspaceState>).acceleventsExports
+    delete (legacy as Partial<WorkspaceState>).portalResources
+    for (const campaign of legacy.campaigns) {
+      delete (campaign as Partial<typeof campaign>).includeCalendarInvite
+      delete (campaign as Partial<typeof campaign>).queuedAt
+    }
+    const state = await new MemoryWorkspaceRepository(legacy).read()
+    expect(state.schemaVersion).toBe(14)
+    expect(state.campaignDeliveries).toEqual([])
+    expect(state.submissionReceiptDeliveries).toEqual([])
+    expect(state.acceleventsExports).toEqual([])
+    expect(state.portalResources).toEqual([])
+    expect(state.campaigns.every((campaign) => campaign.includeCalendarInvite === false)).toBe(true)
+    expect(state.campaigns.every((campaign) => campaign.queuedAt === null)).toBe(true)
+  })
+
+  it('backfills the frozen calendar payload for a legacy delivery row', async () => {
+    const legacy = createSeedState()
+    legacy.schemaVersion = 8
+    const delivery = legacy.campaignDeliveries[0]!
+    delete (delivery as Partial<typeof delivery>).attachments
+
+    const state = await new MemoryWorkspaceRepository(legacy).read()
+    expect(state.schemaVersion).toBe(14)
+    expect(state.campaignDeliveries[0]?.attachments[0]).toMatchObject({
+      filename: 'aie-nyc-2026-invite.ics',
+      contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+    })
+    expect(state.campaignDeliveries[0]?.attachments[0]?.content).toContain('BEGIN:VCALENDAR\r\n')
+  })
+
   it('serves state, manifest, public agenda, and a portable export', async () => {
     const repository = new MemoryWorkspaceRepository()
     const stateResponse = await handleCoreRequest(
@@ -32,6 +69,17 @@ describe('operation HTTP surface', () => {
     )
     const agendaBody = (await agendaResponse?.json()) as { agenda: unknown[] }
     expect(agendaBody.agenda).toHaveLength(10)
+
+    const calendarResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/events/evt_nyc_2026/calendar.ics'),
+      repository,
+    )
+    expect(calendarResponse?.status).toBe(200)
+    expect(calendarResponse?.headers.get('content-type')).toBe('text/calendar; charset=utf-8')
+    expect(calendarResponse?.headers.get('content-disposition')).toContain(
+      'aie-nyc-2026-invite.ics',
+    )
+    expect(await calendarResponse?.text()).toContain('BEGIN:VEVENT\r\n')
 
     const exportResponse = await handleCoreRequest(
       new Request('http://local/api/v1/export'),
@@ -232,6 +280,7 @@ describe('operation HTTP surface', () => {
     expect(body.state.campaigns).toHaveLength(0)
     expect(body.state.outboundMessages).toHaveLength(0)
     expect(body.state.integrations).toHaveLength(0)
+    expect(body.state.acceleventsExports).toHaveLength(0)
     expect(body.state.changeSets).toHaveLength(0)
     expect(body.state.domainEvents).toHaveLength(0)
     expect(body.state.submissions).toHaveLength(0)
@@ -259,7 +308,10 @@ describe('operation HTTP surface', () => {
   })
 
   it('serves distinct public and reviewer projections without operator records', async () => {
-    const repository = new MemoryWorkspaceRepository()
+    const prepared = executeOperation(createSeedState(), 'accelevents.prepare-export', {
+      input: { eventUrl: 'aie-nyc-2026' },
+    }).state
+    const repository = new MemoryWorkspaceRepository(prepared)
 
     const formResponse = await handleCoreRequest(
       new Request('http://local/public/v1/submission-forms/aie-nyc-2026-cfp/state'),
@@ -277,8 +329,11 @@ describe('operation HTTP surface', () => {
     ])
     expect(formBody.state.people).toHaveLength(0)
     expect(formBody.state.submissions).toHaveLength(0)
+    expect(formBody.state.submissionReceiptDeliveries).toHaveLength(0)
     expect(formBody.state.reviewerAssignments).toHaveLength(0)
     expect(formBody.state.domainEvents).toHaveLength(0)
+    expect(formBody.state.acceleventsExports).toHaveLength(0)
+    expect(formBody.state.portalResources).toHaveLength(0)
 
     const closedState = createSeedState()
     closedState.submissionForms.find((entry) => entry.id === 'frm_cfp_2026')!.status = 'closed'

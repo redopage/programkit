@@ -47,14 +47,23 @@ comments; serves scoped downloads; and exports selected latest versions in speak
 folders. Direct attachment upload from the public CFP, malware scanning, and a configurable
 retention policy remain production milestones rather than implied capabilities.
 
+Submission also freezes one confirmation receipt in the same atomic mutation. The submitter sees
+the destination address, reference, and actual delivery state. The reference app leaves the
+receipt in `pending_provider`; it does not claim delivery before a trusted provider result exists.
+
 ## 3. Review consistently
 
-Evaluation plans define criteria, reviewer teams, blind-review policy, and assignment behavior.
-Reviewers receive scoped queues and can read only assigned proposals. Blind plans redact answers
-that reveal submitter identity. Scorecards validate every criterion before submission.
+Evaluation plans define ordered rounds, criteria, reviewer teams, blind-review policy, and
+assignment behavior. Reviewers receive scoped queues and can read only assigned proposals. Blind
+plans redact answers that reveal submitter identity. Scorecards validate every criterion before
+submission.
 
-The committee view aggregates progress and recommendations; it does not replace the underlying
-scorecards or silently decide on their behalf.
+The committee view aggregates progress and recommendations by active round. A proposal advances
+only after the current round reaches its minimum completed-review threshold; the transition creates
+the next round's assignments once, records an audit event, and remains safe to retry with an
+idempotency key. Rejection and waitlisting may close a completed earlier round, while acceptance
+requires the completed final round. The view does not replace scorecards or silently decide on the
+committee's behalf.
 
 ## 4. Decide and create the accepted program
 
@@ -77,13 +86,62 @@ speaker portal. Draft and archived resources remain operator-only.
 Profiles, releases, headshots, slides, and logistics use the same scoped operation and asset
 primitives as the CFP.
 
-## 6. Build and publish the schedule
+Organizers can also publish versioned guides and static HTML cards. Participants receive only the
+published resources for their event. HTML cards accept no attributes, links, images, forms, or
+scripts and render in an iframe sandbox, so this capability does not become an arbitrary code path.
+
+## 6. Communicate with accepted speakers
+
+Organizers can start from an accepted-speaker template, target confirmed speakers, preview rendered
+recipient fields, and attach the event's RFC 5545 invite for Google Calendar, Outlook, or Apple
+Calendar. Approval freezes the submitted recipient set. Queueing creates one durable delivery row
+per recipient with the exact rendered message and complete calendar payload, suppresses unavailable
+or undeliverable contacts, and keeps the campaign visibly in the outbox until trusted provider
+results are recorded. After the transaction commits, the Cloudflare host invokes its Email Service
+consumer when the binding and sender exist; provider IDs or concise failures flow back through the
+trusted result operation. Failed rows can be queued again without rebuilding content or losing
+attempt counts. Sender-domain verification remains release enablement owned outside the repository.
+
+## 7. Build and publish the schedule
 
 Sessions are content; placements are mutable draft room/time assignments. Conflict checks run
-against the draft. Publishing creates an immutable, versioned `ScheduleRelease` snapshot.
+against the draft. Ready sessions without a placement stay in an explicit unscheduled tray.
+Organizers can place or move them through timezone-safe forms, switch among list, day, week, track,
+and room views, filter by day, room, or track, and undo the last accepted change through another
+version-checked operation.
+
+The publish preflight compares the draft with the latest release. It blocks duplicate placements,
+hard conflicts, unscheduled active sessions, empty schedules, and unchanged releases, while
+showing non-blocking capacity warnings and added, moved, or removed sessions. Publishing creates an
+immutable, versioned `ScheduleRelease` snapshot.
 
 The public agenda reads only the latest release. Moving a draft session after publication cannot
 quietly rewrite what attendees already saw; another explicit publication is required.
+
+## 8. Stage the published program for Accelevents
+
+The Accelevents preflight reads the latest immutable release, resolves its public speakers, rooms,
+tracks, and event-local times, and freezes stable speaker and session items into a delivery batch.
+Draft placements and operator-only records are excluded. Each item carries its own provider status,
+attempt count, provider ID, error, and version so partial failures can be retried without rebuilding
+or duplicating the packet.
+
+The reference host never stores an Accelevents API key in workspace state or client code. When the
+owner-managed Worker secret exists, the post-commit consumer uses the official authenticated host
+API to create or update speakers first, resolve their provider IDs into session relationships, and
+then create or update sessions. Each outcome returns through the trusted result operation. Without
+the secret, the same packet remains honestly pending.
+
+## 9. Share the public program as embeds
+
+The speaker gallery and itinerary routes use the same public projection as the agenda: only people
+and sessions from the latest immutable release are present, with private contact and organizer data
+redacted. The itinerary stores an attendee's saved session IDs only in that browser. It performs no
+write against the workspace and makes no claim of cross-device sync.
+
+The final host must allow these routes to be framed by the intended event site. A production
+Content Security Policy and cross-origin smoke test remain deployment evidence rather than a core
+domain concern.
 
 ## Cross-cutting rules
 

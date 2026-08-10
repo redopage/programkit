@@ -38,7 +38,12 @@ export function surfaceFromPathname(pathname: string): ProgramKitSurface {
     }
   }
 
-  if (pathname === '/agenda' || pathname.startsWith('/agenda/')) {
+  if (
+    pathname === '/agenda' ||
+    pathname.startsWith('/agenda/') ||
+    pathname === '/embed/speakers' ||
+    pathname === '/embed/itinerary'
+  ) {
     return { kind: 'public-program' }
   }
 
@@ -56,4 +61,8 @@ export function surfaceKey(surface: ProgramKitSurface) {
     default:
       return surface.kind
   }
+}
+
+export function surfaceRefreshInterval(surface: ProgramKitSurface) {
+  return surface.kind === 'operator' ? 5_000 : 15_000
 }

@@ -1,9 +1,13 @@
 # Live workspace updates
 
-ProgramKit can add live dashboards and notifications without changing its primary database. The
-same Durable Object that serializes one event workspace can own WebSocket connections for that
-workspace. The recommended implementation uses Cloudflare's WebSocket hibernation support so idle
-connections do not keep an object active.
+ProgramKit's reference client already refetches active operator projections every five seconds
+while the page is visible, every other scoped surface every fifteen seconds, and every surface when
+the window regains focus. That gives the readiness dashboard bounded near-real-time behavior without
+moving authorization or derived state into the browser. It falls back cleanly when a tab sleeps.
+
+For lower latency at larger scale, the same Durable Object that serializes one event workspace can
+own WebSocket connections for that workspace. The recommended evolution uses Cloudflare's
+WebSocket hibernation support so idle connections do not keep an object active.
 
 Live updates are an invalidation channel, not a second data channel. The HTTP projections remain
 canonical and scoped for operator, reviewer, participant, submitter, and public surfaces.

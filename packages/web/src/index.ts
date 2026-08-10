@@ -9,7 +9,7 @@ export {
   speakerSubmissionsPath,
   speakerPortalPath,
 } from './lib/public-links.ts'
-export { surfaceFromPathname, surfaceKey } from './client/surfaces.ts'
+export { surfaceFromPathname, surfaceKey, surfaceRefreshInterval } from './client/surfaces.ts'
 export { parseSpeakerCsv, type SpeakerCsvRow } from './lib/speaker-csv.ts'
 export type {
   ProgramKitClient,

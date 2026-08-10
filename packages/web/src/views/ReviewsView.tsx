@@ -80,6 +80,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   const completion =
     activeAssignments.length === 0 ? 0 : Math.round((completed / activeAssignments.length) * 100)
   const plan = (state.evaluationPlans ?? []).find((entry) => entry.eventId === state.activeEventId)
+  const rounds = [...(plan?.rounds ?? [])].sort((left, right) => left.order - right.order)
   const reviewerTeamIds = new Set(
     plan?.rounds.flatMap((round) => [
       evaluationRoundReviewerTeamId(plan, round.id),
@@ -118,7 +119,28 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
         submission.eventId === state.activeEventId &&
         (submission.status === 'submitted' || submission.status === 'in_review'),
     )
-    .map((submission) => ({ submission, review: submissionReviewSummary(state, submission.id) }))
+    .map((submission) => {
+      const submissionAssignments = assignments.filter(
+        (entry) => entry.submissionId === submission.id,
+      )
+      const assignedRoundIds = new Set(submissionAssignments.map((entry) => entry.roundId))
+      const currentRoundIndex = rounds.reduce(
+        (highest, round, index) => (assignedRoundIds.has(round.id) ? index : highest),
+        -1,
+      )
+      const currentRound = rounds[currentRoundIndex]
+      const nextRound = rounds[currentRoundIndex + 1]
+      const review = submissionReviewSummary(state, submission.id)
+      return {
+        submission,
+        review,
+        currentRound,
+        nextRound,
+        canAdvance:
+          Boolean(currentRound && nextRound) &&
+          review.completed >= (currentRound?.minimumCompletedReviews ?? Number.POSITIVE_INFINITY),
+      }
+    })
     .sort((left, right) => right.review.completed - left.review.completed)
   const assignedSubmissionIds = new Set(
     activeAssignments.map((assignment) => assignment.submissionId),
@@ -187,6 +209,21 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
     setExported(true)
   }
 
+  async function advanceRound(
+    submission: (typeof inReview)[number]['submission'],
+    nextRound: NonNullable<(typeof inReview)[number]['nextRound']>,
+  ) {
+    await execute(
+      'review.advance-round',
+      { submissionId: submission.id },
+      {
+        expectedVersions: { [submission.id]: submission.version },
+        idempotencyKey: `review-round:${submission.id}:${nextRound.id}`,
+      },
+      `Proposal advanced to ${nextRound.name}.`,
+    )
+  }
+
   return (
     <div className="flex flex-col gap-7">
       <PageHeader
@@ -216,7 +253,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
               id="review-progress-heading"
               className="text-base font-medium text-zinc-950 sm:text-sm"
             >
-              Committee progress
+              Review progress
             </h2>
             <p className="text-pretty text-base text-zinc-500 sm:text-sm">
               {completed} of {activeAssignments.length} assigned reviews are complete.
@@ -495,7 +532,8 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                 Decision queue
               </h2>
               <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-                Proposals still moving through committee review.
+                Proposals still moving through the review plan. Each row shows the round it is in
+                now.
               </p>
             </div>
             <button
@@ -507,21 +545,26 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             </button>
           </div>
           <ul role="list" className="divide-y divide-zinc-950/5">
-            {inReview.map(({ submission, review }) => (
-              <li key={submission.id}>
+            {inReview.map(({ submission, review, currentRound, nextRound, canAdvance }) => (
+              <li key={submission.id} className="flex flex-wrap items-center gap-3 py-3">
                 <button
                   type="button"
-                  className="focus-ring flex w-full items-center gap-4 rounded-lg py-4 text-left hover:bg-zinc-950/2"
+                  className="focus-ring flex min-w-0 flex-1 basis-full items-center gap-4 rounded-lg py-1 text-left hover:bg-zinc-950/2 sm:basis-auto"
                   onClick={() => navigate('/submissions')}
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-medium text-zinc-950 sm:text-sm">
                       {answerText(submissionAnswerByPurpose(state, submission, 'proposal_title'))}
                     </span>
-                    <span className="block truncate text-base text-zinc-500 sm:text-sm">
-                      {answerText(submissionAnswerByPurpose(state, submission, 'first_name'))}{' '}
-                      {answerText(submissionAnswerByPurpose(state, submission, 'last_name'))} ·{' '}
-                      {review.completed}/{review.assigned} reviews
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5">
+                      <span className="inline-flex max-w-full shrink-0 items-center truncate whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/5">
+                        {currentRound?.name ?? 'Review'}
+                      </span>
+                      <span className="min-w-0 truncate text-base text-zinc-500 sm:text-sm">
+                        {answerText(submissionAnswerByPurpose(state, submission, 'first_name'))}{' '}
+                        {answerText(submissionAnswerByPurpose(state, submission, 'last_name'))} ·{' '}
+                        {review.completed}/{review.assigned} reviews
+                      </span>
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
@@ -531,6 +574,16 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                     <span className="block text-sm text-zinc-500">average</span>
                   </span>
                 </button>
+                {canAdvance && nextRound ? (
+                  <Button
+                    size="compact"
+                    disabled={mutating}
+                    onClick={() => void advanceRound(submission, nextRound)}
+                  >
+                    Advance to {nextRound.name}
+                    <ArrowRightIcon className="size-4 h-lh shrink-0 fill-current" />
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -624,7 +677,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             Reviewer assignments
           </h2>
           <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-            Every outstanding review and its owner.
+            Every assignment, the round it belongs to, and its owner.
           </p>
         </div>
         <div className="-mx-4 -my-2 overflow-x-auto whitespace-nowrap sm:-mx-6">

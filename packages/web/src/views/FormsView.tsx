@@ -271,8 +271,6 @@ export function FormsView({
     ? fields.find((field) => field.id === selected.visibleWhen?.fieldId)
     : undefined
   const publishReadiness = submissionFormPublishReadiness(fields)
-  const speakerPurposes = ['first_name', 'last_name', 'email', 'company', 'job_title', 'biography']
-  const activeStep = selected && speakerPurposes.includes(selected.purpose) ? 2 : 1
 
   function updateSelected(update: Partial<SubmissionFormField>) {
     if (!selected) return
@@ -508,14 +506,9 @@ export function FormsView({
       />
 
       <section aria-labelledby="form-content-heading" className="border-b border-zinc-950/5 pb-7">
-        <div>
-          <h2 id="form-content-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-            Form content
-          </h2>
-          <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-            Configure the public introduction, URL, accepted submission types, and confirmation.
-          </p>
-        </div>
+        <h2 id="form-content-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+          Form content
+        </h2>
         <div className="grid max-w-5xl gap-5 pt-5 @3xl/form-builder:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className="text-base font-medium text-zinc-950 sm:text-sm">Internal name</span>
@@ -653,58 +646,12 @@ export function FormsView({
         </div>
       </section>
 
-      <div className="grid min-w-0 gap-6 @5xl/form-builder:grid-cols-[minmax(0,1fr)_20rem] @7xl/form-builder:grid-cols-[12rem_minmax(0,1fr)_20rem]">
-        <aside
-          aria-label="Form sections"
-          className="min-w-0 @5xl/form-builder:col-span-2 @7xl/form-builder:col-span-1"
-        >
-          <div className="sticky top-6">
-            <ol role="list" className="flex gap-1 overflow-x-auto @7xl/form-builder:flex-col">
-              {[
-                ['01', 'Welcome', 'Public introduction'],
-                [
-                  '02',
-                  'Proposal',
-                  `${fields.filter((field) => ['proposal_title', 'abstract', 'session_format', 'track', 'custom'].includes(field.purpose)).length} questions`,
-                ],
-                [
-                  '03',
-                  'Speaker',
-                  `${fields.filter((field) => ['first_name', 'last_name', 'email', 'company', 'job_title', 'biography'].includes(field.purpose)).length} questions`,
-                ],
-                ['04', 'Confirmation', 'Email and next steps'],
-              ].map(([number, label, detail], index) => (
-                <li key={label} className="min-w-40 @7xl/form-builder:min-w-0">
-                  <div
-                    className={cx(
-                      'flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left',
-                      index === activeStep ? 'bg-zinc-950/5 text-zinc-950' : 'text-zinc-500',
-                    )}
-                  >
-                    <span className="shrink-0 font-mono text-sm tabular-nums text-zinc-400">
-                      {number}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-base font-medium sm:text-sm">{label}</span>
-                      <span className="block truncate text-sm text-zinc-500">{detail}</span>
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </aside>
-
+      <div className="grid min-w-0 gap-6 @5xl/form-builder:grid-cols-[minmax(0,1fr)_20rem]">
         <section aria-labelledby="questions-heading" className="min-w-0">
           <div className="flex items-end justify-between gap-4 border-b border-zinc-950/5 pb-2">
-            <div>
-              <h2 id="questions-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-                Form questions
-              </h2>
-              <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-                Select a question to edit its label, helper text, and validation.
-              </p>
-            </div>
+            <h2 id="questions-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+              Questions
+            </h2>
             <Button size="compact" onClick={() => setQuestionPickerOpen(true)}>
               <DocumentPlusIcon className="size-4 h-lh shrink-0 fill-current" />
               Add question
@@ -747,16 +694,23 @@ export function FormsView({
                 </button>
               </li>
             ))}
-            <li>
-              <button
-                type="button"
-                className="focus-ring flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 text-base font-medium text-zinc-600 hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-950 sm:text-sm"
-                onClick={() => setQuestionPickerOpen(true)}
-              >
-                <DocumentPlusIcon className="size-4 h-lh shrink-0 fill-current" />
-                Add another question
-              </button>
-            </li>
+            {fields.length === 0 ? (
+              <li>
+                <button
+                  type="button"
+                  className="focus-ring flex min-h-24 w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-zinc-300 px-4 text-center hover:border-zinc-400 hover:bg-zinc-50 sm:text-sm"
+                  onClick={() => setQuestionPickerOpen(true)}
+                >
+                  <span className="flex items-center gap-2 text-base font-medium text-zinc-950 sm:text-sm">
+                    <DocumentPlusIcon className="size-4 h-lh shrink-0 fill-current" />
+                    Add your first question
+                  </span>
+                  <span className="text-base text-zinc-500 sm:text-sm">
+                    Ask for a title, an abstract, and speaker details.
+                  </span>
+                </button>
+              </li>
+            ) : null}
           </ol>
         </section>
 
@@ -770,7 +724,7 @@ export function FormsView({
                       id="field-settings-heading"
                       className="text-base font-medium text-zinc-950 sm:text-sm"
                     >
-                      Field settings
+                      Question settings
                     </h2>
                     <p className="truncate font-mono text-sm text-zinc-500">{selected.key}</p>
                   </div>
@@ -1138,8 +1092,8 @@ export function FormsView({
               Publish readiness
             </h2>
             <p className="max-w-[70ch] text-pretty text-base text-zinc-500 sm:text-sm">
-              Accepted proposals need eight required mappings so ProgramKit can create dependable
-              speaker and session records.
+              Map and require these questions so an accepted proposal becomes a speaker and session
+              record.
             </p>
           </div>
           <span
@@ -1213,7 +1167,6 @@ export function FormsView({
           {activeForm.status !== 'open' ? (
             <Button
               size="compact"
-              variant="primary"
               disabled={dirty || mutating || !publishReadiness.ready}
               onClick={() => void publishForm()}
             >
