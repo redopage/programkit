@@ -9,6 +9,7 @@ const externalPasswordIterations = 210_000
 const minimumPasswordLength = 10
 const maximumPasswordLength = 128
 const maximumPendingInvitations = 200
+const maximumApiKeys = 50
 const eventIdPattern = /^[a-z][a-z0-9_-]{2,79}$/u
 const eventSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u
 const tokenPattern = /^([a-z][a-z0-9_-]{2,79})\.([a-f0-9]{64})$/u
@@ -16,6 +17,34 @@ const tokenPattern = /^([a-z][a-z0-9_-]{2,79})\.([a-f0-9]{64})$/u
 export type EventRole = 'owner' | 'admin' | 'member'
 export type EventMembershipStatus = 'active' | 'revoked'
 export type EventInvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
+
+export const apiKeyScopes = [
+  'workspace:read',
+  'workspace:export',
+  'events:read',
+  'events:write',
+  'submission-forms:write',
+  'submission-forms:publish',
+  'submissions:write',
+  'submissions:submit',
+  'reviews:configure',
+  'reviews:write',
+  'reviews:decide',
+  'sessions:write',
+  'schedule:draft',
+  'schedule:publish',
+  'people:write',
+  'participations:write',
+  'requirements:write',
+  'assets:write',
+  'portal:write',
+  'communications:write',
+  'communications:draft',
+  'communications:approve',
+  'communications:send',
+] as const
+
+export type ApiKeyScope = (typeof apiKeyScopes)[number]
 
 export interface EventAccessEvent {
   id: string
@@ -81,6 +110,23 @@ interface ExternalRateRecord {
   attempts: number[]
 }
 
+export interface EventApiKey {
+  id: string
+  eventId: string
+  name: string
+  prefix: string
+  scopes: ApiKeyScope[]
+  createdByUserId: string
+  createdAt: string
+  expiresAt: string | null
+  revokedAt: string | null
+  lastUsedAt: string | null
+}
+
+interface StoredEventApiKey extends EventApiKey {
+  secretHash: string
+}
+
 interface InitializeInput {
   event?: Partial<EventAccessEvent>
   owner?: Partial<EventAccessActor>
@@ -115,6 +161,16 @@ interface MembershipLookupInput {
 
 interface MembershipMutationInput extends ActorInput {
   membershipId?: unknown
+}
+
+interface ApiKeyCreateInput extends ActorInput {
+  name?: unknown
+  scopes?: unknown
+  expiresAt?: unknown
+}
+
+interface ApiKeyMutationInput extends ActorInput {
+  apiKeyId?: unknown
 }
 
 class EventAccessError extends Error {
@@ -261,6 +317,23 @@ function invitationStatus(
 function publicInvitation(invitation: StoredEventInvitation): EventInvitation {
   const { tokenHash: _, ...publicRecord } = invitation
   return { ...publicRecord, status: invitationStatus(invitation) }
+}
+
+function publicApiKey(apiKey: StoredEventApiKey): EventApiKey {
+  const { secretHash: _, ...publicRecord } = apiKey
+  return publicRecord
+}
+
+function cleanApiKeyScopes(value: unknown): ApiKeyScope[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new EventAccessError('INVALID_INPUT', 'Choose at least one API scope.', 400)
+  }
+  const allowed = new Set<string>(apiKeyScopes)
+  const scopes = [...new Set(value)]
+  if (scopes.some((scope) => typeof scope !== 'string' || !allowed.has(scope))) {
+    throw new EventAccessError('INVALID_INPUT', 'One or more API scopes are invalid.', 400)
+  }
+  return (scopes as ApiKeyScope[]).sort()
 }
 
 function json(body: unknown, init?: ResponseInit) {
@@ -415,6 +488,100 @@ export class EventAccessDurableObject extends DurableObject {
     if (/^[a-f0-9]{64}$/u.test(token)) {
       await this.#ctx.storage.delete(`external-session:${await sha256(token)}`)
     }
+  }
+
+  async #listApiKeys(input: ActorInput) {
+    await this.#authorizedActor(input, ['owner', 'admin'])
+    const apiKeys = [
+      ...(await this.#ctx.storage.list<StoredEventApiKey>({ prefix: 'api-key:' })).values(),
+    ]
+      .map(publicApiKey)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    return { apiKeys }
+  }
+
+  async #createApiKey(input: ApiKeyCreateInput) {
+    const { event, actor } = await this.#authorizedActor(input, ['owner', 'admin'])
+    const name = typeof input.name === 'string' ? input.name.trim().replace(/\s+/gu, ' ') : ''
+    if (name.length < 2 || name.length > 60) {
+      throw new EventAccessError('INVALID_INPUT', 'API key name must be 2 to 60 characters.', 400)
+    }
+    const scopes = cleanApiKeyScopes(input.scopes)
+    let expiresAt: string | null = null
+    if (input.expiresAt !== undefined && input.expiresAt !== null && input.expiresAt !== '') {
+      if (typeof input.expiresAt !== 'string' || !Number.isFinite(Date.parse(input.expiresAt))) {
+        throw new EventAccessError('INVALID_INPUT', 'API key expiry must be an ISO date.', 400)
+      }
+      expiresAt = new Date(input.expiresAt).toISOString()
+      if (Date.parse(expiresAt) <= Date.now()) {
+        throw new EventAccessError('INVALID_INPUT', 'API key expiry must be in the future.', 400)
+      }
+    }
+
+    const existing = await this.#ctx.storage.list<StoredEventApiKey>({ prefix: 'api-key:' })
+    const activeCount = [...existing.values()].filter(
+      (apiKey) =>
+        apiKey.revokedAt === null &&
+        (apiKey.expiresAt === null || Date.parse(apiKey.expiresAt) > Date.now()),
+    ).length
+    if (activeCount >= maximumApiKeys) {
+      throw new EventAccessError(
+        'API_KEY_LIMIT',
+        `An event can have at most ${maximumApiKeys} API keys. Revoke an old key first.`,
+        409,
+      )
+    }
+
+    const id = `key_${randomHex(8)}`
+    const secret = randomHex(32)
+    const token = `pk_live_${event.id}_${id}_${secret}`
+    const now = new Date().toISOString()
+    const apiKey: StoredEventApiKey = {
+      id,
+      eventId: event.id,
+      name,
+      prefix: `${token.slice(0, -secret.length)}${secret.slice(0, 8)}`,
+      scopes,
+      createdByUserId: actor.userId,
+      createdAt: now,
+      expiresAt,
+      revokedAt: null,
+      lastUsedAt: null,
+      secretHash: await sha256(token),
+    }
+    await this.#ctx.storage.put(`api-key:${id}`, apiKey)
+    if (expiresAt) await this.#scheduleCleanup(Date.parse(expiresAt))
+    return { apiKey: publicApiKey(apiKey), token }
+  }
+
+  async #revokeApiKey(input: ApiKeyMutationInput) {
+    await this.#authorizedActor(input, ['owner', 'admin'])
+    const apiKeyId = cleanIdentifier(input.apiKeyId, 'apiKeyId')
+    const apiKey = await this.#ctx.storage.get<StoredEventApiKey>(`api-key:${apiKeyId}`)
+    if (!apiKey) throw new EventAccessError('API_KEY_NOT_FOUND', 'API key was not found.', 404)
+    if (apiKey.revokedAt) return { apiKey: publicApiKey(apiKey) }
+    const revoked = { ...apiKey, revokedAt: new Date().toISOString() }
+    await this.#ctx.storage.put(`api-key:${apiKey.id}`, revoked)
+    return { apiKey: publicApiKey(revoked) }
+  }
+
+  async #verifyApiKey(input: Record<string, unknown>) {
+    const event = await this.#event(input.eventId)
+    const apiKeyId = cleanIdentifier(input.apiKeyId, 'apiKeyId')
+    const token = typeof input.token === 'string' ? input.token : ''
+    const apiKey = await this.#ctx.storage.get<StoredEventApiKey>(`api-key:${apiKeyId}`)
+    const invalid =
+      !apiKey ||
+      apiKey.eventId !== event.id ||
+      apiKey.revokedAt !== null ||
+      (apiKey.expiresAt !== null && Date.parse(apiKey.expiresAt) <= Date.now()) ||
+      !equalHex(apiKey.secretHash, await sha256(token))
+    if (invalid || !apiKey) {
+      throw new EventAccessError('API_KEY_INVALID', 'API key is invalid or inactive.', 401)
+    }
+    const used = { ...apiKey, lastUsedAt: new Date().toISOString() }
+    await this.#ctx.storage.put(`api-key:${apiKey.id}`, used)
+    return { apiKey: publicApiKey(used), scopes: used.scopes }
   }
 
   async #event(eventId?: unknown) {
@@ -870,6 +1037,18 @@ export class EventAccessDurableObject extends DurableObject {
       if (path === '/internal/event-access/external/logout') {
         await this.#logoutExternal(input)
         return json({ ok: true })
+      }
+      if (path === '/internal/event-access/api-keys/list') {
+        return json({ ok: true, ...(await this.#listApiKeys(input)) })
+      }
+      if (path === '/internal/event-access/api-keys/create') {
+        return json({ ok: true, ...(await this.#createApiKey(input)) }, { status: 201 })
+      }
+      if (path === '/internal/event-access/api-keys/revoke') {
+        return json({ ok: true, ...(await this.#revokeApiKey(input)) })
+      }
+      if (path === '/internal/event-access/api-keys/verify') {
+        return json({ ok: true, ...(await this.#verifyApiKey(input)) })
       }
       return new Response(null, { status: 404 })
     } catch (error) {

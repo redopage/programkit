@@ -29,6 +29,7 @@ import {
 } from './demo.ts'
 import {
   EventAccessDurableObject,
+  type EventApiKey,
   type EventAccessActor,
   type EventAccessEvent,
   type EventInvitation,
@@ -81,6 +82,7 @@ const workspaceKeyPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u
 const hostedEventIdPattern = /^evt_[a-f0-9]{24}$/u
 const invitationTokenPattern = /^(evt_[a-f0-9]{24})\.([a-f0-9]{64})$/u
 const externalSessionPattern = /^(evt_[a-f0-9]{24})\.([a-f0-9]{64})$/u
+const apiKeyTokenPattern = /^pk_live_(evt_[a-f0-9]{24})_(key_[a-f0-9]{16})_([a-f0-9]{64})$/u
 const airtableCallbackPath = '/api/v1/integrations/airtable/oauth/callback'
 
 function deploymentProfile(env: Env) {
@@ -96,6 +98,19 @@ function isStaticOrLegalPath(pathname: string) {
     pathname === '/favicon.svg' ||
     pathname === '/robots.txt' ||
     pathname.startsWith('/assets/')
+  )
+}
+
+export function isApiKeyAccessiblePath(pathname: string) {
+  return (
+    pathname === '/api/v1/health' ||
+    pathname === '/api/v1/manifest' ||
+    pathname === '/api/v1/domain-events' ||
+    pathname === '/api/v1/events' ||
+    /^\/api\/v1\/events\/[^/]+(?:\/(?:sessions|speakers|submissions))?$/u.test(pathname) ||
+    pathname === '/api/v1/export' ||
+    pathname === '/api/v1/export.json' ||
+    /^\/api\/v1\/operations\/[^/]+$/u.test(pathname)
   )
 }
 
@@ -265,6 +280,12 @@ interface HostedPrincipal {
   scopes: string[]
 }
 
+interface ApiKeyPrincipal {
+  eventId: string
+  apiKey: EventApiKey
+  actor: NonNullable<OperationRequest['actor']>
+}
+
 const authShardPattern = /^[a-f0-9]{32}$/u
 const authSecretPattern = /^[a-f0-9]{64}$/u
 
@@ -279,6 +300,44 @@ function parseScopedAuthToken(value: string | null) {
     return null
   }
   return { shard, secret }
+}
+
+export function parseApiKeyToken(value: string | null) {
+  const match = value?.match(apiKeyTokenPattern)
+  if (!match) return null
+  return { token: value!, eventId: match[1], apiKeyId: match[2] }
+}
+
+function bearerToken(request: Request) {
+  const value = request.headers.get('authorization')
+  const match = value?.match(/^Bearer\s+(.+)$/iu)
+  return match?.[1]?.trim() ?? null
+}
+
+async function resolveApiKeyPrincipal(env: Env, request: Request) {
+  const parsed = parseApiKeyToken(bearerToken(request))
+  if (!parsed) return null
+  const access = eventAccessStub(env, parsed.eventId)
+  if (!access) return null
+  const response = await access.fetch(
+    new Request('http://event-access.internal/internal/event-access/api-keys/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(parsed),
+    }),
+  )
+  const body = (await response.json()) as EventAccessResponse
+  if (!response.ok || !body.apiKey || !body.scopes) return null
+  return {
+    eventId: parsed.eventId,
+    apiKey: body.apiKey,
+    actor: {
+      type: 'service',
+      id: body.apiKey.id,
+      name: body.apiKey.name,
+      scopes: body.scopes,
+    },
+  } satisfies ApiKeyPrincipal
 }
 
 async function resolveHostedPrincipal(env: Env, request: Request) {
@@ -680,6 +739,8 @@ interface EventAccessResponse {
   memberships?: EventMembership[]
   invitation?: EventInvitation
   invitations?: EventInvitation[]
+  apiKey?: EventApiKey
+  apiKeys?: EventApiKey[]
   token?: string
   scopes?: string[]
 }
@@ -1698,6 +1759,7 @@ export default {
     const url = new URL(request.url)
     const profile = deploymentProfile(env)
     let hostedPrincipal: HostedPrincipal | null = null
+    let apiKeyPrincipal: ApiKeyPrincipal | null = null
     const publicEventId = profile === 'hosted-app' ? hostedPublicEventId(request, url) : null
     const hostedPublicDocument =
       Boolean(publicEventId) &&
@@ -1712,6 +1774,21 @@ export default {
     ) {
       const accessResponse = await handleExternalAccessRequest(request, env, url, publicEventId)
       if (accessResponse) return accessResponse
+    }
+
+    const presentedBearer = bearerToken(request)
+    if (
+      profile === 'hosted-app' &&
+      url.pathname.startsWith('/api/') &&
+      presentedBearer?.startsWith('pk_live_')
+    ) {
+      apiKeyPrincipal = await resolveApiKeyPrincipal(env, request)
+      if (!apiKeyPrincipal) {
+        return Response.json(
+          { ok: false, error: 'API key is invalid or inactive.' },
+          { status: 401, headers: { 'cache-control': 'no-store' } },
+        )
+      }
     }
 
     if (profile === 'hosted-app' && request.method === 'GET' && url.pathname === '/auth/invite') {
@@ -1735,7 +1812,8 @@ export default {
         (request.method === 'GET' && isDocumentNavigation(request)) ||
         url.pathname.startsWith('/api/') ||
         url.pathname === '/mcp'
-      if (needsIdentity) hostedPrincipal = await resolveHostedPrincipal(env, request)
+      if (needsIdentity && !apiKeyPrincipal)
+        hostedPrincipal = await resolveHostedPrincipal(env, request)
 
       const pendingInvitation = cookie(request, invitationCookieName)
       if (hostedPrincipal && pendingInvitation) {
@@ -1770,7 +1848,11 @@ export default {
       ) {
         return redirect(url, '/login')
       }
-      if (!hostedPrincipal && (url.pathname.startsWith('/api/') || url.pathname === '/mcp')) {
+      if (
+        !hostedPrincipal &&
+        !apiKeyPrincipal &&
+        (url.pathname.startsWith('/api/') || url.pathname === '/mcp')
+      ) {
         return Response.json(
           { ok: false, error: 'Sign in to continue.' },
           { status: 401, headers: { 'cache-control': 'no-store' } },
@@ -1956,6 +2038,88 @@ export default {
           { ok: true, account: hostedPrincipal.account },
           { headers: { 'cache-control': 'no-store' } },
         )
+      }
+
+      const apiKeysMatch = url.pathname.match(
+        /^\/api\/v1\/events\/([^/]+)\/api-keys(?:\/([^/]+))?$/u,
+      )
+      if (apiKeysMatch) {
+        const eventId = decodeURIComponent(apiKeysMatch[1])
+        if (eventId !== hostedPrincipal.membership!.eventId) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        const access = eventAccessStub(env, eventId)!
+        const actor = eventAccessActor(hostedPrincipal)
+
+        if (request.method === 'GET' && !apiKeysMatch[2]) {
+          const listedResponse = await access.fetch(
+            new Request('http://event-access.internal/internal/event-access/api-keys/list', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ eventId, actor }),
+            }),
+          )
+          const listed = (await listedResponse.json()) as EventAccessResponse
+          return listedResponse.ok
+            ? Response.json(
+                { ok: true, apiKeys: listed.apiKeys ?? [] },
+                { headers: { 'cache-control': 'no-store' } },
+              )
+            : Response.json(
+                { ok: false, error: listed.error ?? 'API keys could not be loaded.' },
+                { status: listedResponse.status },
+              )
+        }
+
+        if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+        if (request.method === 'POST' && !apiKeysMatch[2]) {
+          const input = (await request.json()) as {
+            name?: unknown
+            scopes?: unknown
+            expiresAt?: unknown
+          }
+          const createdResponse = await access.fetch(
+            new Request('http://event-access.internal/internal/event-access/api-keys/create', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ ...input, eventId, actor }),
+            }),
+          )
+          const created = (await createdResponse.json()) as EventAccessResponse
+          return createdResponse.ok && created.apiKey && created.token
+            ? Response.json(
+                { ok: true, apiKey: created.apiKey, token: created.token },
+                { status: 201, headers: { 'cache-control': 'no-store' } },
+              )
+            : Response.json(
+                { ok: false, error: created.error ?? 'API key could not be created.' },
+                { status: createdResponse.status },
+              )
+        }
+
+        if (request.method === 'DELETE' && apiKeysMatch[2]) {
+          const revokedResponse = await access.fetch(
+            new Request('http://event-access.internal/internal/event-access/api-keys/revoke', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                eventId,
+                actor,
+                apiKeyId: decodeURIComponent(apiKeysMatch[2]),
+              }),
+            }),
+          )
+          const revoked = (await revokedResponse.json()) as EventAccessResponse
+          return revokedResponse.ok
+            ? Response.json(
+                { ok: true, apiKey: revoked.apiKey },
+                { headers: { 'cache-control': 'no-store' } },
+              )
+            : Response.json(
+                { ok: false, error: revoked.error ?? 'API key could not be revoked.' },
+                { status: revokedResponse.status },
+              )
+        }
       }
 
       const teamMatch = url.pathname.match(/^\/api\/v1\/events\/([^/]+)\/team$/u)
@@ -2239,9 +2403,11 @@ export default {
     }
     let key = publicEventId
       ? eventWorkspaceKey(publicEventId)
-      : hostedPrincipal
-        ? eventWorkspaceKey(hostedPrincipal.account.activeEventId)
-        : workspaceKey(env, request)
+      : apiKeyPrincipal
+        ? eventWorkspaceKey(apiKeyPrincipal.eventId)
+        : hostedPrincipal
+          ? eventWorkspaceKey(hostedPrincipal.account.activeEventId)
+          : workspaceKey(env, request)
     let newWorkspaceCookie: string | undefined
     if (
       !env.AIRTABLE_BASE_ID &&
@@ -2252,6 +2418,13 @@ export default {
       newWorkspaceCookie = key
     }
     const stub = workspaceStub(env, key)
+
+    if (apiKeyPrincipal && !isApiKeyAccessiblePath(url.pathname)) {
+      return Response.json(
+        { ok: false, error: 'This endpoint is not available to API keys.' },
+        { status: 403, headers: { 'cache-control': 'no-store' } },
+      )
+    }
 
     if (
       profile === 'hosted-app' &&
@@ -2474,9 +2647,11 @@ export default {
               } satisfies OperationRequest['actor'])
             : profile === 'hosted-app' && hostedPrincipal
               ? hostedStaffActor(hostedPrincipal)
-              : url.pathname.startsWith('/public/')
-                ? publicReaderActor
-                : demoStaffActor
+              : profile === 'hosted-app' && apiKeyPrincipal
+                ? apiKeyPrincipal.actor
+                : url.pathname.startsWith('/public/')
+                  ? publicReaderActor
+                  : demoStaffActor
       return stub.fetch(withActor(request, actor))
     }
 

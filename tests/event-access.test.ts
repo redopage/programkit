@@ -40,6 +40,24 @@ async function body(response: Response) {
     identity?: { id: string; email: string }
     sessionToken?: string
     sessionExpiresAt?: string
+    apiKey?: {
+      id: string
+      name: string
+      prefix: string
+      scopes: string[]
+      expiresAt: string | null
+      revokedAt: string | null
+      lastUsedAt: string | null
+    }
+    apiKeys?: Array<{
+      id: string
+      name: string
+      prefix: string
+      scopes: string[]
+      expiresAt: string | null
+      revokedAt: string | null
+      lastUsedAt: string | null
+    }>
   }
 }
 
@@ -228,6 +246,76 @@ describe('EventAccessDurableObject', () => {
     )
     expect(duplicate.status).toBe(409)
     expect(await body(duplicate)).toMatchObject({ code: 'ACCOUNT_EXISTS' })
+  })
+
+  it('creates copy-once event API keys, verifies scopes, and revokes access', async () => {
+    await initialize()
+    const createdResponse = await access.fetch(
+      request('/internal/event-access/api-keys/create', {
+        eventId: event.id,
+        actor: owner,
+        name: 'Website sync',
+        scopes: ['workspace:read', 'events:read'],
+        expiresAt: '2026-09-01T00:00:00.000Z',
+      }),
+    )
+    const created = await body(createdResponse)
+    expect(createdResponse.status).toBe(201)
+    expect(created.token).toMatch(/^pk_live_evt_[a-f0-9]{24}_key_[a-f0-9]{16}_[a-f0-9]{64}$/u)
+    expect(created.apiKey).toMatchObject({
+      name: 'Website sync',
+      scopes: ['events:read', 'workspace:read'],
+      expiresAt: '2026-09-01T00:00:00.000Z',
+      lastUsedAt: null,
+    })
+    expect(created.apiKey).not.toHaveProperty('secretHash')
+
+    const listed = await access.fetch(
+      request('/internal/event-access/api-keys/list', { eventId: event.id, actor: owner }),
+    )
+    const list = await body(listed)
+    expect(list.apiKeys).toHaveLength(1)
+    expect(list.apiKeys?.[0]).not.toHaveProperty('token')
+
+    const verified = await access.fetch(
+      request('/internal/event-access/api-keys/verify', {
+        eventId: event.id,
+        apiKeyId: created.apiKey!.id,
+        token: created.token,
+      }),
+    )
+    expect(await body(verified)).toMatchObject({
+      ok: true,
+      scopes: ['events:read', 'workspace:read'],
+      apiKey: { lastUsedAt: '2026-08-09T12:00:00.000Z' },
+    })
+
+    const invalid = await access.fetch(
+      request('/internal/event-access/api-keys/verify', {
+        eventId: event.id,
+        apiKeyId: created.apiKey!.id,
+        token: `${created.token}bad`,
+      }),
+    )
+    expect(invalid.status).toBe(401)
+
+    const revoked = await access.fetch(
+      request('/internal/event-access/api-keys/revoke', {
+        eventId: event.id,
+        actor: owner,
+        apiKeyId: created.apiKey!.id,
+      }),
+    )
+    expect(await body(revoked)).toMatchObject({ apiKey: { revokedAt: expect.any(String) } })
+
+    const afterRevocation = await access.fetch(
+      request('/internal/event-access/api-keys/verify', {
+        eventId: event.id,
+        apiKeyId: created.apiKey!.id,
+        token: created.token,
+      }),
+    )
+    expect(afterRevocation.status).toBe(401)
   })
 
   it('rejects the wrong participant password and invalidates logout immediately', async () => {

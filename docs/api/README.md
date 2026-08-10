@@ -6,9 +6,9 @@ app, API clients, and later agent tools all reach the same validation, authoriza
 and audit path.
 
 The hosted app resolves its browser actor and event from a verified staff session and account
-membership. The local sample and hosted demo still use demo actors, and external API tokens are not
-implemented. None of these surfaces are safe for real participant data yet; see
-[Security](../../SECURITY.md).
+membership. The local sample and hosted demo still use demo actors. The hosted app also accepts
+event-scoped API keys on the documented integration routes. Review [Security](../../SECURITY.md)
+before using real participant data.
 
 ## Hosted account endpoints
 
@@ -191,29 +191,55 @@ session.
 
 ## External API key contract
 
-External API keys are not implemented yet. The intended contract is deliberately small:
+Owners and administrators create event-scoped API keys under **Infrastructure & API**. The
+management surface supports list, create, copy-once, and immediate revocation:
 
 - an organizer creates a named, event-scoped key and chooses explicit read or write scopes;
 - the secret is shown once, only a hash is stored, and a non-secret prefix identifies the key;
 - keys may expire, are independently revocable, and record their last successful use;
 - clients send `Authorization: Bearer pk_live_...` over HTTPS;
 - the host resolves the key to a server-owned event, actor, and scopes before core code runs; and
-- requests share the same rate limits, idempotency rules, named operations, and audit events as the
-  web application.
+- requests use the same named operations, validation, authorization, idempotency rules, and audit
+  events as the web application.
 
-The first management surface should support list, create, copy-once, and revoke. OAuth is a later
-addition for integrations that need delegated installation across many ProgramKit accounts.
+API keys can access these routes:
+
+```text
+GET  /api/v1/health
+GET  /api/v1/manifest
+GET  /api/v1/domain-events
+GET  /api/v1/events
+GET  /api/v1/events/{eventId}
+GET  /api/v1/events/{eventId}/sessions
+GET  /api/v1/events/{eventId}/speakers
+GET  /api/v1/events/{eventId}/submissions
+GET  /api/v1/export
+GET  /api/v1/export.json
+POST /api/v1/operations/{operationName}
+```
+
+The event ID encoded in the non-secret portion of the key selects exactly one event Durable
+Object. A valid key cannot call account, team, file, Airtable, key-management, or MCP routes. Core
+authorization then checks the key's scopes before reading or applying an operation.
+
+```bash
+curl https://app.programkit.dev/api/v1/events \
+  -H "Authorization: Bearer $PROGRAMKIT_API_KEY"
+```
+
+OAuth remains a later addition for integrations that need delegated installation across many
+ProgramKit accounts.
 
 ## Production API milestones
 
 The next API work is intentionally practical:
 
-1. Hashed API-key identity with event-scoped read and write scopes, followed by delegated OAuth.
-2. Signed webhooks with endpoint subscriptions, retry history, replay, and secret rotation.
-3. Bulk import operations capped at a documented batch size with per-item results.
-4. Direct-to-R2 upload initiation and finalize endpoints with type, size, ownership, and scanning
+1. Signed webhooks with endpoint subscriptions, retry history, replay, and secret rotation.
+2. Bulk import operations capped at a documented batch size with per-item results.
+3. Direct-to-R2 upload initiation and finalize endpoints with type, size, ownership, and scanning
    checks.
-5. OpenAPI output generated from the same schemas used to validate named operations.
+4. OpenAPI output generated from the same schemas used to validate named operations.
+5. Delegated OAuth for third-party apps that install across many ProgramKit events.
 
 Do not add a second write implementation for REST-shaped routes. A resource-style convenience
 endpoint may translate into a named operation, but the core operation remains the source of truth.

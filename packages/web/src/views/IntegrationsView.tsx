@@ -3,10 +3,13 @@ import {
   ArrowRightIcon,
   ArrowPathIcon,
   CheckCircleIcon,
+  ClipboardDocumentIcon,
   CloudIcon,
   ExclamationTriangleIcon,
+  KeyIcon,
   MinusCircleIcon,
   TableCellsIcon,
+  TrashIcon,
 } from '@heroicons/react/16/solid'
 import { createAcceleventsExport } from '@programkit/core'
 import { useEffect, useState } from 'react'
@@ -28,6 +31,76 @@ interface AirtableSetupStatus {
   } | null
 }
 
+interface ApiKeyRecord {
+  id: string
+  eventId: string
+  name: string
+  prefix: string
+  scopes: string[]
+  createdAt: string
+  expiresAt: string | null
+  revokedAt: string | null
+  lastUsedAt: string | null
+}
+
+const apiScopeGroups = [
+  {
+    id: 'read',
+    label: 'Read program data',
+    detail: 'Events, submissions, speakers, sessions, and change history.',
+    scopes: ['workspace:read', 'events:read'],
+  },
+  {
+    id: 'export',
+    label: 'Download exports',
+    detail: 'Create portable ZIP and JSON workspace exports.',
+    scopes: ['workspace:export'],
+  },
+  {
+    id: 'submissions',
+    label: 'Manage submissions',
+    detail: 'Forms, incoming proposals, and submission decisions.',
+    scopes: [
+      'submission-forms:write',
+      'submission-forms:publish',
+      'submissions:write',
+      'submissions:submit',
+      'reviews:configure',
+      'reviews:write',
+      'reviews:decide',
+    ],
+  },
+  {
+    id: 'program',
+    label: 'Manage program',
+    detail: 'Tracks, rooms, sessions, schedule, and publishing.',
+    scopes: ['events:write', 'sessions:write', 'schedule:draft', 'schedule:publish'],
+  },
+  {
+    id: 'speakers',
+    label: 'Manage speakers',
+    detail: 'People, participation, onboarding tasks, and files.',
+    scopes: [
+      'people:write',
+      'participations:write',
+      'requirements:write',
+      'assets:write',
+      'portal:write',
+    ],
+  },
+  {
+    id: 'communications',
+    label: 'Send communications',
+    detail: 'Create campaigns and send event messages.',
+    scopes: [
+      'communications:write',
+      'communications:draft',
+      'communications:approve',
+      'communications:send',
+    ],
+  },
+] as const
+
 export function IntegrationsView() {
   const { payload, execute, mutating, refresh } = useWorkspace()
   const [setup, setSetup] = useState<AirtableSetupStatus | null>(null)
@@ -35,6 +108,13 @@ export function IntegrationsView() {
   const [setupBusy, setSetupBusy] = useState(false)
   const [setupError, setSetupError] = useState<string | null>(null)
   const [acceleventsMessage, setAcceleventsMessage] = useState<string | null>(null)
+  const activeEventId = payload?.state.activeEventId ?? ''
+  const hostedApp =
+    document
+      .querySelector('meta[name="programkit-deployment-profile"]')
+      ?.getAttribute('content') === 'hosted-app'
+  const [apiKeys, setApiKeys] = useState<ApiKeyRecord[] | null>(null)
+  const [apiKeysError, setApiKeysError] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -58,6 +138,29 @@ export function IntegrationsView() {
       })
     return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    if (!hostedApp || !activeEventId) return
+    const controller = new AbortController()
+    void fetch(`/api/v1/events/${encodeURIComponent(activeEventId)}/api-keys`, {
+      headers: { accept: 'application/json' },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = (await response.json()) as {
+          ok?: boolean
+          apiKeys?: ApiKeyRecord[]
+          error?: string
+        }
+        if (!response.ok || !body.ok) throw new Error(body.error ?? 'API keys could not be loaded.')
+        setApiKeys(body.apiKeys ?? [])
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return
+        setApiKeysError(error instanceof Error ? error.message : 'API keys could not be loaded.')
+      })
+    return () => controller.abort()
+  }, [activeEventId, hostedApp])
 
   const query = new URLSearchParams(window.location.search)
   const oauthStatus = query.get('airtable')
@@ -436,6 +539,15 @@ export function IntegrationsView() {
         </ul>
       </section>
 
+      {hostedApp ? (
+        <ApiKeysSection
+          eventId={state.activeEventId}
+          apiKeys={apiKeys}
+          loadError={apiKeysError}
+          onChange={setApiKeys}
+        />
+      ) : null}
+
       <section aria-labelledby="endpoints-heading">
         <div className="border-b border-zinc-950/5 pb-2">
           <h2 id="endpoints-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
@@ -498,5 +610,305 @@ export function IntegrationsView() {
         </div>
       </section>
     </div>
+  )
+}
+
+function ApiKeysSection({
+  eventId,
+  apiKeys,
+  loadError,
+  onChange,
+}: {
+  eventId: string
+  apiKeys: ApiKeyRecord[] | null
+  loadError: string | null
+  onChange: (apiKeys: ApiKeyRecord[]) => void
+}) {
+  const [creating, setCreating] = useState(false)
+  const [name, setName] = useState('')
+  const [selectedGroups, setSelectedGroups] = useState<string[]>(['read'])
+  const [expiry, setExpiry] = useState('90')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [newSecret, setNewSecret] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const selectedScopes = apiScopeGroups
+    .filter((group) => selectedGroups.includes(group.id))
+    .flatMap((group) => [...group.scopes])
+
+  async function createKey() {
+    setBusy(true)
+    setError(null)
+    try {
+      const expiresAt =
+        expiry === 'never'
+          ? null
+          : new Date(Date.now() + Number(expiry) * 24 * 60 * 60 * 1_000).toISOString()
+      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/api-keys`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, scopes: selectedScopes, expiresAt }),
+      })
+      const body = (await response.json()) as {
+        ok?: boolean
+        apiKey?: ApiKeyRecord
+        token?: string
+        error?: string
+      }
+      if (!response.ok || !body.ok || !body.apiKey || !body.token) {
+        throw new Error(body.error ?? 'API key could not be created.')
+      }
+      onChange([body.apiKey, ...(apiKeys ?? [])])
+      setNewSecret(body.token)
+      setName('')
+      setSelectedGroups(['read'])
+      setExpiry('90')
+      setCreating(false)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'API key could not be created.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function revokeKey(apiKey: ApiKeyRecord) {
+    if (!window.confirm(`Revoke “${apiKey.name}”? Requests using it will stop immediately.`)) return
+    setBusy(true)
+    setError(null)
+    try {
+      const response = await fetch(
+        `/api/v1/events/${encodeURIComponent(eventId)}/api-keys/${encodeURIComponent(apiKey.id)}`,
+        { method: 'DELETE' },
+      )
+      const body = (await response.json()) as {
+        ok?: boolean
+        apiKey?: ApiKeyRecord
+        error?: string
+      }
+      if (!response.ok || !body.ok || !body.apiKey) {
+        throw new Error(body.error ?? 'API key could not be revoked.')
+      }
+      onChange((apiKeys ?? []).map((entry) => (entry.id === apiKey.id ? body.apiKey! : entry)))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'API key could not be revoked.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function copySecret() {
+    if (!newSecret) return
+    await navigator.clipboard.writeText(newSecret)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1800)
+  }
+
+  return (
+    <section aria-labelledby="api-keys-heading">
+      <div className="flex flex-col gap-3 border-b border-zinc-950/5 pb-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 id="api-keys-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+            API keys
+          </h2>
+          <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+            Event-scoped access for your website, scripts, and integrations.
+          </p>
+        </div>
+        <Button variant="secondary" size="compact" onClick={() => setCreating((value) => !value)}>
+          <KeyIcon className="size-4 h-lh shrink-0 fill-current" />
+          {creating ? 'Cancel' : 'Create key'}
+        </Button>
+      </div>
+
+      {newSecret ? (
+        <div className="mt-5 rounded-2xl bg-zinc-950 p-5 text-white">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h3 className="text-base font-medium sm:text-sm">Copy your new key now</h3>
+              <p className="pt-1 text-base text-zinc-400 sm:text-sm">
+                It will not be shown again. Store it in a secrets manager or encrypted environment
+                variable.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="compact"
+              className="bg-white text-zinc-950 hover:bg-zinc-100"
+              onClick={() => void copySecret()}
+            >
+              <ClipboardDocumentIcon className="size-4 h-lh shrink-0 fill-current" />
+              {copied ? 'Copied' : 'Copy key'}
+            </Button>
+          </div>
+          <code className="mt-4 block overflow-x-auto rounded-xl bg-white/10 px-3 py-2 text-sm text-zinc-100 ring-1 ring-inset ring-white/10">
+            {newSecret}
+          </code>
+          <button
+            type="button"
+            className="focus-ring mt-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white"
+            onClick={() => setNewSecret(null)}
+          >
+            I saved it
+          </button>
+        </div>
+      ) : null}
+
+      {creating ? (
+        <div className="mt-5 rounded-2xl bg-zinc-50 p-5 ring-1 ring-inset ring-zinc-950/5">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
+            <div>
+              <label
+                htmlFor="api-key-name"
+                className="text-base font-medium text-zinc-950 sm:text-sm"
+              >
+                Key name
+              </label>
+              <input
+                id="api-key-name"
+                className="focus-ring mt-2 min-h-10 w-full rounded-xl border border-zinc-950/10 bg-white px-3 text-base text-zinc-950 shadow-xs sm:text-sm"
+                placeholder="Website sync"
+                maxLength={60}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="api-key-expiry"
+                className="text-base font-medium text-zinc-950 sm:text-sm"
+              >
+                Expires
+              </label>
+              <select
+                id="api-key-expiry"
+                className={`${selectControl} mt-2`}
+                value={expiry}
+                onChange={(event) => setExpiry(event.target.value)}
+              >
+                <option value="30">In 30 days</option>
+                <option value="90">In 90 days</option>
+                <option value="365">In one year</option>
+                <option value="never">Never</option>
+              </select>
+            </div>
+          </div>
+
+          <fieldset className="pt-5">
+            <legend className="text-base font-medium text-zinc-950 sm:text-sm">Access</legend>
+            <div className="grid gap-2 pt-2 sm:grid-cols-2 lg:grid-cols-3">
+              {apiScopeGroups.map((group) => {
+                const checked = selectedGroups.includes(group.id)
+                return (
+                  <label
+                    key={group.id}
+                    className={cx(
+                      'flex cursor-pointer gap-3 rounded-xl p-3 ring-1 ring-inset transition-colors',
+                      checked
+                        ? 'bg-blue-50 ring-blue-600/20'
+                        : 'bg-white ring-zinc-950/10 hover:bg-zinc-50',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 size-4 shrink-0 accent-blue-600"
+                      checked={checked}
+                      onChange={() =>
+                        setSelectedGroups((current) =>
+                          checked
+                            ? current.filter((id) => id !== group.id)
+                            : [...current, group.id],
+                        )
+                      }
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-base font-medium text-zinc-950 sm:text-sm">
+                        {group.label}
+                      </span>
+                      <span className="block text-sm text-zinc-500">{group.detail}</span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </fieldset>
+
+          {error ? (
+            <p role="alert" className="pt-4 text-sm font-medium text-red-700">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex items-center gap-2 pt-5">
+            <Button
+              variant="primary"
+              disabled={busy || name.trim().length < 2 || selectedScopes.length === 0}
+              onClick={() => void createKey()}
+            >
+              {busy ? 'Creating…' : 'Create key'}
+            </Button>
+            <Button variant="ghost" disabled={busy} onClick={() => setCreating(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {loadError ? (
+        <p role="alert" className="py-5 text-sm font-medium text-red-700">
+          {loadError}
+        </p>
+      ) : apiKeys === null ? (
+        <p className="py-5 text-base text-zinc-500 sm:text-sm">Loading API keys…</p>
+      ) : apiKeys.length === 0 ? (
+        <p className="py-5 text-base text-zinc-500 sm:text-sm">
+          No API keys yet. Create one when an integration needs private access.
+        </p>
+      ) : (
+        <ul role="list" className="divide-y divide-zinc-950/5">
+          {apiKeys.map((apiKey) => {
+            const expired = apiKey.expiresAt !== null && Date.parse(apiKey.expiresAt) <= Date.now()
+            const inactive = apiKey.revokedAt !== null || expired
+            return (
+              <li key={apiKey.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
+                <KeyIcon
+                  className={cx(
+                    'size-4 h-lh shrink-0',
+                    inactive ? 'fill-zinc-400' : 'fill-blue-600',
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <p className="text-base font-medium text-zinc-950 sm:text-sm">{apiKey.name}</p>
+                    <span className="text-sm text-zinc-400">
+                      {apiKey.revokedAt ? 'Revoked' : expired ? 'Expired' : 'Active'}
+                    </span>
+                  </div>
+                  <p className="truncate font-mono text-sm text-zinc-500">{apiKey.prefix}…</p>
+                  <p className="text-sm text-zinc-400">
+                    {apiKey.lastUsedAt
+                      ? `Last used ${new Date(apiKey.lastUsedAt).toLocaleString()}`
+                      : 'Never used'}
+                    {apiKey.expiresAt
+                      ? ` · Expires ${new Date(apiKey.expiresAt).toLocaleDateString()}`
+                      : ' · No expiry'}
+                  </p>
+                </div>
+                {!inactive ? (
+                  <Button
+                    variant="ghost"
+                    size="compact"
+                    disabled={busy}
+                    onClick={() => void revokeKey(apiKey)}
+                  >
+                    <TrashIcon className="size-4 h-lh shrink-0 fill-current" />
+                    Revoke
+                  </Button>
+                ) : null}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }

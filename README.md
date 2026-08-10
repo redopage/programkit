@@ -91,7 +91,8 @@ Cloudflare Worker ── event access object ── one workspace object per eve
 
 Every human, API, or agent write uses the same named operation engine. Public agenda data comes
 from an immutable schedule release, not the mutable draft. Host code supplies trusted identity and
-event scope.
+event scope. Hosted organizers can create hashed, event-scoped API keys with copy-once secrets and
+explicit read or write permissions.
 
 Read [Architecture](ARCHITECTURE.md) for the full model and
 [Storage and integrations](docs/architecture/storage-and-integrations.md) for the database
