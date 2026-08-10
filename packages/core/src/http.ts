@@ -154,7 +154,7 @@ function publicSubmissionState(state: WorkspaceState, slug: string, speakerAcces
     (entry) =>
       entry.slug === slug &&
       entry.eventId === state.activeEventId &&
-      (entry.status === 'open' || speakerAccessKey.length > 0),
+      (entry.status !== 'draft' || speakerAccessKey.length > 0),
   )
   if (!form) return null
   const projected = projectionBase(state)

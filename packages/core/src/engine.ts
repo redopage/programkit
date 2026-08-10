@@ -1231,6 +1231,34 @@ function applyHandler(
         input.fields === undefined
           ? state.submissionFormFields.filter((field) => field.formId === form.id)
           : parseSubmissionFormFields(form.id, input.fields)
+      if (
+        input.fields !== undefined &&
+        state.submissions.some((submission) => submission.formId === form.id)
+      ) {
+        const currentFields = state.submissionFormFields.filter(
+          (field) => field.formId === form.id,
+        )
+        const nextFieldsById = new Map(fields.map((field) => [field.id, field]))
+        for (const currentField of currentFields) {
+          const nextField = nextFieldsById.get(currentField.id)
+          if (!nextField) {
+            throw new OperationError(
+              'INVALID_INPUT',
+              `“${currentField.label}” cannot be removed after the form receives submissions.`,
+            )
+          }
+          if (
+            nextField.key !== currentField.key ||
+            nextField.purpose !== currentField.purpose ||
+            nextField.kind !== currentField.kind
+          ) {
+            throw new OperationError(
+              'INVALID_INPUT',
+              `The answer mapping for “${currentField.label}” cannot change after the form receives submissions.`,
+            )
+          }
+        }
+      }
       validateSubmissionForm(form, fields, { forPublish: form.status === 'open' })
       if (input.fields !== undefined) {
         state.submissionFormFields = state.submissionFormFields.filter(

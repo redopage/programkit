@@ -1111,6 +1111,50 @@ describe('ProgramKit operation engine', () => {
     expect(updated.response.error?.message).toContain('cannot map multi_select answers to track')
   })
 
+  it('preserves field identity after a form receives submissions', () => {
+    const state = createSeedState()
+    const form = state.submissionForms.find((entry) => entry.id === 'frm_cfp_2026')!
+    const fields = state.submissionFormFields.filter((field) => field.formId === form.id)
+    const titleField = fields.find((field) => field.purpose === 'proposal_title')!
+
+    const remapped = executeOperation(state, 'submission-form.update', {
+      input: {
+        formId: form.id,
+        fields: fields.map((field) =>
+          field.id === titleField.id ? { ...field, key: 'renamed_title' } : field,
+        ),
+      },
+      expectedVersions: { [form.id]: form.version },
+    })
+    expect(remapped.response).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT', message: expect.stringContaining('cannot change') },
+    })
+
+    const removed = executeOperation(state, 'submission-form.update', {
+      input: { formId: form.id, fields: fields.filter((field) => field.id !== titleField.id) },
+      expectedVersions: { [form.id]: form.version },
+    })
+    expect(removed.response).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT', message: expect.stringContaining('cannot be removed') },
+    })
+
+    const relabeled = executeOperation(state, 'submission-form.update', {
+      input: {
+        formId: form.id,
+        fields: fields.map((field) =>
+          field.id === titleField.id ? { ...field, label: 'Session title' } : field,
+        ),
+      },
+      expectedVersions: { [form.id]: form.version },
+    })
+    expect(relabeled.response.ok).toBe(true)
+    expect(
+      relabeled.state.submissionFormFields.find((field) => field.id === titleField.id)?.label,
+    ).toBe('Session title')
+  })
+
   it('validates visible required answers before assigning a submission', () => {
     let state = createSeedState()
     const answers = {

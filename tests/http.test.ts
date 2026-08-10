@@ -189,6 +189,20 @@ describe('operation HTTP surface', () => {
     expect(formBody.state.reviewerAssignments).toHaveLength(0)
     expect(formBody.state.domainEvents).toHaveLength(0)
 
+    const closedState = createSeedState()
+    closedState.submissionForms.find(
+      (entry) => entry.id === 'frm_cfp_2026',
+    )!.status = 'closed'
+    const closedFormResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/submission-forms/aie-nyc-2026-cfp/state'),
+      new MemoryWorkspaceRepository(closedState),
+    )
+    expect(closedFormResponse?.status).toBe(200)
+    const closedFormBody = (await closedFormResponse?.json()) as { state: WorkspaceState }
+    expect(closedFormBody.state.submissionForms).toEqual([
+      expect.objectContaining({ id: 'frm_cfp_2026', status: 'closed' }),
+    ])
+
     const programResponse = await handleCoreRequest(
       new Request('http://local/public/v1/program/state'),
       repository,
