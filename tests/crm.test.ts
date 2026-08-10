@@ -61,13 +61,18 @@ describe('ProgramKit speaker CRM', () => {
     })
 
     const segmented = executeOperation(state, 'crm.segment.create', {
-      input: { name: 'Keynote prospects', mode: 'dynamic', filters: { tag: 'keynote' } },
+      input: {
+        name: 'Keynote prospects',
+        mode: 'dynamic',
+        filters: { company: '', title: '', tag: 'keynote' },
+      },
     })
     expect(segmented.response.ok).toBe(true)
     state = segmented.state
     expect(crmSegmentMembers(state, state.crmSegments[0]).map((entry) => entry.id)).toContain(
       person.id,
     )
+    expect(state.crmSegments[0].filters).toEqual({ tag: 'keynote' })
   })
 
   it('tracks sourcing stage history and pipeline notes', () => {
@@ -138,5 +143,25 @@ describe('ProgramKit speaker CRM', () => {
       returningSpeakers: 0,
       pipelineProspects: 0,
     })
+  })
+
+  it('queues personalized outreach for a selected contact set', () => {
+    const state = createSeedState()
+    const people = state.people.slice(0, 2)
+    const result = executeOperation(state, 'crm.outreach.queue', {
+      input: {
+        personIds: people.map((person) => person.id),
+        subject: 'AIE speaker invitation',
+        body: 'Hi {{first_name}}, we would love to have you join us.',
+      },
+    })
+    expect(result.response.ok).toBe(true)
+    expect(result.state.outboundMessages?.slice(0, 2)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'crm_outreach', recipientEmail: people[0].email }),
+        expect.objectContaining({ kind: 'crm_outreach', recipientEmail: people[1].email }),
+      ]),
+    )
+    expect(result.state.outboundMessages?.[0].body).not.toContain('{{first_name}}')
   })
 })

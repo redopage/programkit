@@ -2550,7 +2550,8 @@ function applyHandler(
         })
       }
       const personId = createId('per')
-      const participationId = createId('par')
+      const addToActiveEvent = input.addToActiveEvent !== false
+      const participationId = addToActiveEvent ? createId('par') : null
       const person = {
         id: personId,
         firstName,
@@ -2577,37 +2578,41 @@ function applyHandler(
       if (roles.some((role) => !allowedRoles.includes(role as (typeof allowedRoles)[number]))) {
         throw new OperationError('INVALID_INPUT', 'One or more participant roles are invalid.')
       }
-      const participation = {
-        id: participationId,
-        eventId: state.activeEventId,
-        personId,
-        portalAccessKey: createId('portal'),
-        roles: roles as Array<(typeof allowedRoles)[number]>,
-        status: 'prospect' as const,
-        sessionIds: [],
-        internalNotes: '',
-        publicTitle: person.title,
-        publicCompany: person.company,
-        confirmedAt: null,
-        updatedAt: timestamp,
-        version: 1,
-      }
+      const participation: Participation | null = participationId
+        ? {
+            id: participationId,
+            eventId: state.activeEventId,
+            personId,
+            portalAccessKey: createId('portal'),
+            roles: roles as Array<(typeof allowedRoles)[number]>,
+            status: 'prospect' as const,
+            sessionIds: [],
+            internalNotes: '',
+            publicTitle: person.title,
+            publicCompany: person.company,
+            confirmedAt: null,
+            updatedAt: timestamp,
+            version: 1,
+          }
+        : null
       state.people.push(person)
-      state.participations.push(participation)
-      for (const definition of state.requirementDefinitions.filter(
-        (entry) => entry.eventId === state.activeEventId,
-      )) {
-        state.requirementInstances.push({
-          id: createId('rqi'),
-          definitionId: definition.id,
-          participationId,
-          status: 'not_started',
-          value: '',
-          submittedAt: null,
-          reviewedAt: null,
-          updatedAt: timestamp,
-          version: 1,
-        })
+      if (participation) {
+        state.participations.push(participation)
+        for (const definition of state.requirementDefinitions.filter(
+          (entry) => entry.eventId === state.activeEventId,
+        )) {
+          state.requirementInstances.push({
+            id: createId('rqi'),
+            definitionId: definition.id,
+            participationId: participation.id,
+            status: 'not_started',
+            value: '',
+            submittedAt: null,
+            reviewedAt: null,
+            updatedAt: timestamp,
+            version: 1,
+          })
+        }
       }
       appendEvent(state, context, {
         type: 'person.created',
@@ -2615,12 +2620,14 @@ function applyHandler(
         summary: `Created ${firstName} ${lastName}.`,
         data: { participationId },
       })
-      appendEvent(state, context, {
-        type: 'participation.created',
-        aggregate: { type: 'participation', id: participationId, version: 1 },
-        summary: `Added ${firstName} ${lastName} to the active event.`,
-        data: { personId, roles },
-      })
+      if (participation) {
+        appendEvent(state, context, {
+          type: 'participation.created',
+          aggregate: { type: 'participation', id: participation.id, version: 1 },
+          summary: `Added ${firstName} ${lastName} to the active event.`,
+          data: { personId, roles },
+        })
+      }
       return { person, participation }
     }
 
@@ -2840,7 +2847,9 @@ function applyHandler(
       const filters: CrmSegment['filters'] = {}
       for (const field of ['company', 'title', 'tag'] as const) {
         if (filtersInput[field] !== undefined) {
-          filters[field] = assertString(filtersInput[field], `filters.${field}`)
+          const value = filtersInput[field]
+          if (value === '') continue
+          filters[field] = assertString(value, `filters.${field}`)
         }
       }
       const personIds =
@@ -2956,6 +2965,39 @@ function applyHandler(
       return { entry, note }
     }
 
+    case 'crm.outreach.queue': {
+      const personIds = [...new Set(assertStringArray(input.personIds, 'personIds'))]
+      if (personIds.length < 1 || personIds.length > 500) {
+        throw new OperationError('INVALID_INPUT', 'Choose between 1 and 500 contacts.')
+      }
+      const subject = assertString(input.subject, 'subject')
+      const body = assertString(input.body, 'body')
+      const people = personIds.map((personId) => findRequired(state.people, personId, 'person'))
+      const messages = people.map((person) =>
+        queueOutboundMessage(
+          state,
+          {
+            campaignId: null,
+            submissionId: null,
+            kind: 'crm_outreach',
+            trigger: 'crm.outreach.queue',
+            recipientName: `${person.firstName} ${person.lastName}`,
+            recipientEmail: person.email,
+            subject,
+            body: body.replaceAll('{{first_name}}', person.firstName),
+          },
+          timestamp,
+        ),
+      )
+      appendEvent(state, context, {
+        type: 'crm.outreach-queued',
+        aggregate: { type: 'workspace', id: state.workspace.id, version: state.revision + 1 },
+        summary: `Queued outreach for ${messages.length} contact${messages.length === 1 ? '' : 's'}.`,
+        data: { personIds, messageIds: messages.map((message) => message.id), subject },
+      })
+      return { messages, recipientCount: messages.length }
+    }
+
     case 'person.import': {
       if (!Array.isArray(input.people) || input.people.length === 0 || input.people.length > 500) {
         throw new OperationError('INVALID_INPUT', 'people must contain between 1 and 500 rows.', {
@@ -2963,7 +3005,12 @@ function applyHandler(
         })
       }
       const existingEmails = new Set(state.people.map((person) => person.email.toLowerCase()))
-      const imported: Array<{ personId: string; participationId: string; email: string }> = []
+      const addToActiveEvent = input.addToActiveEvent !== false
+      const imported: Array<{
+        personId: string
+        participationId: string | null
+        email: string
+      }> = []
       const skipped: string[] = []
 
       for (const [index, value] of input.people.entries()) {
@@ -2977,7 +3024,7 @@ function applyHandler(
         const firstName = assertString(record.firstName, `people.${index}.firstName`)
         const lastName = assertString(record.lastName, `people.${index}.lastName`)
         const personId = createId('per')
-        const participationId = createId('par')
+        const participationId = addToActiveEvent ? createId('par') : null
         const person: Person = {
           id: personId,
           firstName,
@@ -2997,37 +3044,41 @@ function applyHandler(
           updatedAt: timestamp,
           version: 1,
         }
-        const participation: Participation = {
-          id: participationId,
-          eventId: state.activeEventId,
-          personId,
-          portalAccessKey: createId('portal'),
-          roles: ['speaker'],
-          status: 'prospect',
-          sessionIds: [],
-          internalNotes: '',
-          publicTitle: person.title,
-          publicCompany: person.company,
-          confirmedAt: null,
-          updatedAt: timestamp,
-          version: 1,
-        }
+        const participation: Participation | null = participationId
+          ? {
+              id: participationId,
+              eventId: state.activeEventId,
+              personId,
+              portalAccessKey: createId('portal'),
+              roles: ['speaker'],
+              status: 'prospect',
+              sessionIds: [],
+              internalNotes: '',
+              publicTitle: person.title,
+              publicCompany: person.company,
+              confirmedAt: null,
+              updatedAt: timestamp,
+              version: 1,
+            }
+          : null
         state.people.push(person)
-        state.participations.push(participation)
-        for (const definition of state.requirementDefinitions.filter(
-          (entry) => entry.eventId === state.activeEventId,
-        )) {
-          state.requirementInstances.push({
-            id: createId('rqi'),
-            definitionId: definition.id,
-            participationId,
-            status: 'not_started',
-            value: '',
-            submittedAt: null,
-            reviewedAt: null,
-            updatedAt: timestamp,
-            version: 1,
-          })
+        if (participation) {
+          state.participations.push(participation)
+          for (const definition of state.requirementDefinitions.filter(
+            (entry) => entry.eventId === state.activeEventId,
+          )) {
+            state.requirementInstances.push({
+              id: createId('rqi'),
+              definitionId: definition.id,
+              participationId: participation.id,
+              status: 'not_started',
+              value: '',
+              submittedAt: null,
+              reviewedAt: null,
+              updatedAt: timestamp,
+              version: 1,
+            })
+          }
         }
         appendEvent(state, context, {
           type: 'person.created',
@@ -3035,12 +3086,14 @@ function applyHandler(
           summary: `Imported ${firstName} ${lastName}.`,
           data: { participationId },
         })
-        appendEvent(state, context, {
-          type: 'participation.created',
-          aggregate: { type: 'participation', id: participationId, version: 1 },
-          summary: `Added ${firstName} ${lastName} to the active event.`,
-          data: { personId, roles: ['speaker'] },
-        })
+        if (participation) {
+          appendEvent(state, context, {
+            type: 'participation.created',
+            aggregate: { type: 'participation', id: participation.id, version: 1 },
+            summary: `Added ${firstName} ${lastName} to the active event.`,
+            data: { personId, roles: ['speaker'] },
+          })
+        }
         imported.push({ personId, participationId, email })
       }
 

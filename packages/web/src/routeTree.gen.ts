@@ -18,6 +18,7 @@ import { Route as OperatorIndexRouteImport } from './routes/_operator.index'
 import { Route as OperatorAgentRouteImport } from './routes/_operator.agent'
 import { Route as OperatorChangesRouteImport } from './routes/_operator.changes'
 import { Route as OperatorCommunicationsRouteImport } from './routes/_operator.communications'
+import { Route as OperatorCrmRouteImport } from './routes/_operator.crm'
 import { Route as OperatorFilesRouteImport } from './routes/_operator.files'
 import { Route as OperatorFormsRouteImport } from './routes/_operator.forms'
 import { Route as OperatorIntegrationsRouteImport } from './routes/_operator.integrations'
@@ -77,6 +78,11 @@ const OperatorChangesRoute = OperatorChangesRouteImport.update({
 const OperatorCommunicationsRoute = OperatorCommunicationsRouteImport.update({
   id: '/communications',
   path: '/communications',
+  getParentRoute: () => OperatorRoute,
+} as any)
+const OperatorCrmRoute = OperatorCrmRouteImport.update({
+  id: '/crm',
+  path: '/crm',
   getParentRoute: () => OperatorRoute,
 } as any)
 const OperatorFilesRoute = OperatorFilesRouteImport.update({
@@ -172,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/agent': typeof OperatorAgentRoute
   '/changes': typeof OperatorChangesRoute
   '/communications': typeof OperatorCommunicationsRoute
+  '/crm': typeof OperatorCrmRoute
   '/files': typeof OperatorFilesRoute
   '/forms': typeof OperatorFormsRoute
   '/integrations': typeof OperatorIntegrationsRoute
@@ -197,6 +204,7 @@ export interface FileRoutesByTo {
   '/agent': typeof OperatorAgentRoute
   '/changes': typeof OperatorChangesRoute
   '/communications': typeof OperatorCommunicationsRoute
+  '/crm': typeof OperatorCrmRoute
   '/files': typeof OperatorFilesRoute
   '/forms': typeof OperatorFormsRoute
   '/integrations': typeof OperatorIntegrationsRoute
@@ -225,6 +233,7 @@ export interface FileRoutesById {
   '/_operator/agent': typeof OperatorAgentRoute
   '/_operator/changes': typeof OperatorChangesRoute
   '/_operator/communications': typeof OperatorCommunicationsRoute
+  '/_operator/crm': typeof OperatorCrmRoute
   '/_operator/files': typeof OperatorFilesRoute
   '/_operator/forms': typeof OperatorFormsRoute
   '/_operator/integrations': typeof OperatorIntegrationsRoute
@@ -254,6 +263,7 @@ export interface FileRouteTypes {
     | '/agent'
     | '/changes'
     | '/communications'
+    | '/crm'
     | '/files'
     | '/forms'
     | '/integrations'
@@ -279,6 +289,7 @@ export interface FileRouteTypes {
     | '/agent'
     | '/changes'
     | '/communications'
+    | '/crm'
     | '/files'
     | '/forms'
     | '/integrations'
@@ -306,6 +317,7 @@ export interface FileRouteTypes {
     | '/_operator/agent'
     | '/_operator/changes'
     | '/_operator/communications'
+    | '/_operator/crm'
     | '/_operator/files'
     | '/_operator/forms'
     | '/_operator/integrations'
@@ -402,6 +414,13 @@ declare module '@tanstack/react-router' {
       path: '/communications'
       fullPath: '/communications'
       preLoaderRoute: typeof OperatorCommunicationsRouteImport
+      parentRoute: typeof OperatorRoute
+    }
+    '/_operator/crm': {
+      id: '/_operator/crm'
+      path: '/crm'
+      fullPath: '/crm'
+      preLoaderRoute: typeof OperatorCrmRouteImport
       parentRoute: typeof OperatorRoute
     }
     '/_operator/files': {
@@ -523,6 +542,7 @@ interface OperatorRouteChildren {
   OperatorAgentRoute: typeof OperatorAgentRoute
   OperatorChangesRoute: typeof OperatorChangesRoute
   OperatorCommunicationsRoute: typeof OperatorCommunicationsRoute
+  OperatorCrmRoute: typeof OperatorCrmRoute
   OperatorFilesRoute: typeof OperatorFilesRoute
   OperatorFormsRoute: typeof OperatorFormsRoute
   OperatorIntegrationsRoute: typeof OperatorIntegrationsRoute
@@ -540,6 +560,7 @@ const OperatorRouteChildren: OperatorRouteChildren = {
   OperatorAgentRoute: OperatorAgentRoute,
   OperatorChangesRoute: OperatorChangesRoute,
   OperatorCommunicationsRoute: OperatorCommunicationsRoute,
+  OperatorCrmRoute: OperatorCrmRoute,
   OperatorFilesRoute: OperatorFilesRoute,
   OperatorFormsRoute: OperatorFormsRoute,
   OperatorIntegrationsRoute: OperatorIntegrationsRoute,

@@ -15,6 +15,7 @@ import {
   EnvelopeIcon,
   HomeIcon,
   InboxStackIcon,
+  IdentificationIcon,
   LinkIcon,
   MagnifyingGlassIcon,
   PaperClipIcon,
@@ -81,6 +82,7 @@ const navigation = [
   {
     label: 'People',
     items: [
+      { href: '/crm', label: 'CRM', icon: IdentificationIcon, iconClass: 'fill-fuchsia-500' },
       { href: '/people', label: 'Speakers', icon: UserGroupIcon, iconClass: 'fill-rose-500' },
       {
         href: '/readiness',
@@ -154,6 +156,10 @@ const commandDetails: Record<
   '/people': {
     description: 'Manage speakers and participation.',
     keywords: ['people', 'profiles'],
+  },
+  '/crm': {
+    description: 'Reuse contacts, source speakers, and build outreach lists.',
+    keywords: ['contacts', 'directory', 'segments', 'pipeline', 'crm'],
   },
   '/readiness': {
     description: 'Follow speaker tasks and requirements.',

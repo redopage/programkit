@@ -417,7 +417,12 @@ export interface OutboundMessage {
   eventId: Id
   campaignId: Id | null
   submissionId: Id | null
-  kind: 'submission_confirmation' | 'decision_notice' | 'reviewer_reminder' | 'campaign'
+  kind:
+    | 'submission_confirmation'
+    | 'decision_notice'
+    | 'reviewer_reminder'
+    | 'campaign'
+    | 'crm_outreach'
   trigger: string
   recipientName: string
   recipientEmail: string
