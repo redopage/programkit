@@ -33,6 +33,12 @@ automatic task reminders create one resolved outbox record per recipient as part
 operation. The object alarm drains queued messages after the transaction, records each attempt and
 provider message ID, and retries failures after 1, 5, 30, and 120 minutes up to five attempts.
 
+Calendar-invite campaigns resolve each recipient against the latest published schedule before the
+campaign enters the outbox. A scheduled speaker receives one personalized `.ics` attachment with
+their confirmed sessions, times, and rooms. The attachment is stored with the outbox record so a
+later schedule edit cannot silently change an already approved delivery. Cloudflare Email Service
+sends it as `text/calendar`, which can be imported by Google Calendar, Outlook, and Apple Calendar.
+
 The operator can inspect the exact recipient, subject, body, trigger, queued or sent time, attempt
 count, provider ID, and last delivery error in Communications. Workspace exports include the same
 records in `csv/outbound-messages.csv`. A message is marked `sent` only after Cloudflare Email
@@ -83,10 +89,10 @@ queue or Durable Object alarm
       └── retry or expose a terminal failure
 ```
 
-The outbox covers submission confirmations, decision notices, invitations, reminders, and approved
-campaigns. Calendar attachment delivery, suppression and unsubscribe state, a dead-letter action,
-and provider-level idempotency across a crash immediately after provider acceptance remain before
-using bulk mail for a production event.
+The outbox covers submission confirmations, decision notices, invitations, reminders, approved
+campaigns, and personalized calendar attachments. Suppression and unsubscribe state, a dead-letter
+action, and provider-level idempotency across a crash immediately after provider acceptance remain
+before using bulk mail for a production event.
 
 ## Self-hosting
 

@@ -141,6 +141,12 @@ export class WorkspaceDurableObject extends DurableObject {
         subject: string
         text?: string
         replyTo?: string
+        attachments?: Array<{
+          disposition: 'attachment'
+          filename: string
+          type: string
+          content: string
+        }>
       }): Promise<{ messageId: string }>
     }
   }
@@ -168,6 +174,12 @@ export class WorkspaceDurableObject extends DurableObject {
           subject: string
           text?: string
           replyTo?: string
+          attachments?: Array<{
+            disposition: 'attachment'
+            filename: string
+            type: string
+            content: string
+          }>
         }): Promise<{ messageId: string }>
       }
     }
@@ -584,6 +596,18 @@ export class WorkspaceDurableObject extends DurableObject {
           replyTo: this.#env.PROGRAMKIT_SUPPORT_EMAIL,
           subject: attempt.subject,
           text: this.#absoluteMessageBody(attempt.body),
+          ...(attempt.calendarAttachment
+            ? {
+                attachments: [
+                  {
+                    disposition: 'attachment' as const,
+                    filename: attempt.calendarAttachment.filename,
+                    type: attempt.calendarAttachment.contentType,
+                    content: attempt.calendarAttachment.content,
+                  },
+                ],
+              }
+            : {}),
         })
         await repository.mutate((current) => {
           const next = structuredClone(current)

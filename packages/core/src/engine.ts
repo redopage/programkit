@@ -1,4 +1,5 @@
 import { operationDefinition } from './manifest.ts'
+import { calendarAttachmentForParticipation } from './calendar.ts'
 import {
   dueRequirementReminders,
   requirementReminderSummary,
@@ -154,7 +155,9 @@ function initializeProgramCollections(state: WorkspaceState) {
     asset.sessionId ??= null
     asset.uploadedBy ??= { type: 'staff', id: 'system', name: 'ProgramKit' }
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 11)
+  for (const campaign of state.campaigns) campaign.includeCalendarInvite ??= false
+  for (const message of state.outboundMessages ?? []) message.calendarAttachment ??= null
+  state.schemaVersion = Math.max(state.schemaVersion, 12)
 }
 
 function queueOutboundMessage(
@@ -4242,6 +4245,7 @@ function applyHandler(
           audience === 'custom'
             ? assertStringArray(input.recipientParticipationIds ?? [], 'recipientParticipationIds')
             : [],
+        includeCalendarInvite: input.includeCalendarInvite === true,
         status: 'draft',
         createdAt: timestamp,
         approvedAt: null,
@@ -4317,6 +4321,9 @@ function applyHandler(
               recipientEmail: preview.recipientEmail,
               subject: preview.subject,
               body: preview.body,
+              calendarAttachment: campaign.includeCalendarInvite
+                ? calendarAttachmentForParticipation(state, participationId)
+                : null,
             },
             timestamp,
           )
@@ -4329,7 +4336,8 @@ function applyHandler(
         data: {
           recipientCount: campaign.recipientParticipationIds.length,
           messageIds: messages.map((message) => message.id),
-          deliveryMode: 'demo-outbox',
+          calendarInviteCount: messages.filter((message) => message.calendarAttachment).length,
+          deliveryMode: 'durable-outbox',
         },
       })
       return { campaign, messages }

@@ -1,4 +1,5 @@
 import { executeOperation } from './engine.ts'
+import { calendarDate, calendarEscape } from './calendar.ts'
 import { evaluationRoundIsBlind } from './reviews.ts'
 import { createWorkspaceExportArchive, workspaceExportFilename } from './export.ts'
 import { operationManifest } from './manifest.ts'
@@ -429,18 +430,6 @@ ${session.speakers
 ${sessions}
   </sessions>
 </program>`
-}
-
-function calendarEscape(value: string) {
-  return value
-    .replaceAll('\\', '\\\\')
-    .replaceAll(',', '\\,')
-    .replaceAll(';', '\\;')
-    .replaceAll(/\r?\n/gu, '\\n')
-}
-
-function calendarDate(value: string) {
-  return new Date(value).toISOString().replaceAll(/[-:]/gu, '').replace('.000', '')
 }
 
 function publicProgramCalendar(feed: NonNullable<ReturnType<typeof publicProgramFeed>>) {

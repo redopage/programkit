@@ -405,6 +405,7 @@ export interface Campaign {
   body: string
   audience: 'all_active' | 'unconfirmed' | 'missing_requirements' | 'custom'
   recipientParticipationIds: Id[]
+  includeCalendarInvite: boolean
   status: CampaignStatus
   createdAt: ISODateTime
   approvedAt: ISODateTime | null
@@ -430,6 +431,12 @@ export interface OutboundMessage {
   recipientEmail: string
   subject: string
   body: string
+  calendarAttachment?: {
+    filename: string
+    contentType: string
+    content: string
+    eventCount: number
+  } | null
   status: 'queued' | 'sent' | 'failed'
   queuedAt: ISODateTime
   sentAt: ISODateTime | null

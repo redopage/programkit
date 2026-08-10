@@ -1159,6 +1159,7 @@ const campaigns: Campaign[] = [
     recipientParticipationIds: participations
       .filter((participation) => participation.status === 'invited')
       .map((participation) => participation.id),
+    includeCalendarInvite: false,
     status: 'awaiting_approval',
     createdAt: seededAt,
     approvedAt: null,
@@ -1174,6 +1175,7 @@ const campaigns: Campaign[] = [
     body: 'Hi {{first_name}},\n\nYour speaker workspace is ready. Start with your profile and recording release.',
     audience: 'custom',
     recipientParticipationIds: participations.slice(0, 6).map((participation) => participation.id),
+    includeCalendarInvite: false,
     status: 'sent',
     createdAt: '2026-07-21T15:00:00.000Z',
     approvedAt: '2026-07-21T15:30:00.000Z',
@@ -1236,7 +1238,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 11,
+    schemaVersion: 12,
     revision: 1,
     workspace: {
       id: 'wrk_aie',

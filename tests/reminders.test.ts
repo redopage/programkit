@@ -221,4 +221,74 @@ describe('automatic speaker task reminders', () => {
       nextAttemptAt: null,
     })
   })
+
+  it('delivers a frozen speaker schedule as a Cloudflare email attachment', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-09T18:00:00.000Z'))
+    let state = createSeedState()
+    const participation = state.participations.find((entry) =>
+      state.scheduleReleases[0].placements.some((placement) => {
+        const session = state.sessions.find((candidate) => candidate.id === placement.sessionId)
+        return session?.participantIds.includes(entry.id)
+      }),
+    )!
+    const drafted = executeOperation(state, 'campaign.create-draft', {
+      input: {
+        name: 'Calendar delivery',
+        subject: 'Your published schedule',
+        body: 'Your calendar is attached.',
+        audience: 'custom',
+        recipientParticipationIds: [participation.id],
+        includeCalendarInvite: true,
+      },
+    })
+    state = drafted.state
+    let campaign = state.campaigns[0]
+    state = executeOperation(state, 'campaign.submit', {
+      input: { campaignId: campaign.id },
+      expectedVersions: { [campaign.id]: campaign.version },
+    }).state
+    campaign = state.campaigns.find((entry) => entry.id === campaign.id)!
+    state = executeOperation(state, 'campaign.approve', {
+      input: { campaignId: campaign.id },
+      expectedVersions: { [campaign.id]: campaign.version },
+    }).state
+    campaign = state.campaigns.find((entry) => entry.id === campaign.id)!
+    state = executeOperation(state, 'campaign.send', {
+      input: { campaignId: campaign.id },
+      expectedVersions: { [campaign.id]: campaign.version },
+    }).state
+
+    const storage = new MemoryStorage()
+    storage.values.set('workspace-state', state)
+    const delivered: Array<Record<string, unknown>> = []
+    const workspace = new WorkspaceDurableObject(
+      { storage } as unknown as DurableObjectState,
+      {
+        PROGRAMKIT_EMAIL_FROM: 'notifications@mail.programkit.dev',
+        EMAIL: {
+          async send(message: Record<string, unknown>) {
+            delivered.push(message)
+            return { messageId: 'provider-calendar-001' }
+          },
+        },
+      } as unknown as Cloudflare.Env,
+    )
+
+    await workspace.alarm()
+    expect(delivered).toContainEqual(
+      expect.objectContaining({
+        to: state.outboundMessages?.[0]?.recipientEmail,
+        subject: 'Your published schedule',
+        attachments: [
+          expect.objectContaining({
+            disposition: 'attachment',
+            filename: expect.stringMatching(/-schedule\.ics$/u),
+            type: 'text/calendar; method=PUBLISH; charset=utf-8',
+            content: expect.stringContaining('BEGIN:VCALENDAR\r\n'),
+          }),
+        ],
+      }),
+    )
+  })
 })

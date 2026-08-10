@@ -1,4 +1,6 @@
 export { executeOperation } from './engine.ts'
+export { calendarAttachmentForParticipation, calendarDate, calendarEscape } from './calendar.ts'
+export type { CalendarAttachment } from './calendar.ts'
 export {
   contactConnections,
   crmDashboard,

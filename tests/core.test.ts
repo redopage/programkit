@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  calendarAttachmentForParticipation,
   createEmptyWorkspaceState,
   createSeedState,
   campaignPreview,
@@ -1119,6 +1120,55 @@ describe('ProgramKit operation engine', () => {
       status: 'queued',
     })
     expect(`${messages?.[0]?.subject}${messages?.[0]?.body}`).not.toContain('{{')
+  })
+
+  it('freezes each scheduled speaker calendar into the approved campaign outbox', () => {
+    let state = createSeedState()
+    const participation = state.participations.find((entry) =>
+      calendarAttachmentForParticipation(state, entry.id),
+    )!
+    const attachment = calendarAttachmentForParticipation(state, participation.id)!
+    expect(attachment.content).toContain('BEGIN:VCALENDAR\r\n')
+    expect(attachment.content).toContain('METHOD:PUBLISH\r\n')
+    expect(attachment.content.match(/BEGIN:VEVENT/gu)).toHaveLength(attachment.eventCount)
+    expect(attachment.filename).toMatch(/-schedule\.ics$/u)
+
+    const drafted = executeOperation(state, 'campaign.create-draft', {
+      input: {
+        name: 'Speaker calendar delivery',
+        subject: 'Your published schedule',
+        body: 'Your confirmed sessions are attached.',
+        audience: 'custom',
+        recipientParticipationIds: [participation.id],
+        includeCalendarInvite: true,
+      },
+    })
+    state = drafted.state
+    let campaign = state.campaigns[0]
+    const submitted = executeOperation(state, 'campaign.submit', {
+      input: { campaignId: campaign.id },
+      expectedVersions: { [campaign.id]: campaign.version },
+    })
+    state = submitted.state
+    campaign = state.campaigns.find((entry) => entry.id === campaign.id)!
+    const approved = executeOperation(state, 'campaign.approve', {
+      input: { campaignId: campaign.id },
+      expectedVersions: { [campaign.id]: campaign.version },
+    })
+    state = approved.state
+    campaign = state.campaigns.find((entry) => entry.id === campaign.id)!
+    const sent = executeOperation(state, 'campaign.send', {
+      input: { campaignId: campaign.id },
+      expectedVersions: { [campaign.id]: campaign.version },
+    })
+
+    expect(sent.response.ok).toBe(true)
+    expect(sent.state.outboundMessages?.[0]?.calendarAttachment).toMatchObject({
+      filename: attachment.filename,
+      contentType: 'text/calendar; method=PUBLISH; charset=utf-8',
+      eventCount: attachment.eventCount,
+    })
+    expect(sent.state.outboundMessages?.[0]?.calendarAttachment?.content).toBe(attachment.content)
   })
 
   it('renders campaign merge fields for a real event participant', () => {

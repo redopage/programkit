@@ -55,6 +55,12 @@ interface Env {
       html?: string
       text?: string
       replyTo?: string
+      attachments?: Array<{
+        disposition: 'attachment'
+        filename: string
+        type: string
+        content: string
+      }>
     }): Promise<{ messageId: string }>
   }
   AIRTABLE_TOKEN?: string

@@ -1,4 +1,5 @@
 import {
+  CalendarDaysIcon,
   CheckIcon,
   ChevronUpDownIcon,
   EnvelopeIcon,
@@ -8,6 +9,7 @@ import {
 import { useState, type FormEvent } from 'react'
 
 import {
+  calendarAttachmentForParticipation,
   campaignPreview,
   participationPerson,
   readinessRows,
@@ -19,6 +21,7 @@ import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Button,
   Callout,
+  Checkbox,
   Drawer,
   FilterTabs,
   PageHeader,
@@ -38,6 +41,7 @@ type CampaignTemplate = {
   subject: string
   body: string
   audience: Campaign['audience']
+  includeCalendarInvite: boolean
 }
 
 const campaignTemplates: CampaignTemplate[] = [
@@ -48,6 +52,7 @@ const campaignTemplates: CampaignTemplate[] = [
     subject: 'Welcome to {{event_name}}, {{first_name}}',
     body: 'Hi {{first_name}},\n\nWe are glad you are joining us for {{event_name}}. Your session is {{session}}.\n\nOpen your private speaker portal to review the details:\n{{portal_link}}',
     audience: 'all_active',
+    includeCalendarInvite: false,
   },
   {
     id: 'portal',
@@ -56,6 +61,7 @@ const campaignTemplates: CampaignTemplate[] = [
     subject: 'Your {{event_name}} speaker portal',
     body: 'Hi {{first_name}},\n\nYour speaker portal is ready. Use it to update your profile and complete your assigned work:\n{{portal_link}}',
     audience: 'all_active',
+    includeCalendarInvite: false,
   },
   {
     id: 'requirements',
@@ -64,6 +70,16 @@ const campaignTemplates: CampaignTemplate[] = [
     subject: 'Tasks to finish for {{event_name}}',
     body: 'Hi {{first_name}},\n\nHere is what still needs your attention:\n\n{{outstanding_tasks}}\n\nOpen your speaker portal to finish these items:\n{{portal_link}}',
     audience: 'missing_requirements',
+    includeCalendarInvite: false,
+  },
+  {
+    id: 'calendar',
+    label: 'Session calendar invite',
+    name: 'Speaker calendar invite',
+    subject: 'Add your {{event_name}} sessions to your calendar',
+    body: 'Hi {{first_name}},\n\nYour session schedule for {{event_name}} is attached. Open the calendar file to add the confirmed time and room to Google Calendar, Outlook, or Apple Calendar.\n\nYou can also review your speaker workspace here:\n{{portal_link}}',
+    audience: 'all_active',
+    includeCalendarInvite: true,
   },
 ]
 
@@ -379,6 +395,16 @@ function MessageDrawer({
         <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
           <p className="whitespace-pre-wrap text-pretty text-sm text-zinc-700">{message.body}</p>
         </div>
+        {message.calendarAttachment ? (
+          <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-950 ring-1 ring-blue-600/10">
+            <CalendarDaysIcon className="size-4 shrink-0 fill-blue-600" />
+            <span className="min-w-0 truncate">{message.calendarAttachment.filename}</span>
+            <span className="ml-auto shrink-0 text-blue-700">
+              {message.calendarAttachment.eventCount}{' '}
+              {message.calendarAttachment.eventCount === 1 ? 'session' : 'sessions'}
+            </span>
+          </div>
+        ) : null}
         {message.status === 'sent' ? (
           <Callout tone="success" title="Delivered">
             <p>ProgramKit sent this message and recorded the provider result.</p>
@@ -459,7 +485,7 @@ function CampaignDrawer({
             'campaign.send',
             { campaignId: campaign.id },
             { expectedVersions: { [campaign.id]: campaign.version } },
-            'Campaign marked sent in the demo. No email provider was contacted.',
+            'Campaign queued for delivery.',
           )
         }
       >
@@ -488,6 +514,14 @@ function CampaignDrawer({
             <dt className="text-base font-medium text-zinc-950 sm:text-sm">Subject</dt>
             <dd className="text-pretty text-base text-zinc-500 sm:text-sm">{campaign.subject}</dd>
           </div>
+          {campaign.includeCalendarInvite ? (
+            <div>
+              <dt className="text-base font-medium text-zinc-950 sm:text-sm">Calendar invite</dt>
+              <dd className="text-pretty text-base text-zinc-500 sm:text-sm">
+                Each scheduled speaker receives their own published sessions as an .ics file.
+              </dd>
+            </div>
+          ) : null}
         </dl>
         <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
           <p className="whitespace-pre-wrap text-pretty text-base text-zinc-700 sm:text-sm">
@@ -524,11 +558,13 @@ function ComposeDrawer({
     subject: string
     body: string
     audience: Campaign['audience']
+    includeCalendarInvite: boolean
   }>({
     name: defaultTemplate.name,
     subject: defaultTemplate.subject,
     body: defaultTemplate.body,
     audience: defaultTemplate.audience,
+    includeCalendarInvite: defaultTemplate.includeCalendarInvite,
   })
   if (!payload) return null
   const { state } = payload
@@ -558,6 +594,12 @@ function ComposeDrawer({
   const preview = resolvedPreviewId
     ? campaignPreview(state, { subject: form.subject, body: form.body }, resolvedPreviewId)
     : null
+  const previewCalendar = resolvedPreviewId
+    ? calendarAttachmentForParticipation(state, resolvedPreviewId)
+    : null
+  const scheduledRecipientCount = previewRecipients.filter(({ participation }) =>
+    calendarAttachmentForParticipation(state, participation.id),
+  ).length
 
   function applyTemplate(nextTemplateId: string) {
     const template = campaignTemplates.find((entry) => entry.id === nextTemplateId)
@@ -569,6 +611,7 @@ function ComposeDrawer({
       subject: template.subject,
       body: template.body,
       audience: template.audience,
+      includeCalendarInvite: template.includeCalendarInvite,
     }))
   }
 
@@ -586,6 +629,7 @@ function ComposeDrawer({
       subject: defaultTemplate.subject,
       body: defaultTemplate.body,
       audience: defaultTemplate.audience,
+      includeCalendarInvite: defaultTemplate.includeCalendarInvite,
     })
     setTemplateId(defaultTemplate.id)
     onClose()
@@ -689,6 +733,22 @@ function ComposeDrawer({
             className={textAreaControl}
           />
         </label>
+        <div className="flex flex-col gap-1.5 rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
+          <Checkbox
+            id="campaign-calendar-invite"
+            name="includeCalendarInvite"
+            label="Attach each speaker's published schedule"
+            checked={form.includeCalendarInvite}
+            onChange={(includeCalendarInvite) =>
+              setForm((current) => ({ ...current, includeCalendarInvite }))
+            }
+          />
+          <p className="pl-7 text-sm text-zinc-500 sm:pl-6">
+            {scheduledRecipientCount} of {previewRecipients.length} recipients currently have a
+            published session. Calendar files work with Google Calendar, Outlook, and Apple
+            Calendar.
+          </p>
+        </div>
         <div className="rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-base font-medium text-zinc-950 sm:text-sm">Recipient preview</p>
@@ -725,6 +785,22 @@ function ComposeDrawer({
               <p className="whitespace-pre-wrap text-pretty text-sm text-zinc-700">
                 {preview.body}
               </p>
+              {form.includeCalendarInvite ? (
+                previewCalendar ? (
+                  <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-zinc-700 ring-1 ring-zinc-950/10">
+                    <CalendarDaysIcon className="size-4 shrink-0 fill-blue-600" />
+                    <span className="min-w-0 truncate">{previewCalendar.filename}</span>
+                    <span className="ml-auto shrink-0 text-zinc-500">
+                      {previewCalendar.eventCount}{' '}
+                      {previewCalendar.eventCount === 1 ? 'session' : 'sessions'}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-amber-700">
+                    This speaker has no session in the published schedule yet.
+                  </p>
+                )
+              ) : null}
             </div>
           ) : (
             <p className="mt-3 text-sm text-zinc-500">
