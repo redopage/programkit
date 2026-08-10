@@ -72,8 +72,9 @@ guidance for token handling, enumeration resistance, session rotation, logout, a
 
 The hosted app sign-in screen, password derivation, email delivery, one-time exchange, session
 validation, event membership, team invitations, event creation, switching, and logout are
-implemented. Reviewer and speaker access uses record-scoped capabilities rather than account
-sessions. Authenticated password changes, account recovery, and optional MFA remain. See
+implemented. Public participants can create a separate event-scoped password account and recover
+matching submission, reviewer, and speaker capabilities by normalized email. Authenticated
+password changes, account recovery, and optional MFA remain. See
 [Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).
 
 ## Required delivery path

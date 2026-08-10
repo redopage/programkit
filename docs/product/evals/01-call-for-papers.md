@@ -47,11 +47,11 @@ assignments already in progress.
 
 ## Identity model
 
-The hosted open-source reference uses unguessable speaker, reviewer, and participant capabilities
-for role-scoped public surfaces. Staff use password or magic-link authentication and event
-memberships. The capabilities are practical for a deterministic evaluator and hosted demo, but
-production operators should follow the identity hardening checklist in `SECURITY.md` before using
-real participant data.
+The hosted reference uses event-scoped email and password accounts for public submitters. A signed
+in participant can recover only the submission, reviewer, and speaker destinations whose stored
+email matches that account. Each destination still uses an unguessable record capability, and the
+Worker verifies that capability on every projected read and operation. Staff authentication and
+event membership remain completely separate.
 
 ## Remaining manual evidence
 

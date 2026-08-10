@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as OperatorRouteImport } from './routes/_operator'
+import { Route as AccessRouteImport } from './routes/access'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -38,6 +39,11 @@ import { Route as SubmitFormSlugMineSpeakerAccessKeyRouteImport } from './routes
 
 const OperatorRoute = OperatorRouteImport.update({
   id: '/_operator',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccessRoute = AccessRouteImport.update({
+  id: '/access',
+  path: '/access',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgendaRoute = AgendaRouteImport.update({
@@ -171,6 +177,7 @@ const SubmitFormSlugMineSpeakerAccessKeyRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof OperatorIndexRoute
+  '/access': typeof AccessRoute
   '/agenda': typeof AgendaRoute
   '/demo': typeof DemoRoute
   '/privacy': typeof PrivacyRoute
@@ -197,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/submit/$formSlug/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
 export interface FileRoutesByTo {
+  '/access': typeof AccessRoute
   '/agenda': typeof AgendaRoute
   '/demo': typeof DemoRoute
   '/privacy': typeof PrivacyRoute
@@ -226,6 +234,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_operator': typeof OperatorRouteWithChildren
+  '/access': typeof AccessRoute
   '/agenda': typeof AgendaRoute
   '/demo': typeof DemoRoute
   '/privacy': typeof PrivacyRoute
@@ -256,6 +265,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/access'
     | '/agenda'
     | '/demo'
     | '/privacy'
@@ -282,6 +292,7 @@ export interface FileRouteTypes {
     | '/submit/$formSlug/mine/$speakerAccessKey'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/access'
     | '/agenda'
     | '/demo'
     | '/privacy'
@@ -310,6 +321,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_operator'
+    | '/access'
     | '/agenda'
     | '/demo'
     | '/privacy'
@@ -339,6 +351,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   OperatorRoute: typeof OperatorRouteWithChildren
+  AccessRoute: typeof AccessRoute
   AgendaRoute: typeof AgendaRoute
   DemoRoute: typeof DemoRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -358,6 +371,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof OperatorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/access': {
+      id: '/access'
+      path: '/access'
+      fullPath: '/access'
+      preLoaderRoute: typeof AccessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agenda': {
@@ -580,6 +600,7 @@ const OperatorRouteWithChildren = OperatorRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   OperatorRoute: OperatorRouteWithChildren,
+  AccessRoute: AccessRoute,
   AgendaRoute: AgendaRoute,
   DemoRoute: DemoRoute,
   PrivacyRoute: PrivacyRoute,

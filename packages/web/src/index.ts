@@ -2,9 +2,11 @@ export { App, ProgramKitApp } from './App.tsx'
 export { ProgramKitMark } from './components/brand.tsx'
 export { createProgramKitHttpClient } from './client/http.ts'
 export {
+  externalAccessPath,
   publicProgramPath,
   publicSubmissionPath,
   reviewerAccessPath,
+  speakerSubmissionsPath,
   speakerPortalPath,
 } from './lib/public-links.ts'
 export { surfaceFromPathname, surfaceKey } from './client/surfaces.ts'

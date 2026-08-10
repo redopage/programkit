@@ -55,10 +55,9 @@ The URL is a bearer capability. Anyone with it can edit, and there is no individ
 revocation. The operator, reviewer, submitter, and speaker identities remain demo conveniences.
 Do not enter personal information, private files, provider credentials, or production data.
 
-The hosted app has verified staff sessions and event membership, but the demo deliberately keeps
-its capability and fixed actors. Before using real data, add participant and reviewer identity,
-team roles, public event links, abuse protection, and the controls in
-[`SECURITY.md`](../../SECURITY.md).
+The hosted app has verified staff and participant sessions, but the demo deliberately keeps its
+capability and fixed actors. Never enter real data in a disposable demo. A production deployment
+still needs edge abuse protection and the controls in [`SECURITY.md`](../../SECURITY.md).
 
 ## Later hardening
 

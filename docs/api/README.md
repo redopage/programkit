@@ -23,9 +23,18 @@ These browser endpoints are available only on the hosted app. Mutations require 
 | `GET`  | `/api/v1/account`              | Read the signed-in user's accessible events          |
 | `POST` | `/api/v1/events`               | Create and select an isolated empty event            |
 | `POST` | `/api/v1/account/active-event` | Select an event from verified membership             |
+| `POST` | `/public/v1/access/password`   | Create or restore an event participant account       |
+| `GET`  | `/public/v1/access/session`    | Resolve that account's event-scoped destinations     |
+| `POST` | `/public/v1/access/logout`     | Revoke the participant session                       |
 
 Password requests include `email`, `password`, and `intent`, where intent is `signup` or `signin`.
 Passwords must contain 10 to 128 characters. Passwords are never returned or stored directly.
+
+Participant credentials use the same password policy but a separate per-event session. They never
+create a staff membership. After authentication, the Worker matches the normalized account email
+to submissions, reviewer records, and accepted-speaker participation records in that event. It
+returns only the corresponding record-scoped destinations. The underlying capability remains the
+authorization boundary for each projected surface.
 
 Event team access uses these same-origin browser endpoints:
 

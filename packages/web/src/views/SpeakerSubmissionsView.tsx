@@ -14,6 +14,7 @@ import { ProgramKitMark } from '../components/brand.tsx'
 import { SubmissionAnswerFields } from '../components/SubmissionAnswerFields.tsx'
 import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
 import { Button, StatusBadge, sentenceCase } from '../components/ui.tsx'
+import { externalAccessPath, publicSubmissionPath } from '../lib/public-links.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 
 function answerText(value: unknown) {
@@ -61,6 +62,7 @@ export function SpeakerSubmissionsView({
   const availability = form ? submissionFormAvailability(form) : 'closed'
   const canEdit =
     availability === 'open' && selected?.status !== 'accepted' && selected?.status !== 'withdrawn'
+  const accessHref = event ? externalAccessPath(event.id, formSlug) : null
 
   useEffect(() => {
     if (!selected) return
@@ -144,7 +146,17 @@ export function SpeakerSubmissionsView({
             <ProgramKitMark className="size-6" />
             ProgramKit
           </a>
-          <p className="truncate text-base text-zinc-500 sm:text-sm">{event.name}</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <p className="truncate text-base text-zinc-500 sm:text-sm">{event.name}</p>
+            {accessHref ? (
+              <a
+                href={accessHref}
+                className="focus-ring shrink-0 rounded-lg text-base font-medium text-zinc-600 hover:text-zinc-950 sm:text-sm"
+              >
+                Event access
+              </a>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -162,7 +174,7 @@ export function SpeakerSubmissionsView({
             <Button
               variant="primary"
               onClick={() => {
-                window.location.href = `/submit/${formSlug}`
+                window.location.href = publicSubmissionPath(event.id, formSlug)
               }}
             >
               <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
@@ -178,7 +190,9 @@ export function SpeakerSubmissionsView({
               This private speaker link is no longer connected to a proposal.
             </p>
             <div className="flex justify-center pt-5">
-              <Button onClick={() => (window.location.href = `/submit/${formSlug}`)}>
+              <Button
+                onClick={() => (window.location.href = publicSubmissionPath(event.id, formSlug))}
+              >
                 Return to the call for proposals
               </Button>
             </div>

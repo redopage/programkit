@@ -37,6 +37,9 @@ async function body(response: Response) {
       version: number
     }
     invitation?: { id: string; status: string }
+    identity?: { id: string; email: string }
+    sessionToken?: string
+    sessionExpiresAt?: string
   }
 }
 
@@ -182,5 +185,93 @@ describe('EventAccessDurableObject', () => {
     const expired = await consume(created.result.token!, member)
     expect(expired.response.status).toBe(410)
     expect(expired.result.code).toBe('INVITATION_EXPIRED')
+  })
+
+  it('creates isolated participant credentials and restores an event-scoped session', async () => {
+    await initialize()
+    const signup = await access.fetch(
+      request('/internal/event-access/external/password', {
+        eventId: event.id,
+        email: 'Priya@example.com',
+        password: 'a-long-test-password',
+        intent: 'signup',
+        ipHash: 'ip-one',
+      }),
+    )
+    const signedUp = await body(signup)
+    expect(signup.status).toBe(201)
+    expect(signedUp.identity).toMatchObject({ email: 'priya@example.com' })
+    expect(signedUp.sessionToken).toMatch(/^[a-f0-9]{64}$/u)
+
+    const restored = await access.fetch(
+      request('/internal/event-access/external/session', {
+        eventId: event.id,
+        token: signedUp.sessionToken,
+      }),
+    )
+    expect(await body(restored)).toMatchObject({
+      ok: true,
+      event,
+      identity: { email: 'priya@example.com' },
+    })
+
+    vi.advanceTimersByTime(1_000)
+
+    const duplicate = await access.fetch(
+      request('/internal/event-access/external/password', {
+        eventId: event.id,
+        email: 'priya@example.com',
+        password: 'another-long-password',
+        intent: 'signup',
+        ipHash: 'ip-two',
+      }),
+    )
+    expect(duplicate.status).toBe(409)
+    expect(await body(duplicate)).toMatchObject({ code: 'ACCOUNT_EXISTS' })
+  })
+
+  it('rejects the wrong participant password and invalidates logout immediately', async () => {
+    await initialize()
+    const signup = await access.fetch(
+      request('/internal/event-access/external/password', {
+        eventId: event.id,
+        email: 'speaker@example.com',
+        password: 'speaker-password',
+        intent: 'signup',
+        ipHash: 'ip-three',
+      }),
+    )
+    const signedUp = await body(signup)
+    vi.advanceTimersByTime(1_000)
+
+    const wrongPassword = await access.fetch(
+      request('/internal/event-access/external/password', {
+        eventId: event.id,
+        email: 'speaker@example.com',
+        password: 'incorrect-password',
+        intent: 'signin',
+        ipHash: 'ip-three',
+      }),
+    )
+    expect(wrongPassword.status).toBe(401)
+    expect(await body(wrongPassword)).toMatchObject({ code: 'INVALID_CREDENTIALS' })
+
+    expect(
+      (
+        await access.fetch(
+          request('/internal/event-access/external/logout', {
+            eventId: event.id,
+            token: signedUp.sessionToken,
+          }),
+        )
+      ).status,
+    ).toBe(200)
+    const afterLogout = await access.fetch(
+      request('/internal/event-access/external/session', {
+        eventId: event.id,
+        token: signedUp.sessionToken,
+      }),
+    )
+    expect(afterLogout.status).toBe(401)
   })
 })

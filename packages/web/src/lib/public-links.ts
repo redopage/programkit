@@ -36,6 +36,30 @@ export function publicSubmissionPath(
   return withHostedEvent(`/submit/${encodeURIComponent(formSlug)}`, eventId, profile)
 }
 
+export function externalAccessPath(
+  eventId: string,
+  formSlug?: string,
+  profile: DeploymentProfile = currentDeploymentProfile(),
+) {
+  if (profile !== 'hosted-app') return null
+  const search = new URLSearchParams({ event: eventId })
+  if (formSlug) search.set('form', formSlug)
+  return `/access?${search}`
+}
+
+export function speakerSubmissionsPath(
+  eventId: string,
+  formSlug: string,
+  speakerAccessKey: string,
+  profile: DeploymentProfile = currentDeploymentProfile(),
+) {
+  return withHostedEvent(
+    `/submit/${encodeURIComponent(formSlug)}/mine/${encodeURIComponent(speakerAccessKey)}`,
+    eventId,
+    profile,
+  )
+}
+
 export function reviewerAccessPath(
   eventId: string,
   reviewerId: string,

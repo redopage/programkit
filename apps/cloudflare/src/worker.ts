@@ -5,6 +5,7 @@ import {
   createStoredZip,
   exchangeAirtableAuthorizationCode,
   listAirtableBases,
+  submissionAnswerByPurpose,
   verifyAirtableWebhookMac,
   type OperationRequest,
   type OperationResponse,
@@ -74,10 +75,12 @@ const workspaceCookieName = 'programkit_workspace'
 const eventCookieName = 'programkit_event'
 const sessionCookieName = 'programkit_session'
 const invitationCookieName = 'programkit_invitation'
+const externalSessionCookieName = 'programkit_external_session'
 const publicEventCookieName = 'programkit_public_event'
 const workspaceKeyPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u
 const hostedEventIdPattern = /^evt_[a-f0-9]{24}$/u
 const invitationTokenPattern = /^(evt_[a-f0-9]{24})\.([a-f0-9]{64})$/u
+const externalSessionPattern = /^(evt_[a-f0-9]{24})\.([a-f0-9]{64})$/u
 const airtableCallbackPath = '/api/v1/integrations/airtable/oauth/callback'
 
 function deploymentProfile(env: Env) {
@@ -332,6 +335,7 @@ function isHostedAlwaysPublicPage(pathname: string) {
 function isHostedPublicDocument(pathname: string) {
   return (
     pathname === '/agenda' ||
+    pathname === '/access' ||
     pathname.startsWith('/submit/') ||
     /^\/reviewer\/[^/]+\/[^/]+\/?$/u.test(pathname) ||
     /^\/portal\/[^/]+\/[^/]+\/?$/u.test(pathname)
@@ -351,6 +355,284 @@ export function hostedPublicEventId(request: Request, url: URL) {
     const selected = cookie(request, publicEventCookieName)
     return selected && hostedEventIdPattern.test(selected) ? selected : null
   }
+  return null
+}
+
+interface ExternalAccessIdentity {
+  id: string
+  email: string
+}
+
+interface ExternalAccessDestination {
+  id: string
+  kind: 'submissions' | 'reviewer' | 'speaker'
+  label: string
+  detail: string
+  href: string
+}
+
+interface ExternalAccessResponse {
+  ok: boolean
+  code?: string
+  error?: string
+  identity?: ExternalAccessIdentity
+  sessionToken?: string
+  sessionExpiresAt?: string
+}
+
+function externalSessionCookie(eventId: string, token: string, url: URL, expiresAt: string) {
+  const maxAge = Math.max(0, Math.floor((Date.parse(expiresAt) - Date.now()) / 1_000))
+  return authCookie(externalSessionCookieName, `${eventId}.${token}`, url, maxAge)
+}
+
+function parseExternalSession(value: string | null, eventId: string) {
+  const match = value?.match(externalSessionPattern)
+  return match?.[1] === eventId ? match[2] : null
+}
+
+function externalAccessHref(pathname: string, eventId: string) {
+  const search = new URLSearchParams({ event: eventId })
+  return `${pathname}?${search}`
+}
+
+function externalAccessDestinations(
+  state: WorkspaceState,
+  email: string,
+  eventId: string,
+): ExternalAccessDestination[] {
+  const normalizedEmail = normalizeEmail(email)
+  if (!normalizedEmail) return []
+  const destinations: ExternalAccessDestination[] = []
+  const seenSubmissionKeys = new Set<string>()
+
+  for (const submission of state.submissions) {
+    const submissionEmail = normalizeEmail(submissionAnswerByPurpose(state, submission, 'email'))
+    if (submission.eventId !== eventId || submissionEmail !== normalizedEmail) continue
+    const form = state.submissionForms.find((entry) => entry.id === submission.formId)
+    if (!form) continue
+    const key = `${form.id}:${submission.speakerAccessKey}`
+    if (seenSubmissionKeys.has(key)) continue
+    seenSubmissionKeys.add(key)
+    destinations.push({
+      id: `submissions:${key}`,
+      kind: 'submissions',
+      label: form.title,
+      detail: 'Your proposals and decisions',
+      href: externalAccessHref(
+        `/submit/${encodeURIComponent(form.slug)}/mine/${encodeURIComponent(submission.speakerAccessKey)}`,
+        eventId,
+      ),
+    })
+  }
+
+  for (const reviewer of state.reviewers) {
+    if (
+      reviewer.eventId !== eventId ||
+      reviewer.status === 'inactive' ||
+      normalizeEmail(reviewer.email) !== normalizedEmail
+    ) {
+      continue
+    }
+    destinations.push({
+      id: `reviewer:${reviewer.id}`,
+      kind: 'reviewer',
+      label: 'Reviewer workspace',
+      detail: reviewer.name,
+      href: externalAccessHref(
+        `/reviewer/${encodeURIComponent(reviewer.id)}/${encodeURIComponent(reviewer.accessKey)}`,
+        eventId,
+      ),
+    })
+  }
+
+  for (const participation of state.participations) {
+    if (participation.eventId !== eventId) continue
+    const person = state.people.find((entry) => entry.id === participation.personId)
+    if (!person || normalizeEmail(person.email) !== normalizedEmail) continue
+    destinations.push({
+      id: `speaker:${participation.id}`,
+      kind: 'speaker',
+      label: 'Speaker portal',
+      detail: `${person.firstName} ${person.lastName}`,
+      href: externalAccessHref(
+        `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}`,
+        eventId,
+      ),
+    })
+  }
+
+  return destinations.sort((left, right) => left.label.localeCompare(right.label))
+}
+
+async function externalAccessPayload(
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  identity: ExternalAccessIdentity,
+  eventId: string,
+  formSlug?: string | null,
+) {
+  const destinations = externalAccessDestinations(
+    await readWorkspace(stub),
+    identity.email,
+    eventId,
+  )
+  const submissionDestination = formSlug
+    ? destinations.find((destination) => {
+        if (destination.kind !== 'submissions') return false
+        const pathname = new URL(destination.href, 'https://programkit.invalid').pathname
+        return pathname.startsWith(`/submit/${encodeURIComponent(formSlug)}/mine/`)
+      })
+    : null
+  const accessKey = submissionDestination
+    ? decodeURIComponent(
+        new URL(submissionDestination.href, 'https://programkit.invalid').pathname
+          .split('/')
+          .at(-1) ?? '',
+      )
+    : null
+  return { identity, destinations, submissionAccessKey: accessKey || null }
+}
+
+async function handleExternalAccessRequest(request: Request, env: Env, url: URL, eventId: string) {
+  const access = eventAccessStub(env, eventId)
+  if (!access) {
+    return Response.json(
+      { ok: false, error: 'Participant access is unavailable.' },
+      { status: 503, headers: { 'cache-control': 'no-store' } },
+    )
+  }
+  const workspace = workspaceStub(env, eventWorkspaceKey(eventId))
+  const formSlug = url.searchParams.get('form')
+  const sessionToken = parseExternalSession(cookie(request, externalSessionCookieName), eventId)
+
+  if (request.method === 'GET' && url.pathname === '/public/v1/access/session') {
+    if (!sessionToken) {
+      return Response.json(
+        { ok: true, authenticated: false },
+        { headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const response = await access.fetch(
+      new Request('http://event-access.internal/internal/event-access/external/session', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ eventId, token: sessionToken }),
+      }),
+    )
+    const body = (await response.json()) as ExternalAccessResponse
+    if (!response.ok || !body.identity) {
+      return Response.json(
+        { ok: true, authenticated: false },
+        {
+          headers: {
+            'cache-control': 'no-store',
+            'set-cookie': clearAuthCookie(externalSessionCookieName, url),
+          },
+        },
+      )
+    }
+    return Response.json(
+      {
+        ok: true,
+        authenticated: true,
+        ...(await externalAccessPayload(workspace, body.identity, eventId, formSlug)),
+      },
+      { headers: { 'cache-control': 'no-store' } },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/public/v1/access/password') {
+    if (!sameOrigin(request, url)) {
+      return Response.json(
+        { ok: false, error: 'Cross-origin requests are not allowed.' },
+        { status: 403 },
+      )
+    }
+    const input = (await request.json()) as Record<string, unknown>
+    const email = normalizeEmail(input.email)
+    const password = typeof input.password === 'string' ? input.password : ''
+    const intent = input.intent === 'signup' ? 'signup' : 'signin'
+    if (!email || password.length < 10 || password.length > 128) {
+      return Response.json(
+        { ok: false, error: 'Enter a valid email and a password with at least 10 characters.' },
+        { status: 400, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const ipHash = await hashValue(request.headers.get('cf-connecting-ip') ?? 'local')
+    const authenticatedResponse = await access.fetch(
+      new Request('http://event-access.internal/internal/event-access/external/password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ eventId, email, password, intent, ipHash }),
+      }),
+    )
+    const authenticated = (await authenticatedResponse.json()) as ExternalAccessResponse
+    if (
+      !authenticatedResponse.ok ||
+      !authenticated.identity ||
+      !authenticated.sessionToken ||
+      !authenticated.sessionExpiresAt
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          code: authenticated.code,
+          error:
+            authenticated.error ??
+            (intent === 'signup'
+              ? 'That account already exists. Sign in instead.'
+              : 'The email or password is incorrect.'),
+        },
+        {
+          status: authenticatedResponse.status,
+          headers: { 'cache-control': 'no-store' },
+        },
+      )
+    }
+    const payload = await externalAccessPayload(
+      workspace,
+      authenticated.identity,
+      eventId,
+      formSlug,
+    )
+    return Response.json(
+      { ok: true, authenticated: true, ...payload },
+      {
+        status: intent === 'signup' ? 201 : 200,
+        headers: {
+          'cache-control': 'no-store',
+          'set-cookie': externalSessionCookie(
+            eventId,
+            authenticated.sessionToken,
+            url,
+            authenticated.sessionExpiresAt,
+          ),
+        },
+      },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/public/v1/access/logout') {
+    if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+    if (sessionToken) {
+      await access.fetch(
+        new Request('http://event-access.internal/internal/event-access/external/logout', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ eventId, token: sessionToken }),
+        }),
+      )
+    }
+    return Response.json(
+      { ok: true },
+      {
+        headers: {
+          'cache-control': 'no-store',
+          'set-cookie': clearAuthCookie(externalSessionCookieName, url),
+        },
+      },
+    )
+  }
+
   return null
 }
 
@@ -738,6 +1020,7 @@ async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
     const headers = new Headers({ 'cache-control': 'no-store' })
     headers.append('set-cookie', clearAuthCookie(sessionCookieName, url))
     headers.append('set-cookie', clearAuthCookie(eventCookieName, url))
+    headers.append('set-cookie', clearAuthCookie(externalSessionCookieName, url))
     return Response.json({ ok: true }, { headers })
   }
 
@@ -1421,6 +1704,15 @@ export default {
       isDocumentNavigation(request) &&
       isHostedPublicDocument(url.pathname)
     const hostedPublicApi = Boolean(publicEventId) && url.pathname.startsWith('/public/')
+
+    if (
+      profile === 'hosted-app' &&
+      publicEventId &&
+      url.pathname.startsWith('/public/v1/access/')
+    ) {
+      const accessResponse = await handleExternalAccessRequest(request, env, url, publicEventId)
+      if (accessResponse) return accessResponse
+    }
 
     if (profile === 'hosted-app' && request.method === 'GET' && url.pathname === '/auth/invite') {
       const token = url.searchParams.get('token') ?? ''

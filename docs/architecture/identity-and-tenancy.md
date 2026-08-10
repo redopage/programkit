@@ -65,6 +65,17 @@ active and revoked memberships, owner and administrator policy, and pending invi
 Worker validates the selected membership there on every hosted request, then derives role scopes.
 Removing access takes effect even if an account event projection or browser cookie is stale.
 
+The same event access object owns a separate participant credential namespace. A submitter can
+create an email and password account from the public CFP without receiving any staff membership.
+Participant passwords use PBKDF2-SHA-256 with a random salt and 210,000 iterations. Sessions are
+random, stored only by hash, event-bound, HTTP-only, and independently revocable.
+
+After participant sign-in, the Worker matches the normalized email against that event's
+submissions, reviewer records, and speaker participations. It returns only the matching
+record-scoped links. This makes drafts, review assignments, and speaker portals recoverable from a
+new device while preserving the existing least-privilege capability check on every projected read
+and operation.
+
 Owners can invite administrators or read-only viewers. Administrators can invite and remove
 viewers. Invitation secrets are random 256-bit values, stored only as SHA-256 hashes, bound to one
 normalized email, usable once, and expired after seven days. Accepting an invitation repairs the
@@ -129,6 +140,6 @@ sets an HTTP-only routing cookie, and serves only the public form or immutable p
 projection from that event object. The event ID is routing context, not organizer authorization.
 
 Reviewer and speaker links use separate, record-scoped capability keys. They can read and mutate
-only the matching reviewer queue or participation portal and cannot call operator endpoints.
-Account-backed participant sessions remain future work; the demo remains the safest place to
-evaluate sample-data role switching.
+only the matching reviewer queue or participation portal and cannot call operator endpoints. An
+event participant account can recover matching links through `/access`, but the account session is
+not accepted by operator endpoints and does not replace the capability check.

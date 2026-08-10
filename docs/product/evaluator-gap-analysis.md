@@ -9,15 +9,15 @@ still needs scenario evidence before it should be counted.
 
 ## Where ProgramKit stands
 
-| Evaluator area             | Current fit          | Working evidence                                                                                                                                                                           | Largest gaps                                                                                                                       |
-| -------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Call for papers            | Strong foundation    | Form builder, required fields, conditional visibility, category-based reviewer routing, public form, draft resume and editing, reviewer workspace, decisions, accepted proposal conversion | Account-backed submitter identity, live-provider delivery evidence, and precise post-close policy                                  |
-| Abstract management        | Strong               | Reviewer teams, independent rounds, weighted scorecards, blind projection, category routing, exact and bulk assignments, progress, recusal, coauthors, and CSV export                      | Round release controls and live-provider reminder evidence; AI review is deliberately not claimed                                  |
-| Speaker management         | Partial              | Searchable people roster, lifecycle state, profiles, readiness tasks, scoped speaker portal, linked sessions                                                                               | CSV import, real invites, headshot and file upload, logistics, bulk communication, automated reminders, message history            |
-| Content management         | Early                | Asset metadata and requirement concepts exist                                                                                                                                              | R2 uploads, file constraints, private download, versions, comments, approval gate, deliverables dashboard, files library, bulk ZIP |
-| AI agenda                  | Partial              | Draft placements, conflict detection, room and list views, validated moves, immutable publish, public release                                                                              | Unscheduled tray, multi-day views, track filters, configurable inventory UI, clear and undo, auto-schedule                         |
-| Public program and widgets | Strong foundation    | Five public views share one immutable release: searchable sessions and speakers, details, multi-day agenda, gallery, persistent itinerary, ICS export, share links, and embeds             | Account-synced itineraries, richer embed appearance controls, and recorded evaluator evidence                                      |
-| CRM extra credit           | Deliberately limited | People records, search, detail, tags in the domain                                                                                                                                         | Organizations, notes, custom fields, CSV import, merge, kanban, segments, history, bulk email, dashboard                           |
+| Evaluator area             | Current fit          | Working evidence                                                                                                                                                                                          | Largest gaps                                                                                                                       |
+| -------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Call for papers            | Strong foundation    | Form builder, required fields, conditional visibility, category-based reviewer routing, public form, account-backed draft resume and editing, reviewer workspace, decisions, accepted proposal conversion | Live-provider delivery evidence and precise post-close policy                                                                      |
+| Abstract management        | Strong               | Reviewer teams, independent rounds, weighted scorecards, blind projection, category routing, exact and bulk assignments, progress, recusal, coauthors, and CSV export                                     | Round release controls and live-provider reminder evidence; AI review is deliberately not claimed                                  |
+| Speaker management         | Partial              | Searchable people roster, lifecycle state, profiles, readiness tasks, scoped speaker portal, linked sessions                                                                                              | CSV import, real invites, headshot and file upload, logistics, bulk communication, automated reminders, message history            |
+| Content management         | Early                | Asset metadata and requirement concepts exist                                                                                                                                                             | R2 uploads, file constraints, private download, versions, comments, approval gate, deliverables dashboard, files library, bulk ZIP |
+| AI agenda                  | Partial              | Draft placements, conflict detection, room and list views, validated moves, immutable publish, public release                                                                                             | Unscheduled tray, multi-day views, track filters, configurable inventory UI, clear and undo, auto-schedule                         |
+| Public program and widgets | Strong foundation    | Five public views share one immutable release: searchable sessions and speakers, details, multi-day agenda, gallery, persistent itinerary, ICS export, share links, and embeds                            | Account-synced itineraries, richer embed appearance controls, and recorded evaluator evidence                                      |
+| CRM extra credit           | Deliberately limited | People records, search, detail, tags in the domain                                                                                                                                                        | Organizations, notes, custom fields, CSV import, merge, kanban, segments, history, bulk email, dashboard                           |
 
 ## Important evaluator lesson
 
@@ -30,8 +30,9 @@ surface.
 The expiring `/demo/{capability}` workspace now provides a clean, isolated starting point for
 scenario runs and collaborator handoff. It improves test repeatability and safe evaluation, but it
 does not count as the real identity, role membership, or per-person authorization required by the
-scenarios. The hosted app now has real owner, administrator, and viewer membership. Submitter,
-reviewer, and speaker identity remain separate gaps.
+scenarios. The hosted app has real owner, administrator, and viewer membership. Public participants
+use a separate event-scoped account that can recover only matching submission, reviewer, and
+speaker destinations by normalized email.
 
 ## How the V1 evaluator reaches the product
 
@@ -49,8 +50,9 @@ event ID is validated before the public page loads and is exchanged for an HTTP-
 That cookie selects only the event's public projections and does not grant organizer access. The
 program exposes agenda, session, speaker, itinerary, and gallery views on the same `/agenda` route.
 Each view reads the same immutable release and can be linked or embedded with query parameters. The
-The hosted app now supports deterministic organizer password signup and sign-in. The seven-day demo
-remains the preferred target for seeded role switching until participant sessions are account-backed.
+hosted app supports deterministic organizer password signup and sign-in. Public CFP accounts are
+event-scoped and recover matching submission, reviewer, and speaker destinations without granting
+organizer access. The seven-day demo remains useful for repeatable seeded walkthroughs.
 
 Airtable, the Cloudflare runtime, API breadth, repository hosting, and performance are not scored by
 the V1 browser rubric. They remain useful bonus or product-quality work, but should not displace a
@@ -58,9 +60,9 @@ required end-to-end scenario.
 
 ## Recommended implementation order
 
-1. **Finish scoped identity and evaluator fixtures.** Keep the working staff sign-in and team
-   invitations, then add submitter, reviewer, and speaker sessions. Provide deterministic evaluator
-   role sessions that do not require external inbox access.
+1. **Finish evaluator identity fixtures.** Keep the working staff and participant sign-in paths,
+   then verify the evaluator's exact role transitions and add a deterministic reset for repeated
+   runs.
 2. **One complete file pipeline.** Use R2 for bytes and event records for metadata. Reuse it for CFP
    attachments, headshots, slides, and requirement deliverables, including version history and
    private access. Airtable mirroring must remain optional and outside this critical path.

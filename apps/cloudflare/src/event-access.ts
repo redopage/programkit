@@ -3,6 +3,11 @@ import { DurableObject } from 'cloudflare:workers'
 import { normalizeEmail } from './auth.ts'
 
 const invitationLifetimeMs = 7 * 24 * 60 * 60 * 1_000
+const externalSessionLifetimeMs = 30 * 24 * 60 * 60 * 1_000
+const externalRateWindowMs = 60 * 60 * 1_000
+const externalPasswordIterations = 210_000
+const minimumPasswordLength = 10
+const maximumPasswordLength = 128
 const maximumPendingInvitations = 200
 const eventIdPattern = /^[a-z][a-z0-9_-]{2,79}$/u
 const eventSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u
@@ -53,6 +58,27 @@ export interface EventInvitation {
 
 interface StoredEventInvitation extends Omit<EventInvitation, 'status'> {
   tokenHash: string
+}
+
+interface ExternalIdentity {
+  id: string
+  eventId: string
+  email: string
+  passwordSalt: string
+  passwordHash: string
+  passwordIterations: number
+  createdAt: string
+  lastSignedInAt: string
+}
+
+interface ExternalSession {
+  identityId: string
+  createdAt: string
+  expiresAt: string
+}
+
+interface ExternalRateRecord {
+  attempts: number[]
 }
 
 interface InitializeInput {
@@ -121,6 +147,55 @@ function randomHex(bytes: number) {
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
   return Array.from(new Uint8Array(digest), (entry) => entry.toString(16).padStart(2, '0')).join('')
+}
+
+function bytesToHex(value: Uint8Array) {
+  return Array.from(value, (entry) => entry.toString(16).padStart(2, '0')).join('')
+}
+
+async function passwordHash(password: string, salt: string, iterations: number) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  )
+  const derived = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      hash: 'SHA-256',
+      salt: new TextEncoder().encode(salt),
+      iterations,
+    },
+    key,
+    256,
+  )
+  return bytesToHex(new Uint8Array(derived))
+}
+
+function equalHex(left: string, right: string) {
+  if (left.length !== right.length) return false
+  let difference = 0
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index)
+  }
+  return difference === 0
+}
+
+function cleanPassword(value: unknown) {
+  if (
+    typeof value !== 'string' ||
+    value.length < minimumPasswordLength ||
+    value.length > maximumPasswordLength
+  ) {
+    throw new EventAccessError(
+      'INVALID_INPUT',
+      `Password must be between ${minimumPasswordLength} and ${maximumPasswordLength} characters.`,
+      400,
+    )
+  }
+  return value
 }
 
 function cleanIdentifier(value: unknown, field: string) {
@@ -205,6 +280,141 @@ export class EventAccessDurableObject extends DurableObject {
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env)
     this.#ctx = ctx
+  }
+
+  async #externalRateAllows(key: string, limit: number, cooldownMs = 0) {
+    const now = Date.now()
+    const storageKey = `external-rate:${key}`
+    const stored = (await this.#ctx.storage.get<ExternalRateRecord>(storageKey)) ?? {
+      attempts: [],
+    }
+    const attempts = stored.attempts.filter((attempt) => attempt > now - externalRateWindowMs)
+    const last = attempts.at(-1)
+    const allowed = attempts.length < limit && (last == null || now - last >= cooldownMs)
+    attempts.push(now)
+    await this.#ctx.storage.put(storageKey, { attempts: attempts.slice(-limit * 2) })
+    return allowed
+  }
+
+  async #authenticateExternal(input: Record<string, unknown>) {
+    const event = await this.#event(input.eventId)
+    const email = normalizeEmail(input.email)
+    if (!email) throw new EventAccessError('INVALID_INPUT', 'Email is invalid.', 400)
+    const password = cleanPassword(input.password)
+    const intent = input.intent === 'signup' ? 'signup' : 'signin'
+    const ipHash = typeof input.ipHash === 'string' ? input.ipHash : 'unknown'
+    const emailHash = await sha256(email)
+    const emailAllowed = await this.#externalRateAllows(`email:${emailHash}`, 10, 750)
+    const ipAllowed = await this.#externalRateAllows(`ip:${ipHash}`, 40)
+    if (!emailAllowed || !ipAllowed) {
+      throw new EventAccessError('RATE_LIMITED', 'Too many sign-in attempts. Try again later.', 429)
+    }
+
+    const identityId = await this.#ctx.storage.get<string>(`external-email:${emailHash}`)
+    let identity = identityId
+      ? await this.#ctx.storage.get<ExternalIdentity>(`external-identity:${identityId}`)
+      : null
+
+    if (intent === 'signup') {
+      if (identity) {
+        throw new EventAccessError(
+          'ACCOUNT_EXISTS',
+          'That account already exists. Sign in instead.',
+          409,
+        )
+      }
+      const salt = randomHex(16)
+      const now = new Date().toISOString()
+      identity = {
+        id: `ext_${randomHex(12)}`,
+        eventId: event.id,
+        email,
+        passwordSalt: salt,
+        passwordHash: await passwordHash(password, salt, externalPasswordIterations),
+        passwordIterations: externalPasswordIterations,
+        createdAt: now,
+        lastSignedInAt: now,
+      }
+      await this.#ctx.storage.transaction(async (transaction) => {
+        const racedIdentity = await transaction.get<string>(`external-email:${emailHash}`)
+        if (racedIdentity) {
+          throw new EventAccessError(
+            'ACCOUNT_EXISTS',
+            'That account already exists. Sign in instead.',
+            409,
+          )
+        }
+        await transaction.put(`external-email:${emailHash}`, identity!.id)
+        await transaction.put(`external-identity:${identity!.id}`, identity!)
+      })
+    } else {
+      if (!identity) {
+        throw new EventAccessError(
+          'INVALID_CREDENTIALS',
+          'The email or password is incorrect.',
+          401,
+        )
+      }
+      const candidate = await passwordHash(
+        password,
+        identity.passwordSalt,
+        identity.passwordIterations,
+      )
+      if (!equalHex(candidate, identity.passwordHash)) {
+        throw new EventAccessError(
+          'INVALID_CREDENTIALS',
+          'The email or password is incorrect.',
+          401,
+        )
+      }
+      identity = { ...identity, lastSignedInAt: new Date().toISOString() }
+      await this.#ctx.storage.put(`external-identity:${identity.id}`, identity)
+    }
+
+    const token = randomHex(32)
+    const tokenHash = await sha256(token)
+    const session: ExternalSession = {
+      identityId: identity.id,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + externalSessionLifetimeMs).toISOString(),
+    }
+    await this.#ctx.storage.put(`external-session:${tokenHash}`, session)
+    await this.#scheduleCleanup(Date.parse(session.expiresAt))
+    return {
+      event,
+      identity: { id: identity.id, email: identity.email },
+      sessionToken: token,
+      sessionExpiresAt: session.expiresAt,
+    }
+  }
+
+  async #externalSession(input: Record<string, unknown>) {
+    const event = await this.#event(input.eventId)
+    const token = typeof input.token === 'string' ? input.token : ''
+    if (!/^[a-f0-9]{64}$/u.test(token)) {
+      throw new EventAccessError('SESSION_INVALID', 'Session is invalid.', 401)
+    }
+    const tokenHash = await sha256(token)
+    const session = await this.#ctx.storage.get<ExternalSession>(`external-session:${tokenHash}`)
+    if (!session || Date.parse(session.expiresAt) <= Date.now()) {
+      if (session) await this.#ctx.storage.delete(`external-session:${tokenHash}`)
+      throw new EventAccessError('SESSION_INVALID', 'Session is invalid.', 401)
+    }
+    const identity = await this.#ctx.storage.get<ExternalIdentity>(
+      `external-identity:${session.identityId}`,
+    )
+    if (!identity || identity.eventId !== event.id) {
+      throw new EventAccessError('SESSION_INVALID', 'Session is invalid.', 401)
+    }
+    return { event, identity: { id: identity.id, email: identity.email } }
+  }
+
+  async #logoutExternal(input: Record<string, unknown>) {
+    await this.#event(input.eventId)
+    const token = typeof input.token === 'string' ? input.token : ''
+    if (/^[a-f0-9]{64}$/u.test(token)) {
+      await this.#ctx.storage.delete(`external-session:${await sha256(token)}`)
+    }
   }
 
   async #event(eventId?: unknown) {
@@ -392,7 +602,7 @@ export class EventAccessDurableObject extends DurableObject {
       await transaction.put(`invitation:${invitation.id}`, invitation)
       await transaction.put(`invite-token:${tokenHash}`, invitation.id)
     })
-    await this.#scheduleInvitationCleanup(Date.parse(invitation.expiresAt))
+    await this.#scheduleCleanup(Date.parse(invitation.expiresAt))
     return { invitation: publicInvitation(invitation), token }
   }
 
@@ -580,7 +790,7 @@ export class EventAccessDurableObject extends DurableObject {
     return { membership: revoked }
   }
 
-  async #scheduleInvitationCleanup(expiresAt: number) {
+  async #scheduleCleanup(expiresAt: number) {
     const current = await this.#ctx.storage.getAlarm()
     if (current == null || current > expiresAt) await this.#ctx.storage.setAlarm(expiresAt)
   }
@@ -598,6 +808,21 @@ export class EventAccessDurableObject extends DurableObject {
       }
       const expiresAt = Date.parse(invitation.expiresAt)
       next = next == null ? expiresAt : Math.min(next, expiresAt)
+    }
+    const sessions = await this.#ctx.storage.list<ExternalSession>({
+      prefix: 'external-session:',
+    })
+    for (const [key, session] of sessions) {
+      const expiresAt = Date.parse(session.expiresAt)
+      if (expiresAt <= now) await this.#ctx.storage.delete(key)
+      else next = next == null ? expiresAt : Math.min(next, expiresAt)
+    }
+    for (const [key, record] of await this.#ctx.storage.list<ExternalRateRecord>({
+      prefix: 'external-rate:',
+    })) {
+      if (record.attempts.every((attempt) => attempt <= now - externalRateWindowMs)) {
+        await this.#ctx.storage.delete(key)
+      }
     }
     if (next == null) await this.#ctx.storage.deleteAlarm()
     else await this.#ctx.storage.setAlarm(next)
@@ -632,6 +857,19 @@ export class EventAccessDurableObject extends DurableObject {
       }
       if (path === '/internal/event-access/invitations/consume') {
         return json({ ok: true, ...(await this.#consumeInvitation(input)) }, { status: 201 })
+      }
+      if (path === '/internal/event-access/external/password') {
+        return json(
+          { ok: true, ...(await this.#authenticateExternal(input)) },
+          { status: input.intent === 'signup' ? 201 : 200 },
+        )
+      }
+      if (path === '/internal/event-access/external/session') {
+        return json({ ok: true, ...(await this.#externalSession(input)) })
+      }
+      if (path === '/internal/event-access/external/logout') {
+        await this.#logoutExternal(input)
+        return json({ ok: true })
       }
       return new Response(null, { status: 404 })
     } catch (error) {

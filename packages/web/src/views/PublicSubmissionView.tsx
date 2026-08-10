@@ -7,13 +7,17 @@ import {
   type SubmissionAnswers,
   type SubmissionContributor,
   type SubmissionFormField,
+  type SubmissionFieldPurpose,
   type SubmissionKind,
 } from '@programkit/core'
 
 import { ProgramKitMark } from '../components/brand.tsx'
+import { ExternalAccessForm } from '../components/ExternalAccessForm.tsx'
 import { SubmissionAnswerFields } from '../components/SubmissionAnswerFields.tsx'
 import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
 import { Button, cx } from '../components/ui.tsx'
+import { useExternalAccess } from '../lib/external-access.ts'
+import { speakerSubmissionsPath } from '../lib/public-links.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 
 function isSpeakerField(field: SubmissionFormField) {
@@ -39,6 +43,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
   const state = payload?.state
   const form = state?.submissionForms?.find((entry) => entry.slug === slug)
   const event = state?.events.find((entry) => entry.id === form?.eventId)
+  const externalAccess = useExternalAccess(event?.id ?? '', slug)
   const [answers, setAnswers] = useState<SubmissionAnswers>({})
   const [contributors, setContributors] = useState<SubmissionContributor[]>([])
   const [speakerAccessKey, setSpeakerAccessKey] = useState('')
@@ -55,6 +60,22 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     const stored = window.localStorage.getItem(`programkit:speaker:${slug}`)
     if (stored) setSpeakerAccessKey(stored)
   }, [slug])
+
+  useEffect(() => {
+    const email = externalAccess.session.identity?.email
+    if (!email || !state || !form) return
+    const emailField = state.submissionFormFields.find(
+      (field) => field.formId === form.id && field.purpose === 'email',
+    )
+    if (emailField) {
+      setAnswers((current) =>
+        current[emailField.key] === email ? current : { ...current, [emailField.key]: email },
+      )
+    }
+    if (externalAccess.session.submissionAccessKey) {
+      setSpeakerAccessKey(externalAccess.session.submissionAccessKey)
+    }
+  }, [externalAccess.session, form, state])
 
   if (!payload || !form || !event) {
     return (
@@ -141,7 +162,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     }
     setSpeakerAccessKey(nextSpeakerAccessKey)
     window.localStorage.setItem(`programkit:speaker:${slug}`, nextSpeakerAccessKey)
-    window.location.href = `/submit/${slug}/mine/${encodeURIComponent(nextSpeakerAccessKey)}`
+    window.location.href = speakerSubmissionsPath(event!.id, slug, nextSpeakerAccessKey)
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -214,7 +235,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
             <Button
               variant="primary"
               onClick={() => {
-                window.location.href = `/submit/${slug}/mine/${encodeURIComponent(speakerAccessKey)}`
+                window.location.href = speakerSubmissionsPath(event.id, slug, speakerAccessKey)
               }}
             >
               View my submissions
@@ -264,12 +285,64 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     )
   }
 
+  if (externalAccess.enabled && externalAccess.loading) {
+    return (
+      <div className="min-h-dvh bg-white">
+        <PublicHeader eventName={event.name} />
+        <main className="grid min-h-[calc(100dvh-4rem)] place-items-center px-6 py-16">
+          <p className="text-base text-zinc-500 sm:text-sm">Loading proposal access…</p>
+        </main>
+      </div>
+    )
+  }
+
+  if (externalAccess.enabled && !externalAccess.session.authenticated) {
+    return (
+      <div className="min-h-dvh bg-white">
+        <PublicHeader eventName={event.name} />
+        <main className="mx-auto grid min-h-[calc(100dvh-4rem)] max-w-6xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[4fr_7fr] lg:gap-16">
+          <div className="min-w-0">
+            <h2 className="max-w-[18ch] text-balance text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">
+              {form.title}
+            </h2>
+            <p className="max-w-[48ch] pt-3 text-pretty text-base text-zinc-600">
+              Save drafts, return from any device, and follow the program decision.
+            </p>
+          </div>
+          <ExternalAccessForm
+            title="Start your proposal"
+            onSubmit={async (input) => {
+              const result = await externalAccess.authenticate(input)
+              if (input.intent === 'signin' && result.submissionAccessKey) {
+                const destination = result.destinations?.find(
+                  (entry) => entry.kind === 'submissions',
+                )
+                if (destination) window.location.href = destination.href
+              }
+            }}
+          />
+        </main>
+      </div>
+    )
+  }
+
   const proposalFields = visibleFields.filter((field) => !isSpeakerField(field))
   const speakerFields = visibleFields.filter(isSpeakerField)
 
   return (
     <div className="min-h-dvh bg-white">
-      <PublicHeader eventName={event.name} />
+      <PublicHeader
+        eventName={event.name}
+        accountEmail={externalAccess.session.identity?.email}
+        onSignOut={
+          externalAccess.enabled
+            ? async () => {
+                await externalAccess.logout()
+                window.location.reload()
+              }
+            : undefined
+        }
+      />
       <main className="mx-auto grid max-w-6xl gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[4fr_7fr] lg:gap-16">
         <aside className="min-w-0 lg:sticky lg:top-10 lg:self-start">
           <h1 className="max-w-[18ch] text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
@@ -363,6 +436,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
               fields={speakerFields}
               answers={answers}
               errors={fieldErrors}
+              lockedPurposes={externalAccess.session.identity ? ['email'] : []}
               onChange={setAnswer}
             />
 
@@ -392,7 +466,15 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
   )
 }
 
-function PublicHeader({ eventName }: { eventName: string }) {
+function PublicHeader({
+  eventName,
+  accountEmail,
+  onSignOut,
+}: {
+  eventName: string
+  accountEmail?: string
+  onSignOut?: () => Promise<void>
+}) {
   return (
     <header className="border-b border-zinc-950/5 bg-white">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
@@ -404,7 +486,18 @@ function PublicHeader({ eventName }: { eventName: string }) {
           <ProgramKitMark className="size-6" />
           ProgramKit
         </a>
-        <p className="truncate text-base text-zinc-500 sm:text-sm">{eventName}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <p className="truncate text-base text-zinc-500 sm:text-sm">{accountEmail ?? eventName}</p>
+          {onSignOut ? (
+            <button
+              type="button"
+              className="focus-ring shrink-0 rounded-lg text-base font-medium text-zinc-600 hover:text-zinc-950 sm:text-sm"
+              onClick={() => void onSignOut()}
+            >
+              Sign out
+            </button>
+          ) : null}
+        </div>
       </div>
     </header>
   )
@@ -416,6 +509,7 @@ function FormSection({
   fields,
   answers,
   errors,
+  lockedPurposes,
   onChange,
 }: {
   title: string
@@ -423,6 +517,7 @@ function FormSection({
   fields: SubmissionFormField[]
   answers: SubmissionAnswers
   errors: Record<string, string>
+  lockedPurposes?: SubmissionFieldPurpose[]
   onChange: (key: string, value: SubmissionAnswers[string]) => void
 }) {
   if (fields.length === 0) return null
@@ -435,6 +530,7 @@ function FormSection({
           fields={fields}
           answers={answers}
           errors={errors}
+          lockedPurposes={lockedPurposes}
           onChange={onChange}
         />
       </div>

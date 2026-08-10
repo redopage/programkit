@@ -32,9 +32,9 @@ ProgramKit gives organizers one focused workspace to:
 It is intentionally smaller than a general CRM or an enterprise event suite. The goal is to make
 the conference-program job fast, understandable, and easy to own.
 
-> **Project status:** active alpha. The seeded demo is safe to explore, but the hosted app is not
-> ready for real participant data until participant and reviewer identity, account recovery,
-> private file storage, production mail delivery, rate limiting, and backup policy are complete. See
+> **Project status:** active alpha. Staff and event participants have separate scoped accounts, and
+> private files use R2. Production operators still need account recovery, verified mail delivery,
+> edge abuse controls, and a documented backup policy before using sensitive participant data. See
 > [Security](SECURITY.md) and the [roadmap](ROADMAP.md).
 
 ## Run it locally

@@ -29,6 +29,12 @@ describe('hosted public event routing', () => {
     expect(hostedPublicEventId(request, new URL(request.url))).toBe(eventId)
   })
 
+  it('keeps participant account access on the selected event', () => {
+    const request = documentRequest(`/access?event=${eventId}`)
+
+    expect(hostedPublicEventId(request, new URL(request.url))).toBe(eventId)
+  })
+
   it('does not use the public event cookie for staff documents', () => {
     const request = documentRequest('/submissions', `programkit_public_event=${eventId}`)
 

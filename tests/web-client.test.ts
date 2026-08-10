@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   createProgramKitHttpClient,
+  externalAccessPath,
   parseSpeakerCsv,
   publicProgramPath,
   publicSubmissionPath,
   reviewerAccessPath,
   speakerPortalPath,
+  speakerSubmissionsPath,
   surfaceFromPathname,
   surfaceKey,
   type WorkspacePayload,
@@ -47,6 +49,13 @@ describe('ProgramKit web client', () => {
     expect(speakerPortalPath(eventId, 'par/1', 'portal/1', 'hosted-app')).toBe(
       '/portal/par%2F1/portal%2F1?event=evt_1234567890abcdef12345678',
     )
+    expect(speakerSubmissionsPath(eventId, 'summer/cfp', 'speaker/1', 'hosted-app')).toBe(
+      '/submit/summer%2Fcfp/mine/speaker%2F1?event=evt_1234567890abcdef12345678',
+    )
+    expect(externalAccessPath(eventId, 'summer/cfp', 'hosted-app')).toBe(
+      '/access?event=evt_1234567890abcdef12345678&form=summer%2Fcfp',
+    )
+    expect(externalAccessPath(eventId, undefined, 'single-workspace')).toBeNull()
   })
 
   it('maps deep links to explicit surfaces', () => {
