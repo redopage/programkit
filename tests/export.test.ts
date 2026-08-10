@@ -38,6 +38,7 @@ describe('workspace export archive', () => {
     expect(files.has('csv/workspace.csv')).toBe(true)
     expect(files.has('csv/people.csv')).toBe(true)
     expect(files.has('csv/submissions.csv')).toBe(true)
+    expect(files.has('csv/portal-resource-pages.csv')).toBe(true)
 
     const manifest = JSON.parse(files.get('manifest.json')!) as {
       format: string
@@ -56,6 +57,7 @@ describe('workspace export archive', () => {
 
     expect(files.get('csv/people.csv')).toContain('"firstName","lastName","email"')
     expect(files.get('csv/submissions.csv')).toContain('"answers.email"')
+    expect(files.get('csv/portal-resource-pages.csv')).toContain('"speaker-guide"')
   })
 
   it('uses RFC-style quoting and prevents spreadsheet formula execution', () => {

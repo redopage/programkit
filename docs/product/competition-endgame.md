@@ -78,7 +78,8 @@ by the buyer, and the stated tiebreaker is "the product we would actually use":
   speaker calendar attachments now ship with approved campaign delivery.
 - **One-way Accelevents integration.** Integrations can now export the published program as official
   speaker and session CSVs, a room mapping sheet, and an import guide.
-- **Resource / wiki pages in the speaker portal with HTML embed support.** Not started.
+- **Resource / wiki pages in the speaker portal with HTML embed support.** Organizers can create,
+  publish, archive, and safely embed HTTPS resources. Only published pages reach speakers.
 
 The Cloudflare deployment, Forge hosting, HTTP API, and fast page loads are already banked. Airtable
 is deliberately not counted here: its source-of-truth bonus is not part of the V1 browser rubric,
@@ -133,8 +134,8 @@ and exercised through its complete user journey before the next one starts.
     room-column schedule grid, embed studio, and approved-content propagation without republishing
     placements.
 12. **Co-authors** on submissions with role labels.
-13. **Buyer-brief extras, cheapest first:** portal resource pages with sanitized organizer HTML
-    embeds, then a one-way Accelevents export/push.
+13. **Buyer-brief extras:** complete. Portal resources normalize iframe code to a sandboxed HTTPS
+    source, and the Accelevents handoff exports official speaker and session import files.
 14. **CRM** only if time genuinely remains: directory, notes, tags, segments, kanban, merge. It is
     19 extra-credit points but it is worth less than any remaining required gap.
 15. **Evidence pass.** Run the full 20-scenario chain twice against the submission URL, fix what it

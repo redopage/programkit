@@ -195,7 +195,22 @@ describe('operation HTTP surface', () => {
   })
 
   it('returns a participant-specific projection without operator-only records', async () => {
-    const repository = new MemoryWorkspaceRepository()
+    const initial = createSeedState()
+    initial.portalResourcePages.push({
+      id: 'res_draft_only',
+      eventId: initial.activeEventId,
+      title: 'Internal draft',
+      slug: 'internal-draft',
+      summary: 'Not ready for speakers.',
+      body: '',
+      embedUrl: '',
+      linkUrl: '',
+      status: 'draft',
+      sortOrder: 99,
+      updatedAt: '2026-08-09T12:00:00.000Z',
+      version: 1,
+    })
+    const repository = new MemoryWorkspaceRepository(initial)
     const actor = {
       type: 'participant' as const,
       id: 'par_003',
@@ -228,6 +243,10 @@ describe('operation HTTP surface', () => {
     expect(body.state.reviewerAssignments).toHaveLength(0)
     expect(body.state.scorecards).toHaveLength(0)
     expect(body.state.reviewDecisions).toHaveLength(0)
+    expect(body.state.portalResourcePages.map((resource) => resource.id)).toEqual([
+      'res_speaker_guide',
+      'res_venue_guide',
+    ])
 
     const denied = await handleCoreRequest(
       new Request('http://local/public/v1/portal/par_003/state', {

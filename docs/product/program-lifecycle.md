@@ -69,8 +69,11 @@ The speaker portal is scoped to one participation. The speaker updates public pr
 confirms participation, and completes assigned requirements. Organizers see readiness across the
 event and can review submitted work.
 
-The next production-depth milestone is a shared task-form and asset renderer so profiles, releases,
-headshots, slides, and logistics use the same dependable primitives as the CFP.
+Organizers can also publish event guides, related links, and sandboxed HTTPS embeds into every
+speaker portal. Draft and archived resources remain operator-only.
+
+Profiles, releases, headshots, slides, and logistics use the same scoped operation and asset
+primitives as the CFP.
 
 ## 6. Build and publish the schedule
 

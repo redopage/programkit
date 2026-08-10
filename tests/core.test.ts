@@ -131,6 +131,40 @@ describe('ProgramKit operation engine', () => {
     expect(invalid.response.error?.fields?.timezone).toBeTruthy()
   })
 
+  it('creates and publishes speaker portal resources with safe embed URLs', () => {
+    const state = createSeedState()
+    const created = executeOperation(state, 'portal-resource.create', {
+      input: {
+        title: 'Slide template',
+        summary: 'Use this deck for every breakout session.',
+        body: 'Duplicate the template and keep the closing slide intact.',
+        embedUrl: 'https://docs.google.com/presentation/d/example/embed',
+        linkUrl: 'https://docs.google.com/presentation/d/example/copy',
+        status: 'draft',
+      },
+    })
+    expect(created.response.ok).toBe(true)
+    const resource = (
+      created.response.data as { resource: { id: string; slug: string; version: number } }
+    ).resource
+    expect(resource).toMatchObject({ slug: 'slide-template', version: 1 })
+
+    const published = executeOperation(created.state, 'portal-resource.update', {
+      input: { resourceId: resource.id, status: 'published' },
+      expectedVersions: { [resource.id]: 1 },
+    })
+    expect(published.response.ok).toBe(true)
+    expect(published.state.portalResourcePages).toContainEqual(
+      expect.objectContaining({ id: resource.id, status: 'published', version: 2 }),
+    )
+    expect(published.state.domainEvents.at(-1)?.type).toBe('portal-resource.updated')
+
+    const insecure = executeOperation(state, 'portal-resource.create', {
+      input: { title: 'Unsafe', body: 'Nope', embedUrl: 'http://example.com/embed' },
+    })
+    expect(insecure.response.error?.code).toBe('INVALID_INPUT')
+  })
+
   it('builds program inventory and sessions from an empty event', () => {
     let state = createEmptyWorkspaceState({
       eventId: 'evt_summit',

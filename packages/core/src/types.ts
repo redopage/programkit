@@ -451,6 +451,21 @@ export interface OutboundMessage {
   lastError?: string | null
 }
 
+export interface PortalResourcePage {
+  id: Id
+  eventId: Id
+  title: string
+  slug: string
+  summary: string
+  body: string
+  embedUrl: string
+  linkUrl: string
+  status: 'draft' | 'published' | 'archived'
+  sortOrder: number
+  updatedAt: ISODateTime
+  version: number
+}
+
 export interface Integration {
   id: Id
   name: string
@@ -552,6 +567,7 @@ export interface WorkspaceState {
   scheduleReleases: ScheduleRelease[]
   campaigns: Campaign[]
   outboundMessages?: OutboundMessage[]
+  portalResourcePages: PortalResourcePage[]
   changeSets: ChangeSet[]
   integrations: Integration[]
   domainEvents: DomainEvent[]

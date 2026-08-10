@@ -109,4 +109,6 @@ Before claiming an evaluator area, its fixtures and tests should prove:
 The original buyer brief also calls for a one-way Accelevents integration and speaker-portal
 resource pages that can include trusted organizer HTML embeds. The V1 evaluator does not currently
 score either capability. The Accelevents handoff is implemented as a published-program export with
-official speaker and session CSV shapes. Portal resource pages remain follow-up buyer-brief work.
+official speaker and session CSV shapes. Organizers can also publish speaker resource pages with
+guidance, links, and sandboxed HTTPS embeds. Neither optional feature changes the authoritative
+event data path.

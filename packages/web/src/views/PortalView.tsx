@@ -18,6 +18,7 @@ import {
   type RequirementInstance,
 } from '@programkit/core'
 
+import { PortalResources } from '../components/PortalResources.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Avatar,
@@ -298,6 +299,8 @@ function PortalWorkspace() {
             </ul>
           </section>
         ) : null}
+
+        <PortalResources resources={state.portalResourcePages ?? []} />
 
         <div className="grid gap-8 lg:grid-cols-[7fr_5fr]">
           <section

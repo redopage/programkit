@@ -45,6 +45,7 @@ import type {
   Participation,
   ParticipationStatus,
   Person,
+  PortalResourcePage,
   RequirementStatus,
   ReviewRecommendation,
   Session,
@@ -110,6 +111,7 @@ function initializeProgramCollections(state: WorkspaceState) {
   state.scorecards ??= []
   state.reviewDecisions ??= []
   state.outboundMessages ??= []
+  state.portalResourcePages ??= []
   for (const message of state.outboundMessages) {
     message.submissionId ??= null
     message.attempts ??= 0
@@ -160,7 +162,7 @@ function initializeProgramCollections(state: WorkspaceState) {
   for (const plan of state.evaluationPlans) {
     for (const round of plan.rounds) round.categoryRoutes ??= []
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 13)
+  state.schemaVersion = Math.max(state.schemaVersion, 14)
 }
 
 function queueOutboundMessage(
@@ -512,6 +514,24 @@ function optionalDateTime(value: unknown, field: string) {
   return parsed.toISOString()
 }
 
+function optionalHttpsUrl(value: unknown, field: string) {
+  if (value === undefined || value === null || value === '') return ''
+  if (typeof value !== 'string') {
+    throw new OperationError('INVALID_INPUT', `${field} must be an HTTPS URL.`, {
+      [field]: 'Enter a secure URL.',
+    })
+  }
+  try {
+    const url = new URL(value.trim())
+    if (url.protocol !== 'https:') throw new Error('HTTPS required')
+    return url.toString()
+  } catch {
+    throw new OperationError('INVALID_INPUT', `${field} must be an HTTPS URL.`, {
+      [field]: 'Enter a full URL beginning with https://.',
+    })
+  }
+}
+
 function assertTimeZone(value: unknown, field = 'timezone') {
   const timeZone = assertString(value, field)
   try {
@@ -799,6 +819,7 @@ function allVersionedRecords(state: WorkspaceState) {
     ...state.sessions,
     ...state.placements,
     ...state.campaigns,
+    ...(state.portalResourcePages ?? []),
     ...state.changeSets,
   ]
 }
@@ -966,6 +987,126 @@ function applyHandler(
         data: { previous },
       })
       return { event }
+    }
+
+    case 'portal-resource.create': {
+      const title = assertString(input.title, 'title')
+      const slug =
+        typeof input.slug === 'string' && input.slug.trim()
+          ? assertString(input.slug, 'slug').toLocaleLowerCase()
+          : title
+              .normalize('NFKD')
+              .replace(/[^a-z0-9]+/giu, '-')
+              .replace(/^-+|-+$/gu, '')
+              .toLocaleLowerCase()
+      if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(slug)) {
+        throw new OperationError('INVALID_INPUT', 'The resource slug must be URL-safe.', {
+          slug: 'Use lowercase letters, numbers, and hyphens.',
+        })
+      }
+      if (
+        state.portalResourcePages.some(
+          (entry) => entry.eventId === state.activeEventId && entry.slug === slug,
+        )
+      ) {
+        throw new OperationError('DUPLICATE', 'A portal resource already uses that slug.', {
+          title: 'Choose a title that creates a different URL.',
+        })
+      }
+      const resource: PortalResourcePage = {
+        id: createId('res'),
+        eventId: state.activeEventId,
+        title,
+        slug,
+        summary: typeof input.summary === 'string' ? input.summary.trim() : '',
+        body: typeof input.body === 'string' ? input.body.trim() : '',
+        embedUrl: optionalHttpsUrl(input.embedUrl, 'embedUrl'),
+        linkUrl: optionalHttpsUrl(input.linkUrl, 'linkUrl'),
+        status:
+          input.status === undefined
+            ? 'draft'
+            : assertOneOf(input.status, 'status', ['draft', 'published', 'archived'] as const),
+        sortOrder:
+          typeof input.sortOrder === 'number'
+            ? boundedInteger(input.sortOrder, 'sortOrder', 0, 10_000)
+            : Math.max(
+                -1,
+                ...state.portalResourcePages
+                  .filter((entry) => entry.eventId === state.activeEventId)
+                  .map((entry) => entry.sortOrder),
+              ) + 1,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      if (!resource.summary && !resource.body && !resource.embedUrl && !resource.linkUrl) {
+        throw new OperationError('INVALID_INPUT', 'Add content or a link before saving.', {
+          body: 'Add page content, an embed, or a related link.',
+        })
+      }
+      state.portalResourcePages.push(resource)
+      appendEvent(state, context, {
+        type: 'portal-resource.created',
+        aggregate: { type: 'portal-resource', id: resource.id, version: resource.version },
+        summary: `Created speaker resource “${resource.title}”.`,
+        data: { status: resource.status, slug: resource.slug },
+      })
+      return { resource }
+    }
+
+    case 'portal-resource.update': {
+      const resource = findRequired(state.portalResourcePages, input.resourceId, 'portal resource')
+      if (resource.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The resource does not belong to the active event.')
+      }
+      const nextTitle =
+        input.title === undefined ? resource.title : assertString(input.title, 'title')
+      const nextSummary =
+        input.summary === undefined
+          ? resource.summary
+          : typeof input.summary === 'string'
+            ? input.summary.trim()
+            : resource.summary
+      const nextBody =
+        input.body === undefined
+          ? resource.body
+          : typeof input.body === 'string'
+            ? input.body.trim()
+            : resource.body
+      const nextEmbedUrl =
+        input.embedUrl === undefined
+          ? resource.embedUrl
+          : optionalHttpsUrl(input.embedUrl, 'embedUrl')
+      const nextLinkUrl =
+        input.linkUrl === undefined ? resource.linkUrl : optionalHttpsUrl(input.linkUrl, 'linkUrl')
+      if (!nextSummary && !nextBody && !nextEmbedUrl && !nextLinkUrl) {
+        throw new OperationError('INVALID_INPUT', 'Add content or a link before saving.', {
+          body: 'Add page content, an embed, or a related link.',
+        })
+      }
+      resource.title = nextTitle
+      resource.summary = nextSummary
+      resource.body = nextBody
+      resource.embedUrl = nextEmbedUrl
+      resource.linkUrl = nextLinkUrl
+      if (input.status !== undefined) {
+        resource.status = assertOneOf(input.status, 'status', [
+          'draft',
+          'published',
+          'archived',
+        ] as const)
+      }
+      if (input.sortOrder !== undefined) {
+        resource.sortOrder = boundedInteger(input.sortOrder, 'sortOrder', 0, 10_000)
+      }
+      resource.updatedAt = timestamp
+      resource.version += 1
+      appendEvent(state, context, {
+        type: 'portal-resource.updated',
+        aggregate: { type: 'portal-resource', id: resource.id, version: resource.version },
+        summary: `Updated speaker resource “${resource.title}”.`,
+        data: { status: resource.status },
+      })
+      return { resource }
     }
 
     case 'track.create': {

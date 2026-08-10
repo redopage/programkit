@@ -22,6 +22,7 @@ import type {
   CampaignStatus,
   ChangeSetStatus,
   ParticipationStatus,
+  PortalResourcePage,
   RequirementStatus,
   SubmissionStatus,
 } from '@programkit/core'
@@ -143,6 +144,8 @@ const statusLabels: Record<string, string> = {
   stale: 'Stale',
   queued: 'Queued',
   failed: 'Failed',
+  published: 'Published',
+  archived: 'Archived',
 }
 
 export function StatusBadge({
@@ -155,6 +158,7 @@ export function StatusBadge({
     | CampaignStatus
     | ChangeSetStatus
     | SubmissionStatus
+    | PortalResourcePage['status']
     | 'queued'
     | 'failed'
   label?: string
@@ -168,7 +172,8 @@ export function StatusBadge({
         (status === 'confirmed' ||
           status === 'accepted' ||
           status === 'approved' ||
-          status === 'committed') &&
+          status === 'committed' ||
+          status === 'published') &&
           'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-700/10',
         (status === 'invited' ||
           status === 'submitted' ||
@@ -183,7 +188,10 @@ export function StatusBadge({
           status === 'not_started' ||
           status === 'waitlisted') &&
           'bg-zinc-100 text-zinc-700 ring-1 ring-zinc-950/5',
-        (status === 'declined' || status === 'withdrawn' || status === 'rejected') &&
+        (status === 'declined' ||
+          status === 'withdrawn' ||
+          status === 'rejected' ||
+          status === 'archived') &&
           'bg-zinc-100 text-zinc-500 ring-1 ring-zinc-950/5',
         status === 'waived' && 'bg-sky-50 text-sky-700 ring-1 ring-sky-700/10',
         status === 'sent' && 'bg-violet-50 text-violet-700 ring-1 ring-violet-700/10',

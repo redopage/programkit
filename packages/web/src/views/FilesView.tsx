@@ -8,6 +8,7 @@ import { useState, type FormEvent } from 'react'
 
 import type { Asset, WorkspaceState } from '@programkit/core'
 
+import { PortalResourcesManager } from '../components/PortalResourcesManager.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Button,
@@ -114,6 +115,8 @@ export function FilesView() {
           ) : null
         }
       />
+
+      <PortalResourcesManager />
 
       <Toolbar>
         <FilterTabs

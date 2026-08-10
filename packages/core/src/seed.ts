@@ -1150,6 +1150,41 @@ const initialScheduleRelease: ScheduleRelease = {
   placements: structuredClone(placements),
 }
 
+const portalResourcePages = [
+  {
+    id: 'res_speaker_guide',
+    eventId,
+    title: 'Speaker guide',
+    slug: 'speaker-guide',
+    summary: 'Arrival, stage, and recording details for your time at AIE NYC.',
+    body: `Please arrive at speaker check-in 45 minutes before your session. A program team member will walk you to the green room and confirm your microphone and slide setup.
+
+Bring a local copy of your final deck even if you uploaded it in advance. Sessions are recorded unless the program team has confirmed an exception with you.`,
+    embedUrl: '',
+    linkUrl: '',
+    status: 'published' as const,
+    sortOrder: 0,
+    updatedAt: seededAt,
+    version: 1,
+  },
+  {
+    id: 'res_venue_guide',
+    eventId,
+    title: 'Venue and arrival',
+    slug: 'venue-and-arrival',
+    summary: 'Where to enter, what to bring, and who to contact when you arrive.',
+    body: `Use the Building 77 entrance at Brooklyn Navy Yard and bring a photo ID. Speaker check-in opens at 8:00 AM each event day.
+
+If your travel changes, reply to your latest program team email so the onsite team sees it.`,
+    embedUrl: '',
+    linkUrl: 'https://brooklynnavyyard.org/visit/getting-here/',
+    status: 'published' as const,
+    sortOrder: 1,
+    updatedAt: seededAt,
+    version: 1,
+  },
+]
+
 const campaigns: Campaign[] = [
   {
     id: 'cam_001',
@@ -1240,7 +1275,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 13,
+    schemaVersion: 14,
     revision: 1,
     workspace: {
       id: 'wrk_aie',
@@ -1289,6 +1324,7 @@ export function createSeedState(): WorkspaceState {
     scheduleReleases: [structuredClone(initialScheduleRelease)],
     campaigns: structuredClone(campaigns),
     outboundMessages: [],
+    portalResourcePages: structuredClone(portalResourcePages),
     changeSets: [
       {
         id: 'chg_agent_001',
@@ -1430,6 +1466,7 @@ export function createEmptyWorkspaceState({
     scheduleReleases: [],
     campaigns: [],
     outboundMessages: [],
+    portalResourcePages: [],
     changeSets: [],
     integrations: structuredClone(template.integrations),
     domainEvents: [
