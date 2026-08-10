@@ -267,6 +267,9 @@ export function FormsView({
 
   const activeForm = formDraft ?? form
   const selected = fields.find((field) => field.id === selectedFieldId) ?? fields[0]
+  const conditionSource = selected?.visibleWhen
+    ? fields.find((field) => field.id === selected.visibleWhen?.fieldId)
+    : undefined
   const publishReadiness = submissionFormPublishReadiness(fields)
   const speakerPurposes = ['first_name', 'last_name', 'email', 'company', 'job_title', 'biography']
   const activeStep = selected && speakerPurposes.includes(selected.purpose) ? 2 : 1
@@ -1038,17 +1041,47 @@ export function FormsView({
                           <option value="not_equals">Does not equal</option>
                           <option value="includes">Includes</option>
                         </select>
-                        <input
-                          type="text"
-                          aria-label="Condition value"
-                          value={selected.visibleWhen.value}
-                          onChange={(event) =>
-                            updateSelected({
-                              visibleWhen: { ...selected.visibleWhen!, value: event.target.value },
-                            })
-                          }
-                          className={cx(textControl, 'min-w-0')}
-                        />
+                        {conditionSource?.options.length ? (
+                          <select
+                            aria-label="Condition value"
+                            value={selected.visibleWhen.value}
+                            onChange={(event) =>
+                              updateSelected({
+                                visibleWhen: {
+                                  ...selected.visibleWhen!,
+                                  value: event.target.value,
+                                },
+                              })
+                            }
+                            className={cx(textControl, 'min-w-0')}
+                          >
+                            {!conditionSource.options.some(
+                              (option) => option.value === selected.visibleWhen?.value,
+                            ) ? (
+                              <option value={selected.visibleWhen.value}>Choose an option</option>
+                            ) : null}
+                            {conditionSource.options.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            aria-label="Condition value"
+                            value={selected.visibleWhen.value}
+                            onChange={(event) =>
+                              updateSelected({
+                                visibleWhen: {
+                                  ...selected.visibleWhen!,
+                                  value: event.target.value,
+                                },
+                              })
+                            }
+                            className={cx(textControl, 'min-w-0')}
+                          />
+                        )}
                       </div>
                     ) : null}
                   </div>
