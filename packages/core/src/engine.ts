@@ -20,6 +20,7 @@ import {
   campaignPreview,
   scheduleConflicts,
   submissionAnswerByPurpose,
+  submissionAnswerDisplayByPurpose,
   submissionDecisionReadiness,
   submissionReviewSummary,
   visibleSubmissionFormFields,
@@ -748,6 +749,32 @@ function stringAnswer(
 ) {
   const value = submissionAnswerByPurpose(state, submission, purpose)
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function sessionFormatAnswer(
+  state: WorkspaceState,
+  submission: Submission,
+): Exclude<Session['format'], 'break'> {
+  const stored = stringAnswer(state, submission, 'session_format')
+  const displayed = submissionAnswerDisplayByPurpose(state, submission, 'session_format')
+  const normalized = `${stored} ${typeof displayed === 'string' ? displayed : ''}`.toLowerCase()
+  if (normalized.includes('keynote')) return 'keynote'
+  if (normalized.includes('lightning')) return 'lightning'
+  if (normalized.includes('workshop')) return 'workshop'
+  if (normalized.includes('panel')) return 'panel'
+  if (normalized.includes('talk')) return 'talk'
+  throw new OperationError('INVALID_INPUT', 'Choose a supported session format.', {
+    session_format: 'Use Keynote, Talk, Lightning Talk, Workshop, or Panel.',
+  })
+}
+
+function requestedSessionDuration(state: WorkspaceState, submission: Submission) {
+  const displayed = submissionAnswerDisplayByPurpose(state, submission, 'session_format')
+  if (typeof displayed !== 'string') return null
+  const match = displayed.match(/\b(\d{1,3})\s*min(?:ute)?s?\b/iu)
+  if (!match) return null
+  const minutes = Number(match[1])
+  return Number.isInteger(minutes) && minutes > 0 ? minutes : null
 }
 
 function hasScope(actor: Actor, scope: string) {
@@ -2618,25 +2645,26 @@ function applyHandler(
             participation = participantParticipation
           }
         }
-        const format = assertOneOf(stringAnswer(state, submission, 'session_format'), 'format', [
-          'keynote',
-          'talk',
-          'panel',
-          'workshop',
-        ] as const)
+        const format = sessionFormatAnswer(state, submission)
         const requestedTrackId = stringAnswer(state, submission, 'track')
         const track =
           state.tracks.find(
             (entry) => entry.id === requestedTrackId && entry.eventId === submission.eventId,
           ) ?? state.tracks.find((entry) => entry.eventId === submission.eventId)
         if (!track) throw new OperationError('INVALID_INPUT', 'The event needs at least one track.')
-        const defaultDurations = { keynote: 40, talk: 30, panel: 45, workshop: 75 } as const
+        const defaultDurations = {
+          keynote: 45,
+          talk: 30,
+          lightning: 10,
+          panel: 45,
+          workshop: 120,
+        } as const
         const durationMinutes =
           typeof input.durationMinutes === 'number' &&
           Number.isInteger(input.durationMinutes) &&
           input.durationMinutes > 0
             ? input.durationMinutes
-            : defaultDurations[format]
+            : (requestedSessionDuration(state, submission) ?? defaultDurations[format])
         const expectedAttendance =
           typeof input.expectedAttendance === 'number' &&
           Number.isInteger(input.expectedAttendance) &&

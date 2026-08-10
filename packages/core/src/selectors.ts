@@ -73,6 +73,30 @@ export function submissionAnswerByPurpose(
   return field ? submission.answers[field.key] : undefined
 }
 
+/**
+ * Resolve stored select values to the labels the submitter actually chose.
+ *
+ * Choice values are stable identifiers, so organizers can safely rename a label
+ * without breaking conditional rules or historical answers. Product surfaces and
+ * human-readable exports should use this helper instead of exposing those identifiers.
+ */
+export function submissionAnswerDisplayByPurpose(
+  state: WorkspaceState,
+  submission: Submission,
+  purpose: SubmissionFieldPurpose,
+) {
+  const field = (state.submissionFormFields ?? []).find(
+    (entry) => entry.formId === submission.formId && entry.purpose === purpose,
+  )
+  const answer = field ? submission.answers[field.key] : undefined
+  if (!field || (field.kind !== 'select' && field.kind !== 'multi_select')) return answer
+
+  const label = (value: string) =>
+    field.options.find((option) => option.value === value)?.label ?? value
+  if (Array.isArray(answer)) return answer.map(label)
+  return typeof answer === 'string' ? label(answer) : answer
+}
+
 export function submissionParticipants(state: WorkspaceState, submission: Submission) {
   const text = (purpose: SubmissionFieldPurpose) => {
     const value = submissionAnswerByPurpose(state, submission, purpose)

@@ -12,6 +12,7 @@ import {
   evaluationRoundIsBlind,
   reviewerQueue,
   submissionAnswerByPurpose,
+  submissionAnswerDisplayByPurpose,
   type ReviewRecommendation,
   type SubmissionAnswerValue,
 } from '@programkit/core'
@@ -290,7 +291,11 @@ function ReviewerWorkspace({
                   <dd className="text-base text-zinc-500 sm:text-sm">
                     {sentenceCase(
                       answerText(
-                        submissionAnswerByPurpose(state, selected.submission, 'session_format'),
+                        submissionAnswerDisplayByPurpose(
+                          state,
+                          selected.submission,
+                          'session_format',
+                        ),
                       ),
                     )}
                   </dd>

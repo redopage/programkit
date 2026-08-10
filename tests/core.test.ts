@@ -16,6 +16,7 @@ import {
   submissionFormAvailability,
   submissionFormPublishReadiness,
   submissionDecisionReadiness,
+  submissionAnswerDisplayByPurpose,
   submissionReviewSummary,
   visibleSubmissionFormFields,
 } from '@programkit/core'
@@ -1322,6 +1323,46 @@ describe('ProgramKit operation engine', () => {
     })
     expect(talkFields.some((field) => field.key === 'workshop_outline')).toBe(false)
     expect(workshopFields.some((field) => field.key === 'workshop_outline')).toBe(true)
+  })
+
+  it('renders choice labels instead of leaking stored option identifiers', () => {
+    const state = createSeedState()
+    const submission = state.submissions.find((entry) => entry.id === 'sub_005')!
+    const formatField = state.submissionFormFields.find(
+      (field) => field.formId === submission.formId && field.purpose === 'session_format',
+    )!
+    formatField.options = [{ value: 'panel', label: 'Talk (30 min)' }]
+    submission.answers[formatField.key] = 'panel'
+
+    expect(submissionAnswerDisplayByPurpose(state, submission, 'session_format')).toBe(
+      'Talk (30 min)',
+    )
+  })
+
+  it('converts labeled formats and durations even when their stored choice ids are stale', () => {
+    const state = createSeedState()
+    const submission = state.submissions.find((entry) => entry.id === 'sub_005')!
+    const formatField = state.submissionFormFields.find(
+      (field) => field.formId === submission.formId && field.purpose === 'session_format',
+    )!
+    formatField.options = [{ value: 'panel', label: 'Lightning Talk (10 min)' }]
+    submission.answers[formatField.key] = 'panel'
+
+    const accepted = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: submission.id,
+        decision: 'accepted',
+        override: true,
+        reason: 'Approved by the program chair.',
+      },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+
+    expect(accepted.response.ok).toBe(true)
+    const converted = accepted.state.submissions.find((entry) => entry.id === submission.id)!
+    expect(
+      accepted.state.sessions.find((entry) => entry.id === converted.convertedSessionId),
+    ).toMatchObject({ format: 'lightning', durationMinutes: 10 })
   })
 
   it('creates, configures, and publishes a versioned submission form', () => {

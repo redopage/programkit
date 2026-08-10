@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react'
 
 import {
   submissionAnswerByPurpose,
+  submissionAnswerDisplayByPurpose,
   submissionDecisionReadiness,
   submissionParticipants,
   submissionPipelineSummary,
@@ -519,7 +520,9 @@ function SubmissionDrawer({
               [
                 'Format',
                 sentenceCase(
-                  answerText(submissionAnswerByPurpose(state, submission, 'session_format')),
+                  answerText(
+                    submissionAnswerDisplayByPurpose(state, submission, 'session_format'),
+                  ),
                 ),
               ],
               ['Track', trackLabel],

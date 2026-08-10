@@ -2,6 +2,7 @@ import type { WorkspaceState } from './types.ts'
 import { evaluationCriterionKind, evaluationRoundCriteria } from './reviews.ts'
 import {
   submissionAnswerByPurpose,
+  submissionAnswerDisplayByPurpose,
   submissionParticipants,
   submissionReviewSummary,
 } from './selectors.ts'
@@ -456,7 +457,7 @@ export function createReviewResultsCsv(state: WorkspaceState) {
               `${participant.firstName} ${participant.lastName} (${participant.roleLabel})`,
           )
           .join(' | '),
-        track: submissionAnswerByPurpose(state, submission, 'track') ?? '',
+        track: submissionAnswerDisplayByPurpose(state, submission, 'track') ?? '',
         status: submission.status,
         assignedReviews: review.assigned,
         completedReviews: review.completed,

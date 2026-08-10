@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   submissionFormAvailability,
   submissionAnswerByPurpose,
+  submissionAnswerDisplayByPurpose,
   submissionParticipants,
   visibleSubmissionFormFields,
   type SubmissionAnswers,
@@ -373,7 +374,11 @@ export function SpeakerSubmissionsView({
                             'Format',
                             sentenceCase(
                               answerText(
-                                submissionAnswerByPurpose(state, selected, 'session_format'),
+                                submissionAnswerDisplayByPurpose(
+                                  state,
+                                  selected,
+                                  'session_format',
+                                ),
                               ),
                             ),
                           ],
