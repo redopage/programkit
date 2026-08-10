@@ -1097,6 +1097,19 @@ function ContactDrawer({
     )
     if (response.ok) form.reset()
   }
+  const addPipelineNote = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!pipeline) return
+    const form = event.currentTarget
+    const data = new FormData(form)
+    const response = await execute(
+      'crm.pipeline.add-note',
+      { entryId: pipeline.id, body: data.get('body') },
+      { expectedVersions: { [pipeline.id]: pipeline.version } },
+      'Sourcing note added.',
+    )
+    if (response.ok) form.reset()
+  }
   return (
     <Drawer open onClose={onClose} title={`${person.firstName} ${person.lastName}`}>
       <div className="flex flex-col gap-7">
@@ -1219,6 +1232,74 @@ function ContactDrawer({
               {pipeline.rationale ? (
                 <p className="text-sm text-zinc-500">{pipeline.rationale}</p>
               ) : null}
+              <form className="grid gap-2" onSubmit={(event) => void addPipelineNote(event)}>
+                <label className="text-sm font-medium" htmlFor="crm-pipeline-note">
+                  Sourcing note
+                </label>
+                <textarea
+                  id="crm-pipeline-note"
+                  name="body"
+                  required
+                  rows={2}
+                  placeholder="Add context for the next follow-up"
+                  className={textAreaControl}
+                />
+                <div>
+                  <Button size="compact" type="submit" disabled={mutating}>
+                    Add note
+                  </Button>
+                </div>
+              </form>
+              {pipeline.notes.length > 0 ? (
+                <div className="divide-y divide-zinc-950/5 rounded-xl bg-zinc-50 px-3 ring-1 ring-zinc-950/5">
+                  {pipeline.notes.map((note) => (
+                    <div key={note.id} className="py-3">
+                      <p className="whitespace-pre-wrap text-sm text-zinc-700">{note.body}</p>
+                      <p className="pt-1 text-xs text-zinc-400">
+                        {note.createdBy} ·{' '}
+                        {new Intl.DateTimeFormat('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        }).format(new Date(note.createdAt))}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div>
+                <p className="text-sm font-medium text-zinc-950">Stage history</p>
+                <ol className="mt-2 divide-y divide-zinc-950/5 rounded-xl bg-zinc-50 px-3 ring-1 ring-zinc-950/5">
+                  {[...pipeline.history].reverse().map((transition) => (
+                    <li
+                      key={`${transition.changedAt}:${transition.from ?? 'new'}:${transition.to}`}
+                      className="py-3"
+                    >
+                      <div className="flex items-center gap-2 text-sm font-medium text-zinc-700">
+                        {transition.from ? (
+                          <>
+                            <span>{sentenceCase(transition.from)}</span>
+                            <ArrowRightIcon className="size-3.5 shrink-0 fill-zinc-400" />
+                          </>
+                        ) : null}
+                        <span>{sentenceCase(transition.to)}</span>
+                      </div>
+                      <p className="pt-1 text-xs text-zinc-400">
+                        {transition.changedBy} ·{' '}
+                        {new Intl.DateTimeFormat('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        }).format(new Date(transition.changedAt))}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
             </div>
           ) : (
             <Button
