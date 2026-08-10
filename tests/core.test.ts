@@ -2065,6 +2065,100 @@ describe('ProgramKit operation engine', () => {
     ).toEqual([expect.objectContaining({ decision: 'accepted', version: 2 })])
   })
 
+  it('safely compensates and can restore an accepted proposal decision', () => {
+    let state = createSeedState()
+    const submission = state.submissions.find((entry) => entry.id === 'sub_005')!
+    const accepted = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: submission.id,
+        decision: 'accepted',
+        override: true,
+        reason: 'The committee approved an early program exception.',
+      },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+    expect(accepted.response.ok, JSON.stringify(accepted.response)).toBe(true)
+    state = accepted.state
+
+    const acceptedSubmission = state.submissions.find((entry) => entry.id === submission.id)!
+    const firstSessionId = acceptedSubmission.convertedSessionId!
+    const firstParticipationId = acceptedSubmission.convertedParticipationId!
+    const participation = state.participations.find((entry) => entry.id === firstParticipationId)!
+    participation.status = 'confirmed'
+    const placed = executeOperation(state, 'schedule.place-session', {
+      input: {
+        sessionId: firstSessionId,
+        roomId: 'rom_studio',
+        startsAt: '2026-10-04T20:00:00.000Z',
+      },
+    })
+    expect(placed.response.ok, JSON.stringify(placed.response)).toBe(true)
+    state = placed.state
+
+    const current = state.submissions.find((entry) => entry.id === submission.id)!
+    const blocked = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: current.id,
+        decision: 'rejected',
+        reason: 'The session no longer fits the program.',
+      },
+      expectedVersions: { [current.id]: current.version },
+    })
+    expect(blocked.response).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_TRANSITION', message: expect.stringContaining('override') },
+    })
+
+    const reversed = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: current.id,
+        decision: 'rejected',
+        override: true,
+        reason: 'The session no longer fits the program.',
+      },
+      expectedVersions: { [current.id]: current.version },
+    })
+    expect(reversed.response.ok, JSON.stringify(reversed.response)).toBe(true)
+    state = reversed.state
+    expect(state.submissions.find((entry) => entry.id === current.id)?.status).toBe('rejected')
+    expect(state.sessions.find((entry) => entry.id === firstSessionId)?.status).toBe('cancelled')
+    expect(state.placements.some((entry) => entry.sessionId === firstSessionId)).toBe(false)
+    expect(state.participations.find((entry) => entry.id === firstParticipationId)).toMatchObject({
+      status: 'withdrawn',
+      sessionIds: [],
+    })
+    expect(
+      state.domainEvents.some(
+        (entry) =>
+          entry.type === 'session.cancelled-from-submission' &&
+          entry.aggregate.id === firstSessionId,
+      ),
+    ).toBe(true)
+
+    const rejected = state.submissions.find((entry) => entry.id === current.id)!
+    const restored = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: rejected.id,
+        decision: 'accepted',
+        override: true,
+        reason: 'A newly open slot makes the session viable again.',
+      },
+      expectedVersions: { [rejected.id]: rejected.version },
+    })
+    expect(restored.response.ok, JSON.stringify(restored.response)).toBe(true)
+    const restoredSubmission = restored.state.submissions.find((entry) => entry.id === rejected.id)!
+    expect(restoredSubmission.convertedSessionId).not.toBe(firstSessionId)
+    expect(
+      restored.state.participations.find((entry) => entry.id === firstParticipationId),
+    ).toMatchObject({
+      status: 'invited',
+      sessionIds: [restoredSubmission.convertedSessionId],
+    })
+    expect(
+      restored.state.people.filter((entry) => entry.email === 'priya@craftwork.dev'),
+    ).toHaveLength(1)
+  })
+
   it('bulk assigns only eligible proposals with reviewer caps and track filters', () => {
     let state = createSeedState()
     const addedReviewer = executeOperation(state, 'reviewer.create', {

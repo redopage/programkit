@@ -318,7 +318,7 @@ export const operationManifest = [
     scopes: ['reviews:decide'],
     risk: 'administrative',
     agentPolicy: 'denied',
-    reversible: false,
+    reversible: true,
     supportsDryRun: true,
     requiredInput: ['submissionId', 'decision'],
     emits: [
@@ -326,6 +326,7 @@ export const operationManifest = [
       'person.created',
       'participation.created',
       'session.created-from-submission',
+      'session.cancelled-from-submission',
     ],
   },
   {

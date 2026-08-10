@@ -2259,21 +2259,29 @@ function applyHandler(
 
     case 'review.decide': {
       const submission = findRequired(state.submissions, input.submissionId, 'submission')
+      const decision = assertOneOf(input.decision, 'decision', [
+        'accepted',
+        'rejected',
+        'waitlisted',
+      ] as const)
+      const previousStatus = submission.status
       if (
         submission.status === 'draft' ||
         submission.status === 'withdrawn' ||
-        submission.status === 'accepted'
+        (submission.status === 'accepted' && decision === 'accepted')
       ) {
         throw new OperationError(
           'INVALID_TRANSITION',
           `A ${submission.status} submission cannot receive this decision.`,
         )
       }
-      const decision = assertOneOf(input.decision, 'decision', [
-        'accepted',
-        'rejected',
-        'waitlisted',
-      ] as const)
+      if (previousStatus === 'accepted' && input.override !== true) {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Changing an accepted decision requires an explicit override and reason.',
+          { reason: 'Explain why the accepted decision is changing.' },
+        )
+      }
       if (input.override !== true) {
         const readiness = submissionDecisionReadiness(state, submission)
         if (!readiness.ready) {
@@ -2293,6 +2301,7 @@ function applyHandler(
       let person: Person | null = null
       let participation: Participation | null = null
       let session: Session | null = null
+      let removedPlacementIds: string[] = []
       const acceptedParticipations: Participation[] = []
       if (decision === 'accepted') {
         const submissionParticipants = [
@@ -2467,6 +2476,51 @@ function applyHandler(
         })
         submission.convertedParticipationId = participation!.id
         submission.convertedSessionId = session.id
+      } else if (previousStatus === 'accepted') {
+        session = submission.convertedSessionId
+          ? (state.sessions.find((entry) => entry.id === submission.convertedSessionId) ?? null)
+          : null
+        removedPlacementIds = session
+          ? state.placements
+              .filter((placement) => placement.sessionId === session?.id)
+              .map((placement) => placement.id)
+          : []
+        if (session) {
+          session.status = 'cancelled'
+          session.updatedAt = timestamp
+          session.version += 1
+          state.placements = state.placements.filter(
+            (placement) => placement.sessionId !== session?.id,
+          )
+          for (const participationId of session.participantIds) {
+            const acceptedParticipation = state.participations.find(
+              (entry) => entry.id === participationId,
+            )
+            if (!acceptedParticipation) continue
+            acceptedParticipation.sessionIds = acceptedParticipation.sessionIds.filter(
+              (sessionId) => sessionId !== session?.id,
+            )
+            if (
+              acceptedParticipation.sessionIds.length === 0 &&
+              (acceptedParticipation.status === 'invited' ||
+                acceptedParticipation.status === 'confirmed')
+            ) {
+              acceptedParticipation.status = 'withdrawn'
+            }
+            acceptedParticipation.updatedAt = timestamp
+            acceptedParticipation.version += 1
+          }
+          appendEvent(state, context, {
+            type: 'session.cancelled-from-submission',
+            aggregate: { type: 'session', id: session.id, version: session.version },
+            summary: `Cancelled “${session.title}” after its proposal decision changed.`,
+            data: {
+              submissionId: submission.id,
+              decision,
+              removedPlacementIds,
+            },
+          })
+        }
       }
 
       const previous = submission.status
@@ -2518,6 +2572,7 @@ function applyHandler(
           reviewDecisionId: reviewDecision.id,
           participationId: participation?.id,
           sessionId: session?.id,
+          removedPlacementIds,
         },
       })
       return {

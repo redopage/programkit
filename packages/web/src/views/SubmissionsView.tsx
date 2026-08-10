@@ -5,7 +5,7 @@ import {
   EnvelopeIcon,
   LinkIcon,
 } from '@heroicons/react/16/solid'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import {
   submissionAnswerByPurpose,
@@ -20,6 +20,7 @@ import {
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Button,
+  Dialog,
   Drawer,
   EmptyState,
   FilterTabs,
@@ -320,6 +321,8 @@ function SubmissionDrawer({
   onClose: () => void
 }) {
   const { payload, execute, mutating } = useWorkspace()
+  const [decisionChange, setDecisionChange] = useState<'rejected' | 'waitlisted' | null>(null)
+  const [decisionReason, setDecisionReason] = useState('')
   const submission = payload?.state.submissions?.find((entry) => entry.id === submissionId)
   if (!payload || !submission) return null
 
@@ -385,7 +388,27 @@ function SubmissionDrawer({
     )
   }
 
-  return (
+  async function changeAcceptedDecision() {
+    if (!decisionChange || !decisionReason.trim()) return
+    const response = await execute(
+      'review.decide',
+      {
+        submissionId: submission!.id,
+        decision: decisionChange,
+        override: true,
+        reason: decisionReason.trim(),
+      },
+      { expectedVersions: { [submission!.id]: submission!.version } },
+      decisionChange === 'rejected'
+        ? 'Acceptance withdrawn and session cancelled.'
+        : 'Submission moved to the waitlist and session cancelled.',
+    )
+    if (!response?.ok) return
+    setDecisionChange(null)
+    setDecisionReason('')
+  }
+
+  const drawer = (
     <Drawer
       open={open}
       onClose={onClose}
@@ -423,6 +446,16 @@ function SubmissionDrawer({
                 Accept proposal
               </Button>
             </>
+          ) : null}
+          {submission.status === 'accepted' ? (
+            <Button
+              size="compact"
+              variant="secondary"
+              disabled={mutating}
+              onClick={() => setDecisionChange('waitlisted')}
+            >
+              Change decision
+            </Button>
           ) : null}
           {hasDecision ? (
             <Button
@@ -616,5 +649,77 @@ function SubmissionDrawer({
         </section>
       </div>
     </Drawer>
+  )
+
+  return (
+    <>
+      {decisionChange === null ? drawer : null}
+      <Dialog
+        open={decisionChange !== null}
+        onClose={() => {
+          if (mutating) return
+          setDecisionChange(null)
+          setDecisionReason('')
+        }}
+        title="Change accepted decision?"
+        description="The generated session will be cancelled and removed from the draft schedule. The proposal, people, and decision history stay available."
+        footer={
+          <>
+            <Button
+              size="compact"
+              onClick={() => {
+                setDecisionChange(null)
+                setDecisionReason('')
+              }}
+              disabled={mutating}
+            >
+              Keep accepted
+            </Button>
+            <Button
+              size="compact"
+              variant={decisionChange === 'rejected' ? 'danger' : 'primary'}
+              disabled={mutating || !decisionReason.trim()}
+              onClick={() => void changeAcceptedDecision()}
+            >
+              {decisionChange === 'rejected' ? 'Decline proposal' : 'Move to waitlist'}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <fieldset>
+            <legend className="text-base font-medium text-zinc-950 sm:text-sm">New decision</legend>
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              {(['waitlisted', 'rejected'] as const).map((decision) => (
+                <button
+                  key={decision}
+                  type="button"
+                  aria-pressed={decisionChange === decision}
+                  onClick={() => setDecisionChange(decision)}
+                  className={cx(
+                    'focus-ring min-h-10 rounded-xl px-3 text-base font-medium ring-1 sm:text-sm',
+                    decisionChange === decision
+                      ? 'bg-zinc-950 text-white ring-zinc-950'
+                      : 'bg-white text-zinc-700 ring-zinc-950/10 hover:bg-zinc-50',
+                  )}
+                >
+                  {decision === 'waitlisted' ? 'Waitlist' : 'Decline'}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <label className="flex flex-col gap-2 text-base font-medium text-zinc-950 sm:text-sm">
+            Reason
+            <textarea
+              rows={3}
+              value={decisionReason}
+              onChange={(event) => setDecisionReason(event.target.value)}
+              placeholder="Explain why this decision is changing"
+              className="focus-ring resize-none rounded-xl bg-white px-3 py-2 text-base font-normal text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:text-sm"
+            />
+          </label>
+        </div>
+      </Dialog>
+    </>
   )
 }
