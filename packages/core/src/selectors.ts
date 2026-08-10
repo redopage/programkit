@@ -1,4 +1,5 @@
 import { nowIso } from './utils.ts'
+import { evaluationCriterionKind, evaluationRoundCriteria } from './reviews.ts'
 import type {
   Campaign,
   ISODateTime,
@@ -72,6 +73,59 @@ export function submissionAnswerByPurpose(
   return field ? submission.answers[field.key] : undefined
 }
 
+/**
+ * Resolve stored select values to the labels the submitter actually chose.
+ *
+ * Choice values are stable identifiers, so organizers can safely rename a label
+ * without breaking conditional rules or historical answers. Product surfaces and
+ * human-readable exports should use this helper instead of exposing those identifiers.
+ */
+export function submissionAnswerDisplayByPurpose(
+  state: WorkspaceState,
+  submission: Submission,
+  purpose: SubmissionFieldPurpose,
+) {
+  const field = (state.submissionFormFields ?? []).find(
+    (entry) => entry.formId === submission.formId && entry.purpose === purpose,
+  )
+  const answer = field ? submission.answers[field.key] : undefined
+  if (!field || (field.kind !== 'select' && field.kind !== 'multi_select')) return answer
+
+  const label = (value: string) =>
+    field.options.find((option) => option.value === value)?.label ?? value
+  if (Array.isArray(answer)) return answer.map(label)
+  return typeof answer === 'string' ? label(answer) : answer
+}
+
+export function submissionParticipants(state: WorkspaceState, submission: Submission) {
+  const text = (purpose: SubmissionFieldPurpose) => {
+    const value = submissionAnswerByPurpose(state, submission, purpose)
+    return typeof value === 'string' ? value.trim() : ''
+  }
+  return [
+    {
+      id: `lead:${submission.id}`,
+      firstName: text('first_name'),
+      lastName: text('last_name'),
+      email: text('email'),
+      company: text('company'),
+      title: text('job_title'),
+      biography: text('biography'),
+      role: 'lead_speaker' as const,
+      roleLabel: 'Lead speaker',
+    },
+    ...(submission.contributors ?? []).map((contributor) => ({
+      ...contributor,
+      roleLabel:
+        contributor.role === 'co_author'
+          ? 'Co-author'
+          : contributor.role === 'co_presenter'
+            ? 'Co-presenter'
+            : 'Co-speaker',
+    })),
+  ]
+}
+
 export function submissionPipelineSummary(
   state: WorkspaceState,
   eventId = state.activeEventId,
@@ -105,7 +159,7 @@ export function submissionReviewSummary(
   submissionId: string,
 ): SubmissionReviewSummary {
   const allAssignments = (state.reviewerAssignments ?? []).filter(
-    (entry) => entry.submissionId === submissionId,
+    (entry) => entry.submissionId === submissionId && entry.status !== 'recused',
   )
   const submission = (state.submissions ?? []).find((entry) => entry.id === submissionId)
   const plan = (state.evaluationPlans ?? []).find(
@@ -126,8 +180,16 @@ export function submissionReviewSummary(
   const scorecards = (state.scorecards ?? []).filter((entry) =>
     assignmentIds.has(entry.assignmentId),
   )
+  const criteria = [
+    ...new Map(
+      assignments
+        .flatMap((assignment) => evaluationRoundCriteria(plan, assignment.roundId))
+        .filter((criterion) => evaluationCriterionKind(criterion) === 'numeric')
+        .map((criterion) => [criterion.id, criterion]),
+    ).values(),
+  ]
   const criterionAverages = Object.fromEntries(
-    (plan?.criteria ?? []).map((criterion) => {
+    criteria.map((criterion) => {
       const values = scorecards
         .map((scorecard) => scorecard.scores[criterion.id])
         .filter((score): score is number => typeof score === 'number')
@@ -140,14 +202,17 @@ export function submissionReviewSummary(
     }),
   )
   const scorecardAverages = scorecards.map((scorecard) => {
-    const weighted = (plan?.criteria ?? []).reduce(
-      (total, criterion) => total + (scorecard.scores[criterion.id] ?? 0) * criterion.weight,
-      0,
+    const assignment = assignments.find((entry) => entry.id === scorecard.assignmentId)
+    const roundCriteria = evaluationRoundCriteria(plan, assignment?.roundId).filter(
+      (criterion) => evaluationCriterionKind(criterion) === 'numeric',
     )
-    const totalWeight = (plan?.criteria ?? []).reduce(
-      (total, criterion) => total + criterion.weight,
-      0,
-    )
+    const weighted = roundCriteria.reduce((total, criterion) => {
+      const maximum = criterion.maximum ?? 5
+      const score = scorecard.scores[criterion.id] ?? 0
+      const normalizedScore = maximum > 0 ? (score / maximum) * 5 : 0
+      return total + normalizedScore * criterion.weight
+    }, 0)
+    const totalWeight = roundCriteria.reduce((total, criterion) => total + criterion.weight, 0)
     return totalWeight === 0 ? 0 : weighted / totalWeight
   })
   const recommendations: SubmissionReviewSummary['recommendations'] = {}
@@ -164,11 +229,45 @@ export function submissionReviewSummary(
         ? null
         : Math.round(
             (scorecardAverages.reduce((sum, score) => sum + score, 0) / scorecardAverages.length) *
-              10,
-          ) / 10,
+              100,
+          ) / 100,
     criterionAverages,
     recommendations,
   }
+}
+
+export function submissionDecisionReadiness(state: WorkspaceState, submission: Submission) {
+  if (submission.kind === 'guaranteed_session') {
+    return { ready: true, incompleteRounds: [] }
+  }
+
+  const plan = (state.evaluationPlans ?? []).find(
+    (entry) =>
+      entry.formId === submission.formId && entry.submissionKinds.includes(submission.kind),
+  )
+  if (!plan) return { ready: true, incompleteRounds: [] }
+
+  const incompleteRounds = [...plan.rounds]
+    .sort((left, right) => left.order - right.order)
+    .map((round) => {
+      const completed = (state.reviewerAssignments ?? []).filter(
+        (entry) =>
+          entry.submissionId === submission.id &&
+          entry.evaluationPlanId === plan.id &&
+          entry.roundId === round.id &&
+          entry.status === 'completed',
+      ).length
+      return {
+        id: round.id,
+        name: round.name,
+        completed,
+        required: round.minimumCompletedReviews,
+        remaining: Math.max(0, round.minimumCompletedReviews - completed),
+      }
+    })
+    .filter((round) => round.remaining > 0)
+
+  return { ready: incompleteRounds.length === 0, incompleteRounds }
 }
 
 export function reviewerQueue(state: WorkspaceState, reviewerId: string) {
@@ -203,7 +302,10 @@ export function readinessRows(state: WorkspaceState): ReadinessRow[] {
         instances.map((instance) => [instance.definitionId, instance.status]),
       )
       const relevant = state.requirementDefinitions.filter(
-        (definition) => definition.eventId === participation.eventId && definition.required,
+        (definition) =>
+          definition.eventId === participation.eventId &&
+          definition.required &&
+          Object.hasOwn(requirementStatuses, definition.id),
       )
       const completed = relevant.filter((definition) => {
         const status = requirementStatuses[definition.id]
@@ -511,40 +613,84 @@ export function audienceForCampaign(state: WorkspaceState, campaign: Campaign) {
   return campaign.recipientParticipationIds
 }
 
+export function campaignPreview(
+  state: WorkspaceState,
+  template: Pick<Campaign, 'subject' | 'body'>,
+  participationId: string,
+) {
+  const participation = state.participations.find(
+    (entry) => entry.id === participationId && entry.eventId === state.activeEventId,
+  )
+  if (!participation) return null
+  const person = participationPerson(state, participation)
+  const event = activeEvent(state)
+  if (!person || !event) return null
+  const sessions = participation.sessionIds
+    .map((sessionId) => state.sessions.find((entry) => entry.id === sessionId)?.title)
+    .filter((title): title is string => Boolean(title))
+  const outstandingTasks = state.requirementInstances
+    .filter(
+      (instance) =>
+        instance.participationId === participation.id &&
+        instance.status !== 'approved' &&
+        instance.status !== 'waived',
+    )
+    .map((instance) => {
+      const definition = state.requirementDefinitions.find(
+        (entry) => entry.id === instance.definitionId,
+      )
+      return definition ? `• ${definition.label} (due ${definition.dueAt.slice(0, 10)})` : null
+    })
+    .filter((line): line is string => Boolean(line))
+  const replacements: Record<string, string> = {
+    first_name: person.firstName,
+    last_name: person.lastName,
+    full_name: `${person.firstName} ${person.lastName}`,
+    company: person.company,
+    event_name: event.name,
+    event_date: new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: event.timezone,
+    }).format(new Date(event.startsAt)),
+    event_venue: [event.venue, event.city].filter(Boolean).join(', '),
+    session: sessions.join(', ') || 'your session',
+    outstanding_tasks: outstandingTasks.join('\n') || 'No outstanding tasks',
+    portal_link: `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}?event=${encodeURIComponent(event.id)}`,
+    portal_url: `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}?event=${encodeURIComponent(event.id)}`,
+  }
+  const render = (value: string) =>
+    Object.entries(replacements).reduce(
+      (result, [token, replacement]) => result.replaceAll(`{{${token}}}`, replacement),
+      value,
+    )
+  return {
+    participationId,
+    personId: person.id,
+    recipientName: `${person.firstName} ${person.lastName}`,
+    recipientEmail: person.email,
+    subject: render(template.subject),
+    body: render(template.body),
+  }
+}
+
 export function renderCampaignMessage(
   state: WorkspaceState,
   campaign: Campaign,
   participationId: string,
 ) {
+  const preview = campaignPreview(state, campaign, participationId)
   const participation = state.participations.find((entry) => entry.id === participationId)
   const person = participation
     ? state.people.find((entry) => entry.id === participation.personId)
     : undefined
-  const event = state.events.find((entry) => entry.id === campaign.eventId)
-  if (!participation || !person || !event) return null
-
-  const eventDate = new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: event.timezone,
-  }).format(new Date(event.startsAt))
-  const values: Record<string, string> = {
-    first_name: person.firstName,
-    last_name: person.lastName,
-    event_name: event.name,
-    event_date: eventDate,
-    event_venue: [event.venue, event.city].filter(Boolean).join(', '),
-    portal_url: `/portal/${participation.id}`,
-  }
-  const render = (template: string) =>
-    template.replace(/\{\{([a-z_]+)\}\}/gu, (token, key: string) => values[key] ?? token)
-
+  if (!preview || !participation || !person) return null
   return {
     participation,
     person,
-    subject: render(campaign.subject),
-    body: render(campaign.body),
+    subject: preview.subject,
+    body: preview.body,
   }
 }
 
@@ -584,6 +730,7 @@ export function publicAgenda(state: WorkspaceState) {
         speakers: speakers.filter((speaker) => speaker !== null),
       }
     })
+    .filter((entry) => entry.session?.status === 'ready')
 }
 
 /**
@@ -673,6 +820,7 @@ export function nextActions(state: WorkspaceState, now: ISODateTime = nowIso()):
     (assignment) =>
       assignment.eventId === state.activeEventId &&
       assignment.status !== 'completed' &&
+      assignment.status !== 'recused' &&
       !completedAssignmentIds.has(assignment.id),
   )
   if (openAssignments.length > 0) {

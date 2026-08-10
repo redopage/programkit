@@ -1,69 +1,47 @@
-# Accelevents as a one-way program destination
+# Accelevents handoff
 
-ProgramKit exports a published program to Accelevents without making Accelevents authoritative.
-The adapter reads only the latest immutable `ScheduleRelease`; unpublished moves, unscheduled
-sessions, internal notes, review data, and task files never enter the packet.
+ProgramKit can package the current event's published program for a one-way import into
+Accelevents. ProgramKit remains the planning source of truth. The export does not read from or
+write to an Accelevents account.
 
-## What is implemented
+Open **Integrations** and choose **Download Accelevents package**. The ZIP contains:
 
-`accelevents.prepare-export` runs a mapping preflight and freezes one versioned delivery batch. Each
-batch contains stable speaker and session items with independent status, attempt count, provider ID,
-last error, and version. Repeating the operation for the same release and event URL is rejected so a
-retry cannot silently duplicate a batch.
+| File                  | Purpose                                                              |
+| --------------------- | -------------------------------------------------------------------- |
+| `speakers.csv`        | Accepted speakers referenced by published sessions                   |
+| `sessions.csv`        | Ready sessions and their published placements                        |
+| `rooms-reference.csv` | ProgramKit room names beside an empty Accelevents Location ID column |
+| `README.txt`          | Import order, timezone, schedule version, and export warnings        |
+| `manifest.json`       | Machine-readable event, release, file counts, and warnings           |
 
-After the workspace commit, the Cloudflare host invokes the checked-in provider consumer only when
-the owner-managed `ACCELEVENTS_API_KEY` secret exists. It processes speakers before sessions, uses
-documented create calls for new records and update calls for retained provider IDs, and resolves
-speaker IDs into each session relationship. `accelevents.record-result` is reserved for that trusted
-consumer. It records a delivered or failed outcome for one item; `accelevents.retry-export` queues
-every undelivered frozen item again. Delivered items are terminal. Batch and integration summaries
-derive from provider evidence instead of claiming success when a packet is merely staged.
+## Import order
 
-## Mapping contract
+1. Import `speakers.csv` from the Accelevents Speakers area.
+2. Create or confirm event Locations in Accelevents.
+3. If locations should be assigned, copy each Accelevents numeric Location ID into the matching
+   session rows. `rooms-reference.csv` provides the ProgramKit names and capacities.
+4. Import `sessions.csv` from the Accelevents Sessions area.
+5. Review both import previews before completing them.
 
-| ProgramKit source             | Frozen Accelevents fields                                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Person + participation        | Stable external key, first/last name, email, public title/company, bio, image URL, moderator flag                         |
-| Published placement + session | Stable external key, title, description, event-local start/end, room, format, room capacity, track, speaker external keys |
+The session file uses Location ID `0` by default, which Accelevents accepts when no location is
+assigned. Speaker assignments use email addresses. Dates and times are rendered in the event's
+configured IANA timezone, not the browser timezone.
 
-Session formats map to Accelevents' documented values: keynotes use `MAIN_STAGE`, talks and panels
-use `BREAKOUT_SESSION`, workshops use `WORKSHOP`, and breaks use `BREAK`. Date/time strings use the
-event timezone and Accelevents' documented `yyyy/MM/dd HH:mm` shape.
+ProgramKit follows the current official Accelevents CSV column names, including the source
+template's `Instragram Handle` spelling. See the Accelevents guides for
+[speaker CSV imports](https://support.accelevents.com/en/articles/74958-uploading-items-from-a-csv)
+and [session CSV imports](https://support.accelevents.com/en/articles/13510323-upload-sessions-via-csv)
+before importing into a production event.
 
-The consumer follows Accelevents' official host-side
-[create-speaker](https://developer.accelevents.com/reference/create-speaker),
-[update-speaker](https://developer.accelevents.com/reference/update-speaker),
-[create-session](https://developer.accelevents.com/reference/create-session), and
-[update-session](https://developer.accelevents.com/reference/update-session) contracts. Requests use
-the documented `AUTHENTICATION` header. The session documentation describes the title, start/end,
-description, capacity, visibility, and format fields used by the packet. Stable ProgramKit keys are
-audit evidence; returned provider IDs are the create-versus-update key and carry into later release
-batches.
+## Boundary
 
-## Credential and delivery boundary
+This integration is deliberately an export rather than continuous sync:
 
-The core package never imports an Accelevents SDK and never stores an API key. Accelevents says its
-API is available on Enterprise and White Label plans, and that an enterprise owner creates or views
-the API key. See the official [API-key guide](https://developer.accelevents.com/docs/getting-started)
-and [API overview](https://developer.accelevents.com/docs/accelevents-api-documentation).
+- only the latest published schedule release is included;
+- draft and cancelled sessions stay in ProgramKit;
+- edits made in Accelevents do not flow back;
+- Accelevents credentials are not required or stored;
+- re-exporting creates a fresh, reviewable handoff package.
 
-Production activation belongs in the checked-in Cloudflare consumer after the workspace commit:
-
-1. Andrew stores the Enterprise key with `wrangler secret put ACCELEVENTS_API_KEY`;
-2. an operator stages the latest published release or explicitly retries an existing batch;
-3. the host creates or updates speakers, then creates or updates sessions with those speaker IDs;
-4. it records the provider resource ID or a concise failure through
-   `accelevents.record-result` without exposing the key;
-5. a failed item remains visible and can be queued again without rebuilding the frozen packet.
-
-There is deliberately no delete propagation. Removing a ProgramKit session requires an explicit
-provider-side archive policy; a one-way export must not infer destructive external changes.
-
-## Honest release state
-
-The reference application proves mapping, versioning, redaction, executable create/update requests,
-speaker-first relationship resolution, provider-ID reuse, failure/retry transitions, and operator
-status. It does not include an Accelevents credential or claim a live provider delivery. Before
-release, Andrew must configure the Enterprise key outside the repository, use a controlled target
-event, exercise provider rate limits and partial failures, and retain a provider-confirmed smoke-
-test receipt.
+Use the ProgramKit full export for backup and portability. Use the Accelevents package only for a
+downstream event-delivery handoff.

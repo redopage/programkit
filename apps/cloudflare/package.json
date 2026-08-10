@@ -7,7 +7,7 @@
     "dev": "vite --host localhost --port 4173 --strictPort",
     "build": "vite build",
     "preview": "vite preview --host localhost --port 4173 --strictPort",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy --config ../../wrangler.jsonc"
   },
   "dependencies": {
     "@programkit/agent": "workspace:*",

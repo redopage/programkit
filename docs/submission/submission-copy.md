@@ -83,6 +83,7 @@ call for proposals to published agenda — instead of a general event platform.
 ## Honest limitations
 
 The reference deployment runs on deterministic, passwordless demo identities and sample data. It
-does not claim production authentication, sender-domain activation, upload scanning, Airtable
-runtime sync, or provider credentials; each of those is documented as a host requirement. Optional
-AI review assistance is left out rather than simulated.
+does not claim production account hardening, sender-domain activation, upload scanning, or provider
+credentials; each of those is documented as a host requirement. An experimental Airtable-backed
+mode is available for integration testing but remains optional and disconnected during evaluator
+runs. Optional AI review assistance is left out rather than simulated.

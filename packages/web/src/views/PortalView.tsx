@@ -1,13 +1,13 @@
 import {
   ArrowDownTrayIcon,
-  ArrowLeftIcon,
-  ArrowPathIcon,
   BookOpenIcon,
   CalendarDaysIcon,
+  ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ClockIcon,
   DocumentArrowUpIcon,
-  LockClosedIcon,
+  MapPinIcon,
+  PaperClipIcon,
   UserGroupIcon,
 } from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
@@ -15,20 +15,19 @@ import { useState, type FormEvent } from 'react'
 import {
   readinessRows,
   type Asset,
+  type AssetComment,
   type RequirementDefinition,
   type RequirementInstance,
 } from '@programkit/core'
 
-import { eventDateTime } from '../lib/date.ts'
+import { PortalResources } from '../components/PortalResources.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Avatar,
   Button,
-  Callout,
   EmptyState,
   ProgressBar,
   StatusBadge,
-  cx,
   sentenceCase,
   textAreaControl,
   textControl,
@@ -39,26 +38,6 @@ import {
  * upload, the written answer, and the blocked release all read as the same
  * kind of object rather than three unrelated widgets.
  */
-const taskWell = 'rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5 sm:ml-6'
-
-/**
- * An approval the speaker has never been given a document for cannot be acted
- * on, so it is the program team's move, not theirs. Grouping and due-date copy
- * both read from this so the page never asks for something it has not provided.
- */
-function blockedOnProgramTeam({
-  definition,
-  instance,
-}: {
-  definition: RequirementDefinition
-  instance: RequirementInstance
-}) {
-  return (
-    definition.kind === 'approval' &&
-    (instance.status === 'not_started' || instance.status === 'revision_requested')
-  )
-}
-
 export function PortalView() {
   const { payload } = useWorkspace()
   if (!payload) return null
@@ -66,18 +45,132 @@ export function PortalView() {
 }
 
 function PortalWorkspace() {
-  const { payload, execute, uploadRequirementFile, assetUrl, mutating } = useWorkspace()
+  const { payload, execute, mutating, refresh } = useWorkspace()
   const state = payload!.state
-  const event = state.events.find((entry) => entry.id === state.activeEventId)!
-  const participation =
-    state.participations.find((entry) => entry.id === 'par_003') ?? state.participations[0]
+  const participation = state.participations[0]
   const person = state.people.find((entry) => entry.id === participation.personId)!
+  const event = state.events.find((entry) => entry.id === participation.eventId)!
   const row = readinessRows(state).find((entry) => entry.participationId === participation.id)!
   const [form, setForm] = useState({
     publicTitle: participation.publicTitle,
     publicCompany: participation.publicCompany,
     bio: person.bio,
   })
+  const [uploadingHeadshot, setUploadingHeadshot] = useState(false)
+  const [headshotError, setHeadshotError] = useState<string | null>(null)
+  const [uploadingRequirementId, setUploadingRequirementId] = useState<string | null>(null)
+  const [deliverableErrors, setDeliverableErrors] = useState<Record<string, string>>({})
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
+  const headshots = state.assets
+    .filter(
+      (asset) =>
+        asset.kind === 'headshot' && asset.owner.type === 'person' && asset.owner.id === person.id,
+    )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+
+  async function uploadHeadshot(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const formElement = event.currentTarget
+    const file = new FormData(formElement).get('file')
+    if (!(file instanceof File) || file.size < 1) {
+      setHeadshotError('Choose a headshot first.')
+      return
+    }
+    setUploadingHeadshot(true)
+    setHeadshotError(null)
+    try {
+      const body = new FormData()
+      body.set('file', file)
+      const response = await fetch(
+        `/public/v1/portal/${encodeURIComponent(participation.id)}/assets/headshot`,
+        {
+          method: 'POST',
+          headers: { 'x-programkit-portal-key': participation.portalAccessKey },
+          body,
+        },
+      )
+      const result = (await response.json()) as { error?: string }
+      if (!response.ok) throw new Error(result.error ?? 'The headshot could not be uploaded.')
+      formElement.reset()
+      await refresh()
+    } catch (caught) {
+      setHeadshotError(
+        caught instanceof Error ? caught.message : 'The headshot could not be uploaded.',
+      )
+    } finally {
+      setUploadingHeadshot(false)
+    }
+  }
+  async function uploadDeliverable(
+    event: FormEvent<HTMLFormElement>,
+    instance: RequirementInstance,
+  ) {
+    event.preventDefault()
+    const formElement = event.currentTarget
+    const file = new FormData(formElement).get('file')
+    if (!(file instanceof File) || file.size < 1) {
+      setDeliverableErrors((current) => ({ ...current, [instance.id]: 'Choose a file first.' }))
+      return
+    }
+    setUploadingRequirementId(instance.id)
+    setDeliverableErrors((current) => ({ ...current, [instance.id]: '' }))
+    try {
+      const body = new FormData()
+      body.set('file', file)
+      const response = await fetch(
+        `/public/v1/portal/${encodeURIComponent(participation.id)}/requirements/${encodeURIComponent(instance.id)}/assets`,
+        {
+          method: 'POST',
+          headers: { 'x-programkit-portal-key': participation.portalAccessKey },
+          body,
+        },
+      )
+      const result = (await response.json()) as { error?: string }
+      if (!response.ok) throw new Error(result.error ?? 'The file could not be uploaded.')
+      formElement.reset()
+      await refresh()
+    } catch (caught) {
+      setDeliverableErrors((current) => ({
+        ...current,
+        [instance.id]: caught instanceof Error ? caught.message : 'The file could not be uploaded.',
+      }))
+    } finally {
+      setUploadingRequirementId(null)
+    }
+  }
+
+  async function downloadDeliverable(asset: Asset) {
+    const response = await fetch(
+      `/public/v1/portal/${encodeURIComponent(participation.id)}/assets/${encodeURIComponent(asset.id)}`,
+      { headers: { 'x-programkit-portal-key': participation.portalAccessKey } },
+    )
+    if (!response.ok) {
+      setDeliverableErrors((current) => ({
+        ...current,
+        [asset.owner.id]: 'The file could not be downloaded.',
+      }))
+      return
+    }
+    const url = URL.createObjectURL(await response.blob())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = asset.filename
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function addFileComment(event: FormEvent<HTMLFormElement>, asset: Asset) {
+    event.preventDefault()
+    const body = commentDrafts[asset.id]?.trim() ?? ''
+    if (!body) return
+    const response = await execute(
+      'asset.comment',
+      { assetId: asset.id, body },
+      undefined,
+      'Comment added.',
+    )
+    if (response.ok) setCommentDrafts((current) => ({ ...current, [asset.id]: '' }))
+  }
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     await execute(
@@ -93,67 +186,19 @@ function PortalWorkspace() {
     )
   }
 
-  const tasks = state.requirementInstances
-    .filter((instance) => instance.participationId === participation.id)
-    .map((instance) => ({
-      instance,
-      definition: state.requirementDefinitions.find((entry) => entry.id === instance.definitionId)!,
-    }))
-    .sort((left, right) => left.definition.dueAt.localeCompare(right.definition.dueAt))
-
-  // Three groups answer the only questions a speaker has on this page: what is
-  // waiting on me, what is waiting on somebody else, and what is finished.
-  const groups = [
-    {
-      key: 'open',
-      label: 'Waiting on you',
-      tasks: tasks.filter(
-        (task) =>
-          (task.instance.status === 'not_started' ||
-            task.instance.status === 'revision_requested') &&
-          !blockedOnProgramTeam(task),
-      ),
-    },
-    {
-      key: 'review',
-      label: 'With the program team',
-      tasks: tasks.filter(
-        (task) => task.instance.status === 'submitted' || blockedOnProgramTeam(task),
-      ),
-    },
-    {
-      key: 'settled',
-      label: 'Settled',
-      tasks: tasks.filter(
-        ({ instance }) => instance.status === 'approved' || instance.status === 'waived',
-      ),
-    },
-  ].filter((group) => group.tasks.length > 0)
-
-  const nothingOutstanding = tasks.length > 0 && groups.every((group) => group.key === 'settled')
-
   return (
     <div className="min-h-dvh bg-white">
-      <header className="border-b border-zinc-950/5 bg-white">
+      <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <a
-            href={`/portal/${participation.id}`}
+            href="#"
             aria-label="Homepage"
             className="focus-ring text-base font-semibold tracking-tight text-zinc-950"
             onClick={(event) => event.preventDefault()}
           >
-            AIE NYC
+            {event.name}
           </a>
-          <button
-            type="button"
-            className="focus-ring flex items-center gap-2 rounded-lg text-base text-zinc-500 hover:text-zinc-950 sm:text-sm"
-            onClick={() => {
-              window.location.href = '/'
-            }}
-          >
-            <ArrowLeftIcon className="size-4 h-lh shrink-0 fill-current" />
-            Operator workspace
-          </button>
+          <p className="text-base text-zinc-500 sm:text-sm">Speaker portal</p>
         </div>
       </header>
 
@@ -171,7 +216,7 @@ function PortalWorkspace() {
                 Welcome, {person.firstName}
               </h1>
               <p className="truncate text-base text-zinc-500 sm:text-sm">
-                {sentenceCase(participation.roles.join(', '))} · AIE NYC 2026
+                {sentenceCase(participation.roles.join(', '))} · {event.name}
               </p>
             </div>
           </div>
@@ -216,8 +261,8 @@ function PortalWorkspace() {
               <div className="max-w-2xl">
                 <h2 className="text-xl font-semibold">Confirm your participation</h2>
                 <p className="text-pretty text-base text-zinc-300 sm:text-sm">
-                  Confirm that you plan to join us in Brooklyn on October 4–5. You can update
-                  logistics later.
+                  Confirm that you plan to join us in {event.city} for {event.name}. You can update
+                  your profile and remaining tasks afterward.
                 </p>
               </div>
               <Button
@@ -239,6 +284,54 @@ function PortalWorkspace() {
           </section>
         ) : null}
 
+        {state.sessions.length > 0 ? (
+          <section
+            aria-labelledby="sessions-heading"
+            className="rounded-2xl p-5 ring-1 ring-zinc-950/10 sm:p-6"
+          >
+            <div className="border-b border-zinc-950/5 pb-3">
+              <h2 id="sessions-heading" className="text-lg font-semibold text-zinc-950">
+                Your sessions
+              </h2>
+            </div>
+            <ul role="list" className="divide-y divide-zinc-950/5">
+              {state.sessions.map((session) => {
+                const placement = state.placements.find((entry) => entry.sessionId === session.id)
+                const room = state.rooms.find((entry) => entry.id === placement?.roomId)
+                const track = state.tracks.find((entry) => entry.id === session.trackId)
+                return (
+                  <li key={session.id} className="flex flex-col gap-2 py-4">
+                    <p className="text-base font-medium text-zinc-950">{session.title}</p>
+                    <div className="flex flex-wrap gap-x-5 gap-y-1 text-base text-zinc-500 sm:text-sm">
+                      {placement ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <CalendarDaysIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
+                          {new Intl.DateTimeFormat('en-US', {
+                            timeZone: event.timezone,
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          }).format(new Date(placement.startsAt))}
+                        </span>
+                      ) : null}
+                      {room ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <MapPinIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
+                          {room.name}
+                        </span>
+                      ) : null}
+                      {track ? <span>{track.name}</span> : null}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        ) : null}
+
+        <PortalResources resources={state.portalResourcePages ?? []} />
+
         <div className="grid gap-8 lg:grid-cols-[7fr_5fr]">
           <section
             id="tasks"
@@ -253,81 +346,124 @@ function PortalWorkspace() {
                 What you send goes to the program team, who approve it or ask for a change.
               </p>
             </div>
-
-            {tasks.length === 0 ? (
-              <EmptyState
-                title="Nothing assigned yet"
-                description="The program team has not given you anything to complete for this event."
-              />
-            ) : (
-              <>
-                {nothingOutstanding ? (
-                  <div className="pt-4">
-                    <Callout tone="success" title={`You are ready for ${event.name}`}>
-                      Every task on your list is settled. Nothing here is waiting on you.
-                    </Callout>
-                  </div>
-                ) : null}
-                <div>
-                  {groups.map((group) => (
-                    <div key={group.key} className="pt-5 first:pt-3">
-                      {/* The count sits with the label so the size of each group
-                          is legible before any row is read. */}
-                      <h3 className="flex items-baseline gap-2 text-base font-medium text-zinc-500 sm:text-sm">
-                        {group.label}
-                        <span className="tabular-nums text-zinc-500">{group.tasks.length}</span>
-                      </h3>
-                      <ul role="list" className="divide-y divide-zinc-950/5">
-                        {group.tasks.map(({ instance, definition }) => (
-                          <RequirementTask
-                            key={instance.id}
+            <ul role="list" className="divide-y divide-zinc-950/5">
+              {state.requirementInstances
+                .filter((instance) => instance.participationId === participation.id)
+                .map((instance) => {
+                  const definition = state.requirementDefinitions.find(
+                    (entry) => entry.id === instance.definitionId,
+                  )!
+                  const deliverables = state.assets
+                    .filter(
+                      (asset) =>
+                        asset.owner.type === 'requirement' && asset.owner.id === instance.id,
+                    )
+                    .sort((left, right) => (right.version ?? 1) - (left.version ?? 1))
+                  const latest = deliverables.find((asset) => asset.isLatest) ?? deliverables[0]
+                  const deliverableIds = new Set(deliverables.map((asset) => asset.id))
+                  const comments = (state.assetComments ?? [])
+                    .filter((comment) => deliverableIds.has(comment.assetId))
+                    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+                  return (
+                    <li key={instance.id} className="flex flex-col gap-4 py-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start gap-2">
+                            {instance.status === 'approved' ? (
+                              <CheckCircleIcon className="size-4 h-lh shrink-0 fill-emerald-600" />
+                            ) : (
+                              <ClockIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-base font-medium text-zinc-950 sm:text-sm">
+                                {definition.label}
+                              </p>
+                              <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                                {definition.description}
+                              </p>
+                              <p className="pt-1 text-base text-zinc-500 sm:text-sm">
+                                Due{' '}
+                                {new Intl.DateTimeFormat('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                }).format(new Date(definition.dueAt))}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
+                          <span className="flex sm:w-32">
+                            <StatusBadge status={instance.status} />
+                          </span>
+                          {definition.kind !== 'file' ? (
+                            <span className="flex sm:w-24 sm:justify-end">
+                              {(instance.status === 'not_started' ||
+                                instance.status === 'revision_requested') &&
+                              definition.systemKey !== 'participation_confirmation' &&
+                              definition.systemKey !== 'profile_bio' ? (
+                                <Button
+                                  size="compact"
+                                  disabled={mutating}
+                                  onClick={() =>
+                                    void execute(
+                                      'requirement.set-status',
+                                      {
+                                        requirementInstanceId: instance.id,
+                                        status: definition.selfCompletable
+                                          ? 'approved'
+                                          : 'submitted',
+                                        value: definition.selfCompletable
+                                          ? 'Completed through participant portal.'
+                                          : 'Submitted through participant portal.',
+                                      },
+                                      { expectedVersions: { [instance.id]: instance.version } },
+                                      definition.selfCompletable
+                                        ? `${definition.label} completed.`
+                                        : `${definition.label} submitted for review.`,
+                                    )
+                                  }
+                                >
+                                  {definition.selfCompletable ? (
+                                    <CheckCircleIcon className="size-4 h-lh shrink-0 fill-current" />
+                                  ) : (
+                                    <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
+                                  )}
+                                  {definition.selfCompletable ? 'Mark complete' : 'Submit'}
+                                </Button>
+                              ) : null}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      {definition.kind === 'file' ? (
+                        <div className="flex items-start gap-2">
+                          <FileRequirement
                             definition={definition}
                             instance={instance}
-                            asset={
-                              state.assets.find((entry) => entry.id === instance.value) ?? null
+                            deliverables={deliverables}
+                            latest={latest}
+                            comments={comments}
+                            uploading={uploadingRequirementId === instance.id}
+                            error={deliverableErrors[instance.id]}
+                            commentDraft={latest ? (commentDrafts[latest.id] ?? '') : ''}
+                            onCommentDraftChange={(value) =>
+                              latest &&
+                              setCommentDrafts((current) => ({
+                                ...current,
+                                [latest.id]: value,
+                              }))
                             }
-                            dueLabel={eventDateTime(definition.dueAt, event.timezone, {
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                            submittedLabel={
-                              instance.submittedAt
-                                ? eventDateTime(instance.submittedAt, event.timezone, {
-                                    month: 'short',
-                                    day: 'numeric',
-                                  })
-                                : null
-                            }
-                            awaitingConfirmation={participation.status === 'invited'}
-                            mutating={mutating}
-                            assetUrl={assetUrl}
-                            onSubmit={(value) =>
-                              execute(
-                                'requirement.set-status',
-                                {
-                                  requirementInstanceId: instance.id,
-                                  status: 'submitted',
-                                  value,
-                                },
-                                { expectedVersions: { [instance.id]: instance.version } },
-                                `${definition.label} submitted for review.`,
-                              )
-                            }
-                            onUpload={(file) =>
-                              uploadRequirementFile(
-                                instance.id,
-                                file,
-                                `${definition.label} uploaded for review.`,
-                              )
-                            }
+                            onUpload={uploadDeliverable}
+                            onDownload={downloadDeliverable}
+                            onComment={addFileComment}
                           />
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+                        </div>
+                      ) : null}
+                    </li>
+                  )
+                })}
+            </ul>
           </section>
 
           <section
@@ -341,6 +477,67 @@ function PortalWorkspace() {
               </h2>
               <p className="text-base text-zinc-500 sm:text-sm">Shown on the published program.</p>
             </div>
+            <form
+              className="flex flex-col gap-3 border-b border-zinc-950/5 py-4"
+              onSubmit={(event) => void uploadHeadshot(event)}
+            >
+              <div className="flex items-center gap-3">
+                <Avatar
+                  src={person.avatarUrl}
+                  name={`${person.firstName} ${person.lastName}`}
+                  size="large"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-base font-medium text-zinc-950 sm:text-sm">Headshot</p>
+                  <p className="text-pretty text-sm text-zinc-500">
+                    JPEG, PNG, or WebP up to 8 MB.
+                  </p>
+                </div>
+              </div>
+              <input
+                type="file"
+                name="file"
+                required
+                accept="image/jpeg,image/png,image/webp"
+                className="focus-ring min-h-10 w-full rounded-xl px-3 py-2 text-sm text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-zinc-800"
+              />
+              {headshotError ? (
+                <p role="alert" className="text-sm text-red-600">
+                  {headshotError}
+                </p>
+              ) : null}
+              <div className="flex justify-start">
+                <Button type="submit" size="compact" disabled={uploadingHeadshot}>
+                  <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
+                  {uploadingHeadshot ? 'Uploading…' : 'Upload headshot'}
+                </Button>
+              </div>
+              {headshots[0] ? (
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 px-3 py-2 ring-1 ring-zinc-950/5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-zinc-800">
+                      {headshots[0].filename}
+                    </p>
+                    <p className="text-sm text-zinc-500">
+                      {(headshots[0].sizeBytes / 1_000).toFixed(0)} KB ·{' '}
+                      {new Intl.DateTimeFormat('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      }).format(new Date(headshots[0].createdAt))}
+                    </p>
+                  </div>
+                  <a
+                    href={`/public/v1/assets/${encodeURIComponent(headshots[0].id)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="focus-ring rounded-full px-3 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/10 hover:bg-white"
+                  >
+                    View
+                  </a>
+                </div>
+              ) : null}
+            </form>
             <form
               className="flex flex-col gap-4 pt-4"
               onSubmit={(event) => void saveProfile(event)}
@@ -485,190 +682,156 @@ function PortalWorkspace() {
   )
 }
 
-function RequirementTask({
+function FileRequirement({
   definition,
   instance,
-  asset,
-  dueLabel,
-  submittedLabel,
-  awaitingConfirmation,
-  mutating,
-  assetUrl,
-  onSubmit,
+  deliverables,
+  latest,
+  comments,
+  uploading,
+  error,
+  commentDraft,
+  onCommentDraftChange,
   onUpload,
+  onDownload,
+  onComment,
 }: {
   definition: RequirementDefinition
   instance: RequirementInstance
-  asset: Asset | null
-  dueLabel: string
-  submittedLabel: string | null
-  awaitingConfirmation: boolean
-  mutating: boolean
-  assetUrl: (assetId: string) => string
-  onSubmit: (value: string) => Promise<unknown>
-  onUpload: (file: File) => Promise<unknown>
+  deliverables: Asset[]
+  latest: Asset | undefined
+  comments: AssetComment[]
+  uploading: boolean
+  error?: string
+  commentDraft: string
+  onCommentDraftChange: (value: string) => void
+  onUpload: (event: FormEvent<HTMLFormElement>, instance: RequirementInstance) => Promise<void>
+  onDownload: (asset: Asset) => Promise<void>
+  onComment: (event: FormEvent<HTMLFormElement>, asset: Asset) => Promise<void>
 }) {
-  const [value, setValue] = useState(instance.value)
-  const [file, setFile] = useState<File | null>(null)
-  const editable = instance.status === 'not_started' || instance.status === 'revision_requested'
-  const settled = instance.status === 'approved' || instance.status === 'waived'
-  const blocked = blockedOnProgramTeam({ definition, instance })
-  // A release the speaker has never been given is not late by their doing, so a
-  // blocked task is never marked overdue and never dated as if they owed it.
-  const overdue = editable && !blocked && Date.parse(definition.dueAt) < Date.now()
-  const fileAccept =
-    definition.id === 'req_headshot'
-      ? 'image/jpeg,image/png,image/webp'
-      : '.pdf,.doc,.docx,.ppt,.pptx,application/pdf'
-
-  const StatusIcon = settled
-    ? CheckCircleIcon
-    : instance.status === 'revision_requested'
-      ? ArrowPathIcon
-      : ClockIcon
-  const statusTone = settled
-    ? 'fill-emerald-600'
-    : instance.status === 'revision_requested'
-      ? 'fill-rose-500'
-      : instance.status === 'submitted'
-        ? 'fill-amber-500'
-        : 'fill-zinc-300'
-
+  const accepted = definition.acceptedContentTypes ?? []
+  const maximumMb = Math.round((definition.maxSizeBytes ?? 50_000_000) / 1_000_000)
+  const constraints = `${accepted.some((type) => type === 'application/pdf') ? 'PDF' : 'Document'}${
+    accepted.some((type) => type.includes('powerpoint')) ? ' or PowerPoint' : ''
+  }, up to ${maximumMb} MB`
   return (
-    <li className="flex flex-col gap-3 py-4">
-      {/* The title line owns the status chip so the description keeps the full
-          column at 375px instead of wrapping around a floating badge. */}
-      <div className="flex items-start gap-2">
-        <StatusIcon className={cx('size-4 h-lh shrink-0', statusTone)} />
-        <p className="min-w-0 flex-1 text-base font-medium text-zinc-950 sm:text-sm">
-          {definition.label}
+    <div className="ml-6 flex w-full min-w-0 flex-col gap-3 rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-800">
+          <PaperClipIcon className="size-4 fill-zinc-400" />
+          {constraints}
         </p>
-        <StatusBadge status={instance.status} />
-      </div>
-      <div className="-mt-2 sm:ml-6">
-        <p className="text-pretty text-base text-zinc-500 sm:text-sm">{definition.description}</p>
-        {settled ? null : (
-          <p
-            className={cx('pt-1 text-sm', overdue ? 'font-medium text-rose-700' : 'text-zinc-500')}
-          >
-            {blocked
-              ? `Due ${dueLabel}, once the program team provides it`
-              : overdue
-                ? `Overdue since ${dueLabel}`
-                : `Due ${dueLabel}`}
+        {deliverables.length > 0 ? (
+          <p className="text-sm tabular-nums text-zinc-500">
+            {deliverables.length} {deliverables.length === 1 ? 'version' : 'versions'}
           </p>
-        )}
+        ) : null}
       </div>
-
-      {instance.status === 'submitted' ? (
-        <p className="text-base text-zinc-500 sm:ml-6 sm:text-sm">
-          {submittedLabel ? `Sent ${submittedLabel}. ` : ''}The program team is reviewing it now.
+      <form
+        className="flex flex-col gap-2 sm:flex-row sm:items-center"
+        onSubmit={(event) => void onUpload(event, instance)}
+      >
+        <input
+          type="file"
+          name="file"
+          required
+          accept={accepted.join(',')}
+          className="focus-ring min-h-10 min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-sm text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-zinc-800"
+        />
+        <Button type="submit" size="compact" disabled={uploading}>
+          <DocumentArrowUpIcon className="size-4 fill-current" />
+          {uploading ? 'Uploading…' : latest ? 'Upload new version' : 'Upload file'}
+        </Button>
+      </form>
+      {error ? (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
         </p>
       ) : null}
-
-      {instance.status === 'waived' ? (
-        <p className="text-base text-zinc-500 sm:ml-6 sm:text-sm">
-          The program team waived this for you.
-        </p>
+      {deliverables.length > 0 ? (
+        <ul className="divide-y divide-zinc-950/5 overflow-hidden rounded-xl bg-white ring-1 ring-zinc-950/5">
+          {deliverables.map((asset) => (
+            <li key={asset.id} className="flex items-center gap-3 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-zinc-800">
+                  {asset.filename}{' '}
+                  {asset.isLatest ? (
+                    <span className="ml-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      Latest
+                    </span>
+                  ) : null}
+                </p>
+                <p className="text-sm text-zinc-500">
+                  Version {asset.version ?? 1} · {(asset.sizeBytes / 1_000_000).toFixed(1)} MB ·{' '}
+                  {new Intl.DateTimeFormat('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  }).format(new Date(asset.createdAt))}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="compact"
+                variant="ghost"
+                aria-label={`Download ${asset.filename} version ${asset.version ?? 1}`}
+                onClick={() => void onDownload(asset)}
+              >
+                <ArrowDownTrayIcon className="size-4 fill-current" />
+                Download
+              </Button>
+            </li>
+          ))}
+        </ul>
       ) : null}
-
-      {asset ? (
-        <a
-          href={assetUrl(asset.id)}
-          className="focus-ring inline-flex w-fit items-center gap-1.5 rounded-md text-base font-medium text-blue-700 hover:text-blue-900 sm:ml-6 sm:text-sm"
-        >
-          <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
-          Download {asset.filename}
-        </a>
-      ) : null}
-
-      {editable && definition.kind === 'confirmation' ? (
-        <p className="text-pretty text-base text-zinc-500 sm:ml-6 sm:text-sm">
-          {awaitingConfirmation
-            ? 'Use Confirm participation at the top of this page.'
-            : 'The program team closes this out once your participation is on record.'}
-        </p>
-      ) : null}
-
-      {editable && definition.kind === 'file' ? (
-        <div className={cx(taskWell, 'flex flex-col gap-3')}>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-base font-medium text-zinc-950 sm:text-sm">
-              {asset ? 'Replace file' : 'Choose file'}
-            </span>
+      {latest ? (
+        <div className="flex flex-col gap-2 border-t border-zinc-950/5 pt-3">
+          <p className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-800">
+            <ChatBubbleLeftRightIcon className="size-4 fill-zinc-400" />
+            Comments
+          </p>
+          {comments.length > 0 ? (
+            <ul className="flex flex-col gap-2">
+              {comments.map((comment) => (
+                <li
+                  key={comment.id}
+                  className="rounded-xl bg-white px-3 py-2 ring-1 ring-zinc-950/5"
+                >
+                  <p className="text-sm text-zinc-700">{comment.body}</p>
+                  <p className="pt-1 text-xs text-zinc-500">
+                    {comment.author.name} ·{' '}
+                    {new Intl.DateTimeFormat('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    }).format(new Date(comment.createdAt))}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <form className="flex gap-2" onSubmit={(event) => void onComment(event, latest)}>
             <input
-              type="file"
-              accept={fileAccept}
-              className="focus-ring block w-full rounded-lg bg-white p-2 text-base text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 sm:text-sm"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              type="text"
+              aria-label="Add a file comment"
+              placeholder="Add a note about this file"
+              value={commentDraft}
+              onChange={(event) => onCommentDraftChange(event.target.value)}
+              className={textControl}
             />
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-base text-zinc-500 sm:text-sm">
-              {definition.id === 'req_headshot'
-                ? 'JPEG, PNG, or WebP · 8 MB maximum'
-                : 'PDF, Word, or PowerPoint · 8 MB maximum'}
-            </p>
             <Button
+              type="submit"
               size="compact"
-              className="w-full sm:w-auto"
-              disabled={mutating || !file}
-              onClick={() => file && void onUpload(file)}
+              variant="secondary"
+              disabled={!commentDraft.trim()}
             >
-              <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
-              Upload for review
+              Comment
             </Button>
-          </div>
+          </form>
         </div>
       ) : null}
-
-      {editable && (definition.kind === 'text' || definition.kind === 'form') ? (
-        <div className={cx(taskWell, 'flex flex-col gap-3')}>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-base font-medium text-zinc-950 sm:text-sm">
-              {definition.kind === 'form' ? 'Production notes' : 'Your response'}
-            </span>
-            <textarea
-              rows={definition.kind === 'form' ? 4 : 5}
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              className={textAreaControl}
-            />
-          </label>
-          <div className="flex justify-end">
-            <Button
-              size="compact"
-              className="w-full sm:w-auto"
-              disabled={mutating || value.trim().length === 0}
-              onClick={() => void onSubmit(value.trim())}
-            >
-              Submit for review
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {blocked ? (
-        <div className={cx(taskWell, 'flex items-start gap-3')}>
-          <LockClosedIcon className="size-4 h-lh shrink-0 fill-zinc-400" />
-          <div className="min-w-0">
-            <p className="text-base font-medium text-zinc-950 sm:text-sm">
-              Release not available yet
-            </p>
-            <p className="text-pretty text-base text-zinc-600 sm:text-sm">
-              The program team has not attached the release document. Once they add it here or send
-              it to you, you can respond. Nothing is waiting on you right now.
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      {!editable && !asset && instance.value ? (
-        <div className={taskWell}>
-          <p className="text-base font-medium text-zinc-950 sm:text-sm">What you sent</p>
-          <p className="text-pretty text-base text-zinc-600 sm:text-sm">{instance.value}</p>
-        </div>
-      ) : null}
-    </li>
+    </div>
   )
 }

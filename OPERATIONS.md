@@ -19,6 +19,7 @@ workspace.
 
 ### Demo routes
 
+- `/demo` — create an isolated workspace locally or on a self-hosted installation
 - `/` — operator overview
 - `/people`, `/readiness`, `/sessions`, `/schedule`, `/communications`, `/changes` — operator work
 - `/integrations` — integration state and demo reset
@@ -26,8 +27,42 @@ workspace.
 - `/agenda` — public agenda using the latest immutable published release
 - `/portal/par_003` — example participant portal using a server-side data projection
 
-The operator has no login, and the participant ID in the portal URL acts as identity in this demo.
-Use sample data only.
+The private `/demo/{capability}` link grants edit access to its workspace. The demo operator has no
+login, and the participant ID in the portal URL acts as identity in this sample surface. Use sample
+data only. Copy or delete the workspace from the sidebar or banner. Expiry and early deletion remove local state
+and authorization but never delete records in a connected Airtable base.
+
+On the official hosted demo, `https://demo.programkit.dev/` is the creation screen. `/demo`
+redirects to `/` there so the hostname and path do not repeat the same idea. Private collaboration
+links still use `/demo/{capability}` because that segment identifies a capability exchange, not a
+normal application page.
+
+### Experimental Airtable-backed mode
+
+The local demo and recommended V1 deployment use the event Durable Object as the complete store.
+To test the optional Airtable integration, register a development OAuth integration with the
+localhost callback, copy the example, add its client ID, and start ProgramKit:
+
+```bash
+cp apps/cloudflare/.dev.vars.example .dev.vars
+# Add AIRTABLE_OAUTH_CLIENT_ID and the optional client secret.
+pnpm dev
+```
+
+Open `/integrations`, connect Airtable, grant a base, and let ProgramKit initialize or import it.
+
+The operator-token fallback remains useful for scripts and integration tests:
+
+```bash
+# Add AIRTABLE_TOKEN and AIRTABLE_BASE_ID to .dev.vars.
+pnpm airtable:setup
+pnpm airtable:seed
+pnpm airtable:verify
+```
+
+`airtable:verify` reconstructs the complete workspace from the base and reports collection counts.
+The detailed scopes, tables, request budget, failure modes, and webhook boundary are in the
+[Airtable integration guide](docs/integrations/airtable.md).
 
 ### HTTP endpoints
 
@@ -61,7 +96,8 @@ The host supplies the actor. An `actor` in this public JSON is ignored by the HT
 
 ### Workspace routing
 
-The reference Worker selects the Durable Object with `x-programkit-workspace-key`:
+The reference Worker selects non-capability development workspaces with
+`x-programkit-workspace-key`:
 
 ```bash
 curl http://localhost:4173/api/v1/health \
@@ -72,7 +108,8 @@ Valid keys contain lowercase letters, numbers, underscores, or hyphens, begin wi
 number, and are at most 64 characters. Missing or invalid keys use `demo`.
 
 This header creates or selects isolated Durable Object state, but it does not authenticate the
-caller. Production routing must derive the workspace from verified membership instead.
+caller. It cannot select a hosted capability demo. Production routing must derive the workspace
+from verified membership instead.
 
 ### Reset the demo
 
@@ -115,23 +152,38 @@ production build, and plugin validation.
 
 ## Cloudflare deployment
 
-Authenticate Wrangler, review the account and Worker name in `apps/cloudflare/wrangler.jsonc`, then
+Authenticate Wrangler, review the account and Worker name in `wrangler.jsonc`, then
 run:
 
 ```bash
 pnpm deploy
 ```
 
+The ProgramKit-owned hosted environments use named profiles:
+
+```bash
+pnpm deploy:site
+pnpm deploy:demo
+pnpm deploy:app
+```
+
+`programkit.dev`, `demo.programkit.dev`, and `app.programkit.dev` are separate Workers. The public
+site exposes no workspace API. The demo has its own event-object namespace and no outbound email.
+The app has account and event-object namespaces plus a sender-restricted Cloudflare Email Service
+binding. It verifies staff sessions and event membership, but must not hold real participant data
+until the remaining identities and file path are complete.
+
 The configuration declares:
 
 - the `apps/cloudflare/src/worker.ts` entry point;
 - static assets with SPA fallback and Worker-first routing;
 - the `PROGRAMKIT_WORKSPACES` Durable Object binding;
-- the SQLite Durable Object migration;
+- the app-only `PROGRAMKIT_AUTH` Durable Object binding;
+- SQLite Durable Object migrations;
 - Worker observability.
 
 The seeded demonstration needs neither a D1 database ID nor an R2 bucket. Add a custom domain with
-a `routes` entry in `apps/cloudflare/wrangler.jsonc` or the Cloudflare dashboard.
+a `routes` entry in `wrangler.jsonc` or the Cloudflare dashboard.
 
 After deployment, verify at least:
 
@@ -145,10 +197,10 @@ does not affect the agenda until publication creates a new release.
 
 ## Production enablement
 
-The reference deployment is passwordless and uses a fixed staff actor with wildcard scope. Before
-pointing a real domain or real data at it:
+The hosted app verifies staff sessions and event membership. Before pointing real data at it:
 
-- replace demo actor and workspace routing with verified staff and participant identity;
+- add team invitation, administrator roles, revocation, and role-to-scope mapping;
+- add verified participant and reviewer identity plus event-scoped public links;
 - add OAuth and workspace-scoped authorization to `/mcp`;
 - activate the checked-in campaign Email Service consumer only after sender verification, then
   connect the separate submission-receipt outbox and future webhooks to equivalent consumers;
@@ -158,29 +210,30 @@ pointing a real domain or real data at it:
 - establish retention, deletion, legal-hold, backup, and restore policies;
 - complete every item in `SECURITY.md`.
 
-`campaign.send` creates durable, per-recipient delivery records and marks the campaign `queued`; it
-does not mark the message sent or contact an external provider inside the transaction. Each row
-contains the full RFC 5545 attachment. After commit, the Cloudflare host invokes the checked-in
-Email Service consumer only when its binding and sender address exist. `campaign.record-delivery`
-is the trusted provider-result boundary and closes a campaign only after every recipient is
-delivered or suppressed; `campaign.retry-deliveries` queues pending and failed rows again without
-discarding attempt counts. Complete sender-domain verification and use controlled recipients before
-processing real rows. The Airtable row describes the planned mirror and must not be shown as
-connected until a real cursor and delivery state exist.
+`campaign.send` currently records a demo outbox event and marks the campaign sent; no external
+email is delivered. The Airtable persistence adapter is real, but the integrations screen still
+uses seeded status rows and must not claim production health until it reports the actual base,
+cursor, quota, last success, retry, and webhook expiry state.
 
-`submission.submit` atomically freezes one confirmation receipt alongside the accepted proposal.
-The public response exposes only that submitter-owned receipt; organizer projections retain the
-delivery evidence, while participant, reviewer, and unrelated public projections omit it. A
-receipt in `pending_provider` is prepared, not delivered. A trusted consumer records `delivered`
-or `failed` through `submission.record-receipt-delivery` after the same sender-domain and provider
-requirements are met.
+### Email operations
+
+The official app Worker may send only from `notifications@mail.programkit.dev`. Its sending domain
+has Cloudflare-managed bounce, SPF, DKIM, and DMARC records. `support@programkit.dev` is an inbound
+Email Routing address and is not the automated sender.
+
+One direct delivery smoke test should be run after changing the domain, binding, or DNS. Do not
+send from the public demo Worker. Before wiring product notifications, implement a durable outbox,
+idempotent delivery keys, retry limits, provider response storage, suppression handling, and
+operator-visible failures. Full setup and self-hosting guidance is in
+[Cloudflare email](docs/integrations/email.md).
 
 ## Backup, restore, and departure
 
 `GET /api/v1/export` returns the selected workspace with an explicit schema version. Recent
-idempotency response caches are omitted. A production system should schedule encrypted exports
-outside the primary Durable Object, record their workspace and schema version, and test restoration
-into a separate environment.
+idempotency response caches are omitted. An Airtable-enabled installation can also run
+`pnpm airtable:verify` to prove source reconstruction. A production system should schedule
+encrypted logical exports outside both Airtable and the cache, record their workspace and schema
+version, and test restoration into a separate environment.
 
 Private participant file objects live in R2 and must be exported and restored alongside their
 logical asset records. D1 and Airtable projections are rebuildable and are not backup sources.

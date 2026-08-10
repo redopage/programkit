@@ -2,16 +2,39 @@
 
 ## Current release
 
-ProgramKit contains production-shaped domain controls, but the reference Worker is a passwordless,
-seeded demonstration. It is not a production identity, tenancy, email, or file-storage
-configuration.
+ProgramKit contains production-shaped domain controls and a working passwordless staff session for
+the hosted app. It has event-scoped team invitations and live role enforcement, but does not yet
+have production-complete participant and reviewer identity, account recovery, MCP OAuth, or file
+storage.
 
 Do not place real participant data, provider credentials, private documents, or production email
 access in the reference deployment.
 
-## Reference Worker security boundary
+## Deployment security boundaries
 
-The demo intentionally makes all workflows immediately inspectable:
+`app.programkit.dev` now enforces these hosted staff controls:
+
+- A normalized email selects an account-sharded Auth Durable Object.
+- Magic-link and session secrets are random 256-bit values stored only as SHA-256 hashes.
+- Magic links expire after 15 minutes, work once, and use the configured canonical callback origin.
+- Sessions expire after 30 days and use HTTP-only, secure, same-site cookies in production.
+- Event creation and selection come from server-owned account membership. Each event maps to a
+  separate Workspace Durable Object.
+- A separate Event Access Durable Object is authoritative for each event's owners, administrators,
+  viewers, pending invitations, and revocations.
+- Invitation secrets are random 256-bit values stored only as SHA-256 hashes. They are bound to one
+  normalized email, expire after seven days, and work once.
+- Every hosted workspace request checks the live event membership and derives scopes from its role.
+  The account event list is a repairable switcher projection, not an authorization boundary.
+- Caller-supplied actor headers and body actors never become the trusted staff actor.
+- Logout revokes the stored session and clears its cookies.
+
+The hosted app keeps participant, reviewer, MCP, and file workflows behind the staff session. Public
+CFP and agenda documents may be opened through an event-specific link. The Worker validates the
+event ID before setting an HTTP-only routing cookie, and that cookie reaches only public projections
+and public submission operations. It is not staff authentication and cannot access operator APIs.
+
+The anonymous demo intentionally makes all sample workflows immediately inspectable:
 
 - Operator API requests run as the fixed `Demo Operator` staff actor with `*` scope.
 - `/portal/{participationId}` and its API routes derive a participant actor from the participation
@@ -22,12 +45,16 @@ The demo intentionally makes all workflows immediately inspectable:
   who knows that ID can impersonate the reviewer in the reference deployment.
 - `/mcp` has no OAuth gate. MCP operations use the fixed ProgramKit agent identity and its curated
   scopes.
-- `x-programkit-workspace-key` selects a Durable Object. It is routing input, not verified organization
-  membership or tenant isolation.
+- `/demo/{capability}` selects an isolated seven-day Durable Object and exchanges the capability
+  for an HTTP-only cookie. Possession of the link grants demo access; it is not a user account.
+- `x-programkit-workspace-key` selects only non-capability local and self-hosted sample workspaces.
+  The hosted app does not use it for membership or tenant selection.
+- Starting Airtable OAuth inside a capability demo keeps the connection in that isolated workspace.
+  Other reference workspaces still receive a random HTTP-only trial cookie. This is browser
+  isolation, not team identity or cross-device authentication.
 
-These shortcuts are acceptable only for deterministic sample data. Production deployments must
-replace the actor and workspace resolution in `apps/cloudflare/src/worker.ts`; hiding the routes or
-changing the demo IDs is not sufficient.
+These demo shortcuts are acceptable only for deterministic sample data. A self-hosted deployment
+must either configure equivalent hosted identity or retain the same sample-data-only boundary.
 
 ## Server-enforced controls present
 
@@ -56,9 +83,16 @@ The following controls remain useful after a real identity adapter is added:
 - Current MCP protocol metadata and routing-header validation
 - Incrementally enforced 128 KB JSON request limits on the REST operation surface
 - Atomic repository mutation and transactional Durable Object storage writes
+- Airtable OAuth state expiry, PKCE, server-only rotating tokens, same-origin connection mutations,
+  per-trial-workspace connection isolation, signed inbound webhooks, and best-effort webhook
+  deletion on disconnect
+- Hosted staff magic-link enumeration resistance, one-time tokens, hashed secrets, account resend
+  limits, canonical callbacks, revocable sessions, email-bound team invitations, immediate event
+  revocation, and verified event selection
 
-These controls do not authenticate a human, protect an OAuth bearer token, deliver email, scan a
-file, or establish regulatory compliance by themselves.
+These controls authenticate the hosted staff account but do not authenticate a participant or
+reviewer, protect an MCP OAuth bearer token, deliver product campaigns, scan a file, or establish
+regulatory compliance by themselves.
 
 ## Host integration requirements
 
@@ -67,24 +101,23 @@ after verifying a session or token, checking workspace membership, and loading s
 Never translate public `x-programkit-internal-actor-*` headers or a body `actor` object directly into this
 context.
 
-Likewise, derive the Durable Object workspace key from authenticated membership. Do not trust the
-reference `x-programkit-workspace-key` header as an authorization decision.
+Likewise, derive the Durable Object workspace key from authenticated membership. The hosted app
+does this for staff events. Do not trust the reference `x-programkit-workspace-key` header as an
+authorization decision in another deployment.
 
 ## Required before real data
 
-1. Add an OIDC-compatible staff authentication adapter with secure session lifecycle, MFA policy,
-   and server-owned role-to-scope mapping.
-2. Replace participation IDs in portal URLs with short-lived, one-time magic links or another
+1. Add account recovery, ownership transfer, and an MFA or external OIDC policy where deployment
+   risk requires it. Add a complete leave-event flow before users can remove their own access.
+2. Replace participation and reviewer IDs in portal URLs with short-lived, one-time magic links or another
    verified participant login. Store only token hashes and scope the session to one workspace and
    participation.
 3. Protect `/mcp` with OAuth. Map token audience, workspace, actor, and scopes server-side; reject
    missing, expired, replayed, or wrong-audience tokens.
-4. Protect browser mutations with secure, HTTP-only, same-site cookies and CSRF validation where
-   the chosen session design requires it.
-5. Activate and harden the checked-in post-commit campaign email consumer behind a verified sender,
-   controlled smoke recipients, rate limits, and monitoring. Connect the separate submission-
-   receipt outbox and future webhooks to equivalent retrying consumers. `campaign.send` and
-   `submission.submit` record `pending_provider`; neither status means mail was delivered.
+4. Add verified participant and reviewer sessions on the same origin. Add explicit CSRF tokens if
+   cookie or cross-site requirements change.
+5. Supply a transactional outbox and idempotent workers for outbound email and webhooks. The demo's
+   `campaign.send` only records a `demo-outbox` transition; it does not deliver mail.
 6. Store provider secrets in a managed secret service, never in workspace state, source control,
    browser bundles, or logs.
 7. Replace the reference portal identity with authenticated, per-workspace authorization for the
@@ -97,7 +130,7 @@ reference `x-programkit-workspace-key` header as an authorization decision.
    into an isolated workspace.
 10. Add request and command rate limits, abuse protection, structured security logging, alerts, and
     incident-response procedures.
-11. Review cross-workspace isolation, portal authorization, privilege escalation, duplicate
+11. Review cross-event and cross-account isolation, portal authorization, privilege escalation, duplicate
     delivery, stale writes, and export access with automated and adversarial tests.
 12. Run dependency, secret, accessibility, privacy, and threat-model reviews before launch.
 

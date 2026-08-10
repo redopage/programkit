@@ -2,12 +2,18 @@ import {
   ArrowTopRightOnSquareIcon,
   CheckIcon,
   ClockIcon,
+  EnvelopeIcon,
   LinkIcon,
 } from '@heroicons/react/16/solid'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import {
+  evaluationCriterionKind,
+  evaluationRoundCriteria,
   submissionAnswerByPurpose,
+  submissionAnswerDisplayByPurpose,
+  submissionDecisionReadiness,
+  submissionParticipants,
   submissionPipelineSummary,
   submissionReviewSummary,
   type SubmissionAnswerValue,
@@ -15,9 +21,11 @@ import {
 } from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
+import { publicSubmissionPath } from '../lib/public-links.ts'
 import {
   Button,
   Callout,
+  Dialog,
   Drawer,
   EmptyState,
   FilterTabs,
@@ -93,14 +101,24 @@ export function SubmissionsView({
             <Button
               size="compact"
               onClick={() => {
-                const url = `${window.location.origin}/submit/${form?.slug ?? 'call-for-speakers'}`
+                const path = publicSubmissionPath(
+                  state.activeEventId,
+                  form?.slug ?? 'call-for-speakers',
+                )
+                const url = new URL(path, window.location.origin).toString()
                 void navigator.clipboard.writeText(url)
               }}
             >
               <LinkIcon className="size-4 h-lh shrink-0 fill-current" />
               Copy public link
             </Button>
-            <Button onClick={() => navigate(`/submit/${form?.slug ?? 'call-for-speakers'}`)}>
+            <Button
+              onClick={() =>
+                navigate(
+                  publicSubmissionPath(state.activeEventId, form?.slug ?? 'call-for-speakers'),
+                )
+              }
+            >
               Open submission form
               <ArrowTopRightOnSquareIcon className="size-4 h-lh shrink-0 fill-current" />
             </Button>
@@ -318,6 +336,8 @@ function SubmissionDrawer({
   onClose: () => void
 }) {
   const { payload, execute, mutating } = useWorkspace()
+  const [decisionChange, setDecisionChange] = useState<'rejected' | 'waitlisted' | null>(null)
+  const [decisionReason, setDecisionReason] = useState('')
   const submission = payload?.state.submissions?.find((entry) => entry.id === submissionId)
   if (!payload || !submission) return null
 
@@ -341,7 +361,7 @@ function SubmissionDrawer({
   const title = answerText(submissionAnswerByPurpose(state, submission, 'proposal_title'))
   const review = submissionReviewSummary(state, submission.id)
   const submissionAssignments = state.reviewerAssignments.filter(
-    (entry) => entry.submissionId === submission.id,
+    (entry) => entry.submissionId === submission.id && entry.status !== 'recused',
   )
   const plan = state.evaluationPlans.find(
     (entry) =>
@@ -359,23 +379,37 @@ function SubmissionDrawer({
   const scorecards = state.scorecards.filter((entry) =>
     currentAssignmentIds.has(entry.assignmentId),
   )
-  const decisionReady =
-    submission.kind === 'guaranteed_session' ||
-    !plan ||
-    Boolean(currentRound && review.completed >= currentRound.minimumCompletedReviews)
-  const canResolve =
-    decisionReady && (submission.status === 'submitted' || submission.status === 'in_review')
-  const canAccept =
-    canResolve &&
-    (submission.kind === 'guaranteed_session' ||
-      !plan ||
-      !finalRound ||
-      currentRound?.id === finalRound.id)
+  const numericCriteria = [
+    ...new Map(
+      submissionAssignments
+        .flatMap((assignment) => evaluationRoundCriteria(plan, assignment.roundId))
+        .filter((criterion) => evaluationCriterionKind(criterion) === 'numeric')
+        .map((criterion) => [criterion.id, criterion]),
+    ).values(),
+  ]
+  const decisionReadiness = submissionDecisionReadiness(state, submission)
+  const decisionReady = decisionReadiness.ready
+  const canDecide =
+    decisionReady &&
+    (submission.status === 'submitted' ||
+      submission.status === 'in_review' ||
+      submission.status === 'rejected' ||
+      submission.status === 'waitlisted')
+  const canResolve = canDecide
+  const canAccept = canDecide
+  const hasDecision =
+    submission.status === 'accepted' ||
+    submission.status === 'rejected' ||
+    submission.status === 'waitlisted'
+  const decisionNotice = state.outboundMessages?.find(
+    (message) => message.submissionId === submission.id && message.kind === 'decision_notice',
+  )
   const trackValue = answerText(submissionAnswerByPurpose(state, submission, 'track'))
   const trackLabel = state.tracks.find((entry) => entry.id === trackValue)?.name ?? trackValue
+  const participants = submissionParticipants(state, submission)
 
   async function decide(decision: 'accepted' | 'rejected' | 'waitlisted') {
-    const response = await execute(
+    await execute(
       'review.decide',
       {
         submissionId: submission!.id,
@@ -392,36 +426,98 @@ function SubmissionDrawer({
         ? 'Submission accepted and added to the program.'
         : `Submission ${decision}.`,
     )
-    if (response.ok) onClose()
   }
 
-  return (
+  async function notifyDecision() {
+    await execute(
+      'submission.notify-decision',
+      { submissionId: submission!.id },
+      undefined,
+      'Decision email queued.',
+    )
+  }
+
+  async function changeAcceptedDecision() {
+    if (!decisionChange || !decisionReason.trim()) return
+    const response = await execute(
+      'review.decide',
+      {
+        submissionId: submission!.id,
+        decision: decisionChange,
+        override: true,
+        reason: decisionReason.trim(),
+      },
+      { expectedVersions: { [submission!.id]: submission!.version } },
+      decisionChange === 'rejected'
+        ? 'Acceptance withdrawn and session cancelled.'
+        : 'Submission moved to the waitlist and session cancelled.',
+    )
+    if (!response?.ok) return
+    setDecisionChange(null)
+    setDecisionReason('')
+  }
+
+  const drawer = (
     <Drawer
       open={open}
       onClose={onClose}
       title={title}
       footer={
-        canResolve ? (
-          <>
-            <Button
-              size="compact"
-              variant="danger"
-              disabled={mutating}
-              onClick={() => void decide('rejected')}
-            >
-              Decline
-            </Button>
-            <Button size="compact" disabled={mutating} onClick={() => void decide('waitlisted')}>
-              Waitlist
-            </Button>
-            {canAccept ? (
-              <Button variant="primary" disabled={mutating} onClick={() => void decide('accepted')}>
+        <>
+          {canDecide ? (
+            <>
+              {submission.status !== 'rejected' ? (
+                <Button
+                  size="compact"
+                  variant="danger"
+                  disabled={mutating}
+                  onClick={() => void decide('rejected')}
+                >
+                  Decline
+                </Button>
+              ) : null}
+              {submission.status !== 'waitlisted' ? (
+                <Button
+                  size="compact"
+                  disabled={mutating}
+                  onClick={() => void decide('waitlisted')}
+                >
+                  Waitlist
+                </Button>
+              ) : null}
+              <Button
+                size="compact"
+                variant="primary"
+                disabled={mutating}
+                onClick={() => void decide('accepted')}
+              >
                 <CheckIcon className="size-4 h-lh shrink-0 fill-current" />
                 Accept proposal
               </Button>
-            ) : null}
-          </>
-        ) : null
+            </>
+          ) : null}
+          {submission.status === 'accepted' ? (
+            <Button
+              size="compact"
+              variant="secondary"
+              disabled={mutating}
+              onClick={() => setDecisionChange('waitlisted')}
+            >
+              Change decision
+            </Button>
+          ) : null}
+          {hasDecision ? (
+            <Button
+              size="compact"
+              variant={decisionNotice ? 'secondary' : 'primary'}
+              disabled={mutating}
+              onClick={() => void notifyDecision()}
+            >
+              <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
+              {decisionNotice ? 'Queue again' : 'Queue decision email'}
+            </Button>
+          ) : null}
+        </>
       }
     >
       <div className="flex flex-col gap-7">
@@ -437,6 +533,14 @@ function SubmissionDrawer({
                 : 'Draft submission'}
             </p>
           </div>
+          {hasDecision ? (
+            <div className="mt-4 flex items-center justify-between gap-4 rounded-xl bg-zinc-50 px-4 py-3 ring-1 ring-zinc-950/5">
+              <span className="text-base font-medium text-zinc-950 sm:text-sm">Decision email</span>
+              <span className="text-base text-zinc-500 sm:text-sm">
+                {decisionNotice ? sentenceCase(decisionNotice.status) : 'Not queued'}
+              </span>
+            </div>
+          ) : null}
           <h3
             id="submission-summary-heading"
             className="pt-4 text-base font-medium text-zinc-950 sm:text-sm"
@@ -453,7 +557,7 @@ function SubmissionDrawer({
               [
                 'Format',
                 sentenceCase(
-                  answerText(submissionAnswerByPurpose(state, submission, 'session_format')),
+                  answerText(submissionAnswerDisplayByPurpose(state, submission, 'session_format')),
                 ),
               ],
               ['Track', trackLabel],
@@ -526,6 +630,39 @@ function SubmissionDrawer({
         ) : null}
 
         <section
+          aria-labelledby="submission-participants-heading"
+          className="border-t border-zinc-950/5 pt-6"
+        >
+          <h3
+            id="submission-participants-heading"
+            className="text-base font-medium text-zinc-950 sm:text-sm"
+          >
+            Participants
+          </h3>
+          <ul role="list" className="divide-y divide-zinc-950/5 pt-2">
+            {participants.map((participant) => (
+              <li
+                key={participant.id}
+                className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-5"
+              >
+                <div className="min-w-0">
+                  <p className="text-base font-medium text-zinc-950 sm:text-sm">
+                    {participant.firstName} {participant.lastName}
+                  </p>
+                  <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                    {[participant.title, participant.company].filter(Boolean).join(' · ') ||
+                      participant.email}
+                  </p>
+                </div>
+                <p className="shrink-0 text-base text-zinc-500 sm:text-sm">
+                  {participant.roleLabel}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section
           aria-labelledby="review-summary-heading"
           className="border-t border-zinc-950/5 pt-6"
         >
@@ -550,7 +687,7 @@ function SubmissionDrawer({
           </div>
           {plan ? (
             <dl className="flex flex-col gap-3 pt-5">
-              {plan.criteria.map((criterion) => {
+              {numericCriteria.map((criterion) => {
                 const value = review.criterionAverages[criterion.id] ?? 0
                 return (
                   <div key={criterion.id}>
@@ -568,7 +705,7 @@ function SubmissionDrawer({
                           className="h-full w-(--score) rounded-full bg-blue-600"
                           style={
                             {
-                              '--score': `${(value / criterion.maximum) * 100}%`,
+                              '--score': `${(value / (criterion.maximum ?? 5)) * 100}%`,
                             } as React.CSSProperties
                           }
                         />
@@ -584,12 +721,13 @@ function SubmissionDrawer({
               <p className="text-pretty text-base sm:text-sm">No review plan is assigned yet.</p>
             </div>
           )}
-          {!decisionReady && currentRound ? (
+          {!decisionReady && decisionReadiness.incompleteRounds[0] ? (
             <div className="mt-5 rounded-lg bg-amber-50 p-3 text-amber-800 ring-1 ring-amber-800/10">
               <p className="text-pretty text-base sm:text-sm">
-                Complete {currentRound.minimumCompletedReviews - review.completed} more review
-                {currentRound.minimumCompletedReviews - review.completed === 1 ? '' : 's'} in{' '}
-                {currentRound.name} before a decision can be recorded.
+                Complete {decisionReadiness.incompleteRounds[0].remaining} more review
+                {decisionReadiness.incompleteRounds[0].remaining === 1 ? '' : 's'} in{' '}
+                {decisionReadiness.incompleteRounds[0].name} before the committee records a
+                decision.
               </p>
             </div>
           ) : null}
@@ -631,5 +769,77 @@ function SubmissionDrawer({
         </section>
       </div>
     </Drawer>
+  )
+
+  return (
+    <>
+      {decisionChange === null ? drawer : null}
+      <Dialog
+        open={decisionChange !== null}
+        onClose={() => {
+          if (mutating) return
+          setDecisionChange(null)
+          setDecisionReason('')
+        }}
+        title="Change accepted decision?"
+        description="The generated session will be cancelled and removed from the draft schedule. The proposal, people, and decision history stay available."
+        footer={
+          <>
+            <Button
+              size="compact"
+              onClick={() => {
+                setDecisionChange(null)
+                setDecisionReason('')
+              }}
+              disabled={mutating}
+            >
+              Keep accepted
+            </Button>
+            <Button
+              size="compact"
+              variant={decisionChange === 'rejected' ? 'danger' : 'primary'}
+              disabled={mutating || !decisionReason.trim()}
+              onClick={() => void changeAcceptedDecision()}
+            >
+              {decisionChange === 'rejected' ? 'Decline proposal' : 'Move to waitlist'}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <fieldset>
+            <legend className="text-base font-medium text-zinc-950 sm:text-sm">New decision</legend>
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              {(['waitlisted', 'rejected'] as const).map((decision) => (
+                <button
+                  key={decision}
+                  type="button"
+                  aria-pressed={decisionChange === decision}
+                  onClick={() => setDecisionChange(decision)}
+                  className={cx(
+                    'focus-ring min-h-10 rounded-xl px-3 text-base font-medium ring-1 sm:text-sm',
+                    decisionChange === decision
+                      ? 'bg-zinc-950 text-white ring-zinc-950'
+                      : 'bg-white text-zinc-700 ring-zinc-950/10 hover:bg-zinc-50',
+                  )}
+                >
+                  {decision === 'waitlisted' ? 'Waitlist' : 'Decline'}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <label className="flex flex-col gap-2 text-base font-medium text-zinc-950 sm:text-sm">
+            Reason
+            <textarea
+              rows={3}
+              value={decisionReason}
+              onChange={(event) => setDecisionReason(event.target.value)}
+              placeholder="Explain why this decision is changing"
+              className="focus-ring resize-none rounded-xl bg-white px-3 py-2 text-base font-normal text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:text-sm"
+            />
+          </label>
+        </div>
+      </Dialog>
+    </>
   )
 }

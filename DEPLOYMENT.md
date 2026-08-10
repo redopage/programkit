@@ -17,109 +17,153 @@ Browser
   ▼
 Cloudflare Worker ── Workers Static Assets (Vite web build)
   │
-  ├── workspace Durable Object ── SQLite-backed atomic event state
-  ├── R2                      ── private participant uploads
-  ├── Durable Object outbox   ── frozen messages, calendar payloads, and provider batches
-  └── post-commit consumers   ── Email Service + Accelevents calls when host credentials exist
+  ├── account Durable Object  ── staff sessions and event switcher projection
+  ├── event access object     ── authoritative membership, roles, and invitations
+  ├── event Durable Object    ── authoritative event records and serialized mutations
+  ├── Airtable                 ── optional experimental team integration
+  ├── R2                      ── private uploads and generated files (next)
+  ├── Durable Object alarm   ── email delivery, retries, and task reminders
+  └── Email Service           ── sending domain and app binding (configured)
 ```
 
-The runnable application includes the Worker, static assets, one SQLite-backed Durable Object per
-workspace key, a private R2 binding for participant requirement uploads, and a Cloudflare Email
-Service binding. Local development emulates the bucket and email send. A remote deployment must
-provision `programkit-assets` and onboard the configured sending domain first; it needs no D1
-database or queue. The Accelevents consumer remains inert unless the owner supplies its Enterprise
-API key as a Worker secret. Both consumers run only after the outbox transaction commits, and only
-provider IDs can turn `pending_provider` into delivered evidence.
+The runnable application currently includes the Worker, static assets, one account-sharded
+identity object for hosted users, one access object per event, and one SQLite-backed workspace
+object per event. The official
+demo root creates isolated hosted trials that expire after seven days. Local and self-hosted
+installations need no D1 database, R2 bucket, queue, or email binding to run the deterministic
+sample workspace.
+
+## Official hosted environments
+
+The project deploys the same assembly into four explicit Wrangler profiles. This keeps product
+code, migrations, tests, and documentation together while isolating runtime state.
+
+| Profile | Host                  | Worker            | Purpose                         | Email                     |
+| ------- | --------------------- | ----------------- | ------------------------------- | ------------------------- |
+| default | A self-hosted domain  | `programkit`      | Complete zero-config product    | None required             |
+| `site`  | `programkit.dev`      | `programkit-site` | Public site, no workspace API   | No binding                |
+| `demo`  | `demo.programkit.dev` | `programkit-demo` | Seven-day sample workspaces     | No binding                |
+| `app`   | `app.programkit.dev`  | `programkit-app`  | Staff sessions and event stores | Restricted sender binding |
+
+The site profile serves the small public homepage and rejects workspace APIs. The demo host
+rejects operator or API access until a private demo has been created or opened. The app host uses
+passwordless staff sessions, an account event index, live role-scoped event membership, and one
+empty workspace object per new event. Participant, reviewer, MCP, account recovery, and file
+identities remain incomplete, so real conference data is still out of scope.
+
+Deploy the official profiles with:
+
+```bash
+pnpm deploy:site
+pnpm deploy:demo
+pnpm deploy:app
+```
+
+A separate demo repository would make schema, migrations, security fixes, and product behavior
+drift. Separate runtime profiles provide the useful isolation without duplicating the product.
 
 The production additions are intentionally Cloudflare-native:
 
-| Concern                   | Default                                    | Why                                                                                    |
-| ------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Web and API               | Worker + Static Assets                     | One origin, one deploy, no client-side API configuration                               |
-| Operational state         | SQLite-backed Durable Object               | Atomic conference workflows and strongly consistent workspace reads                    |
-| Files                     | R2                                         | Direct uploads, private objects, lifecycle policies, and no file bytes in domain state |
-| Background delivery       | Durable Object outbox + Worker `waitUntil` | Provider work starts after commit; explicit retry operations preserve durable intent   |
-| Email                     | Cloudflare Email Service binding           | Native Worker delivery; Resend may remain an optional provider                         |
-| Team tables               | Airtable mirror — planned design only      | Familiar collaboration without putting Airtable on the request path                    |
-| Cross-workspace analytics | D1 projection, only when needed            | SQL reporting across many workspace objects                                            |
+| Concern                   | Default                                              | Why                                                                                    |
+| ------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Web and API               | Worker + Static Assets                               | One origin, one deploy, no client-side API configuration                               |
+| Event business records    | SQLite-backed Durable Object                         | One isolated, transactional, zero-configuration store per event                        |
+| Optional team view        | Airtable                                             | Experimental OAuth and schema integration; keep disconnected for the recommended V1    |
+| Files                     | R2                                                   | Direct uploads, private objects, lifecycle policies, and no file bytes in domain state |
+| Background delivery       | Transactional outbox + Queue or Durable Object alarm | Retryable work that does not hold open a user request                                  |
+| Email                     | Cloudflare Email Service binding                     | Native Worker delivery; Resend may remain an optional provider                         |
+| Account event index       | Account Durable Object                               | Verified membership and fast event switching without scanning event objects            |
+| Event team access         | Event Access Durable Object                          | Live owner, administrator, viewer, invitation, and revocation authority per event      |
+| Cross-workspace analytics | D1 projection, only when needed                      | SQL reporting across many workspace objects                                            |
 
-## Why Durable Objects are the default database
+## Why Durable Objects remain in the write path
 
-ProgramKit's important writes are workspace transactions: accept a proposal and create the related
-speaker, participation, requirements, and session; publish one immutable schedule release; approve
-and commit a group of changes. A SQLite-backed Durable Object gives each workspace a single
-coordination boundary with attached transactional storage. That matches the domain today.
+ProgramKit's important writes span several records: accept a proposal and create its speaker,
+participation, requirements, and session; publish one immutable schedule release; approve and
+commit a group of changes. A SQLite-backed Durable Object gives each event one serialized,
+transactional boundary without another service or connection pool.
 
-The current repository stores one logical workspace JSON document in chunked Durable Object values
-and replaces it atomically. This is deliberately simple and inspectable for an event-sized data
-set. Moving to normalized SQLite tables inside the same Durable Object is available when query or
-document-size evidence justifies it; it does not require a product-level database change.
+The object stores the versioned workspace, idempotency responses, and revision metadata. Normal
+reads and writes stay inside that event boundary. The experimental Airtable-backed mode changes
+this behavior by acknowledging Airtable writes before advancing the object cache. That mode is
+useful for integration testing, but it is not the recommended production path until partial-write
+retry and inbound conflict review are complete.
 
 ### Where D1 fits
 
-D1 is not the default source of truth. It becomes useful when ProgramKit needs queries that cross
-many workspace objects, such as an organization-wide event index, global search, analytics, or an
-administrative control plane.
+D1 is not a source of truth. The signed-in user's small event index already lives in their account
+object. D1 becomes useful for organization-wide search, analytics, or an administrative control
+plane across many accounts and event objects.
 
-That future D1 database should be a rebuildable read projection fed by domain events. Event writes
-still commit in the workspace object; the projection may lag briefly and must never decide whether
-a domain transition is valid.
+That future D1 database should be a rebuildable read projection. It may lag briefly and must never
+decide whether a domain transition is valid.
 
-<a id="how-the-airtable-integration-works"></a>
+## Experimental Airtable-backed mode
 
-## Planned Airtable integration design
-
-Airtable is not part of the supported deployment. The repository ships no Airtable client,
-credential path, mirror, cursor, webhook, poller, or reconciliation screen, and there is nothing for
-an operator to install or turn on. Everything in this section is a proposed design for an optional
-future bonus; the only Airtable code that exists today is the tested `reconcileAirtableRecord`
-comparison primitive in `@programkit/core`.
-
-The design is worth recording because program and review teams already know how to filter, group,
-comment on, and edit an Airtable base. Even if it is built, Airtable would not become ProgramKit's
-live application database: no page load or accepted proposal may depend on a third-party API limit
-or retry window.
-
-The proposed delivery and reconciliation flow:
+Program and review teams already know how to filter, group, comment on, and edit an Airtable base,
+so ProgramKit includes a working OAuth, schema, persistence, and webhook vertical slice. It is not
+enabled by default and is not queried on every page load. When enabled, the Durable Object cache
+isolates reads from routine API latency and quota use.
 
 ```text
 named operation
       │
       ▼
-Durable Object transaction ── domain event + outbox intent
-      │                                      │
-      │ user receives success                ▼
-      │                              Queue / object alarm
-      │                                      │
-      └────────────────────────────── batch upsert to Airtable
-                                             │
-                                  webhook / cursor polling
-                                             │
-                                             ▼
-                              three-way reconciliation preview
+Durable Object serializer and current cache
+      │
+      ├── validate operation and compute record delta
+      ├── batch upsert changed Airtable records
+      ├── update cache after Airtable acknowledgement
+      └── return success
+
+direct Airtable edit ── verified webhook ── cache refresh
 ```
 
-A first mirror would create four tables:
+The version 1 schema has one `ProgramKit State` record and ten native tables for events, people,
+participations, submissions, tasks, reviews, sessions, placements, tracks, and rooms. Stable IDs,
+deterministic sort values, native columns, and lossless JSON make the full workspace reconstructable
+without relying on Durable Object storage.
 
-| Airtable table | Stable key      | Fields the design would mirror                                                    |
-| -------------- | --------------- | --------------------------------------------------------------------------------- |
-| Submissions    | `ProgramKit ID` | title, kind, status, speaker, track, review score, updated time, ProgramKit link  |
-| Speakers       | `ProgramKit ID` | name, email, company, confirmation, readiness, session links, portal link         |
-| Sessions       | `ProgramKit ID` | title, format, track, duration, status, speakers, scheduled time, ProgramKit link |
-| Tasks          | `ProgramKit ID` | speaker, requirement, status, due time, review state, ProgramKit link             |
+The checked-in adapter creates and validates that schema, batch-upserts by stable ID, removes stale
+managed rows, writes record-level deltas, restores the complete state, and verifies Airtable webhook
+HMACs. The current seed uses 171 records. Measured steady-state costs are zero Airtable requests per
+page load, two requests for a simple one-record mutation, and eleven requests for an explicit full
+restore.
 
-Every mirrored row would also carry `ProgramKit Revision` and `Last Synced At`. Sync would use
-Airtable batch requests, exponential backoff, and a per-workspace cursor. Secrets would stay in
-Worker secrets. File bytes would stay in R2; Airtable would receive only authorized ProgramKit links
-or safe metadata.
+The OAuth flow registers an HMAC-signed webhook and renews it with a Durable Object alarm. Inbound
+edits currently perform a debounced full refresh. Production work still needs payload cursors,
+narrow record fetches, durable partial-write retries, and conversion of direct edits through named
+operations or reviewable change sets. See the
+[Airtable integration guide](docs/integrations/airtable.md) for setup, failure modes, and the exact
+current boundary. The preferred future team-view design is an asynchronous outbound mirror with
+reviewable inbound changes. That design is not implemented yet.
 
-Inbound edits would use an explicit field allowlist and a saved last-synced baseline. A safe
-Airtable-only edit would become a named operation or previewable change set. A ProgramKit-only edit
-would be exported. If a field changed differently on both sides, neither side would silently win:
-the integration would create a reconciliation item for a human. Protected fields would be repaired
-from ProgramKit, and row deletion would never hard-delete domain data. See
-[the Airtable integration guide](docs/integrations/airtable.md) for the proposed field policy and
-loop prevention, and for what the tested comparison primitive does and does not cover.
+## Hosted demo lifecycle
+
+The root of `demo.programkit.dev` creates a random 192-bit capability and initializes a seeded
+Durable Object before the link is returned. Opening `/demo/{capability}` verifies that object,
+exchanges the capability for an
+HTTP-only same-site cookie, and redirects to `/` so the secret is not left in the address bar.
+
+The object keeps its expiration alongside its workspace state and uses its single alarm for the
+earliest pending lifecycle event: demo expiry, Airtable webhook refresh, or webhook renewal. A
+compact banner shows the remaining time, copies the private link, and supports early deletion.
+Natural and manual deletion remove local state, cached OAuth credentials, and the ProgramKit
+webhook. They never delete a connected Airtable base or any records in it.
+
+This is an evaluation surface, not production identity. Possession of the capability grants edit
+access to the demo, so it must contain sample data only. See
+[Hosted demos](docs/architecture/hosted-demos.md) for the exact boundary.
+
+## Hosted app identity and events
+
+The app profile sends a short-lived, single-use magic link through the app-only Email Service
+binding. It stores only token and session hashes in an account-sharded Auth Durable Object. A
+successful sign-in sets HTTP-only, secure, same-site cookies for the session and active event.
+
+Each event is a separate workspace object. Creating and switching events goes through verified
+account membership, and a new event starts empty. The complete boundary is documented in
+[Identity, events, and storage ownership](docs/architecture/identity-and-tenancy.md).
 
 ## Local development
 
@@ -136,23 +180,31 @@ SQLite-backed Durable Object together in `workerd`.
 
 ## Deploy
 
-Authenticate Wrangler, review `apps/cloudflare/wrangler.jsonc`, and provision the private asset
-bucket once for the target account:
+Use the Deploy to Cloudflare button for the shortest path:
 
-```bash
-pnpm --filter @programkit/app-cloudflare exec wrangler login
-pnpm --filter @programkit/app-cloudflare exec wrangler r2 bucket create programkit-assets
-```
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
 
-Then run:
+Cloudflare clones the public repository, builds it, and provisions the SQLite Durable Object from
+the root `wrangler.jsonc`. The application runs immediately with its isolated demo store. Airtable
+is an optional second setup step because every self-hosted callback domain needs its own Airtable
+OAuth registration.
+
+For a local checkout, authenticate Wrangler, review `wrangler.jsonc`, then run:
 
 ```bash
 pnpm deploy
 ```
 
 The command builds the three public packages, type-checks the workspace, builds the Vite client and
-Worker, and deploys the checked-in Cloudflare application. No deployment files are generated behind
-the scenes.
+Worker, and deploys the checked-in Cloudflare application.
+
+### Enable Airtable on a deployment
+
+Register an OAuth integration with the exact callback
+`https://YOUR_HOST/api/v1/integrations/airtable/oauth/callback`, then add the client ID and optional
+client secret as Worker secrets. Open **Integrations** and choose **Connect Airtable**. The full
+consent and base-selection flow is documented in the
+[Airtable integration guide](docs/integrations/airtable.md#connect-airtable).
 
 After deploying, verify:
 
@@ -186,35 +238,49 @@ verify the deployed Content Security Policy allows only that framing relationshi
 speaker portal, confirm published resources render and a rejected HTML card cannot execute active
 content.
 
+### Email on the official application host
+
+Inbound `support@programkit.dev` mail is forwarded through Cloudflare Email Routing. Outbound mail
+uses the dedicated `mail.programkit.dev` sending domain so application reputation is separate from
+normal human mail. Only the `app` profile receives the `EMAIL` binding, and Wrangler restricts it
+to `notifications@mail.programkit.dev`.
+
+Magic-link sign-in and product notifications use this binding. Product operations persist one
+resolved outbox record per recipient with the domain transaction. The event Durable Object alarm
+delivers outside the transaction, stores the provider message ID and attempt history, and retries
+failures up to five times. Anonymous demos have no outbound binding. See the
+[email guide](docs/integrations/email.md).
+
 ## Production bindings, in order
 
 The golden-path production work should land in this sequence:
 
-1. Replace the demo workspace header and fixed actors with verified sessions, API tokens, and
-   workspace membership.
-2. Evolve the current participant-owned R2 upload and private-download path into authenticated
-   upload initiation with progress, retry, cancellation, replacement, scanning, and lifecycle
+1. Add participant and reviewer magic-link sessions, then complete account recovery and ownership
+   transfer for hosted staff.
+2. Add OAuth and workspace-scoped authorization to MCP and API tokens.
+3. Add R2 upload initiation, direct upload, finalize/scanning, private download, and lifecycle
    cleanup.
-3. Connect the separate submission-confirmation outbox to the checked-in Email Service transport;
-   accepted-speaker reminders already use it.
-4. Add webhook delivery from the same outbox, with signed payloads, retries, and delivery history.
-5. Add the optional Airtable batch mirror, inbound reconciliation queue, and actual cursor, last
-   success, conflict, and error state in the integrations screen.
-6. Add scheduled encrypted logical exports and test restore into a separate workspace key.
+4. Add suppression, unsubscribe, dead-letter recovery, and calendar attachment support to the
+   transactional email outbox.
+5. Add webhook delivery from a durable outbox, with signed payloads, retries, and delivery history.
+6. Move Airtable toward a non-blocking mirror, then add webhook payload cursors, durable retry,
+   inbound change sets, and actual last-success, quota, lag, conflict, and error state.
+7. Add scheduled encrypted logical exports and test restore into a separate workspace key.
 
-Do not call email, webhook, or Airtable APIs while a domain transaction is open. The state
-transition and outbox intent commit together; external delivery is idempotent and retryable.
+Do not call email, delivery webhooks, or optional mirrors while a domain transaction is open. The
+current experimental Airtable-backed repository still performs acknowledged writes in the request
+path. That limitation is one reason it is not the recommended V1 store.
 
 ## Repository hosting and Forge
 
-ProgramKit does not depend on a GitHub-specific runtime. Forge, GitHub, or another Git server can
-host the repository because the deploy command uses the local checkout and Wrangler. CI examples
-currently live under `.github`, but repository hosting is a contributor workflow choice, not a
-product architecture boundary.
+ProgramKit does not depend on a GitHub-specific runtime. Forge is the primary public repository at
+`forge.smol.ai/andheller/programkit`, and GitHub is a synchronized mirror. Cloudflare's deploy
+button currently accepts public GitHub and GitLab repositories, so the button points at the GitHub
+mirror while normal contribution and source links point at Forge.
 
-The small Forge bonus is not worth splitting issue history or making the quick start less familiar
-before the product workflow is complete. A Forge mirror is reasonable later if it can run the same
-`pnpm check` and preserve an obvious contribution path.
+The application runtime remains on Cloudflare. Moving it to Forge Sites would replace the Worker,
+Durable Object, R2, and mail-service assumptions that the reference assembly intentionally tests.
+Forge hosts the source and collaboration surface; Wrangler deploys the same checkout to Cloudflare.
 
 ## Leaving Cloudflare
 

@@ -1,180 +1,105 @@
 # Product status and roadmap
 
-ProgramKit is building one dependable conference-program lifecycle, not a general CRM or a clone
-of every enterprise event product.
+ProgramKit is one focused conference-program system:
 
 ```text
 Publish CFP → receive proposal → review → decide → onboard speaker → schedule → publish program
 ```
 
-Communications and readiness span that lifecycle. The seeded AIE NYC workspace proves the whole
-spine, but a visible screen is not automatically a production-complete capability. This document
-is the source of truth for that distinction.
+The current alpha implements that complete spine. This roadmap separates working product from the
+remaining work required for a dependable public service. The evaluator evidence is maintained in
+[`docs/product/evals`](docs/product/evals/README.md).
 
-## Current capability map
+## Working product
 
-| Workflow           | Trustworthy today                                                                                                                                                                                                                                                                                                                    | Still needed for production depth                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| Event setup        | Active-event identity, slug, venue, city, dates, timezone, lifecycle status, version checks and schedule-boundary validation                                                                                                                                                                                                         | Multi-event switching, administrator membership, branding and public theme controls                                           |
-| CFP                | Multiple event forms, editable public content, ordered fields, choice options, required fields, explicit speaker/session data mappings, shared publish readiness, conditional visibility, track/category routing into accepted sessions, draft preview, public submission, frozen confirmation receipts, and truthful delivery state | File restrictions, richer validation rules, published-version comparison and branch-coverage tests                            |
-| Review             | Reviewer teams, ordered assignment rounds, guarded and idempotent round advancement, scoped reviewer projection, scorecards, blind-review redaction, active-round summaries, final-round acceptance policy, audit evidence, and accepted-record conversion                                                                           | Conflict-of-interest declarations, saved committee filters, assignment balancing controls                                     |
-| Speaker onboarding | Scoped participant projection, profile editing, typed text/form/file requirement submission, private R2 uploads and downloads, due dates, organizer review states, published guides, and sandboxed static HTML cards                                                                                                                 | Shared cross-surface task renderer, release documents, revision conversations, logistics templates, upload scanning           |
-| Communications     | Accepted-speaker template, audience preview, approval, frozen personalized messages and full RFC 5545 attachments, truthful recipient outbox, post-commit Cloudflare Email consumer, provider-result recording, retry control, calendar downloads, and submission-receipt outbox                                                     | Sender-domain activation, controlled test sends, scheduling, submission-receipt delivery consumer, and richer attempt history |
-| Scheduling         | Draft placements, unscheduled tray, timezone-safe place/move forms, accessible drag-and-drop, safe undo, explicit list/day/week/track/room views and filters, conflict previews, full draft-versus-published preflight, immutable releases, public projection                                                                        | Reusable time-block templates, travel/buffer constraints, track locking, and richer collaborative draft history               |
-| Readiness          | Participant matrix, due dates in the domain, blocker counts, submitted-item approval, speaker detail, and foreground five-second operator refresh                                                                                                                                                                                    | Overdue explanations, saved filters, bulk reminders/approval and communication history                                        |
-| Integrations       | Versioned API/export, Accelevents published-program mapping preflight, frozen per-item outbox, authenticated post-commit create/update consumer, retained provider IDs, provider result/retry evidence, and conflict-aware Airtable reconciliation primitive                                                                         | Accelevents Enterprise credential activation and provider smoke test; Airtable runtime delivery and cursor UI                 |
-| Public program     | Immutable agenda, read-only public projection, embeddable mobile speaker gallery, and private-on-device itinerary                                                                                                                                                                                                                    | Host-site theme controls, richer session detail, and production embed/CSP smoke tests                                         |
+| Workflow                    | Current capability                                                                                                                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accounts and events         | Email/password and magic-link staff accounts, owner/admin/viewer membership, email-bound invitations, revocation, event creation, isolated event switching, and participant accounts that recover only matching submissions, reviews, and speaker portals |
+| CFP                         | Multiple forms, mapped speaker and session fields, required and conditional questions, category routing, open/close windows, public draft save/resume/edit/submit, co-speakers, attachments, and decision status                                          |
+| Review                      | Independent rounds, reviewer teams, routed and exact assignments, weighted numeric/select/text scorecards, blind projection, reviewer caps, progress, reminders, recusal, two-way sorting, CSV export, and reversible decisions                           |
+| Speakers and tasks          | Searchable roster, CSV import and deduplication, lifecycle status, reusable profiles, multi-assignee tasks, due dates, readiness filters, logistics, invitations, private speaker portal, resources, and linked sessions                                  |
+| Files and content           | Private R2 headshots and deliverables, type and size rules, version history, comments, authorized downloads, organizer replacement, files library, selected ZIP export, session editing/history/restore, and approval gating                              |
+| Communications              | Templates, merge preview, audience selection, review and approval, frozen recipients, durable outbox records, Cloudflare Email delivery, retry state, history, task reminders, and iCal attachments                                                       |
+| Schedule and public program | Multi-day room grid, session list, unscheduled tray, room/track inventory, conflict naming, accessible move form, drag and drop, auto-place, clear/undo, publish preflight, immutable releases, and five public views with embeds and JSON/XML/iCal feeds |
+| Speaker CRM                 | Cross-event directory, search and multi-criteria filters, tags, notes, event history, CSV import, duplicate merge, saved dynamic/static segments, six-stage sourcing, event reuse, personalized outreach, and organization analytics                      |
+| API and agents              | Event-scoped copy-once API keys, documented read endpoints and named writes, logical ZIP/CSV export, optional MCP server, plugin, and operational skills                                                                                                  |
 
-## Foundation already in place
+## Architecture that is settled
 
-- Exactly three publishable packages: `core`, `web`, and `agent`.
-- One private Cloudflare composition root under `apps/cloudflare`.
-- Named operations with scope checks, expected versions, idempotency, audit events, dry runs, and
-  reviewable change sets.
-- Separate web projections for operator, public submission, reviewer, speaker, and public program
-  surfaces.
-- Surface-specific operation allowlists; public and reviewer routes cannot call arbitrary operator
-  commands.
-- An injected `ProgramKitClient`, with same-origin HTTP as the default implementation.
-- Typed, split TanStack routes and TanStack Query server-state lifecycle.
-- Stable URL state for form/field selection, proposal selection and filtering, people detail, and
-  reviewer assignment selection.
-- SQLite-backed Durable Object persistence for the supported Cloudflare host and a testable atomic
-  repository contract in core.
-- Event-scoped, paginated read APIs for sessions, speakers, and submissions, with named operations
-  as the single write path.
-- An explicit storage decision: Durable Objects are authoritative; D1 and Airtable are downstream
-  projections for different use cases.
+- Three reusable packages: `core`, `web`, and `agent`.
+- One supported Cloudflare assembly under `apps/cloudflare`.
+- One authoritative SQLite-backed Workspace Durable Object per event.
+- Separate Account and Event Access Durable Objects for identity and membership.
+- R2 for private file bytes and event records for metadata.
+- Every human, API, and agent write goes through the same named operation engine with authorization,
+  idempotency, expected versions, audit events, and dry-run/change-set support.
+- Public pages and feeds expose only approved records from the latest immutable schedule release.
+- Airtable is optional and experimental. It is not on the recommended request path.
+- D1 is reserved for a future rebuildable cross-event projection, not another primary database.
 
-The reference host still uses passwordless, path-derived demo actors. These projections reduce
-data exposure and enforce capability shape, but they do not replace real authentication or tenant
-membership. See [Security](SECURITY.md).
+## Remaining release work
 
-## Convergence milestones
+### 1. Prove the hosted journeys
 
-### 1. Finish shared form primitives
+- Run the complete evaluator chain twice against a fresh `app.programkit.dev` account.
+- Verify organizer, submitter, reviewer, speaker, and attendee handoffs without leaving the origin.
+- Capture live-provider evidence for confirmations, reviewer reminders, speaker invitations, bulk
+  mail, scheduled task reminders, and iCal import.
+- Add repeatable disposable-account fixture provisioning and a run checklist. Never expose the
+  seeded demo reset inside a hosted event.
 
-- Extract the public renderer and organizer field editor into shared form modules.
-- Add task-form definitions and submitted answers without conflating task and CFP lifecycles.
-- Add validation schemas, file rules and exhaustive conditional-branch tests.
-- Add explicit published-version comparison.
+### 2. Harden identity and operations
 
-### 2. Add one real asset pipeline
+- Add authenticated password changes, account recovery, ownership transfer, session management,
+  and an optional MFA or external OIDC policy.
+- Add edge abuse controls and an operator-visible security event log.
+- Document backup, restore, retention, and disaster-recovery drills for event and identity objects.
+- Add structured production metrics, tracing, alerting, and a small status/runbook surface.
 
-- Done: define asset metadata, owner-scoped validation, and a named file-submission operation in
-  core.
-- Done: implement private R2 storage, participant-owned upload, private download authorization, and
-  type/size validation in `apps/cloudflare`.
-- Next: replace the passwordless demo actor with authenticated upload initiation and add progress,
-  retry, cancellation, replace/remove, scanning, and lifecycle cleanup.
-- Use the same asset UI for proposal files, video, headshots and slides.
+### 3. Harden files and delivery
 
-### 3. Turn requirements into assigned work
+- Add malware scanning, orphan cleanup, deletion and retention policy, and R2 usage observability.
+- Verify sender-domain reputation and bounce handling for the official Cloudflare Email path.
+- Add suppression management, scheduled campaign controls, and safe cancellation before delivery.
 
-- Done: render text, file, and simple form requirements in the speaker portal and preserve explicit
-  server-backed review states.
-- Done: persist submitted values and private asset references through named core operations.
-- Next: render release/approval tasks only when an actual document and response contract exist.
-- Show organizer review, revision reasons, due/overdue state and direct task links.
+### 4. Finish the public API contract
 
-### 4. Complete two communication automations
+- Publish a generated OpenAPI document and validate examples in CI.
+- Add signed webhook subscriptions with retry, replay protection, and delivery history.
+- Add cursor-based bulk endpoints only where the browser and integration use cases require them.
+- Document API-key rotation and least-privilege recipes for common integrations.
 
-- Done: accepted-speaker template, confirmed-speaker audience, field rendering, recipient preview,
-  suppression safeguards, durable recipient jobs, provider-result recording, and RFC 5545 calendar
-  attachment/download.
-- Done: freeze the full calendar payload per recipient and deliver it as a structured attachment
-  through the post-commit Cloudflare Email consumer; failed rows can be queued again without
-  losing attempt evidence.
-- Done: freeze one submitter-owned confirmation receipt during proposal submission, surface its
-  truthful outbox state to submitters and organizers, and record trusted provider outcomes.
-- Next: activate a verified sender, run a controlled campaign smoke test, add test-send isolation,
-  and connect the separate submission-receipt outbox to the same transport.
+### 5. Make the optional integrations honest
 
-Provider calls must run only after the outbox commit. Domain events already preserve queue and
-provider-result history; a richer per-message attempt timeline remains production depth.
+- Keep Airtable disconnected by default.
+- Replace synchronous Airtable acknowledgement with a durable outbound mirror and observable retry
+  journal before calling it a production team view.
+- Convert inbound Airtable edits into proposed named operations with explicit conflict review.
+- Add a guided Accelevents export checklist and validate a real import against a test account.
 
-### 5. Finish the scheduling studio
+### 6. Final product craft
 
-- Done: add an unscheduled-session tray and day/room/track filters.
-- Done: make list, day, week, track, and room explicit operator view modes while retaining the
-  accessible room/time drag surface.
-- Done: add safe last-change undo and a publication preflight with draft-versus-published evidence.
-- Next: add reusable time-block templates, travel/buffer constraints, track locking, and richer
-  collaborative draft history when pilot evidence requires them.
+- Complete keyboard, screen-reader, 320 px, and reduced-motion acceptance passes on every role.
+- Add first-run guidance and intentional empty states without turning the product into a tour.
+- Keep page copy short, remove redundant labels, and preserve the fast, dense operating surfaces.
+- Retake the website screenshots from the final build and keep the capture recipe outside the public
+  repository.
 
-### 6. Polish the operating queue
-
-- Explain every blocker in plain language.
-- Add saved readiness filters and safe bulk actions.
-- Deep-link every work item and proposed change.
-- Done: refetch active operator projections every five seconds in the foreground and on focus so
-  readiness changes appear without a manual reload.
-- Next: add hibernating workspace WebSockets for lower-latency revision invalidation and durable
-  in-app notifications when scale evidence justifies them.
-
-### 7. Add the Airtable team mirror
-
-- Provide a documented base template for submissions, speakers, sessions, and tasks.
-- Batch-upsert by stable ProgramKit ID from the delivery outbox with backoff and a durable cursor.
-- Accept only allowlisted inbound edits and route them through named operations or human-approved
-  change sets.
-- Use the tested three-way comparison to surface concurrent field edits without choosing a winner.
-- Show real last-success, lag, attempt, conflict, and error state on the integrations screen.
-
-### 8. Complete the Accelevents provider boundary
-
-- Done: map only the latest immutable schedule release into stable speaker and session records.
-- Done: freeze versioned per-item delivery state with provider IDs, failure evidence, and retries.
-- Done: expose the preflight, mapping, packet status, and honest credential boundary to operators.
-- Done: implement the post-commit Cloudflare consumer against Accelevents' authenticated speaker
-  and session create/update endpoints, including speaker-first relationship mapping and provider
-  ID reuse across releases.
-- Next: activate the owner-managed Enterprise API key and retain a provider-confirmed smoke-test
-  receipt.
-
-### 9. Publish speaker resources and public embeds
-
-- Done: versioned guide and static HTML-card records with a staff-only save operation.
-- Done: participant projection includes only published resources for the matching event.
-- Done: HTML cards reject attributes and active content, then render in a scriptless sandbox.
-- Done: mobile speaker-gallery and itinerary routes read only the public immutable release; saved
-  itinerary choices remain on the attendee's device.
-- Next: verify embedding from the final host's Content Security Policy and add theme controls only
-  if pilot evidence requires them.
-
-### 10. Make review rounds operable
-
-- Done: seed an ordered committee and finalist review plan with explicit completion thresholds.
-- Done: advance eligible proposals through a staff-scoped, version-checked, idempotent operation
-  that creates the next assignments once and emits domain evidence.
-- Done: summarize the active round, expose round progress to operators, and keep acceptance hidden
-  until finalist scorecards are complete.
-- Next: add conflict-of-interest declarations and assignment balancing only after real committee
-  policy is available.
-
-## Deliberate non-goals for the golden path
+## Deliberate non-goals
 
 - Payments and ticketing
-- Marketing automation or a generalized CRM
-- Multilingual content management
-- Enterprise awards, digital posters, or attendee networking
+- Marketing automation unrelated to the program workflow
+- Multilingual authoring in V1
+- Awards, digital posters, attendee networking, and other enterprise-suite breadth
 - A maintained Vercel, Node, or general deployment-adapter matrix
-- Airtable as the live application database or last-write-wins two-way sync
-- Broad MCP expansion before the human workflows are complete
+- Querying Airtable on page load or last-write-wins two-way sync
 - Pixel-for-pixel Sessionboard compatibility
 
-## Definition of a trustworthy workflow
+## Definition of done
 
-A workflow is complete only when it has:
+A workflow is complete only when it has a scoped read projection, an authorized idempotent write,
+visible validation and retry state, a stable deep link, keyboard and mobile operation, durable audit
+evidence, focused ownership tests, and documented production dependencies.
 
-1. a scoped read projection;
-2. an authorized, idempotent transition;
-3. visible validation, loading, failure and success states;
-4. a stable deep link to the affected work;
-5. keyboard and mobile operation;
-6. audit evidence and safe retry behavior;
-7. focused tests for ownership, invalid transitions and data exposure; and
-8. documented host capabilities required in production.
-
-That definition keeps the project honest: the goal is a small product whose golden path is deeply
-reliable, not a large collection of convincing mock screens.
+That standard is intentionally stricter than “the screen exists.” ProgramKit should stay small
+enough to understand and complete enough to trust.

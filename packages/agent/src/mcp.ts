@@ -510,6 +510,7 @@ async function callTool(name: string, args: Record<string, unknown>, context: Mc
         label: definition.label,
         required: definition.required,
         dueAt: definition.dueAt,
+        automaticReminders: definition.automaticReminders,
       })),
       rows,
     })

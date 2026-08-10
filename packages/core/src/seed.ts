@@ -205,6 +205,7 @@ const participations: Participation[] = people.map((person, index) => ({
   id: `par_${String(index + 1).padStart(3, '0')}`,
   eventId,
   personId: person.id,
+  portalAccessKey: `portal_${String(index + 1).padStart(3, '0')}_${person.id}`,
   roles:
     index === 2 || index === 8
       ? ['moderator']
@@ -233,8 +234,11 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'Confirm participation',
     description: 'Accept the invitation and confirm attendance.',
     kind: 'confirmation',
+    systemKey: 'participation_confirmation',
+    selfCompletable: false,
     dueAt: '2026-08-21T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
   {
     id: 'req_bio',
@@ -242,8 +246,11 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'Speaker bio',
     description: 'Provide a public bio of no more than 600 characters.',
     kind: 'text',
+    systemKey: 'profile_bio',
+    selfCompletable: false,
     dueAt: '2026-09-04T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
   {
     id: 'req_headshot',
@@ -251,8 +258,11 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'Headshot',
     description: 'Upload a square, high-resolution public headshot.',
     kind: 'file',
+    systemKey: 'profile_headshot',
+    selfCompletable: false,
     dueAt: '2026-09-04T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
   {
     id: 'req_release',
@@ -260,8 +270,11 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'Recording release',
     description: 'Review and sign the event recording release.',
     kind: 'approval',
+    systemKey: null,
+    selfCompletable: false,
     dueAt: '2026-09-11T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
   {
     id: 'req_av',
@@ -269,8 +282,11 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'AV requirements',
     description: 'Tell the production team what you need on stage.',
     kind: 'form',
+    systemKey: null,
+    selfCompletable: false,
     dueAt: '2026-09-18T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
   {
     id: 'req_slides',
@@ -278,8 +294,11 @@ const requirementDefinitions: RequirementDefinition[] = [
     label: 'Final slides',
     description: 'Upload the final presentation deck.',
     kind: 'file',
+    systemKey: 'final_slides',
+    selfCompletable: false,
     dueAt: '2026-09-25T21:00:00.000Z',
     required: true,
+    automaticReminders: false,
   },
 ]
 
@@ -622,6 +641,8 @@ const submissions: Submission[] = [
       'trk_frontier',
       { video_url: 'https://video.example.com/robin-intro' },
     ),
+    contributors: [],
+    speakerAccessKey: 'speaker_robin_sloan',
     assetIds: ['ast_001'],
     submittedAt: '2026-07-20T16:20:00.000Z',
     decidedAt: '2026-07-30T15:00:00.000Z',
@@ -650,6 +671,8 @@ const submissions: Submission[] = [
       'trk_operate',
       { video_url: 'https://video.example.com/mina-agents' },
     ),
+    contributors: [],
+    speakerAccessKey: 'speaker_mina_okafor',
     assetIds: ['ast_002'],
     submittedAt: '2026-08-01T18:42:00.000Z',
     decidedAt: null,
@@ -677,6 +700,8 @@ const submissions: Submission[] = [
       'keynote',
       'trk_operate',
     ),
+    contributors: [],
+    speakerAccessKey: 'speaker_noah_williams',
     assetIds: [],
     submittedAt: '2026-08-05T14:30:00.000Z',
     decidedAt: null,
@@ -704,6 +729,8 @@ const submissions: Submission[] = [
       'talk',
       'trk_frontier',
     ),
+    contributors: [],
+    speakerAccessKey: 'speaker_emery_jones',
     assetIds: [],
     submittedAt: '2026-07-24T19:10:00.000Z',
     decidedAt: '2026-08-04T15:00:00.000Z',
@@ -731,6 +758,19 @@ const submissions: Submission[] = [
       'talk',
       'trk_build',
     ),
+    contributors: [
+      {
+        id: 'contributor_marcus_okafor',
+        firstName: 'Marcus',
+        lastName: 'Okafor',
+        email: 'marcus@cloudreachlabs.example',
+        company: 'Cloudreach Labs',
+        title: 'Staff developer advocate',
+        biography: 'Marcus helps platform teams make build systems easier to understand.',
+        role: 'co_speaker',
+      },
+    ],
+    speakerAccessKey: 'speaker_priya_raman',
     assetIds: [],
     submittedAt: '2026-08-07T12:10:00.000Z',
     decidedAt: null,
@@ -758,6 +798,8 @@ const submissions: Submission[] = [
       'workshop',
       'trk_build',
     ),
+    contributors: [],
+    speakerAccessKey: 'speaker_leo_martin',
     assetIds: [],
     submittedAt: null,
     decidedAt: null,
@@ -860,6 +902,7 @@ const reviewers: Reviewer[] = [
     eventId,
     name: 'Elena Vasquez',
     email: 'elena@aie.example',
+    accessKey: 'reviewer_elena_vasquez',
     status: 'active',
     createdAt: '2026-07-14T15:00:00.000Z',
     version: 1,
@@ -869,6 +912,7 @@ const reviewers: Reviewer[] = [
     eventId,
     name: 'Marcus Lin',
     email: 'marcus@aie.example',
+    accessKey: 'reviewer_marcus_lin',
     status: 'active',
     createdAt: '2026-07-14T15:00:00.000Z',
     version: 1,
@@ -878,6 +922,7 @@ const reviewers: Reviewer[] = [
     eventId,
     name: 'Samira Cole',
     email: 'samira@aie.example',
+    accessKey: 'reviewer_samira_cole',
     status: 'active',
     createdAt: '2026-07-14T15:00:00.000Z',
     version: 1,
@@ -908,6 +953,8 @@ const evaluationPlans: EvaluationPlan[] = [
         id: 'rnd_program_review',
         name: 'Program committee review',
         order: 1,
+        opensAt: '2026-07-15T04:00:00.000Z',
+        closesAt: '2026-08-12T03:59:00.000Z',
         reviewersPerSubmission: 2,
         minimumCompletedReviews: 2,
       },
@@ -1173,11 +1220,11 @@ const placementInput = [
   ['ses_003', 'rom_main', '2026-10-04T14:00:00.000Z'],
   ['ses_004', 'rom_workshop', '2026-10-04T15:00:00.000Z'],
   ['ses_005', 'rom_studio', '2026-10-04T15:00:00.000Z'],
-  ['ses_006', 'rom_main', '2026-10-04T15:00:00.000Z'],
-  ['ses_007', 'rom_studio', '2026-10-04T16:15:00.000Z'],
-  ['ses_008', 'rom_main', '2026-10-04T16:15:00.000Z'],
-  ['ses_009', 'rom_workshop', '2026-10-04T17:00:00.000Z'],
-  ['ses_010', 'rom_main', '2026-10-04T18:15:00.000Z'],
+  ['ses_006', 'rom_main', '2026-10-05T13:00:00.000Z'],
+  ['ses_007', 'rom_studio', '2026-10-05T14:00:00.000Z'],
+  ['ses_008', 'rom_main', '2026-10-05T14:00:00.000Z'],
+  ['ses_009', 'rom_workshop', '2026-10-05T15:00:00.000Z'],
+  ['ses_010', 'rom_main', '2026-10-05T16:15:00.000Z'],
 ] as const
 
 const placements: Placement[] = placementInput.map((placement, index) => {
@@ -1205,6 +1252,41 @@ const initialScheduleRelease: ScheduleRelease = {
   placements: structuredClone(placements),
 }
 
+const portalResourcePages = [
+  {
+    id: 'res_speaker_guide',
+    eventId,
+    title: 'Speaker guide',
+    slug: 'speaker-guide',
+    summary: 'Arrival, stage, and recording details for your time at AIE NYC.',
+    body: `Please arrive at speaker check-in 45 minutes before your session. A program team member will walk you to the green room and confirm your microphone and slide setup.
+
+Bring a local copy of your final deck even if you uploaded it in advance. Sessions are recorded unless the program team has confirmed an exception with you.`,
+    embedUrl: '',
+    linkUrl: '',
+    status: 'published' as const,
+    sortOrder: 0,
+    updatedAt: seededAt,
+    version: 1,
+  },
+  {
+    id: 'res_venue_guide',
+    eventId,
+    title: 'Venue and arrival',
+    slug: 'venue-and-arrival',
+    summary: 'Where to enter, what to bring, and who to contact when you arrive.',
+    body: `Use the Building 77 entrance at Brooklyn Navy Yard and bring a photo ID. Speaker check-in opens at 8:00 AM each event day.
+
+If your travel changes, reply to your latest program team email so the onsite team sees it.`,
+    embedUrl: '',
+    linkUrl: 'https://brooklynnavyyard.org/visit/getting-here/',
+    status: 'published' as const,
+    sortOrder: 1,
+    updatedAt: seededAt,
+    version: 1,
+  },
+]
+
 const campaigns: Campaign[] = [
   {
     id: 'cam_001',
@@ -1216,7 +1298,7 @@ const campaigns: Campaign[] = [
     recipientParticipationIds: participations
       .filter((participation) => participation.status === 'invited')
       .map((participation) => participation.id),
-    includeEventInvite: true,
+    includeCalendarInvite: true,
     status: 'awaiting_approval',
     createdAt: seededAt,
     approvedAt: null,
@@ -1232,12 +1314,9 @@ const campaigns: Campaign[] = [
     subject: 'Your AIE NYC speaker workspace is ready',
     body: 'Hi {{first_name}},\n\nWe’re delighted to confirm you as a speaker at {{event_name}}. Your speaker workspace is ready for your bio, headshot, and session materials.\n\nThe event is {{event_date}} at {{event_venue}}. We’ve included a calendar invite.\n\nOpen your workspace: {{portal_url}}\n\nThank you,\nThe program team',
     audience: 'custom',
-    recipientParticipationIds: participations
-      .filter((participation) => participation.status === 'confirmed')
-      .slice(0, 6)
-      .map((participation) => participation.id),
-    includeEventInvite: true,
-    status: 'queued',
+    recipientParticipationIds: participations.slice(0, 6).map((participation) => participation.id),
+    includeCalendarInvite: true,
+    status: 'sent',
     createdAt: '2026-07-21T15:00:00.000Z',
     approvedAt: '2026-07-21T15:30:00.000Z',
     queuedAt: '2026-07-21T16:00:00.000Z',
@@ -1331,10 +1410,10 @@ const integrations: Integration[] = [
   },
   {
     id: 'int_airtable',
-    name: 'Airtable team mirror',
+    name: 'Airtable (experimental)',
     kind: 'airtable',
     status: 'not_configured',
-    detail: 'Optional conflict-aware mirror for submissions, speakers, sessions, and tasks.',
+    detail: 'Optional OAuth, schema, persistence, and webhook testing with scoped credentials.',
     lastSeenAt: null,
   },
   {
@@ -1358,12 +1437,15 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 9,
+    schemaVersion: 14,
     revision: 1,
     workspace: structuredClone(seededWorkspace),
     activeEventId: eventId,
     events: [structuredClone(seededEvent)],
     people: structuredClone(people),
+    contactNotes: [],
+    crmSegments: [],
+    speakerPipeline: [],
     participations: structuredClone(participations),
     requirementDefinitions: structuredClone(requirementDefinitions),
     requirementInstances: structuredClone(requirementInstances),
@@ -1372,7 +1454,7 @@ export function createSeedState(): WorkspaceState {
     submissions: structuredClone(submissions),
     submissionReceiptDeliveries: structuredClone(submissionReceiptDeliveries),
     assets: structuredClone(assets),
-    portalResources: structuredClone(portalResources),
+    assetComments: [],
     reviewers: structuredClone(reviewers),
     reviewerTeams: structuredClone(reviewerTeams),
     evaluationPlans: structuredClone(evaluationPlans),
@@ -1386,6 +1468,9 @@ export function createSeedState(): WorkspaceState {
     scheduleReleases: [structuredClone(initialScheduleRelease)],
     campaigns: structuredClone(campaigns),
     campaignDeliveries: structuredClone(campaignDeliveries),
+    outboundMessages: [],
+    portalResources: structuredClone(portalResources),
+    portalResourcePages: structuredClone(portalResourcePages),
     changeSets: [
       {
         id: 'chg_agent_001',
@@ -1455,6 +1540,117 @@ export function createSeedState(): WorkspaceState {
         operation: 'change-set.create',
         summary: 'Proposed moving Small models, serious work to Main stage.',
         data: { proposedOperation: 'schedule.move-session' },
+      },
+    ],
+    recentCommandResults: [],
+  }
+}
+
+export function createEmptyWorkspaceState({
+  eventId,
+  eventName,
+  eventSlug,
+  createdAt,
+  startsAt: requestedStartsAt,
+  endsAt: requestedEndsAt,
+  timezone: requestedTimezone,
+  venue = '',
+  city = '',
+}: {
+  eventId: string
+  eventName: string
+  eventSlug: string
+  createdAt: string
+  startsAt?: string
+  endsAt?: string
+  timezone?: string
+  venue?: string
+  city?: string
+}): WorkspaceState {
+  const template = createSeedState()
+  const start = new Date(createdAt)
+  start.setUTCDate(start.getUTCDate() + 90)
+  start.setUTCHours(9, 0, 0, 0)
+  const end = new Date(start)
+  end.setUTCHours(17, 0, 0, 0)
+  const startsAt = requestedStartsAt ?? start.toISOString()
+  const endsAt = requestedEndsAt ?? end.toISOString()
+  const timezone = requestedTimezone?.trim() || 'UTC'
+  if (!Number.isFinite(Date.parse(startsAt)) || !Number.isFinite(Date.parse(endsAt))) {
+    throw new Error('Event dates must be valid ISO date-times.')
+  }
+  if (Date.parse(startsAt) >= Date.parse(endsAt)) {
+    throw new Error('The event end must be after its start.')
+  }
+  new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date(startsAt))
+  return {
+    schemaVersion: template.schemaVersion,
+    revision: 1,
+    workspace: {
+      id: `wrk_${eventId.replace(/^evt_/u, '')}`,
+      name: `${eventName} team`,
+      slug: eventSlug,
+      timezone,
+    },
+    activeEventId: eventId,
+    events: [
+      {
+        id: eventId,
+        name: eventName,
+        slug: eventSlug,
+        venue,
+        city,
+        startsAt,
+        endsAt,
+        timezone,
+        status: 'planning',
+        publishedScheduleVersion: null,
+        version: 1,
+      },
+    ],
+    people: [],
+    contactNotes: [],
+    crmSegments: [],
+    speakerPipeline: [],
+    participations: [],
+    requirementDefinitions: [],
+    requirementInstances: [],
+    submissionForms: [],
+    submissionFormFields: [],
+    submissions: [],
+    submissionReceiptDeliveries: [],
+    assets: [],
+    assetComments: [],
+    portalResources: [],
+    reviewers: [],
+    reviewerTeams: [],
+    evaluationPlans: [],
+    reviewerAssignments: [],
+    scorecards: [],
+    reviewDecisions: [],
+    tracks: [],
+    rooms: [],
+    sessions: [],
+    placements: [],
+    scheduleReleases: [],
+    campaigns: [],
+    campaignDeliveries: [],
+    outboundMessages: [],
+    portalResourcePages: [],
+    changeSets: [],
+    integrations: structuredClone(template.integrations),
+    acceleventsExports: [],
+    domainEvents: [
+      {
+        id: `dev_${eventId.replace(/^evt_/u, '')}_created`,
+        sequence: 1,
+        type: 'workspace.created',
+        occurredAt: createdAt,
+        actor: { type: 'system', id: 'system', name: 'ProgramKit' },
+        aggregate: { type: 'workspace', id: `wrk_${eventId.replace(/^evt_/u, '')}`, version: 1 },
+        operation: 'workspace.create',
+        summary: `Created the ${eventName} workspace.`,
+        data: { eventId },
       },
     ],
     recentCommandResults: [],

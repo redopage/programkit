@@ -14,29 +14,43 @@ not maintain a second version of product or architecture facts.
    are held to, and the checklist a UI change is reviewed against.
 3. [Product status and roadmap](../ROADMAP.md) distinguishes working capabilities from production
    depth that is still needed.
-4. [Portal resources and public embeds](product/portal-resources.md) documents the resource model,
-   sandbox, scoped projections, and embed routes.
-5. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
+4. [Evaluator readiness](product/evaluator-gap-analysis.md) summarizes the complete competition
+   rubric and the remaining manual evidence.
+5. [Evaluator runbook](product/evaluator-runbook.md) explains how to produce repeatable browser
+   evidence without overstating a seeded screen.
+6. [Evaluator evidence](product/evals/README.md) records exercised behavior for Call for Papers,
+   Abstract Management, Speaker Management, Content Management, AI Agenda, Public Widgets, and
+   optional Speaker CRM.
+7. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
    competition brief.
-6. [Competition submission pack](submission/README.md) maps requirements to evidence and provides
-   the walkthrough, final QA checklist, submission copy, and Andrew release handoff.
-7. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
+8. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
    processor, and persistence boundary.
 
 ### I want to run or adapt ProgramKit
 
-1. Start with the root [quick start](../README.md#quick-start).
-2. Follow [Build and publish a call for proposals](guides/build-and-publish-a-cfp.md) for the first
+1. Start with the root [quick start](../README.md#run-it-locally).
+2. Use [Local development](guides/local-development.md) for setup, the seeded walkthrough, reset,
+   and verification.
+3. Follow [Build and publish a call for proposals](guides/build-and-publish-a-cfp.md) for the first
    end-to-end product workflow.
-3. Read [Deployment](../DEPLOYMENT.md) before deploying the Cloudflare application.
-4. Use the [HTTP API](api/README.md) for integrations and data sync.
-5. Read the [Airtable integration guide](integrations/airtable.md) to review the planned, not yet
-   implemented, optional team workspace design.
-6. Read the [Accelevents export guide](integrations/accelevents.md) before activating the one-way
-   provider consumer.
-7. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
-   notifications.
-8. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
+4. Use [Publish speaker resources](guides/publish-speaker-resources.md) for event guides, links, and
+   safe embedded documents in the accepted-speaker portal.
+5. Read [Storage and integrations](architecture/storage-and-integrations.md) before changing
+   persistence, Airtable, D1, R2, or background work.
+6. Read [Deployment](../DEPLOYMENT.md) before deploying the Cloudflare application.
+7. Use the [HTTP API](api/README.md) for integrations and data sync.
+8. Read the [Airtable integration guide](integrations/airtable.md) before testing the experimental
+   Airtable-backed mode.
+9. Use the [Accelevents handoff](integrations/accelevents.md) to move a published program into
+   Accelevents without changing ProgramKit's source of truth.
+10. Read the [Cloudflare email guide](integrations/email.md) before enabling confirmations or
+    reminders.
+11. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
+    notifications.
+12. Read [Identity, events, and storage ownership](architecture/identity-and-tenancy.md) before
+    changing sign-in, membership, event routing, Airtable ownership, or R2 boundaries.
+13. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
+14. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
 
 ### I want to contribute
 
@@ -52,18 +66,22 @@ Start at [Agent navigation](agents/README.md). Coding agents should also read th
 
 ## Sources of truth
 
-| Question                                           | Canonical document or code                             |
-| -------------------------------------------------- | ------------------------------------------------------ |
-| What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                          |
-| Why are the packages and hosts separated?          | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                |
-| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                    |
-| How is the repository operated?                    | [`OPERATIONS.md`](../OPERATIONS.md)                    |
-| What must change before real data?                 | [`SECURITY.md`](../SECURITY.md)                        |
-| Which operations exist?                            | `packages/core/src/manifest.ts`                        |
-| Which HTTP resources exist?                        | [`docs/api/README.md`](api/README.md)                  |
-| What does the domain store?                        | `packages/core/src/types.ts`                           |
-| Which URLs and surfaces exist?                     | `packages/web/src/routes` and `packages/web/README.md` |
-| Which MCP tools and resources exist?               | `packages/agent/README.md`                             |
+| Question                                           | Canonical document or code                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------- |
+| What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                                             |
+| How do we compare with the full evaluator?         | [`evaluator-gap-analysis.md`](product/evaluator-gap-analysis.md)          |
+| How do we run and record evaluator evidence?       | [`evaluator-runbook.md`](product/evaluator-runbook.md)                    |
+| Why are the packages and hosts separated?          | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                                   |
+| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                                       |
+| Which service owns each kind of data?              | [`storage-and-integrations.md`](architecture/storage-and-integrations.md) |
+| Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](architecture/identity-and-tenancy.md)         |
+| How is the repository operated?                    | [`OPERATIONS.md`](../OPERATIONS.md)                                       |
+| What must change before real data?                 | [`SECURITY.md`](../SECURITY.md)                                           |
+| Which operations exist?                            | `packages/core/src/manifest.ts`                                           |
+| Which HTTP resources exist?                        | [`docs/api/README.md`](api/README.md)                                     |
+| What does the domain store?                        | `packages/core/src/types.ts`                                              |
+| Which URLs and surfaces exist?                     | `packages/web/src/routes` and `packages/web/README.md`                    |
+| Which MCP tools and resources exist?               | `packages/agent/README.md`                                                |
 
 When behavior and prose disagree, verify the executable code and tests, then update the canonical
 document in the same change. Do not solve drift by adding another summary.

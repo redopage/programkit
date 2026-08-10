@@ -1,0 +1,134 @@
+{
+  "$schema": "./apps/cloudflare/node_modules/wrangler/config-schema.json",
+  "name": "programkit",
+  "compatibility_date": "2026-07-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./apps/cloudflare/src/worker.ts",
+  "assets": {
+    "directory": "./apps/cloudflare/dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true,
+  },
+  "r2_buckets": [
+    {
+      "binding": "PROGRAMKIT_FILES",
+      "bucket_name": "programkit-assets",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PROGRAMKIT_WORKSPACES",
+        "class_name": "WorkspaceDurableObject",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["WorkspaceDurableObject"],
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["AuthDurableObject"],
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["EventAccessDurableObject"],
+    },
+  ],
+  "observability": {
+    "enabled": true,
+  },
+  "env": {
+    "site": {
+      "routes": [
+        {
+          "pattern": "programkit.dev",
+          "custom_domain": true,
+        },
+      ],
+      "vars": {
+        "PROGRAMKIT_DEPLOYMENT_PROFILE": "hosted-site",
+        "PROGRAMKIT_DEMO_ORIGIN": "https://demo.programkit.dev/",
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "PROGRAMKIT_WORKSPACES",
+            "class_name": "WorkspaceDurableObject",
+          },
+        ],
+      },
+    },
+    "demo": {
+      "routes": [
+        {
+          "pattern": "demo.programkit.dev",
+          "custom_domain": true,
+        },
+      ],
+      "vars": {
+        "PROGRAMKIT_DEPLOYMENT_PROFILE": "hosted-demo",
+      },
+      "r2_buckets": [
+        {
+          "binding": "PROGRAMKIT_FILES",
+          "bucket_name": "programkit-assets",
+        },
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "PROGRAMKIT_WORKSPACES",
+            "class_name": "WorkspaceDurableObject",
+          },
+        ],
+      },
+    },
+    "app": {
+      "routes": [
+        {
+          "pattern": "app.programkit.dev",
+          "custom_domain": true,
+        },
+      ],
+      "vars": {
+        "PROGRAMKIT_DEPLOYMENT_PROFILE": "hosted-app",
+        "PROGRAMKIT_APP_ORIGIN": "https://app.programkit.dev",
+        "PROGRAMKIT_EMAIL_FROM": "notifications@mail.programkit.dev",
+        "PROGRAMKIT_SUPPORT_EMAIL": "support@programkit.dev",
+      },
+      "r2_buckets": [
+        {
+          "binding": "PROGRAMKIT_FILES",
+          "bucket_name": "programkit-assets",
+        },
+      ],
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["notifications@mail.programkit.dev"],
+          "remote": true,
+        },
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "PROGRAMKIT_WORKSPACES",
+            "class_name": "WorkspaceDurableObject",
+          },
+          {
+            "name": "PROGRAMKIT_AUTH",
+            "class_name": "AuthDurableObject",
+          },
+          {
+            "name": "PROGRAMKIT_EVENT_ACCESS",
+            "class_name": "EventAccessDurableObject",
+          },
+        ],
+      },
+    },
+  },
+}

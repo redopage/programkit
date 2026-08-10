@@ -11,6 +11,10 @@ Speaker portal ─────────────┤    │                
 Public program ─────────────┤    └── tenant key ── workspace gateway ──┤
 REST clients ───────────────┤                                           ├── domain events
 Agent MCP + skills ─────────┘                                           └── workspace state
+                                                                            │
+                                         Durable Object SQLite store ◄───────┘
+                                                    │
+                                                    └── optional integrations
 ```
 
 ## Package responsibilities
@@ -45,20 +49,25 @@ legacy initialization.
 
 ## Reference request routing
 
-`apps/cloudflare/src/worker.ts` is the Cloudflare host:
+`apps/cloudflare/src/worker.ts` is the Cloudflare host. Its routing depends on the deployment
+profile:
 
-1. It reads `x-programkit-workspace-key` and accepts only lowercase letters, numbers, underscores, and
-   hyphens, up to 64 characters. Missing or invalid values fall back to `demo`.
-2. It resolves that key with `DurableObjectNamespace.idFromName`, producing one strong-consistency
-   boundary per workspace key.
-3. It removes any caller-supplied `x-programkit-internal-actor-*` headers and injects an actor selected by
-   the host.
-4. It forwards API, public, and MCP work to the selected `WorkspaceDurableObject`; other requests go
-   to the static asset binding.
+1. The public-site profile serves the small marketing entry and legal pages. Workspace APIs are
+   not exposed.
+2. The hosted-demo profile exchanges a random capability link for a same-site cookie and maps that
+   capability to one expiring `WorkspaceDurableObject` containing sample data.
+3. The hosted-app profile verifies a passwordless session through an account-sharded
+   `AuthDurableObject`, checks event membership, and maps the selected event to its own
+   `WorkspaceDurableObject`.
+4. The self-hosted development path may read `x-programkit-workspace-key`. This remains routing
+   input for sample workspaces and is never accepted as hosted-app membership.
+5. Every path removes caller-supplied `x-programkit-internal-actor-*` headers and injects an actor
+   selected by the host before forwarding to core.
 
-Both choices are intentionally simple in the demo. The workspace header is not proof of tenancy,
-and the fixed actors are not authentication. A production host must derive workspace membership,
-actor identity, and scopes from a verified session or token.
+The app session and event cookie are HTTP-only, secure in production, and same-site. Magic-link
+and session secrets are stored only as hashes. See
+[Identity, events, and storage ownership](docs/architecture/identity-and-tenancy.md) for the exact
+boundary and current team-membership limitations.
 
 ## Mutation path
 
@@ -71,7 +80,13 @@ Every command reaches `executeOperation` through one operation definition:
 5. Apply domain invariants to a cloned workspace state.
 6. Append domain events and increment the workspace revision.
 7. Return the next state and operation response from one repository `mutate` callback.
-8. Commit the accepted transition atomically.
+8. Persist the accepted transition in the event's Durable Object transaction.
+9. Return the operation response and let post-commit integrations react to durable intent.
+
+The experimental Airtable-backed repository is a current exception to step 8. When enabled, it
+writes Airtable record deltas before advancing its local cache. This mode is documented and tested,
+but it is not the recommended V1 store because partial multi-table retry and inbound conflict
+review are incomplete.
 
 A dry run returns a preview without mutation. In propose mode, core first validates the proposed
 operation against a cloned state, then stores it in a change set. Approval and commit are separate
@@ -130,29 +145,46 @@ publication time, and a monotonically increasing version. The public agenda sele
 latest release for the active event. Moving a draft placement after publication cannot rewrite a
 previous release.
 
-## Durable Object persistence
+## Event storage and optional Airtable mode
 
-The Cloudflare adapter stores one logical JSON workspace document per SQLite-backed Durable Object.
-It serializes the document and splits it into values of 200,000 characters plus a metadata record.
+Each Cloudflare event has one logical JSON workspace document in its SQLite-backed Durable Object.
+The zero-configuration demo, self-hosted deployment, and every new app event use that object as the
+complete authoritative store. Account identity, sessions, and event memberships stay in the
+separate account object.
+
+When an operator explicitly enables the experimental Airtable-backed mode, Airtable becomes the
+acknowledged persistence backend and the same workspace document becomes the serialized hot cache.
+This behavior is optional, does not run on official evaluator paths, and is not the recommended V1
+production configuration.
+
+The Airtable version 1 schema stores one non-native workspace snapshot plus native events, people,
+participations, submissions, tasks, reviews, sessions, placements, tracks, and rooms. Native
+collections are intentionally absent from the snapshot, so a successful restore must reassemble
+all managed tables. Stable IDs make full exports and record deltas idempotent.
+
+The object serializes cached documents into values of 200,000 characters plus a metadata record.
 Writes, metadata replacement, removal of obsolete chunks, and migration from the original single
-storage value occur inside the object's storage transaction.
+storage value occur inside an object storage transaction. A durable hydration marker prevents an
+Airtable read after every isolate restart. Normal application reads use the cache and make zero
+Airtable requests.
 
-This design favors inspectable, atomic multi-record operations for the reference workload of
-hundreds of people and relatively low write concurrency. Chunking avoids relying on one large
-Durable Object value, but it is not a substitute for retention limits, capacity monitoring, or an
-external file store.
+The optional mode favors inspectable records for a reference workload of hundreds of people and
+relatively low write concurrency. Airtable does not offer one atomic transaction across tables.
+ProgramKit therefore writes idempotent table deltas in the serialized object request, returns an
+error without advancing the cache if Airtable rejects them, and still needs a durable retry journal
+before that path is production-complete.
 
 ## Cloudflare data services
 
-The authoritative metadata boundary is one SQLite-backed Durable Object per workspace. D1 is not a
-second primary database. If organization-wide search or analytics warrants it, D1 receives a
-rebuildable projection from domain events and may lag behind the workspace transaction.
+One SQLite-backed Durable Object per event owns business records, serialized operations, and future
+live-client fan-out. A separate account object owns identity and the small cross-event membership
+index. D1 is not a second primary database. If organization-wide search or analytics warrants it,
+D1 receives a rebuildable projection and may lag behind the event transaction.
 
-Airtable is also downstream of accepted operations. A transactional outbox will wake a Queue or
-Durable Object alarm that batch-upserts selected read models and records its cursor, attempts, and
-errors. Inbound edits are compared against the last-synced baseline. Safe allowlisted changes become
-named operations or previewable change sets; concurrent changes become explicit conflicts. Airtable
-never overwrites ProgramKit state silently.
+The current Airtable adapter creates the schema, batch-upserts changed records, rebuilds the cache,
+and verifies webhook HMACs. The experimental webhook performs a full refresh. Production work must
+move mirroring out of the request path, add the Airtable payload cursor, fetch only affected
+records, durably retry, and convert direct edits to named operations or previewable change sets.
 
 R2 owns private file bytes. Domain `Asset` records store opaque object keys and safe metadata;
 upload and download routes recheck workspace and record ownership. Cloudflare Email Service is the
@@ -177,9 +209,9 @@ Package exports point to `dist/` by default and to TypeScript source under the `
 condition used in the workspace.
 
 `WorkspaceRepository` is the testable boundary between domain transitions and Durable Object
-storage. Identity, email, Accelevents, webhooks, R2, queues, Airtable credentials, and secret
-management are composed in `apps/cloudflare`. The email and Accelevents adapters are executable but
-remain inert without their owner-managed host configuration.
+storage. Identity, email, webhooks, R2, queues, Airtable credentials, and secret management are
+composed in `apps/cloudflare`. Hosted staff identity and magic-link email are implemented there;
+participant identity, R2, and the product-delivery outbox remain incomplete.
 
-See [Deployment](DEPLOYMENT.md) for the supported Cloudflare stack, D1 decision, Airtable mirror,
-and production binding sequence.
+See [Storage and integrations](docs/architecture/storage-and-integrations.md) for service ownership
+and [Deployment](DEPLOYMENT.md) for the supported Cloudflare stack and production binding sequence.

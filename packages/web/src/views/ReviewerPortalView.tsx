@@ -1,14 +1,32 @@
-import { ArrowLeftIcon, CheckCircleIcon, ChevronUpDownIcon } from '@heroicons/react/16/solid'
+import {
+  ArrowUturnLeftIcon,
+  CheckCircleIcon,
+  ChevronUpDownIcon,
+  ShieldExclamationIcon,
+} from '@heroicons/react/16/solid'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import {
+  evaluationCriterionKind,
+  evaluationRound,
+  evaluationRoundCriteria,
+  evaluationRoundIsBlind,
   reviewerQueue,
   submissionAnswerByPurpose,
+  submissionAnswerDisplayByPurpose,
   type ReviewRecommendation,
   type SubmissionAnswerValue,
 } from '@programkit/core'
 
-import { Button, cx, selectControl, sentenceCase, textAreaControl } from '../components/ui.tsx'
+import { ProgramKitMark } from '../components/brand.tsx'
+import {
+  Button,
+  Dialog,
+  cx,
+  selectControl,
+  sentenceCase,
+  textAreaControl,
+} from '../components/ui.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 
 function answerText(value: SubmissionAnswerValue | undefined) {
@@ -51,15 +69,32 @@ function ReviewerWorkspace({
   const event = state.events.find((entry) => entry.id === state.activeEventId)!
   const reviewer = state.reviewers.find((entry) => entry.id === reviewerId)
   const queue = useMemo(() => reviewerQueue(state, reviewerId), [reviewerId, state])
-  const [scores, setScores] = useState<Record<string, number>>({})
+  const [answers, setAnswers] = useState<Record<string, number | string>>({})
   const [recommendation, setRecommendation] = useState<ReviewRecommendation>('accept')
   const [comments, setComments] = useState('')
+  const [recusalOpen, setRecusalOpen] = useState(false)
+  const [conflictReason, setConflictReason] = useState('')
   const selected =
     queue.find((entry) => entry.assignment.id === selectedAssignmentId) ??
-    queue.find((entry) => entry.assignment.status !== 'completed') ??
+    queue.find(
+      (entry) => entry.assignment.status !== 'completed' && entry.assignment.status !== 'recused',
+    ) ??
     queue[0]
   const plan = state.evaluationPlans.find(
     (entry) => entry.id === selected?.assignment.evaluationPlanId,
+  )
+  const criteria = useMemo(
+    () => evaluationRoundCriteria(plan, selected?.assignment.roundId),
+    [plan, selected?.assignment.roundId],
+  )
+  const blindReview = evaluationRoundIsBlind(plan, selected?.assignment.roundId)
+  const hasRecommendationCriterion = criteria.some(
+    (criterion) =>
+      evaluationCriterionKind(criterion) === 'select' && /recommendation/iu.test(criterion.label),
+  )
+  const hasCommentsCriterion = criteria.some(
+    (criterion) =>
+      evaluationCriterionKind(criterion) === 'long_text' && /comments?/iu.test(criterion.label),
   )
 
   /**
@@ -87,21 +122,31 @@ function ReviewerWorkspace({
 
   useEffect(() => {
     if (!selected || !plan) return
-    setScores(
+    setAnswers(
       Object.fromEntries(
-        plan.criteria.map((criterion) => [
-          criterion.id,
-          selected.scorecard?.scores[criterion.id] ?? criterion.maximum,
-        ]),
+        criteria.map((criterion) => {
+          const saved = selected.scorecard?.answers?.[criterion.id]
+          if (saved !== undefined) return [criterion.id, saved]
+          if (evaluationCriterionKind(criterion) === 'numeric') {
+            return [
+              criterion.id,
+              selected.scorecard?.scores[criterion.id] ?? criterion.maximum ?? 5,
+            ]
+          }
+          if (evaluationCriterionKind(criterion) === 'select') {
+            return [criterion.id, criterion.options?.[0] ?? '']
+          }
+          return [criterion.id, '']
+        }),
       ),
     )
     setRecommendation(selected.scorecard?.recommendation ?? 'accept')
     setComments(selected.scorecard?.comments ?? '')
-  }, [plan, selected])
+  }, [criteria, plan, selected])
 
   if (!reviewer) {
     return (
-      <div className="grid min-h-dvh place-items-center bg-white p-6">
+      <div className="grid min-h-dvh place-items-center bg-white px-6 pt-[max(--spacing(6),env(safe-area-inset-top))] pb-[max(--spacing(6),env(safe-area-inset-bottom))]">
         <div className="max-w-md text-center">
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-zinc-950">
             This review link is unavailable
@@ -121,9 +166,9 @@ function ReviewerWorkspace({
       'review.submit-scorecard',
       {
         assignmentId: selected.assignment.id,
-        scores,
-        recommendation,
-        comments,
+        answers,
+        ...(!hasRecommendationCriterion ? { recommendation } : {}),
+        ...(!hasCommentsCriterion ? { comments } : {}),
       },
       { expectedVersions: { [selected.assignment.id]: selected.assignment.version } },
       'Review submitted.',
@@ -131,24 +176,47 @@ function ReviewerWorkspace({
     if (!response.ok) return
     const next = queue.find(
       (entry) =>
-        entry.assignment.id !== selected.assignment.id && entry.assignment.status !== 'completed',
+        entry.assignment.id !== selected.assignment.id &&
+        entry.assignment.status !== 'completed' &&
+        entry.assignment.status !== 'recused',
     )
     if (next) onSelectionChange(next.assignment.id)
   }
 
+  async function recuse() {
+    if (!selected) return
+    const response = await execute(
+      'review.recuse',
+      { assignmentId: selected.assignment.id, reason: conflictReason },
+      { expectedVersions: { [selected.assignment.id]: selected.assignment.version } },
+      'Conflict declared. This proposal is no longer awaiting your review.',
+    )
+    if (!response.ok) return
+    setRecusalOpen(false)
+    setConflictReason('')
+  }
+
+  async function restoreRecusal() {
+    if (!selected) return
+    await execute(
+      'review.restore-recusal',
+      { assignmentId: selected.assignment.id },
+      { expectedVersions: { [selected.assignment.id]: selected.assignment.version } },
+      'Review restored to your queue.',
+    )
+  }
+
   const complete = queue.filter((entry) => entry.assignment.status === 'completed').length
+  const assigned = queue.filter((entry) => entry.assignment.status !== 'recused').length
 
   return (
     <div className="min-h-dvh bg-white">
-      <header className="border-b border-zinc-950/5 bg-white">
+      <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-6">
-          <a
-            href={`/reviewer/${reviewer.id}`}
-            aria-label="Homepage"
-            className="focus-ring text-base font-semibold tracking-tight text-zinc-950"
-          >
+          <div className="flex items-center gap-2 text-base font-semibold tracking-tight text-zinc-950">
+            <ProgramKitMark className="size-6" />
             ProgramKit
-          </a>
+          </div>
           <div className="min-w-0 text-right">
             <p className="truncate text-base font-medium text-zinc-950 sm:text-sm">
               {reviewer.name}
@@ -159,10 +227,10 @@ function ReviewerWorkspace({
       </header>
 
       <main className="mx-auto flex max-w-[90rem] flex-col gap-7 px-4 py-8 sm:px-6 lg:py-10">
-        <div className="flex flex-col gap-4 border-b border-zinc-950/5 pb-5 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
+        <div className="border-b border-zinc-950/5 pb-5">
+          <div>
             <p className="text-base text-zinc-500 sm:text-sm">
-              {complete} of {queue.length} assignments complete
+              {complete} of {assigned} assignments complete
             </p>
             <h1 className="text-balance text-2xl font-semibold tracking-tight text-zinc-950">
               Review workspace
@@ -187,15 +255,6 @@ function ReviewerWorkspace({
               </ul>
             ) : null}
           </div>
-          <Button
-            size="compact"
-            onClick={() => {
-              window.location.href = '/reviews'
-            }}
-          >
-            <ArrowLeftIcon className="size-4 h-lh shrink-0 fill-current" />
-            Organizer view
-          </Button>
         </div>
 
         {selected?.submission && plan ? (
@@ -211,6 +270,10 @@ function ReviewerWorkspace({
                     const title = submission
                       ? answerText(submissionAnswerByPurpose(state, submission, 'proposal_title'))
                       : 'Missing proposal'
+                    const entryPlan = state.evaluationPlans.find(
+                      (plan) => plan.id === entry.assignment.evaluationPlanId,
+                    )
+                    const roundName = evaluationRound(entryPlan, entry.assignment.roundId)?.name
                     const active = entry.assignment.id === selected.assignment.id
                     return (
                       <li key={entry.assignment.id} className="min-w-64 lg:min-w-0">
@@ -236,13 +299,18 @@ function ReviewerWorkspace({
                               {roundNameFor(entry.assignment)}
                             </span>
                             <span className="block text-sm text-zinc-500">
+                              {roundName ? `${roundName} · ` : ''}
                               {entry.assignment.status === 'completed'
                                 ? 'Complete'
-                                : 'Needs review'}
+                                : entry.assignment.status === 'recused'
+                                  ? 'Conflict declared'
+                                  : 'Needs review'}
                             </span>
                           </span>
                           {entry.assignment.status === 'completed' ? (
                             <CheckCircleIcon className="size-4 h-lh shrink-0 fill-emerald-600" />
+                          ) : entry.assignment.status === 'recused' ? (
+                            <ShieldExclamationIcon className="size-4 h-lh shrink-0 fill-rose-600" />
                           ) : null}
                         </button>
                       </li>
@@ -263,7 +331,12 @@ function ReviewerWorkspace({
                 )}
               </h2>
               <p className="pt-1 text-base text-zinc-500 sm:text-sm">
-                {sentenceCase(selected.submission.kind)}
+                {[
+                  evaluationRound(plan, selected.assignment.roundId)?.name,
+                  sentenceCase(selected.submission.kind),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
               <dl className="grid grid-cols-2 gap-4 border-y border-zinc-950/5 py-5 mt-5">
                 <div>
@@ -271,7 +344,11 @@ function ReviewerWorkspace({
                   <dd className="text-base text-zinc-500 sm:text-sm">
                     {sentenceCase(
                       answerText(
-                        submissionAnswerByPurpose(state, selected.submission, 'session_format'),
+                        submissionAnswerDisplayByPurpose(
+                          state,
+                          selected.submission,
+                          'session_format',
+                        ),
                       ),
                     )}
                   </dd>
@@ -287,7 +364,16 @@ function ReviewerWorkspace({
                   </dd>
                 </div>
               </dl>
-              {!plan.blindReview ? (
+              {selected.assignment.status !== 'completed' &&
+              selected.assignment.status !== 'recused' ? (
+                <div className="pt-4">
+                  <Button size="compact" onClick={() => setRecusalOpen(true)}>
+                    <ShieldExclamationIcon className="size-4 h-lh shrink-0 fill-current" />
+                    Declare a conflict
+                  </Button>
+                </div>
+              ) : null}
+              {!blindReview ? (
                 <section aria-labelledby="submitter-heading" className="pt-6">
                   <h3 id="submitter-heading" className="text-lg font-semibold text-zinc-950">
                     Submitter
@@ -312,114 +398,179 @@ function ReviewerWorkspace({
                   {answerText(submissionAnswerByPurpose(state, selected.submission, 'abstract'))}
                 </p>
               </section>
-              {plan.blindReview ? (
+              {blindReview ? (
                 <p className="mt-8 rounded-lg bg-zinc-50 p-3 text-pretty text-base text-zinc-500 ring-1 ring-zinc-950/5 sm:text-sm">
                   Submitter identity is hidden for this review round.
                 </p>
               ) : null}
             </article>
 
-            <form
-              className="min-w-0 border-t border-zinc-950/5 pt-6 lg:col-start-2 xl:col-start-auto xl:border-t-0 xl:pt-0"
-              onSubmit={(event) => void submit(event)}
-            >
-              <div className="xl:sticky xl:top-6">
-                <h2 className="text-lg font-semibold text-zinc-950">Scorecard</h2>
-                <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-                  {selectedRoundName} · score each criterion from 1 to 5.
-                </p>
-                <div className="flex flex-col gap-4 pt-5">
-                  {plan.criteria.map((criterion) => (
-                    <label
-                      key={criterion.id}
-                      className="grid grid-cols-[minmax(0,1fr)_5rem] items-end gap-4"
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-base font-medium text-zinc-950 sm:text-sm">
-                          {criterion.label}
-                        </span>
-                        <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
-                          {criterion.description}
-                        </span>
-                      </span>
-                      <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
-                        <select
-                          name={`score-${criterion.id}`}
-                          aria-label={`${criterion.label} score`}
-                          value={scores[criterion.id] ?? criterion.maximum}
-                          onChange={(event) =>
-                            setScores((current) => ({
-                              ...current,
-                              [criterion.id]: Number(event.target.value),
-                            }))
-                          }
-                          className="focus-ring col-span-full row-start-1 min-h-11 appearance-none rounded-xl bg-white py-2 pr-8 pl-3 text-base tabular-nums text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
-                        >
-                          {Array.from(
-                            { length: criterion.maximum - criterion.minimum + 1 },
-                            (_, index) => criterion.minimum + index,
-                          ).map((score) => (
-                            <option key={score} value={score}>
-                              {score}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
-                      </span>
-                    </label>
-                  ))}
-                  <label className="flex flex-col gap-1.5 border-t border-zinc-950/5 pt-4">
-                    <span className="text-base font-medium text-zinc-950 sm:text-sm">
-                      Recommendation
-                    </span>
-                    <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
-                      <select
-                        name="recommendation"
-                        value={recommendation}
-                        onChange={(event) =>
-                          setRecommendation(event.target.value as ReviewRecommendation)
-                        }
-                        className={selectControl}
-                      >
-                        {(
-                          [
-                            'strong_accept',
-                            'accept',
-                            'borderline',
-                            'reject',
-                            'strong_reject',
-                          ] as const
-                        ).map((value) => (
-                          <option key={value} value={value}>
-                            {sentenceCase(value)}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
-                    </span>
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-base font-medium text-zinc-950 sm:text-sm">
-                      Review notes
-                    </span>
-                    <textarea
-                      name="comments"
-                      rows={5}
-                      value={comments}
-                      onChange={(event) => setComments(event.target.value)}
-                      className={textAreaControl}
-                    />
-                  </label>
-                  <Button type="submit" variant="primary" disabled={mutating}>
-                    {selected.assignment.status === 'completed' ? 'Update review' : 'Submit review'}
-                  </Button>
-                  <p className="text-pretty text-sm text-zinc-500">
-                    This records your scorecard for {selectedRoundName} and opens your next
-                    incomplete assignment. You can reopen this one later to update it.
+            {selected.assignment.status === 'recused' ? (
+              <aside className="min-w-0 border-t border-zinc-950/5 pt-6 lg:col-start-2 xl:col-start-auto xl:border-t-0 xl:pt-0">
+                <div className="rounded-2xl bg-rose-50 p-5 ring-1 ring-rose-700/10">
+                  <ShieldExclamationIcon className="size-5 fill-rose-600" />
+                  <h2 className="pt-3 text-lg font-semibold text-zinc-950">Conflict declared</h2>
+                  <p className="pt-1 text-pretty text-base text-zinc-600 sm:text-sm">
+                    This proposal is no longer awaiting your review. The program chair can reassign
+                    it to another reviewer.
                   </p>
+                  {selected.assignment.conflictReason ? (
+                    <p className="pt-3 text-pretty text-base text-zinc-500 sm:text-sm">
+                      {selected.assignment.conflictReason}
+                    </p>
+                  ) : null}
+                  <div className="pt-4">
+                    <Button disabled={mutating} onClick={() => void restoreRecusal()}>
+                      <ArrowUturnLeftIcon className="size-4 h-lh shrink-0 fill-current" />
+                      Undo recusal
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </form>
+              </aside>
+            ) : (
+              <form
+                className="min-w-0 border-t border-zinc-950/5 pt-6 lg:col-start-2 xl:col-start-auto xl:border-t-0 xl:pt-0"
+                onSubmit={(event) => void submit(event)}
+              >
+                <div className="xl:sticky xl:top-6">
+                  <h2 className="text-lg font-semibold text-zinc-950">Scorecard</h2>
+                  <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                    Complete every required field for this round.
+                  </p>
+                  <div className="flex flex-col gap-4 pt-5">
+                    {criteria.map((criterion) => {
+                      const kind = evaluationCriterionKind(criterion)
+                      return (
+                        <label
+                          key={criterion.id}
+                          className={cx(
+                            'gap-4',
+                            kind === 'numeric'
+                              ? 'grid grid-cols-[minmax(0,1fr)_5rem] items-end'
+                              : 'flex flex-col gap-1.5',
+                          )}
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-base font-medium text-zinc-950 sm:text-sm">
+                              {criterion.label}
+                            </span>
+                            {criterion.description ? (
+                              <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
+                                {criterion.description}
+                              </span>
+                            ) : null}
+                          </span>
+                          {kind === 'long_text' ? (
+                            <textarea
+                              name={`answer-${criterion.id}`}
+                              rows={5}
+                              required={criterion.required ?? true}
+                              value={String(answers[criterion.id] ?? '')}
+                              onChange={(event) =>
+                                setAnswers((current) => ({
+                                  ...current,
+                                  [criterion.id]: event.target.value,
+                                }))
+                              }
+                              className={textAreaControl}
+                            />
+                          ) : (
+                            <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
+                              <select
+                                name={`answer-${criterion.id}`}
+                                required={criterion.required ?? true}
+                                aria-label={criterion.label}
+                                value={answers[criterion.id] ?? ''}
+                                onChange={(event) =>
+                                  setAnswers((current) => ({
+                                    ...current,
+                                    [criterion.id]:
+                                      kind === 'numeric'
+                                        ? Number(event.target.value)
+                                        : event.target.value,
+                                  }))
+                                }
+                                className={selectControl}
+                              >
+                                {kind === 'numeric'
+                                  ? Array.from(
+                                      {
+                                        length:
+                                          (criterion.maximum ?? 5) - (criterion.minimum ?? 1) + 1,
+                                      },
+                                      (_, index) => (criterion.minimum ?? 1) + index,
+                                    ).map((score) => (
+                                      <option key={score} value={score}>
+                                        {score}
+                                      </option>
+                                    ))
+                                  : (criterion.options ?? []).map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                              </select>
+                              <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
+                            </span>
+                          )}
+                        </label>
+                      )
+                    })}
+                    {!hasRecommendationCriterion ? (
+                      <label className="flex flex-col gap-1.5 border-t border-zinc-950/5 pt-4">
+                        <span className="text-base font-medium text-zinc-950 sm:text-sm">
+                          Recommendation
+                        </span>
+                        <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
+                          <select
+                            name="recommendation"
+                            value={recommendation}
+                            onChange={(event) =>
+                              setRecommendation(event.target.value as ReviewRecommendation)
+                            }
+                            className={selectControl}
+                          >
+                            {(
+                              [
+                                'strong_accept',
+                                'accept',
+                                'borderline',
+                                'reject',
+                                'strong_reject',
+                              ] as const
+                            ).map((value) => (
+                              <option key={value} value={value}>
+                                {sentenceCase(value)}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
+                        </span>
+                      </label>
+                    ) : null}
+                    {!hasCommentsCriterion ? (
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-base font-medium text-zinc-950 sm:text-sm">
+                          Committee notes
+                        </span>
+                        <textarea
+                          name="comments"
+                          rows={5}
+                          value={comments}
+                          onChange={(event) => setComments(event.target.value)}
+                          className={textAreaControl}
+                        />
+                      </label>
+                    ) : null}
+                    <Button type="submit" variant="primary" disabled={mutating}>
+                      {selected.assignment.status === 'completed'
+                        ? 'Update review'
+                        : 'Submit review'}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            )}
           </div>
         ) : (
           <div className="py-20 text-center">
@@ -432,6 +583,35 @@ function ReviewerWorkspace({
           </div>
         )}
       </main>
+      <Dialog
+        open={recusalOpen}
+        onClose={() => setRecusalOpen(false)}
+        title="Declare a conflict?"
+        description="This removes only this proposal from your actionable queue. You can undo it afterward."
+        footer={
+          <div className="flex w-full flex-col gap-2 sm:flex-row">
+            <Button onClick={() => setRecusalOpen(false)} disabled={mutating}>
+              Keep assignment
+            </Button>
+            <Button variant="danger" onClick={() => void recuse()} disabled={mutating}>
+              Recuse from proposal
+            </Button>
+          </div>
+        }
+      >
+        <label className="flex flex-col gap-1.5">
+          <span className="text-base font-medium text-zinc-950 sm:text-sm">
+            Note for the program chair <span className="font-normal text-zinc-500">(optional)</span>
+          </span>
+          <textarea
+            rows={3}
+            value={conflictReason}
+            onChange={(event) => setConflictReason(event.target.value)}
+            placeholder="For example, I work closely with the submitter."
+            className={textAreaControl}
+          />
+        </label>
+      </Dialog>
     </div>
   )
 }

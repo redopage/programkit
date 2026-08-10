@@ -11,10 +11,15 @@ import {
 import { useState, type FormEvent } from 'react'
 
 import {
+  calendarAttachmentForParticipation,
+  campaignPreview,
+  participationPerson,
+  readinessRows,
   renderCampaignMessage,
   type Campaign,
   type CampaignDelivery,
   type CampaignStatus,
+  type OutboundMessage,
 } from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -31,17 +36,13 @@ import {
   Toolbar,
   cx,
   selectControl,
+  sentenceCase,
   textAreaControl,
   textControl,
 } from '../components/ui.tsx'
 
 type CampaignFilter = 'all' | Campaign['status']
 
-/**
- * Audience names the organizer chose, not the stored key. `sentenceCase` turns
- * `missing_requirements` into "Missing requirements", which reads like a system
- * value rather than a group of people.
- */
 const audienceLabels: Record<Campaign['audience'], string> = {
   all_active: 'All active participants',
   confirmed: 'Confirmed speakers',
@@ -57,10 +58,6 @@ const audienceHints: Record<string, string> = {
   missing_requirements: 'Anyone with an outstanding task on their readiness list.',
 }
 
-/**
- * The single next move for a campaign. The table shows the short form so a
- * column of them can be scanned; the drawer shows the sentence.
- */
 const nextStepLabels: Record<CampaignStatus, string> = {
   draft: 'Submit for approval',
   awaiting_approval: 'Waiting for an approver',
@@ -85,15 +82,6 @@ const deliveryLabels: Record<CampaignDelivery['status'], string> = {
   suppressed: 'Skipped',
 }
 
-const messageTokens = [
-  '{{first_name}}',
-  '{{last_name}}',
-  '{{event_name}}',
-  '{{event_date}}',
-  '{{event_venue}}',
-  '{{portal_url}}',
-]
-
 const dayFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
 
 function campaignTimestamp(campaign: Campaign) {
@@ -103,17 +91,78 @@ function campaignTimestamp(campaign: Campaign) {
   return { label: 'Created', value: campaign.createdAt }
 }
 
-export function CommunicationsView() {
+type CampaignTemplate = {
+  id: string
+  label: string
+  name: string
+  subject: string
+  body: string
+  audience: Campaign['audience']
+  includeCalendarInvite: boolean
+}
+
+const campaignTemplates: CampaignTemplate[] = [
+  {
+    id: 'welcome',
+    label: 'Welcome speakers',
+    name: 'Speaker welcome',
+    subject: 'Welcome to {{event_name}}, {{first_name}}',
+    body: 'Hi {{first_name}},\n\nWe are glad you are joining us for {{event_name}}. Your session is {{session}}.\n\nOpen your private speaker portal to review the details:\n{{portal_link}}',
+    audience: 'all_active',
+    includeCalendarInvite: false,
+  },
+  {
+    id: 'portal',
+    label: 'Portal invitation',
+    name: 'Speaker portal invitation',
+    subject: 'Your {{event_name}} speaker portal',
+    body: 'Hi {{first_name}},\n\nYour speaker portal is ready. Use it to update your profile and complete your assigned work:\n{{portal_link}}',
+    audience: 'all_active',
+    includeCalendarInvite: false,
+  },
+  {
+    id: 'requirements',
+    label: 'Outstanding tasks',
+    name: 'Outstanding speaker tasks',
+    subject: 'Tasks to finish for {{event_name}}',
+    body: 'Hi {{first_name}},\n\nHere is what still needs your attention:\n\n{{outstanding_tasks}}\n\nOpen your speaker portal to finish these items:\n{{portal_link}}',
+    audience: 'missing_requirements',
+    includeCalendarInvite: false,
+  },
+  {
+    id: 'calendar',
+    label: 'Session calendar invite',
+    name: 'Speaker calendar invite',
+    subject: 'Add your {{event_name}} sessions to your calendar',
+    body: 'Hi {{first_name}},\n\nYour session schedule for {{event_name}} is attached. Open the calendar file to add the confirmed time and room to Google Calendar, Outlook, or Apple Calendar.\n\nYou can also review your speaker workspace here:\n{{portal_link}}',
+    audience: 'all_active',
+    includeCalendarInvite: true,
+  },
+]
+
+export function CommunicationsView({
+  initialCompose = null,
+}: {
+  initialCompose?: 'reminder' | null
+}) {
   const { payload } = useWorkspace()
   const [filter, setFilter] = useState<CampaignFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [composing, setComposing] = useState(false)
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
+  const [composeTemplateId, setComposeTemplateId] = useState(
+    initialCompose === 'reminder' ? 'requirements' : 'welcome',
+  )
+  const [composing, setComposing] = useState(Boolean(initialCompose))
   if (!payload) return null
   const { state } = payload
   const campaigns = state.campaigns.filter(
     (campaign) => filter === 'all' || campaign.status === filter,
   )
   const selected = state.campaigns.find((campaign) => campaign.id === selectedId) ?? null
+  const messages = (state.outboundMessages ?? []).filter(
+    (message) => message.eventId === state.activeEventId,
+  )
+  const selectedMessage = messages.find((message) => message.id === selectedMessageId) ?? null
 
   return (
     <div className="flex flex-col gap-6">
@@ -121,7 +170,13 @@ export function CommunicationsView() {
         title="Communications"
         description="Draft a message, have someone approve it, then stage it for delivery."
         actions={
-          <Button variant="primary" onClick={() => setComposing(true)}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              setComposeTemplateId('welcome')
+              setComposing(true)
+            }}
+          >
             <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
             New campaign
           </Button>
@@ -203,7 +258,7 @@ export function CommunicationsView() {
                               {campaign.name}
                             </span>
                             <span className="flex min-w-0 items-center gap-1.5 text-sm text-zinc-500">
-                              {campaign.includeEventInvite ? (
+                              {campaign.includeCalendarInvite ? (
                                 <>
                                   <PaperClipIcon
                                     aria-hidden="true"
@@ -253,7 +308,7 @@ export function CommunicationsView() {
                         {campaign.name}
                       </span>
                       <span className="flex min-w-0 items-center gap-1.5 text-base text-zinc-500">
-                        {campaign.includeEventInvite ? (
+                        {campaign.includeCalendarInvite ? (
                           <>
                             <PaperClipIcon
                               aria-hidden="true"
@@ -280,13 +335,208 @@ export function CommunicationsView() {
         </>
       )}
 
+      <section aria-labelledby="delivery-log-heading" className="pt-2">
+        <div className="flex items-center justify-between gap-4 border-b border-zinc-950/10 pb-3">
+          <h2 id="delivery-log-heading" className="text-lg font-semibold text-zinc-950">
+            Delivery log
+          </h2>
+          <span className="text-sm tabular-nums text-zinc-500">
+            {messages.length} message{messages.length === 1 ? '' : 's'}
+          </span>
+        </div>
+        {messages.length > 0 ? (
+          <>
+            <div className="hidden sm:block">
+              <div className="-mx-6 overflow-x-auto whitespace-nowrap px-6">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-zinc-950/10">
+                      {['Recipient', 'Subject', 'Trigger', 'Status', 'Queued'].map((heading) => (
+                        <th
+                          key={heading}
+                          scope="col"
+                          className="whitespace-nowrap py-2.5 pr-4 text-left text-sm font-medium text-zinc-500"
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-950/5">
+                    {messages.map((message) => (
+                      <tr key={message.id} className="hover:bg-zinc-950/2">
+                        <td className="py-3 pr-4">
+                          <button
+                            type="button"
+                            className="focus-ring rounded-lg text-left"
+                            onClick={() => setSelectedMessageId(message.id)}
+                          >
+                            <span className="block text-sm font-medium text-zinc-950">
+                              {message.recipientName}
+                            </span>
+                            <span className="block text-sm text-zinc-500">
+                              {message.recipientEmail}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="max-w-md py-3 pr-4 text-sm text-zinc-700">
+                          <span className="block truncate">{message.subject}</span>
+                        </td>
+                        <td className="py-3 pr-4 text-sm text-zinc-500">
+                          {sentenceCase(message.kind)}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <StatusBadge status={message.status} />
+                        </td>
+                        <td className="py-3 text-sm text-zinc-500">
+                          {new Intl.DateTimeFormat('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          }).format(new Date(message.queuedAt))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <ul role="list" className="divide-y divide-zinc-950/5 sm:hidden">
+              {messages.map((message) => (
+                <li key={message.id}>
+                  <button
+                    type="button"
+                    className="focus-ring flex w-full items-start justify-between gap-3 rounded-lg py-4 text-left"
+                    onClick={() => setSelectedMessageId(message.id)}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-base font-medium text-zinc-950">
+                        {message.subject}
+                      </span>
+                      <span className="block truncate text-base text-zinc-500">
+                        {message.recipientName} · {message.recipientEmail}
+                      </span>
+                    </span>
+                    <StatusBadge status={message.status} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="py-6 text-sm text-zinc-500">
+            Submitted proposals, decisions, reminders, and campaigns will appear here.
+          </p>
+        )}
+      </section>
+
       <CampaignDrawer
         campaign={selected}
         open={Boolean(selected)}
         onClose={() => setSelectedId(null)}
       />
-      <ComposeDrawer open={composing} onClose={() => setComposing(false)} />
+      <MessageDrawer
+        message={selectedMessage}
+        open={Boolean(selectedMessage)}
+        onClose={() => setSelectedMessageId(null)}
+      />
+      <ComposeDrawer
+        key={composeTemplateId}
+        open={composing}
+        initialTemplateId={composeTemplateId}
+        onClose={() => setComposing(false)}
+      />
     </div>
+  )
+}
+
+function MessageDrawer({
+  message,
+  open,
+  onClose,
+}: {
+  message: OutboundMessage | null
+  open: boolean
+  onClose: () => void
+}) {
+  if (!message) return null
+  return (
+    <Drawer open={open} onClose={onClose} title={message.subject}>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between gap-3">
+          <StatusBadge status={message.status} />
+          <span className="text-sm text-zinc-500">{sentenceCase(message.kind)}</span>
+        </div>
+        <dl className="grid gap-4">
+          <div>
+            <dt className="text-sm font-medium text-zinc-950">Recipient</dt>
+            <dd className="text-sm text-zinc-500">
+              {message.recipientName} · {message.recipientEmail}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm font-medium text-zinc-950">
+              {message.status === 'sent' ? 'Sent' : 'Queued'}
+            </dt>
+            <dd className="text-sm text-zinc-500">
+              {new Intl.DateTimeFormat('en-US', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              }).format(new Date(message.sentAt ?? message.queuedAt))}
+            </dd>
+          </div>
+          {(message.attempts ?? 0) > 0 ? (
+            <div>
+              <dt className="text-sm font-medium text-zinc-950">Delivery attempts</dt>
+              <dd className="text-sm text-zinc-500">{message.attempts}</dd>
+            </div>
+          ) : null}
+          {message.providerMessageId ? (
+            <div>
+              <dt className="text-sm font-medium text-zinc-950">Provider message</dt>
+              <dd className="break-all text-sm text-zinc-500">{message.providerMessageId}</dd>
+            </div>
+          ) : null}
+        </dl>
+        <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
+          <p className="whitespace-pre-wrap text-pretty text-sm text-zinc-700">{message.body}</p>
+        </div>
+        {message.calendarAttachment ? (
+          <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-950 ring-1 ring-blue-600/10">
+            <CalendarDaysIcon className="size-4 shrink-0 fill-blue-600" />
+            <span className="min-w-0 truncate">{message.calendarAttachment.filename}</span>
+            <span className="ml-auto shrink-0 text-blue-700">
+              {message.calendarAttachment.eventCount}{' '}
+              {message.calendarAttachment.eventCount === 1 ? 'session' : 'sessions'}
+            </span>
+          </div>
+        ) : null}
+        {message.status === 'sent' ? (
+          <Callout tone="success" title="Delivered">
+            <p>ProgramKit sent this message and recorded the provider result.</p>
+          </Callout>
+        ) : message.status === 'failed' ? (
+          <Callout tone="warning" title="Delivery needs attention">
+            <p>{message.lastError ?? 'The provider did not accept this message.'}</p>
+            {message.nextAttemptAt ? (
+              <p className="mt-1">
+                ProgramKit will retry at{' '}
+                {new Intl.DateTimeFormat('en-US', {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                }).format(new Date(message.nextAttemptAt))}
+                .
+              </p>
+            ) : null}
+          </Callout>
+        ) : (
+          <Callout tone="info" title="Queued safely">
+            <p>ProgramKit recorded the resolved recipient and will deliver it asynchronously.</p>
+          </Callout>
+        )}
+      </div>
+    </Drawer>
   )
 }
 
@@ -307,7 +557,6 @@ function CampaignDrawer({
   const preview = payload
     ? renderCampaignMessage(payload.state, campaign, campaign.recipientParticipationIds[0] ?? '')
     : null
-  const timestamp = campaignTimestamp(campaign)
   const footer =
     campaign.status === 'draft' ? (
       <Button
@@ -349,7 +598,7 @@ function CampaignDrawer({
             'campaign.send',
             { campaignId: campaign.id },
             { expectedVersions: { [campaign.id]: campaign.version } },
-            'Added to the delivery outbox. The provider consumer will run only when its binding and verified sender are available.',
+            'Campaign queued for delivery.',
           )
         }
       >
@@ -383,26 +632,25 @@ function CampaignDrawer({
             {nextStepDetails[campaign.status]}
           </p>
         </div>
-
-        <dl className="grid grid-cols-2 border-y border-zinc-950/5">
-          {[
-            ['Audience', audienceLabels[campaign.audience]],
-            ['Recipients', String(campaign.recipientParticipationIds.length)],
-            ['Drafted by', campaign.createdBy],
-            [timestamp.label, dayFormat.format(new Date(timestamp.value))],
-          ].map(([label, value], index) => (
-            <div
-              key={label}
-              className={cx(
-                'min-w-0 border-zinc-950/5 py-3',
-                index % 2 === 1 ? 'border-l pl-4' : 'pr-4',
-                index > 1 && 'border-t',
-              )}
-            >
-              <dt className="truncate text-base font-medium text-zinc-500 sm:text-sm">{label}</dt>
-              <dd className="truncate text-base text-zinc-950 sm:text-sm">{value}</dd>
+        <dl className="grid gap-4">
+          <div>
+            <dt className="text-base font-medium text-zinc-950 sm:text-sm">Audience</dt>
+            <dd className="text-base text-zinc-500 sm:text-sm">
+              {sentenceCase(campaign.audience)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-base font-medium text-zinc-950 sm:text-sm">Subject</dt>
+            <dd className="text-pretty text-base text-zinc-500 sm:text-sm">{campaign.subject}</dd>
+          </div>
+          {campaign.includeCalendarInvite ? (
+            <div>
+              <dt className="text-base font-medium text-zinc-950 sm:text-sm">Calendar invite</dt>
+              <dd className="text-pretty text-base text-zinc-500 sm:text-sm">
+                Each scheduled speaker receives their own published sessions as an .ics file.
+              </dd>
             </div>
-          ))}
+          ) : null}
         </dl>
 
         <section aria-labelledby="campaign-message-heading" className="flex flex-col gap-3">
@@ -442,7 +690,7 @@ function CampaignDrawer({
           </div>
         </section>
 
-        {campaign.includeEventInvite ? (
+        {campaign.includeCalendarInvite ? (
           <section aria-labelledby="campaign-attachment-heading" className="flex flex-col gap-3">
             <h3
               id="campaign-attachment-heading"
@@ -503,43 +751,80 @@ function CampaignDrawer({
   )
 }
 
-const emptyCampaignForm = {
-  name: '',
-  subject: '',
-  body: 'Hi {{first_name}},\n\n',
-  audience: 'missing_requirements',
-  includeEventInvite: false,
-}
+function ComposeDrawer({
+  open,
+  initialTemplateId,
+  onClose,
+}: {
+  open: boolean
+  initialTemplateId: string
+  onClose: () => void
+}) {
+  const { payload, execute, mutating } = useWorkspace()
+  const defaultTemplate =
+    campaignTemplates.find((template) => template.id === initialTemplateId) ?? campaignTemplates[0]
+  const [templateId, setTemplateId] = useState<string>(defaultTemplate.id)
+  const [previewId, setPreviewId] = useState('')
+  const [form, setForm] = useState<{
+    name: string
+    subject: string
+    body: string
+    audience: Campaign['audience']
+    includeCalendarInvite: boolean
+  }>({
+    name: defaultTemplate.name,
+    subject: defaultTemplate.subject,
+    body: defaultTemplate.body,
+    audience: defaultTemplate.audience,
+    includeCalendarInvite: defaultTemplate.includeCalendarInvite,
+  })
+  if (!payload) return null
+  const { state } = payload
+  const missingRequirementIds = new Set(
+    readinessRows(state)
+      .filter((row) => row.blockers > 0 && row.status !== 'prospect')
+      .map((row) => row.participationId),
+  )
+  const previewRecipients = state.participations
+    .filter(
+      (participation) =>
+        participation.eventId === state.activeEventId &&
+        participation.status !== 'declined' &&
+        participation.status !== 'withdrawn' &&
+        participation.status !== 'prospect' &&
+        (form.audience !== 'unconfirmed' || participation.status === 'invited') &&
+        (form.audience !== 'missing_requirements' || missingRequirementIds.has(participation.id)),
+    )
+    .map((participation) => ({
+      participation,
+      person: participationPerson(state, participation),
+    }))
+    .filter((entry) => Boolean(entry.person))
+  const resolvedPreviewId = previewRecipients.some((entry) => entry.participation.id === previewId)
+    ? previewId
+    : (previewRecipients[0]?.participation.id ?? '')
+  const preview = resolvedPreviewId
+    ? campaignPreview(state, { subject: form.subject, body: form.body }, resolvedPreviewId)
+    : null
+  const previewCalendar = resolvedPreviewId
+    ? calendarAttachmentForParticipation(state, resolvedPreviewId)
+    : null
+  const scheduledRecipientCount = previewRecipients.filter(({ participation }) =>
+    calendarAttachmentForParticipation(state, participation.id),
+  ).length
 
-const acceptedSpeakerForm = {
-  name: 'Accepted speaker welcome',
-  subject: 'You’re confirmed for {{event_name}}',
-  body: 'Hi {{first_name}},\n\nWe’re delighted to confirm you as a speaker at {{event_name}}. Your speaker workspace is ready for your bio, headshot, and session materials.\n\nThe event is {{event_date}} at {{event_venue}}. We’ve included a calendar invite.\n\nOpen your workspace: {{portal_url}}\n\nThank you,\nThe program team',
-  audience: 'confirmed',
-  includeEventInvite: true,
-}
-
-const templateOptions = [
-  {
-    value: 'blank',
-    title: 'Blank campaign',
-    detail: 'Write the subject and message yourself.',
-  },
-  {
-    value: 'accepted_speaker',
-    title: 'Accepted speaker welcome',
-    detail: 'Goes to confirmed speakers, points them at their workspace, and carries the invite.',
-  },
-]
-
-function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { execute, mutating } = useWorkspace()
-  const [form, setForm] = useState(emptyCampaignForm)
-  const [template, setTemplate] = useState('blank')
-
-  function chooseTemplate(value: string) {
-    setTemplate(value)
-    setForm(value === 'accepted_speaker' ? acceptedSpeakerForm : emptyCampaignForm)
+  function applyTemplate(nextTemplateId: string) {
+    const template = campaignTemplates.find((entry) => entry.id === nextTemplateId)
+    if (!template) return
+    setTemplateId(template.id)
+    setForm((current) => ({
+      ...current,
+      name: template.name,
+      subject: template.subject,
+      body: template.body,
+      audience: template.audience,
+      includeCalendarInvite: template.includeCalendarInvite,
+    }))
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -551,8 +836,14 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
       'Campaign draft created.',
     )
     if (!response.ok) return
-    setForm(emptyCampaignForm)
-    setTemplate('blank')
+    setForm({
+      name: defaultTemplate.name,
+      subject: defaultTemplate.subject,
+      body: defaultTemplate.body,
+      audience: defaultTemplate.audience,
+      includeCalendarInvite: defaultTemplate.includeCalendarInvite,
+    })
+    setTemplateId(defaultTemplate.id)
     onClose()
   }
 
@@ -582,41 +873,25 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
           A draft sends nothing. Someone has to approve it, and it then waits in the outbox until an
           email provider is connected and the sender domain is verified.
         </p>
-
-        <fieldset className="flex min-w-0 flex-col gap-2">
-          <legend className="pb-2 text-base font-medium text-zinc-950 sm:text-sm">
-            Start from
-          </legend>
-          {templateOptions.map((option) => (
-            <label
-              key={option.value}
-              className="flex cursor-pointer items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-zinc-950/10 has-checked:bg-blue-50 has-checked:ring-blue-600/30 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-blue-600 hover:bg-zinc-50"
+        <label className="flex flex-col gap-1.5">
+          <span className="text-base font-medium text-zinc-950 sm:text-sm">Template</span>
+          <span className="relative">
+            <select
+              value={templateId}
+              onChange={(event) => applyTemplate(event.target.value)}
+              className="focus-ring min-h-11 w-full appearance-none rounded-xl bg-white py-2 pr-9 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
             >
-              <input
-                type="radio"
-                name="campaign-template"
-                value={option.value}
-                checked={template === option.value}
-                onChange={() => chooseTemplate(option.value)}
-                className="mt-0.5 size-4 shrink-0 accent-blue-600 focus-visible:outline-none"
-              />
-              <span className="min-w-0">
-                <span className="block text-base font-medium text-zinc-950 sm:text-sm">
-                  {option.title}
-                </span>
-                <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
-                  {option.detail}
-                </span>
-              </span>
-            </label>
-          ))}
-        </fieldset>
-
-        <Field
-          label="Internal name"
-          htmlFor="campaign-name"
-          hint="Only the program team sees this."
-        >
+              {campaignTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+            <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 fill-zinc-400" />
+          </span>
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-base font-medium text-zinc-950 sm:text-sm">Internal name</span>
           <input
             id="campaign-name"
             type="text"
@@ -626,7 +901,7 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
             onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
             className={textControl}
           />
-        </Field>
+        </label>
 
         <Field label="Audience" htmlFor="campaign-audience" hint={audienceHints[form.audience]}>
           <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
@@ -635,7 +910,10 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
               name="audience"
               value={form.audience}
               onChange={(event) =>
-                setForm((current) => ({ ...current, audience: event.target.value }))
+                setForm((current) => ({
+                  ...current,
+                  audience: event.target.value as Campaign['audience'],
+                }))
               }
               className={selectControl}
             >
@@ -676,31 +954,81 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
             onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))}
             className={textAreaControl}
           />
-          <span className="flex flex-wrap gap-1.5">
-            {messageTokens.map((token) => (
-              <span
-                key={token}
-                className="rounded-full bg-zinc-100 px-2 py-1 font-mono text-sm text-zinc-600 sm:py-0.5"
-              >
-                {token}
-              </span>
-            ))}
-          </span>
         </Field>
-
-        <div className="flex min-w-0 flex-col gap-2">
-          <p className="text-base font-medium text-zinc-950 sm:text-sm">Attachment</p>
+        <div className="flex flex-col gap-1.5 rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
           <Checkbox
-            id="campaign-include-invite"
-            name="includeEventInvite"
-            label="Attach the event invite (.ics)"
-            checked={form.includeEventInvite}
-            onChange={(next) => setForm((current) => ({ ...current, includeEventInvite: next }))}
+            id="campaign-calendar-invite"
+            name="includeCalendarInvite"
+            label="Attach each speaker's published schedule"
+            checked={form.includeCalendarInvite}
+            onChange={(includeCalendarInvite) =>
+              setForm((current) => ({ ...current, includeCalendarInvite }))
+            }
           />
-          <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-            Includes the date, time, and venue as a calendar file that opens in Google Calendar,
-            Outlook, and Apple Calendar.
+          <p className="pl-7 text-sm text-zinc-500 sm:pl-6">
+            {scheduledRecipientCount} of {previewRecipients.length} recipients currently have a
+            published session. Calendar files work with Google Calendar, Outlook, and Apple
+            Calendar.
           </p>
+        </div>
+        <div className="rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-base font-medium text-zinc-950 sm:text-sm">Recipient preview</p>
+            {previewRecipients.length > 0 ? (
+              <label className="relative">
+                <span className="sr-only">Preview recipient</span>
+                <select
+                  value={resolvedPreviewId}
+                  onChange={(event) => setPreviewId(event.target.value)}
+                  className="focus-ring min-h-9 appearance-none rounded-full bg-white py-1.5 pr-8 pl-3 text-sm text-zinc-700 shadow-xs ring-1 ring-zinc-950/10"
+                >
+                  {previewRecipients.map(({ participation, person }) => (
+                    <option key={participation.id} value={participation.id}>
+                      {person!.firstName} {person!.lastName}
+                    </option>
+                  ))}
+                </select>
+                <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 fill-zinc-400" />
+              </label>
+            ) : null}
+          </div>
+          {preview ? (
+            <div className="mt-4 flex flex-col gap-3">
+              <div>
+                <p className="text-sm text-zinc-500">To</p>
+                <p className="text-sm font-medium text-zinc-800">
+                  {preview.recipientName} · {preview.recipientEmail}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-zinc-500">Subject</p>
+                <p className="text-pretty text-sm font-medium text-zinc-800">{preview.subject}</p>
+              </div>
+              <p className="whitespace-pre-wrap text-pretty text-sm text-zinc-700">
+                {preview.body}
+              </p>
+              {form.includeCalendarInvite ? (
+                previewCalendar ? (
+                  <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-zinc-700 ring-1 ring-zinc-950/10">
+                    <CalendarDaysIcon className="size-4 shrink-0 fill-blue-600" />
+                    <span className="min-w-0 truncate">{previewCalendar.filename}</span>
+                    <span className="ml-auto shrink-0 text-zinc-500">
+                      {previewCalendar.eventCount}{' '}
+                      {previewCalendar.eventCount === 1 ? 'session' : 'sessions'}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-amber-700">
+                    This speaker has no session in the published schedule yet.
+                  </p>
+                )
+              ) : null}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-zinc-500">
+              Add a speaker to preview merge fields with real data.
+            </p>
+          )}
         </div>
       </form>
     </Drawer>

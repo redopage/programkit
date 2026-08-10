@@ -1,7 +1,67 @@
 export { executeOperation } from './engine.ts'
-export { eventCalendar, eventCalendarFilename, eventCalendarInvitation } from './calendar.ts'
+export {
+  acceleventsExportPreflight,
+  buildAcceleventsExportItems,
+  createAcceleventsExport,
+} from './accelevents.ts'
+export type { AcceleventsExport } from './accelevents.ts'
+export {
+  calendarAttachmentForParticipation,
+  calendarDate,
+  calendarEscape,
+  eventCalendar,
+  eventCalendarFilename,
+  eventCalendarInvitation,
+} from './calendar.ts'
+export type { CalendarAttachment } from './calendar.ts'
+export {
+  contactConnections,
+  crmDashboard,
+  crmSegmentMembers,
+  duplicateContactGroups,
+} from './crm.ts'
+export {
+  createStoredAssetExportPlan,
+  createStoredZip,
+  createReviewResultsCsv,
+  createWorkspaceExportArchive,
+  recordsToCsv,
+  workspaceExportFilename,
+} from './export.ts'
+export type { StoredAssetExportEntry, WorkspaceExportFile, ZipFile } from './export.ts'
 export { reconcileAirtableRecord } from './airtable.ts'
-export { acceleventsExportPreflight, buildAcceleventsExportItems } from './accelevents.ts'
+export {
+  AIRTABLE_SCHEMA_VERSION,
+  airtableTableDefinitions,
+  createAirtableWorkspaceBundle,
+  rebuildWorkspaceFromAirtable,
+} from './airtable-schema.ts'
+export type {
+  AirtableCellValue,
+  AirtableFieldDefinition,
+  AirtableRecord,
+  AirtableRecordFields,
+  AirtableRecordInput,
+  AirtableTableDefinition,
+  AirtableWorkspaceBundle,
+} from './airtable-schema.ts'
+export { AirtableApiError, AirtableWorkspaceStore } from './airtable-store.ts'
+export type {
+  AirtableDeltaResult,
+  AirtableExportResult,
+  AirtableSchemaIssue,
+  AirtableWebhookRegistration,
+} from './airtable-store.ts'
+export { AirtableCachedWorkspaceRepository } from './airtable-repository.ts'
+export {
+  airtableOAuthScopes,
+  createAirtableOAuthAuthorization,
+  exchangeAirtableAuthorizationCode,
+  listAirtableBases,
+  refreshAirtableOAuthToken,
+} from './airtable-oauth.ts'
+export type { AirtableBaseSummary, AirtableOAuthTokenSet } from './airtable-oauth.ts'
+export { verifyAirtableWebhookMac } from './airtable-webhook.ts'
 export type {
   AirtableFieldChange,
   AirtableFieldConflict,
@@ -11,11 +71,25 @@ export type {
 } from './airtable.ts'
 export { handleCoreRequest } from './http.ts'
 export { operationDefinition, operationManifest } from './manifest.ts'
-export { normalizeWorkspaceState } from './migrations.ts'
+export {
+  dueRequirementReminders,
+  nextRequirementReminderAt,
+  requirementReminderSummary,
+  requirementReminderTrigger,
+  requirementReminderWindows,
+} from './reminders.ts'
+export {
+  evaluationCriterionKind,
+  evaluationRound,
+  evaluationRoundCriteria,
+  evaluationRoundIsBlind,
+  evaluationRoundReviewerTeamId,
+} from './reviews.ts'
 export { MemoryWorkspaceRepository } from './repository.ts'
 export {
   activeEvent,
   audienceForCampaign,
+  campaignPreview,
   isSubmissionFieldVisible,
   participationPerson,
   personName,
@@ -28,15 +102,22 @@ export {
   scheduleConflicts,
   schedulePublishPreflight,
   submissionAnswerByPurpose,
+  submissionAnswerDisplayByPurpose,
+  submissionDecisionReadiness,
   submissionPipelineSummary,
+  submissionParticipants,
   submissionReviewSummary,
   visibleSubmissionFormFields,
 } from './selectors.ts'
-export { createSeedState } from './seed.ts'
+export { createEmptyWorkspaceState, createSeedState } from './seed.ts'
 export {
   requiredSubmissionFieldPurposes,
+  submissionFormAvailability,
   submissionFieldPurposeSupportsKind,
   submissionFormPublishReadiness,
 } from './submission-forms.ts'
-export type { SubmissionFormPublishReadiness } from './submission-forms.ts'
+export type {
+  SubmissionFormAvailability,
+  SubmissionFormPublishReadiness,
+} from './submission-forms.ts'
 export type * from './types.ts'

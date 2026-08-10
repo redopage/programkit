@@ -9,9 +9,14 @@ import type {
 
 const surfaceOperationAllowlist: Record<ProgramKitSurface['kind'], ReadonlySet<string> | null> = {
   operator: null,
-  submission: new Set(['submission.create', 'submission.submit']),
-  reviewer: new Set(['review.submit-scorecard']),
-  speaker: new Set(['participation.set-status', 'requirement.set-status', 'portal.update-profile']),
+  submission: new Set(['submission.create', 'submission.submit', 'submission.update']),
+  reviewer: new Set(['review.submit-scorecard', 'review.recuse', 'review.restore-recusal']),
+  speaker: new Set([
+    'participation.set-status',
+    'requirement.set-status',
+    'portal.update-profile',
+    'asset.comment',
+  ]),
   'public-program': new Set(),
 }
 
@@ -27,14 +32,35 @@ async function parseJson<T>(response: Response) {
   return body
 }
 
+async function parseOperationResponse(response: Response) {
+  const body = (await response.json()) as
+    OperationResponse | { error?: string | { message?: string } }
+  if (typeof (body as OperationResponse).ok === 'boolean') {
+    return body as OperationResponse
+  }
+  if (!response.ok) {
+    const error = body.error
+    const message =
+      typeof error === 'string'
+        ? error
+        : (error?.message ?? `Request failed with ${response.status}.`)
+    throw new Error(message)
+  }
+  throw new Error('The operation returned an invalid response.')
+}
+
 function stateEndpoint(surface: ProgramKitSurface) {
   switch (surface.kind) {
     case 'submission':
-      return `/public/v1/submission-forms/${encodeURIComponent(surface.formSlug)}/state`
+      return `/public/v1/submission-forms/${encodeURIComponent(surface.formSlug)}/state${
+        surface.speakerAccessKey
+          ? `?speakerAccessKey=${encodeURIComponent(surface.speakerAccessKey)}`
+          : ''
+      }`
     case 'reviewer':
-      return `/api/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/state`
+      return `/public/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/state`
     case 'speaker':
-      return `/api/v1/portal/${encodeURIComponent(surface.participationId)}/state`
+      return `/public/v1/portal/${encodeURIComponent(surface.participationId)}/state`
     case 'public-program':
       return '/public/v1/program/state'
     case 'operator':
@@ -48,9 +74,9 @@ function operationEndpoint(surface: ProgramKitSurface, operation: string) {
     case 'submission':
       return `/public/v1/submission-forms/${encodeURIComponent(surface.formSlug)}/operations/${encodedOperation}`
     case 'reviewer':
-      return `/api/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/operations/${encodedOperation}`
+      return `/public/v1/reviewers/${encodeURIComponent(surface.reviewerId)}/operations/${encodedOperation}`
     case 'speaker':
-      return `/api/v1/portal/${encodeURIComponent(surface.participationId)}/operations/${encodedOperation}`
+      return `/public/v1/portal/${encodeURIComponent(surface.participationId)}/operations/${encodedOperation}`
     case 'operator':
       return `/api/v1/operations/${encodedOperation}`
     case 'public-program':
@@ -58,18 +84,36 @@ function operationEndpoint(surface: ProgramKitSurface, operation: string) {
   }
 }
 
-function requirementUploadEndpoint(surface: ProgramKitSurface) {
+function requirementUploadEndpoint(surface: ProgramKitSurface, requirementInstanceId: string) {
   if (surface.kind !== 'speaker') {
     throw new Error('Requirement uploads are only available in a speaker portal.')
   }
-  return `/api/v1/portal/${encodeURIComponent(surface.participationId)}/assets`
+  return `/public/v1/portal/${encodeURIComponent(surface.participationId)}/requirements/${encodeURIComponent(requirementInstanceId)}/assets`
 }
 
 function assetEndpoint(surface: ProgramKitSurface, assetId: string) {
   if (surface.kind !== 'speaker') {
     throw new Error('Private assets are only available in a speaker portal.')
   }
-  return `/api/v1/portal/${encodeURIComponent(surface.participationId)}/assets/${encodeURIComponent(assetId)}/content`
+  return `/public/v1/portal/${encodeURIComponent(surface.participationId)}/assets/${encodeURIComponent(assetId)}`
+}
+
+export function withPublicEventScope(endpoint: string, eventId: string | null) {
+  if (!eventId) return endpoint
+  const url = new URL(endpoint, 'https://programkit.local')
+  url.searchParams.set('event', eventId)
+  return `${url.pathname}${url.search}`
+}
+
+function currentPublicEventId() {
+  if (typeof window === 'undefined') return null
+  return new URLSearchParams(window.location.search).get('event')
+}
+
+function scopedEndpoint(surface: ProgramKitSurface, endpoint: string) {
+  return surface.kind === 'operator'
+    ? endpoint
+    : withPublicEventScope(endpoint, currentPublicEventId())
 }
 
 export function createProgramKitHttpClient(
@@ -83,12 +127,22 @@ export function createProgramKitHttpClient(
     new Headers(headers).forEach((value, key) => result.set(key, value))
     return result
   }
+  const surfaceHeaders = (surface: ProgramKitSurface, headers?: HeadersInit) => {
+    const result = requestHeaders(headers)
+    if (surface.kind === 'reviewer' && surface.reviewerAccessKey) {
+      result.set('x-programkit-reviewer-key', surface.reviewerAccessKey)
+    }
+    if (surface.kind === 'speaker' && surface.portalAccessKey) {
+      result.set('x-programkit-portal-key', surface.portalAccessKey)
+    }
+    return result
+  }
 
   return {
     async readSurface(surface, signal) {
       return parseJson<WorkspacePayload>(
-        await fetcher(resolveUrl(stateEndpoint(surface)), {
-          headers: requestHeaders({ accept: 'application/json' }),
+        await fetcher(resolveUrl(scopedEndpoint(surface, stateEndpoint(surface))), {
+          headers: surfaceHeaders(surface, { accept: 'application/json' }),
           signal,
         }),
       )
@@ -100,10 +154,10 @@ export function createProgramKitHttpClient(
         throw new Error(`${operation} is not available on the ${surface.kind} surface.`)
       }
       const { actor: _untrustedActor, ...publicOptions } = operationOptions ?? {}
-      return parseJson<OperationResponse>(
-        await fetcher(resolveUrl(operationEndpoint(surface, operation)), {
+      return parseOperationResponse(
+        await fetcher(resolveUrl(scopedEndpoint(surface, operationEndpoint(surface, operation))), {
           method: 'POST',
-          headers: requestHeaders({ 'content-type': 'application/json' }),
+          headers: surfaceHeaders(surface, { 'content-type': 'application/json' }),
           body: JSON.stringify({
             input,
             idempotencyKey: crypto.randomUUID(),
@@ -118,9 +172,9 @@ export function createProgramKitHttpClient(
       body.set('requirementInstanceId', requirementInstanceId)
       body.set('file', file)
       return parseJson<OperationResponse>(
-        await fetcher(resolveUrl(requirementUploadEndpoint(surface)), {
+        await fetcher(resolveUrl(requirementUploadEndpoint(surface, requirementInstanceId)), {
           method: 'POST',
-          headers: requestHeaders(),
+          headers: surfaceHeaders(surface),
           body,
         }),
       )

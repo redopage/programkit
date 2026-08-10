@@ -1,4 +1,4 @@
-import { createRootRoute, Outlet } from '@tanstack/react-router'
+import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
 
 import { WorkspaceBoundary } from '../components/WorkspaceBoundary.tsx'
 import { Button, ToastViewport } from '../components/ui.tsx'
@@ -11,6 +11,8 @@ export const Route = createRootRoute({
 })
 
 function RootRoute() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  if (pathname === '/privacy' || pathname === '/terms' || pathname === '/demo') return <Outlet />
   return (
     <WorkspaceProvider>
       <WorkspaceBoundary>

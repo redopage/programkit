@@ -59,10 +59,59 @@ export interface Person {
   version: number
 }
 
+export interface ContactNote {
+  id: Id
+  personId: Id
+  body: string
+  createdBy: string
+  createdAt: ISODateTime
+}
+
+export interface CrmSegmentFilter {
+  company?: string
+  title?: string
+  tag?: string
+}
+
+export interface CrmSegment {
+  id: Id
+  name: string
+  mode: 'dynamic' | 'static'
+  filters: CrmSegmentFilter
+  personIds: Id[]
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
+}
+
+export type SpeakerPipelineStage =
+  'researching' | 'identified' | 'contacted' | 'interested' | 'confirmed' | 'declined'
+
+export interface SpeakerPipelineTransition {
+  from: SpeakerPipelineStage | null
+  to: SpeakerPipelineStage
+  changedAt: ISODateTime
+  changedBy: string
+}
+
+export interface SpeakerPipelineEntry {
+  id: Id
+  personId: Id
+  stage: SpeakerPipelineStage
+  score: number | null
+  rationale: string
+  notes: ContactNote[]
+  history: SpeakerPipelineTransition[]
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
+}
+
 export interface Participation {
   id: Id
   eventId: Id
   personId: Id
+  portalAccessKey: string
   roles: Array<'speaker' | 'moderator' | 'panelist' | 'chair' | 'workshop_lead'>
   status: ParticipationStatus
   sessionIds: Id[]
@@ -80,8 +129,15 @@ export interface RequirementDefinition {
   label: string
   description: string
   kind: 'confirmation' | 'text' | 'file' | 'form' | 'approval'
+  systemKey:
+    'participation_confirmation' | 'profile_bio' | 'profile_headshot' | 'final_slides' | null
+  selfCompletable: boolean
+  sessionId?: Id | null
+  acceptedContentTypes?: string[]
+  maxSizeBytes?: number | null
   dueAt: ISODateTime
   required: boolean
+  automaticReminders: boolean
 }
 
 export interface RequirementInstance {
@@ -149,6 +205,19 @@ export interface SubmissionFormField {
   visibleWhen: SubmissionFieldCondition | null
 }
 
+export type SubmissionContributorRole = 'co_speaker' | 'co_author' | 'co_presenter'
+
+export interface SubmissionContributor {
+  id: Id
+  firstName: string
+  lastName: string
+  email: string
+  company: string
+  title: string
+  biography: string
+  role: SubmissionContributorRole
+}
+
 export interface Submission {
   id: Id
   eventId: Id
@@ -156,6 +225,8 @@ export interface Submission {
   kind: SubmissionKind
   status: SubmissionStatus
   answers: SubmissionAnswers
+  contributors: SubmissionContributor[]
+  speakerAccessKey: string
   assetIds: Id[]
   submittedAt: ISODateTime | null
   decidedAt: ISODateTime | null
@@ -188,12 +259,25 @@ export interface SubmissionReceiptDelivery {
 export interface Asset {
   id: Id
   eventId: Id
-  owner: { type: 'submission' | 'participation' | 'person'; id: Id }
+  owner: { type: 'submission' | 'participation' | 'person' | 'requirement'; id: Id }
   kind: 'headshot' | 'slides' | 'video' | 'supporting_document' | 'other'
   filename: string
   contentType: string
   sizeBytes: number
   storageKey: string
+  version?: number
+  isLatest?: boolean
+  sessionId?: Id | null
+  uploadedBy?: { type: 'participant' | 'staff'; id: Id; name: string }
+  createdAt: ISODateTime
+}
+
+export interface AssetComment {
+  id: Id
+  eventId: Id
+  assetId: Id
+  body: string
+  author: { type: 'participant' | 'staff'; id: Id; name: string }
   createdAt: ISODateTime
 }
 
@@ -219,7 +303,9 @@ export interface Reviewer {
   eventId: Id
   name: string
   email: string
+  accessKey: string
   status: 'invited' | 'active' | 'inactive'
+  lastRemindedAt?: ISODateTime | null
   createdAt: ISODateTime
   version: number
 }
@@ -236,15 +322,27 @@ export interface EvaluationCriterion {
   id: Id
   label: string
   description: string
-  minimum: number
-  maximum: number
+  kind?: 'numeric' | 'select' | 'long_text'
+  required?: boolean
+  minimum?: number
+  maximum?: number
   weight: number
+  options?: string[]
 }
 
 export interface EvaluationRound {
   id: Id
   name: string
   order: number
+  opensAt?: ISODateTime | null
+  closesAt?: ISODateTime | null
+  reviewerTeamId?: Id
+  categoryRoutes?: Array<{
+    trackId: Id
+    reviewerTeamId: Id
+  }>
+  blindReview?: boolean
+  criteria?: EvaluationCriterion[]
   reviewersPerSubmission: number
   minimumCompletedReviews: number
 }
@@ -269,8 +367,10 @@ export interface ReviewerAssignment {
   roundId: Id
   submissionId: Id
   reviewerId: Id
-  status: 'assigned' | 'in_progress' | 'completed'
+  status: 'assigned' | 'in_progress' | 'completed' | 'recused'
   dueAt: ISODateTime | null
+  recusedAt?: ISODateTime | null
+  conflictReason?: string | null
   updatedAt: ISODateTime
   version: number
 }
@@ -281,6 +381,7 @@ export type ReviewRecommendation =
 export interface Scorecard {
   id: Id
   assignmentId: Id
+  answers?: Record<Id, number | string>
   scores: Record<Id, number>
   recommendation: ReviewRecommendation
   comments: string
@@ -318,7 +419,7 @@ export interface Session {
   id: Id
   eventId: Id
   title: string
-  format: 'keynote' | 'talk' | 'panel' | 'workshop' | 'break'
+  format: 'keynote' | 'talk' | 'lightning' | 'panel' | 'workshop' | 'break'
   summary: string
   trackId: Id
   participantIds: Id[]
@@ -349,7 +450,7 @@ export interface Campaign {
   body: string
   audience: CampaignAudience
   recipientParticipationIds: Id[]
-  includeEventInvite: boolean
+  includeCalendarInvite: boolean
   status: CampaignStatus
   createdAt: ISODateTime
   approvedAt: ISODateTime | null
@@ -383,6 +484,54 @@ export interface CampaignDelivery {
   attemptCount: number
   lastError: string | null
   createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
+}
+
+export interface OutboundMessage {
+  id: Id
+  eventId: Id
+  campaignId: Id | null
+  submissionId: Id | null
+  kind:
+    | 'submission_confirmation'
+    | 'decision_notice'
+    | 'reviewer_reminder'
+    | 'requirement_reminder'
+    | 'campaign'
+    | 'crm_outreach'
+  trigger: string
+  recipientName: string
+  recipientEmail: string
+  subject: string
+  body: string
+  calendarAttachment?: {
+    filename: string
+    contentType: string
+    content: string
+    eventCount: number
+  } | null
+  status: 'queued' | 'sent' | 'failed'
+  queuedAt: ISODateTime
+  sentAt: ISODateTime | null
+  providerMessageId: string | null
+  attempts?: number
+  lastAttemptAt?: ISODateTime | null
+  nextAttemptAt?: ISODateTime | null
+  lastError?: string | null
+}
+
+export interface PortalResourcePage {
+  id: Id
+  eventId: Id
+  title: string
+  slug: string
+  summary: string
+  body: string
+  embedUrl: string
+  linkUrl: string
+  status: 'draft' | 'published' | 'archived'
+  sortOrder: number
   updatedAt: ISODateTime
   version: number
 }
@@ -536,6 +685,9 @@ export interface WorkspaceState {
   activeEventId: Id
   events: Event[]
   people: Person[]
+  contactNotes: ContactNote[]
+  crmSegments: CrmSegment[]
+  speakerPipeline: SpeakerPipelineEntry[]
   participations: Participation[]
   requirementDefinitions: RequirementDefinition[]
   requirementInstances: RequirementInstance[]
@@ -544,6 +696,7 @@ export interface WorkspaceState {
   submissions: Submission[]
   submissionReceiptDeliveries: SubmissionReceiptDelivery[]
   assets: Asset[]
+  assetComments: AssetComment[]
   portalResources: PortalResource[]
   reviewers: Reviewer[]
   reviewerTeams: ReviewerTeam[]
@@ -558,6 +711,8 @@ export interface WorkspaceState {
   scheduleReleases: ScheduleRelease[]
   campaigns: Campaign[]
   campaignDeliveries: CampaignDelivery[]
+  outboundMessages?: OutboundMessage[]
+  portalResourcePages: PortalResourcePage[]
   changeSets: ChangeSet[]
   integrations: Integration[]
   acceleventsExports: AcceleventsExport[]

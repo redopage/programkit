@@ -18,16 +18,16 @@ describe('operation HTTP surface', () => {
     delete (legacy as Partial<WorkspaceState>).acceleventsExports
     delete (legacy as Partial<WorkspaceState>).portalResources
     for (const campaign of legacy.campaigns) {
-      delete (campaign as Partial<typeof campaign>).includeEventInvite
+      delete (campaign as Partial<typeof campaign>).includeCalendarInvite
       delete (campaign as Partial<typeof campaign>).queuedAt
     }
     const state = await new MemoryWorkspaceRepository(legacy).read()
-    expect(state.schemaVersion).toBe(9)
+    expect(state.schemaVersion).toBe(14)
     expect(state.campaignDeliveries).toEqual([])
     expect(state.submissionReceiptDeliveries).toEqual([])
     expect(state.acceleventsExports).toEqual([])
     expect(state.portalResources).toEqual([])
-    expect(state.campaigns.every((campaign) => campaign.includeEventInvite === false)).toBe(true)
+    expect(state.campaigns.every((campaign) => campaign.includeCalendarInvite === false)).toBe(true)
     expect(state.campaigns.every((campaign) => campaign.queuedAt === null)).toBe(true)
   })
 
@@ -38,7 +38,7 @@ describe('operation HTTP surface', () => {
     delete (delivery as Partial<typeof delivery>).attachments
 
     const state = await new MemoryWorkspaceRepository(legacy).read()
-    expect(state.schemaVersion).toBe(9)
+    expect(state.schemaVersion).toBe(14)
     expect(state.campaignDeliveries[0]?.attachments[0]).toMatchObject({
       filename: 'aie-nyc-2026-invite.ics',
       contentType: 'text/calendar; charset=utf-8; method=REQUEST',
@@ -85,7 +85,88 @@ describe('operation HTTP surface', () => {
       new Request('http://local/api/v1/export'),
       repository,
     )
-    expect(exportResponse?.headers.get('content-disposition')).toContain('aie-export.json')
+    expect(exportResponse?.headers.get('content-disposition')).toContain('aie-export-')
+    expect(exportResponse?.headers.get('content-type')).toBe('application/zip')
+    expect(new Uint8Array(await exportResponse!.arrayBuffer()).slice(0, 4)).toEqual(
+      new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+    )
+
+    const jsonExportResponse = await handleCoreRequest(
+      new Request('http://local/api/v1/export.json'),
+      repository,
+    )
+    expect(jsonExportResponse?.headers.get('content-disposition')).toContain('aie-export.json')
+  })
+
+  it('serves portable public program feeds with filters and field visibility', async () => {
+    const repository = new MemoryWorkspaceRepository()
+    const jsonResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/program.json'),
+      repository,
+    )
+    expect(jsonResponse?.status).toBe(200)
+    expect(jsonResponse?.headers.get('content-type')).toBe('application/json; charset=utf-8')
+    expect(jsonResponse?.headers.get('access-control-allow-origin')).toBe('*')
+    const jsonBody = (await jsonResponse?.json()) as {
+      event: { id: string; publishedScheduleVersion: number }
+      sessions: Array<{
+        id: string
+        description?: string
+        room: { id: string } | null
+        track: { id: string } | null
+      }>
+    }
+    expect(jsonBody.event).toMatchObject({ id: 'evt_nyc_2026', publishedScheduleVersion: 3 })
+    expect(jsonBody.sessions).toHaveLength(10)
+    expect(jsonBody.sessions.every((session) => session.description)).toBe(true)
+
+    const sample = jsonBody.sessions.find((session) => session.track && session.room)!
+
+    const filteredResponse = await handleCoreRequest(
+      new Request(
+        `http://local/public/v1/program.json?track=${sample.track!.id}&room=${sample.room!.id}&descriptions=hide`,
+      ),
+      repository,
+    )
+    const filteredBody = (await filteredResponse?.json()) as typeof jsonBody
+    expect(filteredBody.sessions.length).toBeGreaterThan(0)
+    expect(filteredBody.sessions.every((session) => session.track?.id === sample.track!.id)).toBe(
+      true,
+    )
+    expect(filteredBody.sessions.every((session) => session.room?.id === sample.room!.id)).toBe(
+      true,
+    )
+    expect(filteredBody.sessions.every((session) => !('description' in session))).toBe(true)
+
+    const xmlResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/program.xml?track=trk_build'),
+      repository,
+    )
+    expect(xmlResponse?.headers.get('content-type')).toBe('application/xml; charset=utf-8')
+    const xml = await xmlResponse!.text()
+    expect(xml).toContain('<program eventId="evt_nyc_2026" version="3">')
+    expect(xml).toContain('<track id="trk_build"')
+    expect(xml).toContain('<speakers>')
+
+    const calendarResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/program.ics'),
+      repository,
+    )
+    expect(calendarResponse?.headers.get('content-type')).toBe('text/calendar; charset=utf-8')
+    expect(calendarResponse?.headers.get('content-disposition')).toContain(
+      'aie-nyc-2026-program.ics',
+    )
+    const calendar = await calendarResponse!.text()
+    expect(calendar).toContain('BEGIN:VCALENDAR\r\n')
+    expect(calendar.match(/BEGIN:VEVENT/gu)).toHaveLength(10)
+    expect(calendar).toContain('LOCATION:')
+
+    const optionsResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/program.json', { method: 'OPTIONS' }),
+      repository,
+    )
+    expect(optionsResponse?.status).toBe(204)
+    expect(optionsResponse?.headers.get('access-control-allow-origin')).toBe('*')
   })
 
   it('serves event-scoped, paginated integration resources', async () => {
@@ -162,22 +243,22 @@ describe('operation HTTP surface', () => {
   })
 
   it('returns a participant-specific projection without operator-only records', async () => {
-    const state = createSeedState()
-    state.assets.push({
-      id: 'ast_private_portal',
-      eventId: state.activeEventId,
-      owner: { type: 'participation', id: 'par_003' },
-      kind: 'headshot',
-      filename: 'private-headshot.png',
-      contentType: 'image/png',
-      sizeBytes: 1_024,
-      storageKey: 'workspaces/wrk_aie/participants/par_003/private/private-headshot.png',
-      createdAt: '2026-08-08T12:00:00.000Z',
+    const initial = createSeedState()
+    initial.portalResourcePages.push({
+      id: 'res_draft_only',
+      eventId: initial.activeEventId,
+      title: 'Internal draft',
+      slug: 'internal-draft',
+      summary: 'Not ready for speakers.',
+      body: '',
+      embedUrl: '',
+      linkUrl: '',
+      status: 'draft',
+      sortOrder: 99,
+      updatedAt: '2026-08-09T12:00:00.000Z',
+      version: 1,
     })
-    const prepared = executeOperation(state, 'accelevents.prepare-export', {
-      input: { eventUrl: 'aie-nyc-2026' },
-    }).state
-    const repository = new MemoryWorkspaceRepository(prepared)
+    const repository = new MemoryWorkspaceRepository(initial)
     const actor = {
       type: 'participant' as const,
       id: 'par_003',
@@ -185,7 +266,9 @@ describe('operation HTTP surface', () => {
       scopes: ['participations:write', 'requirements:write', 'portal:write'],
     }
     const response = await handleCoreRequest(
-      new Request('http://local/api/v1/portal/par_003/state'),
+      new Request('http://local/public/v1/portal/par_003/state', {
+        headers: { 'x-programkit-portal-key': 'portal_003_per_003' },
+      }),
       repository,
       { actor },
     )
@@ -195,24 +278,33 @@ describe('operation HTTP surface', () => {
     expect(body.state.participations).toHaveLength(1)
     expect(body.state.participations[0].internalNotes).toBe('')
     expect(body.state.campaigns).toHaveLength(0)
-    expect(body.state.campaignDeliveries).toHaveLength(0)
-    expect(body.state.submissionReceiptDeliveries).toHaveLength(0)
+    expect(body.state.outboundMessages).toHaveLength(0)
     expect(body.state.integrations).toHaveLength(0)
     expect(body.state.acceleventsExports).toHaveLength(0)
     expect(body.state.changeSets).toHaveLength(0)
     expect(body.state.domainEvents).toHaveLength(0)
     expect(body.state.submissions).toHaveLength(0)
+    expect(body.state.sessions.length).toBeGreaterThan(0)
+    expect(body.state.sessions.every((session) => session.participantIds.includes('par_003'))).toBe(
+      true,
+    )
     expect(body.state.reviewers).toHaveLength(0)
     expect(body.state.reviewerAssignments).toHaveLength(0)
     expect(body.state.scorecards).toHaveLength(0)
     expect(body.state.reviewDecisions).toHaveLength(0)
-    expect(body.state.assets).toEqual([
-      expect.objectContaining({ id: 'ast_private_portal', storageKey: '' }),
+    expect(body.state.portalResourcePages.map((resource) => resource.id)).toEqual([
+      'res_speaker_guide',
+      'res_venue_guide',
     ])
-    expect(body.state.portalResources.map((entry) => entry.id)).toEqual([
-      'por_speaker_guide',
-      'por_venue_card',
-    ])
+
+    const denied = await handleCoreRequest(
+      new Request('http://local/public/v1/portal/par_003/state', {
+        headers: { 'x-programkit-portal-key': 'wrong-key' },
+      }),
+      repository,
+      { actor },
+    )
+    expect(denied?.status).toBe(403)
   })
 
   it('serves distinct public and reviewer projections without operator records', async () => {
@@ -229,6 +321,12 @@ describe('operation HTTP surface', () => {
     const formBody = (await formResponse?.json()) as { state: WorkspaceState }
     expect(formBody.state.submissionForms.map((entry) => entry.id)).toEqual(['frm_cfp_2026'])
     expect(formBody.state.submissionFormFields.length).toBeGreaterThan(5)
+    expect(formBody.state.tracks.map((entry) => entry.name)).toEqual([
+      'Frontier',
+      'Build',
+      'Operate',
+      'Society',
+    ])
     expect(formBody.state.people).toHaveLength(0)
     expect(formBody.state.submissions).toHaveLength(0)
     expect(formBody.state.submissionReceiptDeliveries).toHaveLength(0)
@@ -236,6 +334,18 @@ describe('operation HTTP surface', () => {
     expect(formBody.state.domainEvents).toHaveLength(0)
     expect(formBody.state.acceleventsExports).toHaveLength(0)
     expect(formBody.state.portalResources).toHaveLength(0)
+
+    const closedState = createSeedState()
+    closedState.submissionForms.find((entry) => entry.id === 'frm_cfp_2026')!.status = 'closed'
+    const closedFormResponse = await handleCoreRequest(
+      new Request('http://local/public/v1/submission-forms/aie-nyc-2026-cfp/state'),
+      new MemoryWorkspaceRepository(closedState),
+    )
+    expect(closedFormResponse?.status).toBe(200)
+    const closedFormBody = (await closedFormResponse?.json()) as { state: WorkspaceState }
+    expect(closedFormBody.state.submissionForms).toEqual([
+      expect.objectContaining({ id: 'frm_cfp_2026', status: 'closed' }),
+    ])
 
     const programResponse = await handleCoreRequest(
       new Request('http://local/public/v1/program/state'),
@@ -247,15 +357,14 @@ describe('operation HTTP surface', () => {
     expect(programBody.state.placements).toHaveLength(0)
     expect(programBody.state.submissions).toHaveLength(0)
     expect(programBody.state.campaigns).toHaveLength(0)
-    expect(programBody.state.campaignDeliveries).toHaveLength(0)
-    expect(programBody.state.submissionReceiptDeliveries).toHaveLength(0)
-    expect(programBody.state.acceleventsExports).toHaveLength(0)
-    expect(programBody.state.portalResources).toHaveLength(0)
+    expect(programBody.state.outboundMessages).toHaveLength(0)
     expect(programBody.state.people.every((entry) => entry.email === '')).toBe(true)
     expect(programBody.state.participations.every((entry) => entry.internalNotes === '')).toBe(true)
 
     const reviewerResponse = await handleCoreRequest(
-      new Request('http://local/api/v1/reviewers/rev_001/state'),
+      new Request('http://local/public/v1/reviewers/rev_001/state', {
+        headers: { 'x-programkit-reviewer-key': 'reviewer_elena_vasquez' },
+      }),
       repository,
       {
         actor: {
@@ -276,9 +385,7 @@ describe('operation HTTP surface', () => {
     expect(reviewerBody.state.participations).toHaveLength(0)
     expect(reviewerBody.state.reviewDecisions).toHaveLength(0)
     expect(reviewerBody.state.campaigns).toHaveLength(0)
-    expect(reviewerBody.state.campaignDeliveries).toHaveLength(0)
-    expect(reviewerBody.state.submissionReceiptDeliveries).toHaveLength(0)
-    expect(reviewerBody.state.acceleventsExports).toHaveLength(0)
+    expect(reviewerBody.state.outboundMessages).toHaveLength(0)
     expect(reviewerBody.state.domainEvents).toHaveLength(0)
   })
 
@@ -290,7 +397,9 @@ describe('operation HTTP surface', () => {
     }))
     const repository = new MemoryWorkspaceRepository(state)
     const response = await handleCoreRequest(
-      new Request('http://local/api/v1/reviewers/rev_001/state'),
+      new Request('http://local/public/v1/reviewers/rev_001/state', {
+        headers: { 'x-programkit-reviewer-key': 'reviewer_elena_vasquez' },
+      }),
       repository,
       {
         actor: {
@@ -310,72 +419,203 @@ describe('operation HTTP surface', () => {
       expect(submission.answers.email).toBeUndefined()
       expect(submission.answers.biography).toBeUndefined()
       expect(submission.answers.proposal_title).toBeTruthy()
+      expect(submission.contributors).toEqual([])
     }
   })
 
-  it('returns the submitter-owned frozen receipt created with a public submission', async () => {
+  it('reveals identity when the same reviewer has a non-blind round for the proposal', async () => {
+    const state = createSeedState()
+    const plan = state.evaluationPlans[0]!
+    plan.blindReview = true
+    plan.rounds[0] = { ...plan.rounds[0]!, blindReview: true }
+    plan.rounds.push({
+      ...plan.rounds[0]!,
+      id: 'rnd_final_review',
+      name: 'Final review',
+      order: 2,
+      blindReview: false,
+    })
+    const initialAssignment = state.reviewerAssignments.find(
+      (entry) => entry.reviewerId === 'rev_001' && entry.submissionId === 'sub_002',
+    )!
+    state.reviewerAssignments.push({
+      ...initialAssignment,
+      id: 'rva_final_visible',
+      roundId: 'rnd_final_review',
+      status: 'assigned',
+      version: 1,
+    })
+
+    const response = await handleCoreRequest(
+      new Request('http://local/public/v1/reviewers/rev_001/state', {
+        headers: { 'x-programkit-reviewer-key': 'reviewer_elena_vasquez' },
+      }),
+      new MemoryWorkspaceRepository(state),
+      {
+        actor: {
+          type: 'reviewer',
+          id: 'rev_001',
+          name: 'Elena Vasquez',
+          scopes: ['reviews:write'],
+        },
+      },
+    )
+
+    expect(response?.status).toBe(200)
+    const body = (await response?.json()) as { state: WorkspaceState }
+    const submission = body.state.submissions.find((entry) => entry.id === 'sub_002')!
+    expect(submission.answers.first_name).toBeTruthy()
+    expect(submission.answers.last_name).toBeTruthy()
+    expect(submission.answers.email).toBeTruthy()
+  })
+
+  it('requires a reviewer capability and permits conflict handling', async () => {
     const repository = new MemoryWorkspaceRepository()
-    const submitter = {
+    const actor = {
+      type: 'reviewer' as const,
+      id: 'rev_001',
+      name: 'Elena Vasquez',
+      scopes: ['reviews:write'],
+    }
+    const denied = await handleCoreRequest(
+      new Request('http://local/public/v1/reviewers/rev_001/state', {
+        headers: { 'x-programkit-reviewer-key': 'wrong-key' },
+      }),
+      repository,
+      { actor },
+    )
+    expect(denied?.status).toBe(403)
+
+    const assignment = (await repository.read()).reviewerAssignments.find(
+      (entry) => entry.id === 'rva_007',
+    )!
+    const recused = await handleCoreRequest(
+      new Request('http://local/public/v1/reviewers/rev_001/operations/review.recuse', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-programkit-reviewer-key': 'reviewer_elena_vasquez',
+        },
+        body: JSON.stringify({
+          input: { assignmentId: assignment.id, reason: 'I work with the submitter.' },
+          expectedVersions: { [assignment.id]: assignment.version },
+        }),
+      }),
+      repository,
+      { actor },
+    )
+    expect(recused?.status).toBe(200)
+    expect((await repository.read()).reviewerAssignments).toContainEqual(
+      expect.objectContaining({
+        id: assignment.id,
+        status: 'recused',
+        conflictReason: 'I work with the submitter.',
+      }),
+    )
+  })
+
+  it('serves a private speaker submission history without exposing another speaker', async () => {
+    const repository = new MemoryWorkspaceRepository()
+    const response = await handleCoreRequest(
+      new Request(
+        'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/state?speakerAccessKey=speaker_priya_raman',
+      ),
+      repository,
+    )
+    expect(response?.status).toBe(200)
+    const body = (await response?.json()) as { state: WorkspaceState }
+    expect(body.state.submissions.map((entry) => entry.id)).toEqual(['sub_005'])
+    expect(body.state.submissions[0]).toMatchObject({
+      speakerAccessKey: 'speaker_priya_raman',
+      contributors: [
+        expect.objectContaining({
+          firstName: 'Marcus',
+          lastName: 'Okafor',
+          role: 'co_speaker',
+        }),
+      ],
+    })
+    expect(body.state.assets).toEqual([])
+    expect(body.state.people).toEqual([])
+  })
+
+  it('creates and resumes a title-only draft through the public submission boundary', async () => {
+    const repository = new MemoryWorkspaceRepository()
+    const actor = {
       type: 'submitter' as const,
       id: 'aie-nyc-2026-cfp',
       name: 'Public submitter',
       scopes: ['submissions:write', 'submissions:submit'],
     }
-    const operationUrl = 'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations'
-    const answers = {
-      first_name: 'Ada',
-      last_name: 'Lovelace',
-      email: 'ada@example.com',
-      company: 'Analytical Engines',
-      job_title: 'Programmer',
-      biography: 'Ada writes precise notes about programmable systems.',
-      proposal_title: 'Useful engines',
-      abstract: 'A practical session about systems people can inspect and understand.',
-      session_format: 'talk',
-      track: 'trk_build',
-    }
-    const createResponse = await handleCoreRequest(
-      new Request(`${operationUrl}/submission.create`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ input: { formId: 'frm_cfp_2026', kind: 'abstract', answers } }),
-      }),
+    const created = await handleCoreRequest(
+      new Request(
+        'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations/submission.create',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              formId: 'frm_cfp_2026',
+              kind: 'abstract',
+              answers: { proposal_title: 'A private title-only draft' },
+              contributors: [],
+              speakerAccessKey: 'speaker_priya_raman',
+            },
+          }),
+        },
+      ),
       repository,
-      { actor: submitter },
+      { actor },
     )
-    const createBody = (await createResponse?.json()) as OperationResponse<{
-      submission: { id: string }
-    }>
-    expect(createBody.ok).toBe(true)
+    expect(created?.status).toBe(200)
+    const createdBody = (await created?.json()) as OperationResponse
+    const draft = (createdBody.data as { submission: { id: string; speakerAccessKey: string } })
+      .submission
 
-    const submitResponse = await handleCoreRequest(
-      new Request(`${operationUrl}/submission.submit`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ input: { submissionId: createBody.data?.submission.id } }),
-      }),
+    const privateState = await handleCoreRequest(
+      new Request(
+        `http://local/public/v1/submission-forms/aie-nyc-2026-cfp/state?speakerAccessKey=${draft.speakerAccessKey}`,
+      ),
       repository,
-      { actor: submitter },
     )
-    const submitBody = (await submitResponse?.json()) as OperationResponse<{
-      receiptDelivery: {
-        id: string
-        submissionId: string
-        recipientEmail: string
-        status: string
-        body: string
-      }
-    }>
-    expect(submitBody.ok).toBe(true)
-    expect(submitBody.data?.receiptDelivery).toMatchObject({
-      submissionId: createBody.data?.submission.id,
-      recipientEmail: 'ada@example.com',
-      status: 'pending_provider',
-    })
-    expect(submitBody.data?.receiptDelivery.body).toContain(
-      `Reference: ${createBody.data?.submission.id}`,
+    const privateBody = (await privateState?.json()) as { state: WorkspaceState }
+    expect(privateBody.state.submissions).toContainEqual(
+      expect.objectContaining({
+        id: draft.id,
+        status: 'draft',
+        answers: { proposal_title: 'A private title-only draft' },
+      }),
     )
-    expect((await repository.read()).submissionReceiptDeliveries).toHaveLength(2)
+
+    const persistedDraft = (await repository.read()).submissions.find(
+      (entry) => entry.id === draft.id,
+    )!
+    const updated = await handleCoreRequest(
+      new Request(
+        'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations/submission.update',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              submissionId: draft.id,
+              speakerAccessKey: draft.speakerAccessKey,
+              answers: {
+                ...persistedDraft.answers,
+                email: 'priya@craftwork.dev',
+              },
+            },
+            expectedVersions: { [draft.id]: persistedDraft.version },
+          }),
+        },
+      ),
+      repository,
+      { actor },
+    )
+    expect(updated?.status).toBe(200)
+    expect(
+      (await repository.read()).submissions.find((entry) => entry.id === draft.id)?.answers,
+    ).toMatchObject({ email: 'priya@craftwork.dev' })
   })
 
   it('enforces public-form and reviewer operation boundaries', async () => {
@@ -402,6 +642,32 @@ describe('operation HTTP surface', () => {
     )
     expect(crossFormResponse?.status).toBe(400)
 
+    const current = await repository.read()
+    const priya = current.submissions.find((entry) => entry.id === 'sub_005')!
+    const wrongSpeakerResponse = await handleCoreRequest(
+      new Request(
+        'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations/submission.update',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            input: {
+              submissionId: priya.id,
+              speakerAccessKey: 'wrong-speaker-key',
+              contributors: [],
+            },
+            expectedVersions: { [priya.id]: priya.version },
+          }),
+        },
+      ),
+      repository,
+      { actor: submitter },
+    )
+    expect(wrongSpeakerResponse?.status).toBe(400)
+    expect(await wrongSpeakerResponse?.json()).toEqual({
+      error: 'This speaker link cannot update that submission.',
+    })
+
     const disallowedResponse = await handleCoreRequest(
       new Request(
         'http://local/public/v1/submission-forms/aie-nyc-2026-cfp/operations/person.create',
@@ -424,9 +690,12 @@ describe('operation HTTP surface', () => {
       (entry) => entry.id === foreignAssignment.evaluationPlanId,
     )!
     const reviewerResponse = await handleCoreRequest(
-      new Request('http://local/api/v1/reviewers/rev_001/operations/review.submit-scorecard', {
+      new Request('http://local/public/v1/reviewers/rev_001/operations/review.submit-scorecard', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          'x-programkit-reviewer-key': 'reviewer_elena_vasquez',
+        },
         body: JSON.stringify({
           input: {
             assignmentId: foreignAssignment.id,

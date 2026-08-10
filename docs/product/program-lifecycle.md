@@ -41,9 +41,11 @@ The public surface exposes only one open form and its event. A submitter starts 
 answers and asset references, and submits only after visible required fields validate. Conditional
 questions are evaluated from earlier answers.
 
-ProgramKit currently models asset references, but the reference host does not yet provide a real
-private upload pipeline. File restrictions, scanning, signed download, and lifecycle policy are a
-production milestone, not an implied capability.
+The hosted Worker provides a private R2 pipeline for accepted-speaker headshots and requested
+deliverables. It validates event ownership, file type, and size; records immutable versions and
+comments; serves scoped downloads; and exports selected latest versions in speaker and task
+folders. Direct attachment upload from the public CFP, malware scanning, and a configurable
+retention policy remain production milestones rather than implied capabilities.
 
 Submission also freezes one confirmation receipt in the same atomic mutation. The submitter sees
 the destination address, reference, and actual delivery state. The reference app leaves the
@@ -78,11 +80,11 @@ The speaker portal is scoped to one participation. The speaker updates public pr
 confirms participation, and completes assigned requirements. Organizers see readiness across the
 event and can review submitted work.
 
-The portal now persists text and simple form responses and sends participant-owned headshots,
-slides, and supporting documents through a private R2 upload/download path with type, size, and
-ownership checks. Release approval remains deliberately unavailable until the event team provides
-an actual document and response contract. The next production-depth milestone is a shared
-cross-surface task renderer plus revision conversations, upload scanning, and lifecycle cleanup.
+Organizers can also publish event guides, related links, and sandboxed HTTPS embeds into every
+speaker portal. Draft and archived resources remain operator-only.
+
+Profiles, releases, headshots, slides, and logistics use the same scoped operation and asset
+primitives as the CFP.
 
 Organizers can also publish versioned guides and static HTML cards. Participants receive only the
 published resources for their event. HTML cards accept no attributes, links, images, forms, or

@@ -1,6 +1,95 @@
-import type { Event, Workspace } from './types.ts'
+import type { Event, Workspace, WorkspaceState } from './types.ts'
 
-function escapeCalendarText(value: string) {
+export interface CalendarAttachment {
+  filename: string
+  contentType: 'text/calendar; method=PUBLISH; charset=utf-8'
+  content: string
+  eventCount: number
+}
+
+export function calendarEscape(value: string) {
+  return value
+    .replaceAll('\\', '\\\\')
+    .replaceAll(',', '\\,')
+    .replaceAll(';', '\\;')
+    .replaceAll(/\r?\n/gu, '\\n')
+}
+
+export function calendarDate(value: string) {
+  return new Date(value).toISOString().replaceAll(/[-:]/gu, '').replace('.000', '')
+}
+
+function calendarFilename(value: string) {
+  const normalized = value
+    .normalize('NFKD')
+    .replaceAll(/[^a-zA-Z0-9]+/gu, '-')
+    .replaceAll(/^-+|-+$/gu, '')
+    .toLowerCase()
+  return normalized || 'speaker'
+}
+
+export function calendarAttachmentForParticipation(
+  state: WorkspaceState,
+  participationId: string,
+): CalendarAttachment | null {
+  const participation = state.participations.find(
+    (entry) => entry.id === participationId && entry.eventId === state.activeEventId,
+  )
+  const person = participation
+    ? state.people.find((entry) => entry.id === participation.personId)
+    : null
+  const event = state.events.find((entry) => entry.id === state.activeEventId)
+  const release = [...(state.scheduleReleases ?? [])]
+    .filter((entry) => entry.eventId === state.activeEventId)
+    .sort((left, right) => right.version - left.version)[0]
+  if (!participation || !person || !event || !release) return null
+
+  const sessions = release.placements
+    .map((placement) => {
+      const session = state.sessions.find(
+        (entry) =>
+          entry.id === placement.sessionId && entry.participantIds.includes(participation.id),
+      )
+      const room = state.rooms.find((entry) => entry.id === placement.roomId)
+      return session ? { placement, session, room } : null
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    .sort((left, right) => left.placement.startsAt.localeCompare(right.placement.startsAt))
+  if (sessions.length === 0) return null
+
+  const calendar = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//ProgramKit//Speaker schedule//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${calendarEscape(`${event.name} · ${person.firstName} ${person.lastName}`)}`,
+    ...sessions.flatMap(({ placement, session, room }) => [
+      'BEGIN:VEVENT',
+      `UID:${calendarEscape(`${event.id}-${session.id}`)}@programkit.dev`,
+      `DTSTAMP:${calendarDate(release.publishedAt)}`,
+      `DTSTART:${calendarDate(placement.startsAt)}`,
+      `DTEND:${calendarDate(placement.endsAt)}`,
+      `SEQUENCE:${release.version}`,
+      'STATUS:CONFIRMED',
+      `SUMMARY:${calendarEscape(session.title)}`,
+      ...(session.summary ? [`DESCRIPTION:${calendarEscape(session.summary)}`] : []),
+      `LOCATION:${calendarEscape(room?.name ?? event.venue)}`,
+      'END:VEVENT',
+    ]),
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n')
+
+  return {
+    filename: `${calendarFilename(event.slug)}-${calendarFilename(person.lastName)}-schedule.ics`,
+    contentType: 'text/calendar; method=PUBLISH; charset=utf-8',
+    content: calendar,
+    eventCount: sessions.length,
+  }
+}
+
+function escapeInvitationText(value: string) {
   return value
     .replaceAll('\\', '\\\\')
     .replaceAll('\r\n', '\\n')
@@ -10,7 +99,7 @@ function escapeCalendarText(value: string) {
     .replaceAll(',', '\\,')
 }
 
-function calendarTimestamp(value: string) {
+function invitationTimestamp(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) throw new Error('Calendar dates must be valid ISO timestamps.')
   return date
@@ -20,7 +109,7 @@ function calendarTimestamp(value: string) {
     .replace(/\.\d{3}Z$/u, 'Z')
 }
 
-function foldCalendarLine(line: string) {
+function foldInvitationLine(line: string) {
   const encoder = new TextEncoder()
   const chunks: string[] = []
   let chunk = ''
@@ -63,18 +152,18 @@ export function eventCalendar(
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
-    `UID:${escapeCalendarText(`${event.id}@${workspace.slug}.programkit`)}`,
-    `DTSTAMP:${calendarTimestamp(generatedAt)}`,
-    `DTSTART:${calendarTimestamp(event.startsAt)}`,
-    `DTEND:${calendarTimestamp(event.endsAt)}`,
-    `SUMMARY:${escapeCalendarText(event.name)}`,
-    `DESCRIPTION:${escapeCalendarText(`Join ${workspace.name} for ${event.name}.`)}`,
-    `LOCATION:${escapeCalendarText(location)}`,
+    `UID:${escapeInvitationText(`${event.id}@${workspace.slug}.programkit`)}`,
+    `DTSTAMP:${invitationTimestamp(generatedAt)}`,
+    `DTSTART:${invitationTimestamp(event.startsAt)}`,
+    `DTEND:${invitationTimestamp(event.endsAt)}`,
+    `SUMMARY:${escapeInvitationText(event.name)}`,
+    `DESCRIPTION:${escapeInvitationText(`Join ${workspace.name} for ${event.name}.`)}`,
+    `LOCATION:${escapeInvitationText(location)}`,
     'STATUS:CONFIRMED',
     'END:VEVENT',
     'END:VCALENDAR',
   ]
-  return `${lines.map(foldCalendarLine).join('\r\n')}\r\n`
+  return `${lines.map(foldInvitationLine).join('\r\n')}\r\n`
 }
 
 export function eventCalendarInvitation(
@@ -100,13 +189,13 @@ export function eventCalendarInvitation(
     'CALSCALE:GREGORIAN',
     'METHOD:REQUEST',
     'BEGIN:VEVENT',
-    `UID:${escapeCalendarText(`${event.id}@${workspace.slug}.programkit`)}`,
-    `DTSTAMP:${calendarTimestamp(generatedAt)}`,
-    `DTSTART:${calendarTimestamp(event.startsAt)}`,
-    `DTEND:${calendarTimestamp(event.endsAt)}`,
-    `SUMMARY:${escapeCalendarText(event.name)}`,
-    `DESCRIPTION:${escapeCalendarText(`Join ${workspace.name} for ${event.name}.`)}`,
-    `LOCATION:${escapeCalendarText(location)}`,
+    `UID:${escapeInvitationText(`${event.id}@${workspace.slug}.programkit`)}`,
+    `DTSTAMP:${invitationTimestamp(generatedAt)}`,
+    `DTSTART:${invitationTimestamp(event.startsAt)}`,
+    `DTEND:${invitationTimestamp(event.endsAt)}`,
+    `SUMMARY:${escapeInvitationText(event.name)}`,
+    `DESCRIPTION:${escapeInvitationText(`Join ${workspace.name} for ${event.name}.`)}`,
+    `LOCATION:${escapeInvitationText(location)}`,
     `ORGANIZER:mailto:${organizer}`,
     `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${attendee}`,
     'SEQUENCE:0',
@@ -114,5 +203,5 @@ export function eventCalendarInvitation(
     'END:VEVENT',
     'END:VCALENDAR',
   ]
-  return `${lines.map(foldCalendarLine).join('\r\n')}\r\n`
+  return `${lines.map(foldInvitationLine).join('\r\n')}\r\n`
 }

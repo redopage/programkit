@@ -1,15 +1,26 @@
-import { CheckCircleIcon, ChevronUpDownIcon, ClockIcon } from '@heroicons/react/16/solid'
-import { useMemo, useState, type FormEvent } from 'react'
+import { CheckCircleIcon, ClockIcon } from '@heroicons/react/16/solid'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import {
+  submissionFormAvailability,
   visibleSubmissionFormFields,
+  type Event as ProgramEvent,
   type SubmissionAnswers,
+  type SubmissionContributor,
+  type SubmissionForm,
   type SubmissionFormField,
+  type SubmissionFieldPurpose,
   type SubmissionKind,
   type SubmissionReceiptDeliveryStatus,
 } from '@programkit/core'
 
+import { ProgramKitMark } from '../components/brand.tsx'
+import { ExternalAccessForm } from '../components/ExternalAccessForm.tsx'
+import { SubmissionAnswerFields } from '../components/SubmissionAnswerFields.tsx'
+import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
 import { Button, StatusBadge, cx } from '../components/ui.tsx'
+import { useExternalAccess } from '../lib/external-access.ts'
+import { speakerSubmissionsPath } from '../lib/public-links.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 
 function isSpeakerField(field: SubmissionFormField) {
@@ -18,12 +29,31 @@ function isSpeakerField(field: SubmissionFormField) {
   )
 }
 
+function formatFormDate(value: string, timeZone: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone,
+    timeZoneName: 'short',
+  }).format(new Date(value))
+}
+
+function configuredOptions(fields: SubmissionFormField[], purpose: SubmissionFieldPurpose) {
+  return fields.find((field) => field.purpose === purpose)?.options ?? []
+}
+
 export function PublicSubmissionView({ slug }: { slug: string }) {
   const { payload, execute, mutating } = useWorkspace()
   const state = payload?.state
   const form = state?.submissionForms?.find((entry) => entry.slug === slug)
   const event = state?.events.find((entry) => entry.id === form?.eventId)
+  const externalAccess = useExternalAccess(event?.id ?? '', slug)
   const [answers, setAnswers] = useState<SubmissionAnswers>({})
+  const [contributors, setContributors] = useState<SubmissionContributor[]>([])
+  const [speakerAccessKey, setSpeakerAccessKey] = useState('')
   const [kind, setKind] = useState<SubmissionKind | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [confirmation, setConfirmation] = useState<{
@@ -37,9 +67,30 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     [answers, form, state],
   )
 
+  useEffect(() => {
+    const stored = window.localStorage.getItem(`programkit:speaker:${slug}`)
+    if (stored) setSpeakerAccessKey(stored)
+  }, [slug])
+
+  useEffect(() => {
+    const email = externalAccess.session.identity?.email
+    if (!email || !state || !form) return
+    const emailField = state.submissionFormFields.find(
+      (field) => field.formId === form.id && field.purpose === 'email',
+    )
+    if (emailField) {
+      setAnswers((current) =>
+        current[emailField.key] === email ? current : { ...current, [emailField.key]: email },
+      )
+    }
+    if (externalAccess.session.submissionAccessKey) {
+      setSpeakerAccessKey(externalAccess.session.submissionAccessKey)
+    }
+  }, [externalAccess.session, form, state])
+
   if (!payload || !form || !event) {
     return (
-      <div className="grid min-h-dvh place-items-center bg-white p-6">
+      <div className="grid min-h-dvh place-items-center bg-white px-6 pt-[max(--spacing(6),env(safe-area-inset-top))] pb-[max(--spacing(6),env(safe-area-inset-bottom))]">
         <div className="max-w-md text-center">
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-zinc-950">
             This call for proposals is unavailable
@@ -61,27 +112,89 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     })
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const created = await execute(
+  async function createDraft(successMessage: string) {
+    let created = await execute(
       'submission.create',
-      { formId: form!.id, kind: activeKind, answers },
+      {
+        formId: form!.id,
+        kind: activeKind,
+        answers,
+        contributors,
+        speakerAccessKey: speakerAccessKey || undefined,
+      },
       undefined,
-      'Draft saved.',
+      successMessage,
     )
+    if (!created.ok && created.error?.code === 'FORBIDDEN' && speakerAccessKey) {
+      window.localStorage.removeItem(`programkit:speaker:${slug}`)
+      setSpeakerAccessKey('')
+      created = await execute(
+        'submission.create',
+        {
+          formId: form!.id,
+          kind: activeKind,
+          answers,
+          contributors,
+        },
+        undefined,
+        successMessage,
+      )
+    }
+    return created
+  }
+
+  function createdSubmissionReference(created: Awaited<ReturnType<typeof createDraft>>) {
+    const data = created.data as
+      | {
+          submissionId?: string
+          submission?: { id?: string; speakerAccessKey?: string }
+        }
+      | undefined
+    return {
+      submissionId: data?.submissionId ?? data?.submission?.id,
+      nextSpeakerAccessKey: data?.submission?.speakerAccessKey,
+    }
+  }
+
+  async function saveDraft() {
+    const created = await createDraft('Draft saved.')
     if (!created.ok) {
-      setFieldErrors(created.error?.fields ?? {})
+      setFieldErrors(
+        created.error?.fields ?? {
+          _form: created.error?.message ?? 'Check the form and try again.',
+        },
+      )
       return
     }
-    const data = created.data as { submissionId?: string; submission?: { id?: string } } | undefined
-    const submissionId = data?.submissionId ?? data?.submission?.id
-    if (!submissionId) {
+    const { submissionId, nextSpeakerAccessKey } = createdSubmissionReference(created)
+    if (!submissionId || !nextSpeakerAccessKey) {
+      setFieldErrors({ _form: 'The draft was saved, but its reference was not returned.' })
+      return
+    }
+    setSpeakerAccessKey(nextSpeakerAccessKey)
+    window.localStorage.setItem(`programkit:speaker:${slug}`, nextSpeakerAccessKey)
+    window.location.href = speakerSubmissionsPath(event!.id, slug, nextSpeakerAccessKey)
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const created = await createDraft('Draft saved.')
+    if (!created.ok) {
+      setFieldErrors(
+        created.error?.fields ?? {
+          _form: created.error?.message ?? 'Check the form and try again.',
+        },
+      )
+      return
+    }
+    const { submissionId, nextSpeakerAccessKey } = createdSubmissionReference(created)
+    if (!submissionId || !nextSpeakerAccessKey) {
       setFieldErrors({ _form: 'The draft was saved, but its reference was not returned.' })
       return
     }
     const submitted = await execute(
       'submission.submit',
-      { submissionId },
+      { submissionId, speakerAccessKey: nextSpeakerAccessKey },
       undefined,
       'Proposal submitted.',
     )
@@ -93,6 +206,8 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
       )
       return
     }
+    setSpeakerAccessKey(nextSpeakerAccessKey)
+    window.localStorage.setItem(`programkit:speaker:${slug}`, nextSpeakerAccessKey)
     const submittedData = submitted.data as
       | {
           receiptDelivery?: {
@@ -209,6 +324,96 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
               ))}
             </ol>
           </section>
+          <div className="pt-6">
+            <Button
+              variant="primary"
+              onClick={() => {
+                window.location.href = speakerSubmissionsPath(event.id, slug, speakerAccessKey)
+              }}
+            >
+              View my submissions
+            </Button>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  const availability = submissionFormAvailability(form)
+  if (availability !== 'open') {
+    const scheduled = availability === 'scheduled'
+    return (
+      <div className="min-h-dvh bg-white">
+        <PublicHeader eventName={event.name} />
+        <main className="mx-auto flex max-w-3xl flex-col items-start px-4 py-16 sm:px-6 sm:py-24">
+          <ClockIcon className="size-10 shrink-0 fill-amber-500" />
+          <h1 className="max-w-[22ch] pt-6 text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
+            {scheduled ? 'Submissions open soon' : 'Submissions are closed'}
+          </h1>
+          <p className="max-w-[58ch] pt-3 text-pretty text-base text-zinc-600">
+            {scheduled
+              ? `${form.title} opens ${form.opensAt ? formatFormDate(form.opensAt, event.timezone) : 'soon'}.`
+              : `The submission window for ${form.title} is no longer open.`}
+          </p>
+          <dl className="mt-8 grid w-full gap-5 rounded-2xl bg-zinc-50 p-5 ring-1 ring-zinc-950/5 sm:grid-cols-2 sm:p-6">
+            <div>
+              <dt className="text-sm font-medium text-zinc-950">Event</dt>
+              <dd className="pt-1 text-base text-zinc-600 sm:text-sm">{event.name}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-zinc-950">
+                {scheduled ? 'Opens' : 'Deadline'}
+              </dt>
+              <dd className="pt-1 text-base text-zinc-600 sm:text-sm">
+                {scheduled && form.opensAt
+                  ? formatFormDate(form.opensAt, event.timezone)
+                  : form.closesAt
+                    ? formatFormDate(form.closesAt, event.timezone)
+                    : 'Set by the program team'}
+              </dd>
+            </div>
+          </dl>
+        </main>
+      </div>
+    )
+  }
+
+  if (externalAccess.enabled && externalAccess.loading) {
+    return (
+      <div className="min-h-dvh bg-white">
+        <PublicHeader eventName={event.name} />
+        <main className="grid min-h-[calc(100dvh-4rem)] place-items-center px-6 py-16">
+          <p className="text-base text-zinc-500 sm:text-sm">Loading proposal access…</p>
+        </main>
+      </div>
+    )
+  }
+
+  if (externalAccess.enabled && !externalAccess.session.authenticated) {
+    const formatOptions = configuredOptions(visibleFields, 'session_format')
+    const trackOptions = configuredOptions(visibleFields, 'track')
+    return (
+      <div className="min-h-dvh bg-white">
+        <PublicHeader eventName={event.name} />
+        <main className="mx-auto grid min-h-[calc(100dvh-4rem)] max-w-6xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[4fr_7fr] lg:gap-16">
+          <SubmissionIntroduction
+            form={form}
+            event={event}
+            formatOptions={formatOptions}
+            trackOptions={trackOptions}
+          />
+          <ExternalAccessForm
+            title="Start your proposal"
+            onSubmit={async (input) => {
+              const result = await externalAccess.authenticate(input)
+              if (input.intent === 'signin' && result.submissionAccessKey) {
+                const destination = result.destinations?.find(
+                  (entry) => entry.kind === 'submissions',
+                )
+                if (destination) window.location.href = destination.href
+              }
+            }}
+          />
         </main>
       </div>
     )
@@ -216,47 +421,31 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
 
   const proposalFields = visibleFields.filter((field) => !isSpeakerField(field))
   const speakerFields = visibleFields.filter(isSpeakerField)
+  const formatOptions = configuredOptions(visibleFields, 'session_format')
+  const trackOptions = configuredOptions(visibleFields, 'track')
 
   return (
     <div className="min-h-dvh bg-white">
-      <PublicHeader eventName={event.name} />
+      <PublicHeader
+        eventName={event.name}
+        accountEmail={externalAccess.session.identity?.email}
+        onSignOut={
+          externalAccess.enabled
+            ? async () => {
+                await externalAccess.logout()
+                window.location.reload()
+              }
+            : undefined
+        }
+      />
       <main className="mx-auto grid max-w-6xl gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[4fr_7fr] lg:gap-16">
-        <aside className="min-w-0 lg:sticky lg:top-10 lg:self-start">
-          <h1 className="max-w-[18ch] text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
-            {form.title}
-          </h1>
-          <p className="max-w-[48ch] pt-4 text-pretty text-base text-zinc-600">
-            {form.description}
-          </p>
-          <dl className="flex flex-col gap-4 border-t border-zinc-950/5 pt-6 mt-6">
-            <div>
-              <dt className="text-base font-medium text-zinc-950 sm:text-sm">Event</dt>
-              <dd className="text-base text-zinc-500 sm:text-sm">{event.name}</dd>
-            </div>
-            <div>
-              <dt className="text-base font-medium text-zinc-950 sm:text-sm">Location</dt>
-              <dd className="text-base text-zinc-500 sm:text-sm">
-                {event.venue} · {event.city}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-base font-medium text-zinc-950 sm:text-sm">Submissions close</dt>
-              <dd className="flex items-center gap-2 text-zinc-500">
-                <ClockIcon className="size-4 h-lh shrink-0 fill-current" />
-                <p className="text-base sm:text-sm">
-                  {form.closesAt
-                    ? new Intl.DateTimeFormat('en-US', {
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric',
-                        timeZone: event.timezone,
-                      }).format(new Date(form.closesAt))
-                    : 'No close date'}
-                </p>
-              </dd>
-            </div>
-          </dl>
-        </aside>
+        <SubmissionIntroduction
+          form={form}
+          event={event}
+          formatOptions={formatOptions}
+          trackOptions={trackOptions}
+          sticky
+        />
 
         <form className="min-w-0" onSubmit={(event) => void submit(event)} noValidate>
           <div className="flex flex-col gap-10">
@@ -312,12 +501,15 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
               onChange={setAnswer}
             />
 
+            <SubmissionParticipantsEditor contributors={contributors} onChange={setContributors} />
+
             <FormSection
               title="About you"
               description="This information becomes your speaker profile only if the proposal is accepted."
               fields={speakerFields}
               answers={answers}
               errors={fieldErrors}
+              lockedPurposes={externalAccess.session.identity ? ['email'] : []}
               onChange={setAnswer}
             />
 
@@ -329,12 +521,16 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
 
             <div className="flex flex-col gap-3 border-t border-zinc-950/5 pt-6 sm:flex-row sm:items-center sm:justify-between">
               <p className="max-w-[52ch] text-pretty text-base text-zinc-500 sm:text-sm">
-                The details you share become part of your proposal and, if it's accepted, your
-                speaker record.
+                Save a private draft now, or submit when your proposal is ready for review.
               </p>
-              <Button type="submit" variant="primary" disabled={mutating}>
-                Submit proposal
-              </Button>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button type="button" disabled={mutating} onClick={() => void saveDraft()}>
+                  Save draft
+                </Button>
+                <Button type="submit" variant="primary" disabled={mutating}>
+                  Submit proposal
+                </Button>
+              </div>
             </div>
           </div>
         </form>
@@ -343,18 +539,114 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
   )
 }
 
-function PublicHeader({ eventName }: { eventName: string }) {
+function SubmissionIntroduction({
+  form,
+  event,
+  formatOptions,
+  trackOptions,
+  sticky = false,
+}: {
+  form: SubmissionForm
+  event: ProgramEvent
+  formatOptions: Array<{ value: string; label: string }>
+  trackOptions: Array<{ value: string; label: string }>
+  sticky?: boolean
+}) {
   return (
-    <header className="border-b border-zinc-950/5 bg-white">
+    <aside className={cx('min-w-0', sticky && 'lg:sticky lg:top-10 lg:self-start')}>
+      <h1 className="max-w-[18ch] text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
+        {form.title}
+      </h1>
+      <p className="max-w-[48ch] pt-4 text-pretty text-base text-zinc-600">{form.description}</p>
+      <dl className="mt-6 flex flex-col gap-4 border-t border-zinc-950/5 pt-6">
+        <div>
+          <dt className="text-base font-medium text-zinc-950 sm:text-sm">Event</dt>
+          <dd className="text-base text-zinc-500 sm:text-sm">{event.name}</dd>
+        </div>
+        {event.venue || event.city ? (
+          <div>
+            <dt className="text-base font-medium text-zinc-950 sm:text-sm">Location</dt>
+            <dd className="text-base text-zinc-500 sm:text-sm">
+              {[event.venue, event.city].filter(Boolean).join(' · ')}
+            </dd>
+          </div>
+        ) : null}
+        <div>
+          <dt className="text-base font-medium text-zinc-950 sm:text-sm">Submissions close</dt>
+          <dd className="flex items-center gap-2 text-zinc-500">
+            <ClockIcon className="size-4 h-lh shrink-0 fill-current" />
+            <span className="text-base sm:text-sm">
+              {form.closesAt ? formatFormDate(form.closesAt, event.timezone) : 'No close date'}
+            </span>
+          </dd>
+        </div>
+        {formatOptions.length > 0 ? (
+          <SubmissionOptionSummary label="Formats" options={formatOptions} />
+        ) : null}
+        {trackOptions.length > 0 ? (
+          <SubmissionOptionSummary label="Tracks" options={trackOptions} />
+        ) : null}
+      </dl>
+    </aside>
+  )
+}
+
+function SubmissionOptionSummary({
+  label,
+  options,
+}: {
+  label: string
+  options: Array<{ value: string; label: string }>
+}) {
+  return (
+    <div>
+      <dt className="text-base font-medium text-zinc-950 sm:text-sm">{label}</dt>
+      <dd className="flex flex-wrap gap-1.5 pt-1.5">
+        {options.map((option) => (
+          <span
+            key={option.value}
+            className="rounded-full bg-zinc-100 px-2.5 py-1 text-sm text-zinc-600 ring-1 ring-zinc-950/5"
+          >
+            {option.label}
+          </span>
+        ))}
+      </dd>
+    </div>
+  )
+}
+
+function PublicHeader({
+  eventName,
+  accountEmail,
+  onSignOut,
+}: {
+  eventName: string
+  accountEmail?: string
+  onSignOut?: () => Promise<void>
+}) {
+  return (
+    <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <a
           href="/"
-          aria-label="Homepage"
-          className="focus-ring text-base font-semibold tracking-tight text-zinc-950"
+          aria-label="ProgramKit homepage"
+          className="focus-ring flex items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-zinc-950"
         >
+          <ProgramKitMark className="size-6" />
           ProgramKit
         </a>
-        <p className="truncate text-base text-zinc-500 sm:text-sm">{eventName}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <p className="truncate text-base text-zinc-500 sm:text-sm">{accountEmail ?? eventName}</p>
+          {onSignOut ? (
+            <button
+              type="button"
+              className="focus-ring shrink-0 rounded-lg text-base font-medium text-zinc-600 hover:text-zinc-950 sm:text-sm"
+              onClick={() => void onSignOut()}
+            >
+              Sign out
+            </button>
+          ) : null}
+        </div>
       </div>
     </header>
   )
@@ -366,6 +658,7 @@ function FormSection({
   fields,
   answers,
   errors,
+  lockedPurposes,
   onChange,
 }: {
   title: string
@@ -373,6 +666,7 @@ function FormSection({
   fields: SubmissionFormField[]
   answers: SubmissionAnswers
   errors: Record<string, string>
+  lockedPurposes?: SubmissionFieldPurpose[]
   onChange: (key: string, value: SubmissionAnswers[string]) => void
 }) {
   if (fields.length === 0) return null
@@ -380,189 +674,15 @@ function FormSection({
     <fieldset className="min-w-0">
       <legend className="text-lg font-semibold text-zinc-950">{title}</legend>
       <p className="text-pretty text-base text-zinc-500 sm:text-sm">{description}</p>
-      <div className="grid gap-5 pt-5 sm:grid-cols-2">
-        {fields.map((field) => (
-          <FormField
-            key={field.id}
-            field={field}
-            value={answers[field.key]}
-            error={errors[field.key]}
-            onChange={(value) => onChange(field.key, value)}
-          />
-        ))}
+      <div className="pt-5">
+        <SubmissionAnswerFields
+          fields={fields}
+          answers={answers}
+          errors={errors}
+          lockedPurposes={lockedPurposes}
+          onChange={onChange}
+        />
       </div>
     </fieldset>
-  )
-}
-
-function FormField({
-  field,
-  value,
-  error,
-  onChange,
-}: {
-  field: SubmissionFormField
-  value: SubmissionAnswers[string] | undefined
-  error?: string
-  onChange: (value: SubmissionAnswers[string]) => void
-}) {
-  const fieldId = `submission-${field.id}`
-  const spanWide =
-    field.kind === 'long_text' || field.kind === 'file' || field.kind === 'multi_select'
-  const inputClass =
-    'focus-ring min-h-11 w-full rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm'
-
-  return (
-    <div className={cx('min-w-0', spanWide && 'sm:col-span-2')}>
-      <label htmlFor={fieldId} className="flex items-baseline justify-between gap-3">
-        <span className="text-base font-medium text-zinc-950 sm:text-sm">{field.label}</span>
-        {field.required ? <span className="text-sm text-zinc-400">Required</span> : null}
-      </label>
-      {field.description ? (
-        <p
-          id={`${fieldId}-description`}
-          className="pb-1.5 text-pretty text-base text-zinc-500 sm:text-sm"
-        >
-          {field.description}
-        </p>
-      ) : (
-        <div className="h-1.5" />
-      )}
-      {field.kind === 'long_text' ? (
-        <textarea
-          id={fieldId}
-          name={field.key}
-          rows={5}
-          required={field.required}
-          value={typeof value === 'string' ? value : ''}
-          placeholder={field.placeholder}
-          aria-invalid={Boolean(error)}
-          aria-describedby={
-            error ? `${fieldId}-error` : field.description ? `${fieldId}-description` : undefined
-          }
-          onChange={(event) => onChange(event.target.value)}
-          className={`${inputClass} resize-y`}
-        />
-      ) : field.kind === 'select' ? (
-        <span className="inline-grid w-full grid-cols-[1fr_--spacing(8)]">
-          <select
-            id={fieldId}
-            name={field.key}
-            required={field.required}
-            value={typeof value === 'string' ? value : ''}
-            aria-invalid={Boolean(error)}
-            onChange={(event) => onChange(event.target.value)}
-            className={`${inputClass} col-span-full row-start-1 appearance-none pr-8`}
-          >
-            <option value="">Choose an option</option>
-            {field.options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
-        </span>
-      ) : field.kind === 'multi_select' ? (
-        <div className="flex flex-col gap-2 pt-1">
-          {field.options.map((option) => {
-            const values = Array.isArray(value) ? value : []
-            const checked = values.includes(option.value)
-            return (
-              <label key={option.value} className="flex items-center gap-3 rounded-lg py-1">
-                <span className="flex h-lh shrink-0 items-center text-base sm:text-sm">
-                  <span className="group inline-grid size-5 grid-cols-1 sm:size-4">
-                    <input
-                      type="checkbox"
-                      name={field.key}
-                      value={option.value}
-                      checked={checked}
-                      onChange={(event) =>
-                        onChange(
-                          event.target.checked
-                            ? [...values, option.value]
-                            : values.filter((entry) => entry !== option.value),
-                        )
-                      }
-                      className="col-start-1 row-start-1 appearance-none rounded-sm border border-zinc-300 bg-white checked:border-blue-600 checked:bg-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-zinc-300 disabled:bg-zinc-100 disabled:checked:bg-zinc-100 forced-colors:appearance-auto"
-                    />
-                    <svg
-                      viewBox="0 0 14 14"
-                      fill="none"
-                      className="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white group-not-has-checked:opacity-0"
-                    >
-                      <path
-                        d="M3 8L6 11L11 3.5"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                </span>
-                <span className="text-base text-zinc-700 sm:text-sm">{option.label}</span>
-              </label>
-            )
-          })}
-        </div>
-      ) : field.kind === 'checkbox' ? (
-        <label className="flex items-center gap-3 rounded-lg py-1">
-          <span className="flex h-lh shrink-0 items-center text-base sm:text-sm">
-            <span className="group inline-grid size-5 grid-cols-1 sm:size-4">
-              <input
-                id={fieldId}
-                type="checkbox"
-                name={field.key}
-                checked={value === true}
-                onChange={(event) => onChange(event.target.checked)}
-                className="col-start-1 row-start-1 appearance-none rounded-sm border border-zinc-300 bg-white checked:border-blue-600 checked:bg-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-zinc-300 disabled:bg-zinc-100 disabled:checked:bg-zinc-100 forced-colors:appearance-auto"
-              />
-              <svg
-                viewBox="0 0 14 14"
-                fill="none"
-                className="pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white group-not-has-checked:opacity-0"
-              >
-                <path
-                  d="M3 8L6 11L11 3.5"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-          </span>
-          <span className="text-base text-zinc-700 sm:text-sm">Yes</span>
-        </label>
-      ) : field.kind === 'file' ? (
-        <input
-          id={fieldId}
-          type="file"
-          name={field.key}
-          required={field.required}
-          aria-invalid={Boolean(error)}
-          className="focus-ring min-h-11 w-full rounded-xl bg-white p-2 text-base text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 sm:text-sm"
-        />
-      ) : (
-        <input
-          id={fieldId}
-          type={field.kind === 'email' ? 'email' : field.kind === 'url' ? 'url' : 'text'}
-          name={field.key}
-          required={field.required}
-          value={typeof value === 'string' ? value : ''}
-          placeholder={field.placeholder}
-          aria-invalid={Boolean(error)}
-          aria-describedby={
-            error ? `${fieldId}-error` : field.description ? `${fieldId}-description` : undefined
-          }
-          onChange={(event) => onChange(event.target.value)}
-          className={inputClass}
-        />
-      )}
-      {error ? (
-        <p id={`${fieldId}-error`} className="pt-1 text-base text-rose-700 sm:text-sm">
-          {error}
-        </p>
-      ) : null}
-    </div>
   )
 }

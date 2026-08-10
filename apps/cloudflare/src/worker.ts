@@ -1,28 +1,132 @@
 import { handleMcpRequest } from '@programkit/agent'
 import { WorkspaceDurableObject } from '@programkit/core/cloudflare'
-import type {
-  AcceleventsExport,
-  CampaignDelivery,
-  OperationRequest,
-  OperationResponse,
-  WorkspaceState,
-} from '@programkit/core'
-
 import {
-  deliverAcceleventsItem,
-  deliverCampaignMessage,
-  type EmailSendBinding,
-} from './providers.ts'
+  createAirtableOAuthAuthorization,
+  createStoredAssetExportPlan,
+  createStoredZip,
+  exchangeAirtableAuthorizationCode,
+  listAirtableBases,
+  submissionAnswerByPurpose,
+  verifyAirtableWebhookMac,
+  type OperationRequest,
+  type OperationResponse,
+  type WorkspaceState,
+} from '@programkit/core'
+import {
+  AuthDurableObject,
+  normalizeEmail,
+  type AuthAccount,
+  type AuthEventSummary,
+  type AuthMembershipProjection,
+} from './auth.ts'
+import {
+  createDemoId,
+  demoCookieName,
+  demoExpiresAt,
+  demoIdFromPath,
+  demoIdFromWorkspaceKey,
+  demoWorkspaceKey,
+  isDemoId,
+} from './demo.ts'
+import {
+  EventAccessDurableObject,
+  type EventApiKey,
+  type EventAccessActor,
+  type EventAccessEvent,
+  type EventInvitation,
+  type EventMembership,
+} from './event-access.ts'
 
-export { WorkspaceDurableObject }
+export { AuthDurableObject, EventAccessDurableObject, WorkspaceDurableObject }
 
 interface Env {
   ASSETS: Fetcher
-  EMAIL?: EmailSendBinding
-  PROGRAMKIT_ASSETS: R2Bucket
+  PROGRAMKIT_FILES?: R2Bucket
   PROGRAMKIT_WORKSPACES: DurableObjectNamespace<WorkspaceDurableObject>
+  PROGRAMKIT_AUTH?: DurableObjectNamespace<AuthDurableObject>
+  PROGRAMKIT_EVENT_ACCESS?: DurableObjectNamespace<EventAccessDurableObject>
+  PROGRAMKIT_DEPLOYMENT_PROFILE?: 'hosted-site' | 'hosted-demo' | 'hosted-app'
+  PROGRAMKIT_APP_ORIGIN?: string
+  PROGRAMKIT_DEMO_ORIGIN?: string
   PROGRAMKIT_EMAIL_FROM?: string
-  ACCELEVENTS_API_KEY?: string
+  PROGRAMKIT_SUPPORT_EMAIL?: string
+  EMAIL?: {
+    send(message: {
+      to: string | string[]
+      from: string
+      subject: string
+      html?: string
+      text?: string
+      replyTo?: string
+      attachments?: Array<{
+        disposition: 'attachment'
+        filename: string
+        type: string
+        content: string
+      }>
+    }): Promise<{ messageId: string }>
+  }
+  AIRTABLE_TOKEN?: string
+  AIRTABLE_BASE_ID?: string
+  AIRTABLE_WEBHOOK_MAC_SECRET?: string
+  AIRTABLE_OAUTH_CLIENT_ID?: string
+  AIRTABLE_OAUTH_CLIENT_SECRET?: string
+}
+
+const workspaceCookieName = 'programkit_workspace'
+const eventCookieName = 'programkit_event'
+const sessionCookieName = 'programkit_session'
+const invitationCookieName = 'programkit_invitation'
+const externalSessionCookieName = 'programkit_external_session'
+const publicEventCookieName = 'programkit_public_event'
+const workspaceKeyPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u
+const hostedEventIdPattern = /^evt_[a-f0-9]{24}$/u
+const invitationTokenPattern = /^(evt_[a-f0-9]{24})\.([a-f0-9]{64})$/u
+const externalSessionPattern = /^(evt_[a-f0-9]{24})\.([a-f0-9]{64})$/u
+const apiKeyTokenPattern = /^pk_live_(evt_[a-f0-9]{24})_(key_[a-f0-9]{16})_([a-f0-9]{64})$/u
+const airtableCallbackPath = '/api/v1/integrations/airtable/oauth/callback'
+
+function deploymentProfile(env: Env) {
+  return env.PROGRAMKIT_DEPLOYMENT_PROFILE ?? 'single-workspace'
+}
+
+function isStaticOrLegalPath(pathname: string) {
+  return (
+    pathname === '/' ||
+    pathname === '/demo' ||
+    pathname === '/privacy' ||
+    pathname === '/terms' ||
+    pathname === '/favicon.svg' ||
+    pathname === '/robots.txt' ||
+    pathname.startsWith('/assets/')
+  )
+}
+
+export function isApiKeyAccessiblePath(pathname: string) {
+  return (
+    pathname === '/api/v1/health' ||
+    pathname === '/api/v1/manifest' ||
+    pathname === '/api/v1/domain-events' ||
+    pathname === '/api/v1/events' ||
+    /^\/api\/v1\/events\/[^/]+(?:\/(?:sessions|speakers|submissions))?$/u.test(pathname) ||
+    pathname === '/api/v1/export' ||
+    pathname === '/api/v1/export.json' ||
+    /^\/api\/v1\/operations\/[^/]+$/u.test(pathname)
+  )
+}
+
+function isDocumentNavigation(request: Request) {
+  return (
+    request.headers.get('sec-fetch-dest') === 'document' ||
+    request.headers.get('accept')?.includes('text/html') === true
+  )
+}
+
+function redirect(url: URL, pathname: string, headers?: HeadersInit) {
+  return new Response(null, {
+    status: 302,
+    headers: { location: new URL(pathname, url.origin).toString(), ...headers },
+  })
 }
 
 const demoStaffActor = {
@@ -39,13 +143,6 @@ const agentReaderActor = {
   scopes: ['workspace:read'],
 }
 
-const providerServiceActor = {
-  type: 'service' as const,
-  id: 'service_provider_delivery',
-  name: 'Provider delivery consumer',
-  scopes: ['workspace:read', 'communications:deliver', 'integrations:deliver'],
-}
-
 const publicReaderActor = {
   type: 'service' as const,
   id: 'public_web',
@@ -53,69 +150,1466 @@ const publicReaderActor = {
   scopes: [],
 }
 
-function participantActor(participationId: string) {
+function cookie(request: Request, name: string) {
+  for (const entry of (request.headers.get('cookie') ?? '').split(';')) {
+    const [key, ...parts] = entry.trim().split('=')
+    if (key === name) return decodeURIComponent(parts.join('='))
+  }
+  return null
+}
+
+function workspaceKey(env: Env, request: Request) {
+  const demoId = cookie(request, demoCookieName)
+  if (isDemoId(demoId)) return demoWorkspaceKey(demoId)
+  if (env.AIRTABLE_BASE_ID) return 'demo'
+  const headerKey = request.headers.get('x-programkit-workspace-key')
+  const requested = headerKey ?? cookie(request, workspaceCookieName) ?? 'demo'
+  if (demoIdFromWorkspaceKey(requested)) return 'demo'
+  return workspaceKeyPattern.test(requested) ? requested : 'demo'
+}
+
+function workspaceStub(env: Env, key: string) {
+  return env.PROGRAMKIT_WORKSPACES.get(env.PROGRAMKIT_WORKSPACES.idFromName(key))
+}
+
+function workspaceCookie(value: string, url: URL) {
+  return [
+    `${workspaceCookieName}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=31536000',
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+function demoCookie(value: string, url: URL, expiresAt: string) {
+  const maxAge = Math.max(0, Math.floor((Date.parse(expiresAt) - Date.now()) / 1_000))
+  return [
+    `${demoCookieName}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAge}`,
+    `Expires=${new Date(expiresAt).toUTCString()}`,
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+function clearDemoCookie(url: URL) {
+  return [
+    `${demoCookieName}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=0',
+    'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+function authCookie(name: string, value: string, url: URL, maxAge: number) {
+  return [
+    `${name}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAge}`,
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+function clearAuthCookie(name: string, url: URL) {
+  return [
+    `${name}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=0',
+    'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+function hostedPublicEventCookie(value: string, url: URL) {
+  return [
+    `${publicEventCookieName}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=2592000',
+    url.protocol === 'https:' ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+}
+
+function authStub(env: Env, shard: string) {
+  if (!env.PROGRAMKIT_AUTH) return null
+  return env.PROGRAMKIT_AUTH.get(env.PROGRAMKIT_AUTH.idFromName(`account_${shard}`))
+}
+
+function externalDirectoryStub(env: Env) {
+  if (!env.PROGRAMKIT_AUTH) return null
+  return env.PROGRAMKIT_AUTH.get(env.PROGRAMKIT_AUTH.idFromName('external-directory'))
+}
+
+function eventAccessStub(env: Env, eventId: string) {
+  if (!env.PROGRAMKIT_EVENT_ACCESS) return null
+  return env.PROGRAMKIT_EVENT_ACCESS.get(env.PROGRAMKIT_EVENT_ACCESS.idFromName(eventId))
+}
+
+function eventWorkspaceKey(eventId: string) {
+  return `event_${eventId}`
+}
+
+async function hashValue(value: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return Array.from(new Uint8Array(digest), (entry) => entry.toString(16).padStart(2, '0')).join('')
+}
+
+interface HostedPrincipal {
+  authShard: string
+  sessionToken: string
+  account: AuthAccount
+  membership: EventMembership | null
+  scopes: string[]
+}
+
+interface ApiKeyPrincipal {
+  eventId: string
+  apiKey: EventApiKey
+  actor: NonNullable<OperationRequest['actor']>
+}
+
+const authShardPattern = /^[a-f0-9]{32}$/u
+const authSecretPattern = /^[a-f0-9]{64}$/u
+
+function scopedAuthToken(shard: string, secret: string) {
+  return `${shard}.${secret}`
+}
+
+function parseScopedAuthToken(value: string | null) {
+  if (!value) return null
+  const [shard, secret, ...rest] = value.split('.')
+  if (rest.length > 0 || !authShardPattern.test(shard) || !authSecretPattern.test(secret)) {
+    return null
+  }
+  return { shard, secret }
+}
+
+export function parseApiKeyToken(value: string | null) {
+  const match = value?.match(apiKeyTokenPattern)
+  if (!match) return null
+  return { token: value!, eventId: match[1], apiKeyId: match[2] }
+}
+
+function bearerToken(request: Request) {
+  const value = request.headers.get('authorization')
+  const match = value?.match(/^Bearer\s+(.+)$/iu)
+  return match?.[1]?.trim() ?? null
+}
+
+async function resolveApiKeyPrincipal(env: Env, request: Request) {
+  const parsed = parseApiKeyToken(bearerToken(request))
+  if (!parsed) return null
+  const access = eventAccessStub(env, parsed.eventId)
+  if (!access) return null
+  const response = await access.fetch(
+    new Request('http://event-access.internal/internal/event-access/api-keys/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(parsed),
+    }),
+  )
+  const body = (await response.json()) as EventAccessResponse
+  if (!response.ok || !body.apiKey || !body.scopes) return null
   return {
-    type: 'participant' as const,
-    id: participationId,
-    name: 'Portal participant',
-    scopes: ['participations:write', 'requirements:write', 'portal:write', 'assets:write'],
+    eventId: parsed.eventId,
+    apiKey: body.apiKey,
+    actor: {
+      type: 'service',
+      id: body.apiKey.id,
+      name: body.apiKey.name,
+      scopes: body.scopes,
+    },
+  } satisfies ApiKeyPrincipal
+}
+
+async function resolveHostedPrincipal(env: Env, request: Request) {
+  const session = parseScopedAuthToken(cookie(request, sessionCookieName))
+  if (!session) return null
+  const stub = authStub(env, session.shard)
+  if (!stub) return null
+  const response = await stub.fetch(
+    new Request('http://auth.internal/internal/auth/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: session.secret,
+        preferredEventId: cookie(request, eventCookieName),
+      }),
+    }),
+  )
+  if (!response.ok) return null
+  const body = (await response.json()) as { ok: boolean; account?: AuthAccount }
+  if (!body.ok || !body.account) return null
+  const activeEvent = body.account.events.find((event) => event.id === body.account!.activeEventId)
+  if (!activeEvent) return null
+  const access = await resolveHostedEventAccess(
+    env,
+    {
+      authShard: session.shard,
+      sessionToken: session.secret,
+      account: body.account,
+    },
+    activeEvent,
+  )
+  return {
+    authShard: session.shard,
+    sessionToken: session.secret,
+    account: body.account,
+    membership: access?.membership ?? null,
+    scopes: access?.scopes ?? [],
   }
 }
 
-const maximumRequirementFileBytes = 8 * 1024 * 1024
-
-function json(body: unknown, init?: ResponseInit) {
-  return new Response(JSON.stringify(body), {
-    ...init,
-    headers: {
-      'cache-control': 'no-store',
-      'content-type': 'application/json; charset=utf-8',
-      ...init?.headers,
-    },
-  })
+function hostedStaffActor(principal: HostedPrincipal) {
+  return {
+    type: 'staff' as const,
+    id: principal.account.user.id,
+    name: principal.account.user.name,
+    scopes: principal.scopes,
+  }
 }
 
-function safeFilename(value: string) {
-  const normalized = value
-    .normalize('NFKC')
-    .split('')
-    .map((character) => {
-      const codePoint = character.codePointAt(0) ?? 0
-      return character === '/' || character === '\\' || codePoint < 32 || codePoint === 127
-        ? '-'
-        : character
-    })
-    .join('')
-    .replace(/\s+/gu, ' ')
-    .trim()
-  return (normalized || 'upload').slice(0, 160)
+function isHostedAlwaysPublicPage(pathname: string) {
+  return pathname === '/login' || pathname === '/privacy' || pathname === '/terms'
 }
 
-function participantCanAccessAsset(
-  state: WorkspaceState,
-  participationId: string,
-  assetId: string,
-) {
-  const participation = state.participations.find((entry) => entry.id === participationId)
-  if (!participation) return false
-  const submissionIds = new Set(
-    state.submissions
-      .filter((entry) => entry.convertedParticipationId === participationId)
-      .map((entry) => entry.id),
-  )
-  const asset = state.assets.find((entry) => entry.id === assetId)
-  if (!asset) return false
+function isHostedPublicDocument(pathname: string) {
   return (
-    (asset.owner.type === 'participation' && asset.owner.id === participationId) ||
-    (asset.owner.type === 'person' && asset.owner.id === participation.personId) ||
-    (asset.owner.type === 'submission' && submissionIds.has(asset.owner.id))
+    pathname === '/agenda' ||
+    pathname === '/access' ||
+    pathname.startsWith('/submit/') ||
+    /^\/reviewer\/[^/]+\/[^/]+\/?$/u.test(pathname) ||
+    /^\/portal\/[^/]+\/[^/]+\/?$/u.test(pathname)
   )
 }
 
-function workspaceStub(env: Env, request: Request) {
-  const requested = request.headers.get('x-programkit-workspace-key') ?? 'demo'
-  const workspaceKey = /^[a-z0-9][a-z0-9_-]{0,63}$/u.test(requested) ? requested : 'demo'
-  return env.PROGRAMKIT_WORKSPACES.get(env.PROGRAMKIT_WORKSPACES.idFromName(workspaceKey))
+export function hostedPublicEventId(request: Request, url: URL) {
+  if (isDocumentNavigation(request) && isHostedPublicDocument(url.pathname)) {
+    const requested = url.searchParams.get('event')
+    if (requested && hostedEventIdPattern.test(requested)) return requested
+    const selected = cookie(request, publicEventCookieName)
+    return selected && hostedEventIdPattern.test(selected) ? selected : null
+  }
+  if (url.pathname.startsWith('/public/')) {
+    const requested = url.searchParams.get('event')
+    if (requested && hostedEventIdPattern.test(requested)) return requested
+    const selected = cookie(request, publicEventCookieName)
+    return selected && hostedEventIdPattern.test(selected) ? selected : null
+  }
+  return null
+}
+
+export function isHostedDemoReset(profile: string, method: string, pathname: string) {
+  return (
+    profile === 'hosted-app' &&
+    method === 'POST' &&
+    pathname === '/api/v1/operations/workspace.reset-demo'
+  )
+}
+
+interface ExternalAccessIdentity {
+  id: string
+  email: string
+}
+
+interface ExternalAccessDestination {
+  id: string
+  kind: 'submissions' | 'reviewer' | 'speaker'
+  label: string
+  detail: string
+  href: string
+}
+
+interface ExternalAccessResponse {
+  ok: boolean
+  code?: string
+  error?: string
+  identity?: ExternalAccessIdentity
+  sessionToken?: string
+  sessionExpiresAt?: string
+}
+
+interface ExternalDirectoryEvent {
+  id: string
+  name: string
+  slug: string
+  updatedAt: string
+}
+
+function externalSessionCookie(eventId: string, token: string, url: URL, expiresAt: string) {
+  const maxAge = Math.max(0, Math.floor((Date.parse(expiresAt) - Date.now()) / 1_000))
+  return authCookie(externalSessionCookieName, `${eventId}.${token}`, url, maxAge)
+}
+
+function parseExternalSession(value: string | null, eventId: string) {
+  const match = value?.match(externalSessionPattern)
+  return match?.[1] === eventId ? match[2] : null
+}
+
+function parseAnyExternalSession(value: string | null) {
+  const match = value?.match(externalSessionPattern)
+  return match ? { eventId: match[1], token: match[2] } : null
+}
+
+function externalAccessHref(pathname: string, eventId: string) {
+  const search = new URLSearchParams({ event: eventId })
+  return `${pathname}?${search}`
+}
+
+function externalAccessDestinations(
+  state: WorkspaceState,
+  email: string,
+  eventId: string,
+): ExternalAccessDestination[] {
+  const normalizedEmail = normalizeEmail(email)
+  if (!normalizedEmail) return []
+  const destinations: ExternalAccessDestination[] = []
+  const seenSubmissionKeys = new Set<string>()
+
+  for (const submission of state.submissions) {
+    const submissionEmail = normalizeEmail(submissionAnswerByPurpose(state, submission, 'email'))
+    if (submission.eventId !== eventId || submissionEmail !== normalizedEmail) continue
+    const form = state.submissionForms.find((entry) => entry.id === submission.formId)
+    if (!form) continue
+    const key = `${form.id}:${submission.speakerAccessKey}`
+    if (seenSubmissionKeys.has(key)) continue
+    seenSubmissionKeys.add(key)
+    destinations.push({
+      id: `submissions:${key}`,
+      kind: 'submissions',
+      label: form.title,
+      detail: 'Your proposals and decisions',
+      href: externalAccessHref(
+        `/submit/${encodeURIComponent(form.slug)}/mine/${encodeURIComponent(submission.speakerAccessKey)}`,
+        eventId,
+      ),
+    })
+  }
+
+  for (const reviewer of state.reviewers) {
+    if (
+      reviewer.eventId !== eventId ||
+      reviewer.status === 'inactive' ||
+      normalizeEmail(reviewer.email) !== normalizedEmail
+    ) {
+      continue
+    }
+    destinations.push({
+      id: `reviewer:${reviewer.id}`,
+      kind: 'reviewer',
+      label: 'Reviewer workspace',
+      detail: reviewer.name,
+      href: externalAccessHref(
+        `/reviewer/${encodeURIComponent(reviewer.id)}/${encodeURIComponent(reviewer.accessKey)}`,
+        eventId,
+      ),
+    })
+  }
+
+  for (const participation of state.participations) {
+    if (participation.eventId !== eventId) continue
+    const person = state.people.find((entry) => entry.id === participation.personId)
+    if (!person || normalizeEmail(person.email) !== normalizedEmail) continue
+    destinations.push({
+      id: `speaker:${participation.id}`,
+      kind: 'speaker',
+      label: 'Speaker portal',
+      detail: `${person.firstName} ${person.lastName}`,
+      href: externalAccessHref(
+        `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}`,
+        eventId,
+      ),
+    })
+  }
+
+  return destinations.sort((left, right) => left.label.localeCompare(right.label))
+}
+
+async function externalAccessPayload(
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  identity: ExternalAccessIdentity,
+  eventId: string,
+  formSlug?: string | null,
+) {
+  const destinations = externalAccessDestinations(
+    await readWorkspace(stub),
+    identity.email,
+    eventId,
+  )
+  const submissionDestination = formSlug
+    ? destinations.find((destination) => {
+        if (destination.kind !== 'submissions') return false
+        const pathname = new URL(destination.href, 'https://programkit.invalid').pathname
+        return pathname.startsWith(`/submit/${encodeURIComponent(formSlug)}/mine/`)
+      })
+    : null
+  const accessKey = submissionDestination
+    ? decodeURIComponent(
+        new URL(submissionDestination.href, 'https://programkit.invalid').pathname
+          .split('/')
+          .at(-1) ?? '',
+      )
+    : null
+  return { identity, destinations, submissionAccessKey: accessKey || null }
+}
+
+function workspaceExternalEmails(state: WorkspaceState) {
+  const emails = new Set<string>()
+  for (const reviewer of state.reviewers) {
+    if (reviewer.eventId === state.activeEventId && reviewer.status !== 'inactive') {
+      const email = normalizeEmail(reviewer.email)
+      if (email) emails.add(email)
+    }
+  }
+  for (const participation of state.participations) {
+    if (participation.eventId !== state.activeEventId) continue
+    const person = state.people.find((entry) => entry.id === participation.personId)
+    const email = normalizeEmail(person?.email)
+    if (email) emails.add(email)
+  }
+  for (const submission of state.submissions) {
+    if (submission.eventId !== state.activeEventId) continue
+    const email = normalizeEmail(submissionAnswerByPurpose(state, submission, 'email'))
+    if (email) emails.add(email)
+  }
+  return [...emails]
+}
+
+async function syncExternalAccessDirectory(
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+) {
+  const directory = externalDirectoryStub(env)
+  if (!directory) return
+  const state = await readWorkspace(stub)
+  const event = state.events.find((entry) => entry.id === state.activeEventId)
+  if (!event) return
+  const response = await directory.fetch(
+    new Request('http://auth.internal/internal/external-directory/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        eventId: event.id,
+        name: event.name,
+        slug: event.slug,
+        emails: workspaceExternalEmails(state),
+      }),
+    }),
+  )
+  if (!response.ok) throw new Error('Participant access directory could not be updated.')
+}
+
+async function externalDirectoryEvents(env: Env, email: string) {
+  const directory = externalDirectoryStub(env)
+  if (!directory) return []
+  const response = await directory.fetch(
+    new Request('http://auth.internal/internal/external-directory/lookup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+    }),
+  )
+  if (!response.ok) return []
+  const body = (await response.json()) as { ok?: boolean; events?: ExternalDirectoryEvent[] }
+  return body.ok ? (body.events ?? []) : []
+}
+
+async function externalSessionPayload(
+  env: Env,
+  eventId: string,
+  token: string,
+  formSlug?: string | null,
+) {
+  const access = eventAccessStub(env, eventId)
+  if (!access) return null
+  const response = await access.fetch(
+    new Request('http://event-access.internal/internal/event-access/external/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ eventId, token }),
+    }),
+  )
+  const body = (await response.json()) as ExternalAccessResponse
+  if (!response.ok || !body.identity) return null
+  const workspace = workspaceStub(env, eventWorkspaceKey(eventId))
+  const state = await readWorkspace(workspace)
+  const event = state.events.find((entry) => entry.id === eventId)
+  return {
+    eventId,
+    eventName: event?.name ?? 'Event',
+    ...(await externalAccessPayload(workspace, body.identity, eventId, formSlug)),
+  }
+}
+
+async function handleExternalAccessDiscovery(request: Request, env: Env, url: URL) {
+  const savedSession = parseAnyExternalSession(cookie(request, externalSessionCookieName))
+
+  if (request.method === 'GET' && url.pathname === '/public/v1/access/discover/session') {
+    if (!savedSession) {
+      return Response.json(
+        { ok: true, authenticated: false },
+        { headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const payload = await externalSessionPayload(env, savedSession.eventId, savedSession.token)
+    if (payload) {
+      return Response.json(
+        { ok: true, authenticated: true, ...payload },
+        { headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    return Response.json(
+      { ok: true, authenticated: false },
+      {
+        headers: {
+          'cache-control': 'no-store',
+          'set-cookie': clearAuthCookie(externalSessionCookieName, url),
+        },
+      },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/public/v1/access/discover/password') {
+    if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+    const input = (await request.json()) as Record<string, unknown>
+    const email = normalizeEmail(input.email)
+    const password = typeof input.password === 'string' ? input.password : ''
+    const intent = input.intent === 'signup' ? 'signup' : 'signin'
+    if (!email || password.length < 10 || password.length > 128) {
+      return Response.json(
+        { ok: false, error: 'Enter a valid email and a password with at least 10 characters.' },
+        { status: 400, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const events = await externalDirectoryEvents(env, email)
+    const candidates = intent === 'signup' ? events.slice(0, 1) : events
+    const ipHash = await hashValue(request.headers.get('cf-connecting-ip') ?? 'local')
+    for (const event of candidates) {
+      const access = eventAccessStub(env, event.id)
+      if (!access) continue
+      const authenticatedResponse = await access.fetch(
+        new Request('http://event-access.internal/internal/event-access/external/password', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            eventId: event.id,
+            email,
+            password,
+            intent,
+            ipHash,
+          }),
+        }),
+      )
+      const authenticated = (await authenticatedResponse.json()) as ExternalAccessResponse
+      if (
+        !authenticatedResponse.ok ||
+        !authenticated.identity ||
+        !authenticated.sessionToken ||
+        !authenticated.sessionExpiresAt
+      ) {
+        continue
+      }
+      const payload = await externalSessionPayload(env, event.id, authenticated.sessionToken)
+      if (!payload) continue
+      return Response.json(
+        { ok: true, authenticated: true, ...payload },
+        {
+          status: intent === 'signup' ? 201 : 200,
+          headers: {
+            'cache-control': 'no-store',
+            'set-cookie': externalSessionCookie(
+              event.id,
+              authenticated.sessionToken,
+              url,
+              authenticated.sessionExpiresAt,
+            ),
+          },
+        },
+      )
+    }
+    return Response.json(
+      {
+        ok: false,
+        error:
+          intent === 'signup'
+            ? 'No event invitation was found for this email.'
+            : 'The email or password is incorrect.',
+      },
+      { status: 401, headers: { 'cache-control': 'no-store' } },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/public/v1/access/discover/logout') {
+    if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+    if (savedSession) {
+      const access = eventAccessStub(env, savedSession.eventId)
+      await access?.fetch(
+        new Request('http://event-access.internal/internal/event-access/external/logout', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ eventId: savedSession.eventId, token: savedSession.token }),
+        }),
+      )
+    }
+    return Response.json(
+      { ok: true },
+      {
+        headers: {
+          'cache-control': 'no-store',
+          'set-cookie': clearAuthCookie(externalSessionCookieName, url),
+        },
+      },
+    )
+  }
+
+  return null
+}
+
+async function handleExternalAccessRequest(request: Request, env: Env, url: URL, eventId: string) {
+  const access = eventAccessStub(env, eventId)
+  if (!access) {
+    return Response.json(
+      { ok: false, error: 'Participant access is unavailable.' },
+      { status: 503, headers: { 'cache-control': 'no-store' } },
+    )
+  }
+  const workspace = workspaceStub(env, eventWorkspaceKey(eventId))
+  const formSlug = url.searchParams.get('form')
+  const sessionToken = parseExternalSession(cookie(request, externalSessionCookieName), eventId)
+
+  if (request.method === 'GET' && url.pathname === '/public/v1/access/session') {
+    if (!sessionToken) {
+      return Response.json(
+        { ok: true, authenticated: false },
+        { headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const response = await access.fetch(
+      new Request('http://event-access.internal/internal/event-access/external/session', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ eventId, token: sessionToken }),
+      }),
+    )
+    const body = (await response.json()) as ExternalAccessResponse
+    if (!response.ok || !body.identity) {
+      return Response.json(
+        { ok: true, authenticated: false },
+        {
+          headers: {
+            'cache-control': 'no-store',
+            'set-cookie': clearAuthCookie(externalSessionCookieName, url),
+          },
+        },
+      )
+    }
+    return Response.json(
+      {
+        ok: true,
+        authenticated: true,
+        ...(await externalAccessPayload(workspace, body.identity, eventId, formSlug)),
+      },
+      { headers: { 'cache-control': 'no-store' } },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/public/v1/access/password') {
+    if (!sameOrigin(request, url)) {
+      return Response.json(
+        { ok: false, error: 'Cross-origin requests are not allowed.' },
+        { status: 403 },
+      )
+    }
+    const input = (await request.json()) as Record<string, unknown>
+    const email = normalizeEmail(input.email)
+    const password = typeof input.password === 'string' ? input.password : ''
+    const intent = input.intent === 'signup' ? 'signup' : 'signin'
+    if (!email || password.length < 10 || password.length > 128) {
+      return Response.json(
+        { ok: false, error: 'Enter a valid email and a password with at least 10 characters.' },
+        { status: 400, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const ipHash = await hashValue(request.headers.get('cf-connecting-ip') ?? 'local')
+    const authenticatedResponse = await access.fetch(
+      new Request('http://event-access.internal/internal/event-access/external/password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ eventId, email, password, intent, ipHash }),
+      }),
+    )
+    const authenticated = (await authenticatedResponse.json()) as ExternalAccessResponse
+    if (
+      !authenticatedResponse.ok ||
+      !authenticated.identity ||
+      !authenticated.sessionToken ||
+      !authenticated.sessionExpiresAt
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          code: authenticated.code,
+          error:
+            authenticated.error ??
+            (intent === 'signup'
+              ? 'That account already exists. Sign in instead.'
+              : 'The email or password is incorrect.'),
+        },
+        {
+          status: authenticatedResponse.status,
+          headers: { 'cache-control': 'no-store' },
+        },
+      )
+    }
+    const payload = await externalAccessPayload(
+      workspace,
+      authenticated.identity,
+      eventId,
+      formSlug,
+    )
+    return Response.json(
+      { ok: true, authenticated: true, ...payload },
+      {
+        status: intent === 'signup' ? 201 : 200,
+        headers: {
+          'cache-control': 'no-store',
+          'set-cookie': externalSessionCookie(
+            eventId,
+            authenticated.sessionToken,
+            url,
+            authenticated.sessionExpiresAt,
+          ),
+        },
+      },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/public/v1/access/logout') {
+    if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+    if (sessionToken) {
+      await access.fetch(
+        new Request('http://event-access.internal/internal/event-access/external/logout', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ eventId, token: sessionToken }),
+        }),
+      )
+    }
+    return Response.json(
+      { ok: true },
+      {
+        headers: {
+          'cache-control': 'no-store',
+          'set-cookie': clearAuthCookie(externalSessionCookieName, url),
+        },
+      },
+    )
+  }
+
+  return null
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function configuredAppOrigin(env: Env, requestUrl: URL) {
+  if (requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1') {
+    return requestUrl.origin
+  }
+  return env.PROGRAMKIT_APP_ORIGIN ?? 'https://app.programkit.dev'
+}
+
+async function initializeHostedEvent(
+  env: Env,
+  event: AuthEventSummary,
+  createdAt = event.createdAt,
+  settings?: Omit<NormalizedHostedEventCreateInput, 'name'>,
+) {
+  const response = await workspaceStub(env, eventWorkspaceKey(event.id)).fetch(
+    new Request('http://workspace.internal/internal/event/initialize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: event.id,
+        name: event.name,
+        slug: event.slug,
+        createdAt,
+        ...settings,
+      }),
+    }),
+  )
+  if (!response.ok && response.status !== 409) {
+    throw new Error('The event workspace could not be initialized.')
+  }
+}
+
+interface NormalizedHostedEventCreateInput {
+  name: string
+  startsAt?: string
+  endsAt?: string
+  timezone: string
+  venue: string
+  city: string
+}
+
+function optionalEventText(value: unknown, field: string, maximumLength: number) {
+  if (value === undefined || value === null) return ''
+  if (typeof value !== 'string') throw new Error(`${field} must be text.`)
+  const normalized = value.trim()
+  if (normalized.length > maximumLength) {
+    throw new Error(`${field} must be ${maximumLength} characters or fewer.`)
+  }
+  return normalized
+}
+
+export function normalizeHostedEventCreateInput(input: unknown): NormalizedHostedEventCreateInput {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('Enter the event details.')
+  }
+  const candidate = input as Record<string, unknown>
+  const name = optionalEventText(candidate.name, 'Event name', 120)
+  if (name.length < 2) throw new Error('Enter an event name with at least 2 characters.')
+  const venue = optionalEventText(candidate.venue, 'Venue', 200)
+  const city = optionalEventText(candidate.city, 'City', 120)
+  const timezone = optionalEventText(candidate.timezone, 'Timezone', 100) || 'UTC'
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format()
+  } catch {
+    throw new Error('Choose a valid timezone.')
+  }
+
+  const hasStartsAt = candidate.startsAt !== undefined && candidate.startsAt !== null
+  const hasEndsAt = candidate.endsAt !== undefined && candidate.endsAt !== null
+  if (hasStartsAt !== hasEndsAt) throw new Error('Choose both a start date and an end date.')
+  if (!hasStartsAt) return { name, timezone, venue, city }
+  if (typeof candidate.startsAt !== 'string' || typeof candidate.endsAt !== 'string') {
+    throw new Error('Choose valid event dates.')
+  }
+  const startsAt = candidate.startsAt.trim()
+  const endsAt = candidate.endsAt.trim()
+  if (!Number.isFinite(Date.parse(startsAt)) || !Number.isFinite(Date.parse(endsAt))) {
+    throw new Error('Choose valid event dates.')
+  }
+  if (Date.parse(startsAt) >= Date.parse(endsAt)) {
+    throw new Error('The event end must be after its start.')
+  }
+  return { name, startsAt, endsAt, timezone, venue, city }
+}
+
+type HostedSessionPrincipal = Pick<HostedPrincipal, 'authShard' | 'sessionToken' | 'account'>
+
+interface EventAccessResponse {
+  ok: boolean
+  code?: string
+  error?: string
+  event?: EventAccessEvent
+  membership?: EventMembership
+  memberships?: EventMembership[]
+  invitation?: EventInvitation
+  invitations?: EventInvitation[]
+  apiKey?: EventApiKey
+  apiKeys?: EventApiKey[]
+  token?: string
+  scopes?: string[]
+}
+
+function eventAccessActor(principal: HostedSessionPrincipal): EventAccessActor {
+  return {
+    userId: principal.account.user.id,
+    email: principal.account.user.email,
+  }
+}
+
+async function initializeHostedEventAccess(
+  env: Env,
+  event: AuthEventSummary,
+  owner: EventAccessActor,
+) {
+  const stub = eventAccessStub(env, event.id)
+  if (!stub) throw new Error('Event access is not configured.')
+  const response = await stub.fetch(
+    new Request('http://event-access.internal/internal/event-access/initialize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ event, owner }),
+    }),
+  )
+  const body = (await response.json()) as EventAccessResponse
+  if (!response.ok || !body.membership) {
+    throw new Error(body.error ?? 'Event access could not be initialized.')
+  }
+  return body.membership
+}
+
+function membershipProjection(
+  event: AuthEventSummary,
+  membership: EventMembership,
+): AuthMembershipProjection {
+  return {
+    id: event.id,
+    name: event.name,
+    slug: event.slug,
+    role: membership.role,
+    createdAt: event.createdAt,
+    membershipId: membership.id,
+    membershipVersion: membership.version,
+    joinedAt: membership.joinedAt,
+  }
+}
+
+async function linkHostedMembership(
+  env: Env,
+  principal: HostedSessionPrincipal,
+  event: AuthEventSummary,
+  membership: EventMembership,
+) {
+  const projection = membershipProjection(event, membership)
+  const response = await authStub(env, principal.authShard)!.fetch(
+    new Request('http://auth.internal/internal/memberships/link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: principal.sessionToken, eventId: event.id, ...projection }),
+    }),
+  )
+  if (!response.ok) throw new Error('Event access could not be linked to this account.')
+  Object.assign(event, projection)
+}
+
+async function resolveHostedEventAccess(
+  env: Env,
+  principal: HostedSessionPrincipal,
+  event: AuthEventSummary,
+) {
+  const stub = eventAccessStub(env, event.id)
+  if (!stub) return null
+  const actor = eventAccessActor(principal)
+  let response = await stub.fetch(
+    new Request('http://event-access.internal/internal/event-access/memberships/lookup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ eventId: event.id, ...actor }),
+    }),
+  )
+  let body = (await response.json()) as EventAccessResponse
+
+  if (!response.ok && body.code === 'EVENT_NOT_INITIALIZED' && event.role === 'owner') {
+    const membership = await initializeHostedEventAccess(env, event, actor)
+    body = { ok: true, membership, scopes: ['*'] }
+    response = new Response(null, { status: 200 })
+  }
+  if (!response.ok || !body.membership || !body.scopes) return null
+
+  if (
+    event.membershipId !== body.membership.id ||
+    event.membershipVersion !== body.membership.version ||
+    event.role !== body.membership.role
+  ) {
+    await linkHostedMembership(env, principal, event, body.membership)
+  }
+  return { membership: body.membership, scopes: body.scopes }
+}
+
+async function hostedEventExists(stub: DurableObjectStub<WorkspaceDurableObject>, eventId: string) {
+  const response = await stub.fetch(new Request('http://workspace.internal/internal/event/status'))
+  if (!response.ok) return false
+  const body = (await response.json()) as { ok?: boolean; event?: { id?: string } }
+  return body.ok === true && body.event?.id === eventId
+}
+
+function unavailablePublicEvent(request: Request) {
+  if (!isDocumentNavigation(request)) {
+    return Response.json(
+      { ok: false, error: 'This public event link is no longer available.' },
+      { status: 404, headers: { 'cache-control': 'no-store' } },
+    )
+  }
+  return new Response(
+    '<!doctype html><meta name="viewport" content="width=device-width"><title>Event unavailable</title><main style="font:16px system-ui;max-width:32rem;margin:20vh auto;padding:24px"><h1>This event link is not available.</h1><p>Ask the organizer for a current ProgramKit link.</p><a href="https://programkit.dev">About ProgramKit</a></main>',
+    {
+      status: 404,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+    },
+  )
+}
+
+interface HostedAuthenticationResult {
+  ok: boolean
+  sessionToken?: string
+  sessionExpiresAt?: string
+  account?: AuthAccount
+}
+
+async function establishHostedSession(
+  env: Env,
+  url: URL,
+  authShard: string,
+  authenticated: HostedAuthenticationResult,
+  response: { destination?: string; status?: number } = {},
+) {
+  if (!authenticated.ok || !authenticated.sessionToken || !authenticated.account) return null
+  const firstEvent = authenticated.account.events.find(
+    (event) => event.id === authenticated.account!.activeEventId,
+  )
+  if (!firstEvent) return null
+  await initializeHostedEvent(env, firstEvent)
+  const principal: HostedSessionPrincipal = {
+    authShard,
+    sessionToken: authenticated.sessionToken,
+    account: authenticated.account,
+  }
+  const membership = await initializeHostedEventAccess(env, firstEvent, eventAccessActor(principal))
+  await linkHostedMembership(env, principal, firstEvent, membership)
+  const maxAge = Math.max(
+    0,
+    Math.floor((Date.parse(authenticated.sessionExpiresAt ?? '') - Date.now()) / 1_000),
+  )
+  const headers = new Headers({ 'cache-control': 'no-store' })
+  headers.append(
+    'set-cookie',
+    authCookie(
+      sessionCookieName,
+      scopedAuthToken(authShard, authenticated.sessionToken),
+      url,
+      maxAge,
+    ),
+  )
+  headers.append(
+    'set-cookie',
+    authCookie(eventCookieName, authenticated.account.activeEventId, url, maxAge),
+  )
+  if (response.destination) {
+    headers.set('location', response.destination)
+    return new Response(null, { status: 302, headers })
+  }
+  return Response.json(
+    {
+      ok: true,
+      account: {
+        user: authenticated.account.user,
+        activeEventId: authenticated.account.activeEventId,
+      },
+    },
+    { status: response.status ?? 200, headers },
+  )
+}
+
+async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
+  if (!env.PROGRAMKIT_AUTH)
+    return Response.json({ ok: false, error: 'Authentication is unavailable.' }, { status: 503 })
+
+  if (request.method === 'POST' && url.pathname === '/api/v1/auth/magic-link') {
+    if (!sameOrigin(request, url)) {
+      return Response.json(
+        { ok: false, error: 'Cross-origin requests are not allowed.' },
+        { status: 403 },
+      )
+    }
+    const input = (await request.json()) as { email?: unknown }
+    const email = normalizeEmail(input.email)
+    if (!email) {
+      return Response.json(
+        { ok: true, message: 'If the address can receive mail, a sign-in link is on its way.' },
+        { status: 202, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const shard = (await hashValue(email)).slice(0, 32)
+    const stub = authStub(env, shard)!
+    const ipHash = await hashValue(request.headers.get('cf-connecting-ip') ?? 'local')
+    const issuedResponse = await stub.fetch(
+      new Request('http://auth.internal/internal/auth/request', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, ipHash }),
+      }),
+    )
+    const issued = (await issuedResponse.json()) as {
+      ok: boolean
+      deliver?: boolean
+      token?: string
+      expiresAt?: string
+      email?: string
+    }
+    if (issued.deliver && issued.token) {
+      if (!env.EMAIL || !env.PROGRAMKIT_EMAIL_FROM) {
+        return Response.json(
+          { ok: false, error: 'Email sign-in is not configured on this deployment.' },
+          { status: 503 },
+        )
+      }
+      const callback = new URL('/auth/verify', configuredAppOrigin(env, url))
+      callback.searchParams.set('token', scopedAuthToken(shard, issued.token))
+      const safeCallback = escapeHtml(callback.toString())
+      try {
+        await env.EMAIL.send({
+          to: issued.email ?? email,
+          from: env.PROGRAMKIT_EMAIL_FROM,
+          replyTo: env.PROGRAMKIT_SUPPORT_EMAIL,
+          subject: 'Sign in to ProgramKit',
+          text: `Sign in to ProgramKit: ${callback.toString()}\n\nThis link expires in 15 minutes and can be used once.`,
+          html: `<div style="font-family:Inter,system-ui,sans-serif;color:#18181b;line-height:1.5"><h1 style="font-size:22px">Sign in to ProgramKit</h1><p>Use this secure link to continue:</p><p><a href="${safeCallback}" style="display:inline-block;border-radius:10px;background:#2563eb;color:white;padding:10px 16px;text-decoration:none">Sign in</a></p><p style="color:#71717a;font-size:14px">This link expires in 15 minutes and can be used once.</p></div>`,
+        })
+      } catch {
+        return Response.json(
+          { ok: false, error: 'The sign-in email could not be sent. Try again.' },
+          { status: 503, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+    }
+    return Response.json(
+      { ok: true, message: 'If the address can receive mail, a sign-in link is on its way.' },
+      { status: 202, headers: { 'cache-control': 'no-store' } },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/v1/auth/password') {
+    if (!sameOrigin(request, url)) {
+      return Response.json(
+        { ok: false, error: 'Cross-origin requests are not allowed.' },
+        { status: 403 },
+      )
+    }
+    const input = (await request.json()) as {
+      email?: unknown
+      password?: unknown
+      intent?: unknown
+      name?: unknown
+    }
+    const email = normalizeEmail(input.email)
+    const password = typeof input.password === 'string' ? input.password : ''
+    const intent = input.intent === 'signup' ? 'signup' : 'signin'
+    const name =
+      typeof input.name === 'string' ? input.name.trim().replace(/\s+/gu, ' ').slice(0, 80) : ''
+    if (!email || password.length < 10 || password.length > 128) {
+      return Response.json(
+        { ok: false, error: 'Enter a valid email and a password with at least 10 characters.' },
+        { status: 400, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const shard = (await hashValue(email)).slice(0, 32)
+    const ipHash = await hashValue(request.headers.get('cf-connecting-ip') ?? 'local')
+    const authenticatedResponse = await authStub(env, shard)!.fetch(
+      new Request('http://auth.internal/internal/auth/password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password, intent, ipHash, name }),
+      }),
+    )
+    const authenticated = (await authenticatedResponse.json()) as HostedAuthenticationResult
+    if (!authenticatedResponse.ok || !authenticated.ok) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            intent === 'signup'
+              ? 'That account already exists. Sign in or use an email link.'
+              : 'The email or password is incorrect.',
+        },
+        { status: 401, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const sessionResponse = await establishHostedSession(env, url, shard, authenticated, {
+      status: intent === 'signup' ? 201 : 200,
+    })
+    return (
+      sessionResponse ??
+      Response.json(
+        { ok: false, error: 'That account could not be opened.' },
+        { status: 500, headers: { 'cache-control': 'no-store' } },
+      )
+    )
+  }
+
+  if (request.method === 'GET' && url.pathname === '/auth/verify') {
+    const token = parseScopedAuthToken(url.searchParams.get('token'))
+    if (!token) return redirect(url, '/login?error=expired')
+    const stub = authStub(env, token.shard)!
+    const consumedResponse = await stub.fetch(
+      new Request('http://auth.internal/internal/auth/consume', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: token.secret }),
+      }),
+    )
+    const consumed = (await consumedResponse.json()) as HostedAuthenticationResult
+    const sessionResponse = await establishHostedSession(env, url, token.shard, consumed, {
+      destination: '/',
+    })
+    return sessionResponse ?? redirect(url, '/login?error=expired')
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/v1/auth/logout') {
+    if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+    const session = parseScopedAuthToken(cookie(request, sessionCookieName))
+    if (session) {
+      await authStub(env, session.shard)!.fetch(
+        new Request('http://auth.internal/internal/auth/logout', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ token: session.secret }),
+        }),
+      )
+    }
+    const headers = new Headers({ 'cache-control': 'no-store' })
+    headers.append('set-cookie', clearAuthCookie(sessionCookieName, url))
+    headers.append('set-cookie', clearAuthCookie(eventCookieName, url))
+    headers.append('set-cookie', clearAuthCookie(externalSessionCookieName, url))
+    return Response.json({ ok: true }, { headers })
+  }
+
+  return null
+}
+
+async function acceptHostedInvitation(
+  env: Env,
+  principal: HostedPrincipal,
+  token: string,
+  url: URL,
+) {
+  const match = token.match(invitationTokenPattern)
+  if (!match) {
+    const headers = new Headers({
+      location: '/login?error=invitation',
+      'cache-control': 'no-store',
+    })
+    headers.append('set-cookie', clearAuthCookie(invitationCookieName, url))
+    return new Response(null, { status: 302, headers })
+  }
+  const eventId = match[1]
+  const stub = eventAccessStub(env, eventId)
+  if (!stub)
+    return Response.json({ ok: false, error: 'Event access is unavailable.' }, { status: 503 })
+  const response = await stub.fetch(
+    new Request('http://event-access.internal/internal/event-access/invitations/consume', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        eventId,
+        token,
+        userId: principal.account.user.id,
+        email: principal.account.user.email,
+      }),
+    }),
+  )
+  const body = (await response.json()) as EventAccessResponse
+  if (!response.ok || !body.membership || !body.event) {
+    const headers = new Headers({
+      location: '/login?error=invitation',
+      'cache-control': 'no-store',
+    })
+    headers.append('set-cookie', clearAuthCookie(invitationCookieName, url))
+    headers.append('set-cookie', clearAuthCookie(sessionCookieName, url))
+    headers.append('set-cookie', clearAuthCookie(eventCookieName, url))
+    return new Response(null, { status: 302, headers })
+  }
+  await linkHostedMembership(
+    env,
+    principal,
+    {
+      id: body.event.id,
+      name: body.event.name,
+      slug: body.event.slug,
+      createdAt: body.event.createdAt,
+      role: body.membership.role,
+    },
+    body.membership,
+  )
+  const headers = new Headers({ location: '/', 'cache-control': 'no-store' })
+  headers.append('set-cookie', clearAuthCookie(invitationCookieName, url))
+  headers.append('set-cookie', authCookie(eventCookieName, body.event.id, url, 30 * 24 * 60 * 60))
+  return new Response(null, { status: 302, headers })
+}
+
+async function demoStatus(stub: DurableObjectStub<WorkspaceDurableObject>) {
+  const response = await stub.fetch(new Request('http://workspace.internal/internal/demo/status'))
+  const body = (await response.json()) as {
+    active?: boolean
+    demo?: { id: string; createdAt: string; expiresAt: string; deletedAt?: string }
+  }
+  return { response, body }
+}
+
+function redirectToIntegrations(url: URL, status: string, message?: string) {
+  const target = new URL('/integrations', url.origin)
+  target.searchParams.set('airtable', status)
+  if (message) target.searchParams.set('message', message.slice(0, 180))
+  return Response.redirect(target, 302)
+}
+
+function sameOrigin(request: Request, url: URL) {
+  const origin = request.headers.get('origin')
+  return origin === url.origin
+}
+
+async function handleAirtableIntegration(
+  request: Request,
+  env: Env,
+  url: URL,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  workspaceKey: string,
+  newWorkspaceCookie?: string,
+) {
+  if (request.method === 'GET' && url.pathname === '/api/v1/integrations/airtable/status') {
+    return stub.fetch(new Request('http://workspace.internal/internal/airtable/status'))
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/v1/integrations/airtable/oauth/start') {
+    if (!env.AIRTABLE_OAUTH_CLIENT_ID) {
+      return redirectToIntegrations(url, 'unavailable', 'Airtable OAuth is not configured.')
+    }
+    const redirectUri = new URL(airtableCallbackPath, url.origin).toString()
+    const authorization = await createAirtableOAuthAuthorization({
+      clientId: env.AIRTABLE_OAUTH_CLIENT_ID,
+      redirectUri,
+    })
+    const persisted = await stub.fetch(
+      new Request('http://workspace.internal/internal/airtable/oauth/start', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          state: authorization.state,
+          codeVerifier: authorization.codeVerifier,
+          redirectUri,
+          expiresAt: new Date(Date.now() + 10 * 60 * 1_000).toISOString(),
+        }),
+      }),
+    )
+    if (!persisted.ok) return redirectToIntegrations(url, 'error', 'OAuth setup could not start.')
+    const headers = new Headers({ location: authorization.authorizationUrl })
+    if (newWorkspaceCookie) headers.set('set-cookie', workspaceCookie(newWorkspaceCookie, url))
+    return new Response(null, { status: 302, headers })
+  }
+
+  if (request.method === 'GET' && url.pathname === airtableCallbackPath) {
+    const providerError = url.searchParams.get('error')
+    if (providerError) {
+      return redirectToIntegrations(
+        url,
+        'error',
+        url.searchParams.get('error_description') ?? providerError,
+      )
+    }
+    const code = url.searchParams.get('code')
+    const state = url.searchParams.get('state')
+    if (!code || !state || !env.AIRTABLE_OAUTH_CLIENT_ID) {
+      return redirectToIntegrations(url, 'error', 'Airtable returned an incomplete authorization.')
+    }
+    try {
+      const consumedResponse = await stub.fetch(
+        new Request('http://workspace.internal/internal/airtable/oauth/consume', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ state }),
+        }),
+      )
+      const consumed = (await consumedResponse.json()) as {
+        ok: boolean
+        error?: string
+        authorization?: { codeVerifier: string; redirectUri: string }
+      }
+      if (!consumedResponse.ok || !consumed.authorization) {
+        throw new Error(consumed.error ?? 'The OAuth state expired.')
+      }
+      const token = await exchangeAirtableAuthorizationCode(
+        {
+          code,
+          codeVerifier: consumed.authorization.codeVerifier,
+          redirectUri: consumed.authorization.redirectUri,
+        },
+        {
+          clientId: env.AIRTABLE_OAUTH_CLIENT_ID,
+          clientSecret: env.AIRTABLE_OAUTH_CLIENT_SECRET,
+        },
+      )
+      const bases = await listAirtableBases(token.accessToken)
+      if (bases.length === 0) {
+        throw new Error('No Airtable bases were granted to ProgramKit.')
+      }
+      const pendingResponse = await stub.fetch(
+        new Request('http://workspace.internal/internal/airtable/oauth/pending', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...token, bases, authorizedAt: new Date().toISOString() }),
+        }),
+      )
+      if (!pendingResponse.ok) throw new Error('The Airtable authorization could not be saved.')
+      return redirectToIntegrations(url, 'choose-base')
+    } catch (error) {
+      return redirectToIntegrations(
+        url,
+        'error',
+        error instanceof Error ? error.message : 'Airtable authorization failed.',
+      )
+    }
+  }
+
+  if (
+    request.method === 'POST' &&
+    (url.pathname === '/api/v1/integrations/airtable/connect' ||
+      url.pathname === '/api/v1/integrations/airtable/disconnect')
+  ) {
+    if (!sameOrigin(request, url)) {
+      return Response.json(
+        { ok: false, error: 'Cross-origin setup requests are not allowed.' },
+        { status: 403 },
+      )
+    }
+    const internalPath = url.pathname.endsWith('/disconnect')
+      ? '/internal/airtable/disconnect'
+      : '/internal/airtable/connect'
+    const input = internalPath.endsWith('/connect')
+      ? ((await request.json()) as { baseId?: string })
+      : null
+    return stub.fetch(
+      new Request(`http://workspace.internal${internalPath}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: input
+          ? JSON.stringify({
+              ...input,
+              webhookUrl:
+                url.protocol === 'https:'
+                  ? new URL(
+                      `/api/v1/integrations/airtable/webhook/${encodeURIComponent(workspaceKey)}`,
+                      url.origin,
+                    ).toString()
+                  : undefined,
+            })
+          : undefined,
+      }),
+    )
+  }
+
+  return null
 }
 
 function withActor(request: Request, actor: OperationRequest['actor']) {
@@ -165,219 +1659,1255 @@ async function executeWorkspaceOperation(
   return (await response.json()) as OperationResponse
 }
 
-function providerFailure(error: unknown) {
-  if (!(error instanceof Error)) return 'The provider request failed.'
-  const code = 'code' in error && typeof error.code === 'string' ? `${error.code}: ` : ''
-  return `${code}${error.message}`.replace(/\s+/gu, ' ').trim().slice(0, 500)
-}
-
-async function recordCampaignDelivery(
+async function executePortalOperation(
   stub: DurableObjectStub<WorkspaceDurableObject>,
-  delivery: CampaignDelivery,
-  result:
-    { status: 'delivered'; providerMessageId: string } | { status: 'failed'; lastError: string },
+  participationId: string,
+  portalAccessKey: string,
+  operation: string,
+  request: OperationRequest,
 ) {
-  return executeWorkspaceOperation(stub, 'campaign.record-delivery', {
-    actor: providerServiceActor,
-    input: { deliveryId: delivery.id, ...result },
-    expectedVersions: { [delivery.id]: delivery.version },
-    idempotencyKey: `provider-email-${delivery.id}-${delivery.attemptCount + 1}`,
-  })
-}
-
-async function deliverPendingCampaigns(
-  stub: DurableObjectStub<WorkspaceDurableObject>,
-  env: Env,
-  campaignId: string,
-) {
-  if (!env.EMAIL || !env.PROGRAMKIT_EMAIL_FROM) return
-  const state = await readWorkspace(stub)
-  const pending = state.campaignDeliveries.filter(
-    (entry) => entry.campaignId === campaignId && entry.status === 'pending_provider',
+  const { actor, ...publicRequest } = request
+  const response = await stub.fetch(
+    withActor(
+      new Request(
+        `http://workspace.internal/public/v1/portal/${encodeURIComponent(participationId)}/operations/${encodeURIComponent(operation)}`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-programkit-portal-key': portalAccessKey,
+          },
+          body: JSON.stringify(publicRequest),
+        },
+      ),
+      actor,
+    ),
   )
-  for (const delivery of pending) {
-    try {
-      const providerMessageId = await deliverCampaignMessage(
-        env.EMAIL,
-        env.PROGRAMKIT_EMAIL_FROM,
-        delivery,
-      )
-      await recordCampaignDelivery(stub, delivery, { status: 'delivered', providerMessageId })
-    } catch (error) {
-      await recordCampaignDelivery(stub, delivery, {
-        status: 'failed',
-        lastError: providerFailure(error),
-      })
-    }
-  }
+  return (await response.json()) as OperationResponse
 }
 
-async function recordAcceleventsResult(
+function safeAssetFilename(value: string) {
+  const normalized = value.normalize('NFKC').replace(/[^a-zA-Z0-9._-]+/gu, '-')
+  return normalized.replace(/^-+|-+$/gu, '').slice(0, 120) || 'upload'
+}
+
+async function uploadSpeakerHeadshot(
+  request: Request,
+  env: Env,
   stub: DurableObjectStub<WorkspaceDurableObject>,
-  batch: AcceleventsExport,
-  item: AcceleventsExport['items'][number],
-  result: { status: 'delivered'; providerId: string } | { status: 'failed'; lastError: string },
+  participationId: string,
 ) {
-  return executeWorkspaceOperation(stub, 'accelevents.record-result', {
-    actor: providerServiceActor,
-    input: { exportId: batch.id, itemId: item.id, ...result },
-    expectedVersions: { [item.id]: item.version },
-    idempotencyKey: `provider-accelevents-${item.id}-${item.attemptCount + 1}`,
+  if (!env.PROGRAMKIT_FILES) {
+    return Response.json({ ok: false, error: 'File storage is not configured.' }, { status: 503 })
+  }
+  const state = await readWorkspace(stub)
+  const participation = state.participations.find(
+    (entry) =>
+      entry.id === participationId &&
+      entry.eventId === state.activeEventId &&
+      entry.portalAccessKey === request.headers.get('x-programkit-portal-key'),
+  )
+  if (!participation) {
+    return Response.json({ ok: false, error: 'This speaker link is unavailable.' }, { status: 403 })
+  }
+  const form = await request.formData()
+  const value = form.get('file')
+  if (!(value instanceof File)) {
+    return Response.json({ ok: false, error: 'Choose an image to upload.' }, { status: 400 })
+  }
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  if (!allowedTypes.has(value.type)) {
+    return Response.json(
+      { ok: false, error: 'Headshots must be JPEG, PNG, or WebP images.' },
+      { status: 415 },
+    )
+  }
+  if (value.size < 1 || value.size > 8_000_000) {
+    return Response.json(
+      { ok: false, error: 'Choose a non-empty image smaller than 8 MB.' },
+      { status: 413 },
+    )
+  }
+  const filename = safeAssetFilename(value.name)
+  const nonce = crypto.randomUUID().replaceAll('-', '')
+  const storageKey = `${state.activeEventId}/people/${participation.personId}/${nonce}-${filename}`
+  await env.PROGRAMKIT_FILES.put(storageKey, value.stream(), {
+    httpMetadata: { contentType: value.type },
+    customMetadata: {
+      eventId: state.activeEventId,
+      participationId,
+      personId: participation.personId,
+    },
+  })
+  const portalPerson = state.people.find((entry) => entry.id === participation.personId)
+  const actor = {
+    type: 'participant' as const,
+    id: participation.id,
+    name: portalPerson
+      ? `${portalPerson.firstName} ${portalPerson.lastName}`
+      : 'Portal participant',
+    scopes: ['assets:write'],
+  }
+  const operation = await executePortalOperation(
+    stub,
+    participation.id,
+    participation.portalAccessKey,
+    'asset.register',
+    {
+      input: {
+        ownerType: 'person',
+        ownerId: participation.personId,
+        kind: 'headshot',
+        filename,
+        contentType: value.type,
+        sizeBytes: value.size,
+        storageKey,
+      },
+      actor,
+      idempotencyKey: `headshot:${storageKey}`,
+    },
+  )
+  if (!operation.ok) {
+    await env.PROGRAMKIT_FILES.delete(storageKey)
+    return Response.json(operation, { status: 400 })
+  }
+  return Response.json(operation, { status: 201 })
+}
+
+async function uploadOrganizerHeadshot(
+  request: Request,
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  personId: string,
+  actor: OperationRequest['actor'],
+) {
+  if (!env.PROGRAMKIT_FILES) {
+    return Response.json({ ok: false, error: 'File storage is not configured.' }, { status: 503 })
+  }
+  const state = await readWorkspace(stub)
+  const participation = state.participations.find(
+    (entry) => entry.eventId === state.activeEventId && entry.personId === personId,
+  )
+  if (!participation || !state.people.some((entry) => entry.id === personId)) {
+    return Response.json({ ok: false, error: 'This speaker was not found.' }, { status: 404 })
+  }
+  const form = await request.formData()
+  const value = form.get('file')
+  if (!(value instanceof File)) {
+    return Response.json({ ok: false, error: 'Choose an image to upload.' }, { status: 400 })
+  }
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  if (!allowedTypes.has(value.type)) {
+    return Response.json(
+      { ok: false, error: 'Headshots must be JPEG, PNG, or WebP images.' },
+      { status: 415 },
+    )
+  }
+  if (value.size < 1 || value.size > 8_000_000) {
+    return Response.json(
+      { ok: false, error: 'Choose a non-empty image smaller than 8 MB.' },
+      { status: 413 },
+    )
+  }
+  const filename = safeAssetFilename(value.name)
+  const nonce = crypto.randomUUID().replaceAll('-', '')
+  const storageKey = `${state.activeEventId}/people/${personId}/${nonce}-${filename}`
+  await env.PROGRAMKIT_FILES.put(storageKey, value.stream(), {
+    httpMetadata: { contentType: value.type },
+    customMetadata: {
+      eventId: state.activeEventId,
+      participationId: participation.id,
+      personId,
+    },
+  })
+  const operation = await executeWorkspaceOperation(stub, 'asset.register', {
+    input: {
+      ownerType: 'person',
+      ownerId: personId,
+      kind: 'headshot',
+      filename,
+      contentType: value.type,
+      sizeBytes: value.size,
+      storageKey,
+    },
+    actor,
+    idempotencyKey: `headshot:${storageKey}`,
+  })
+  if (!operation.ok) {
+    await env.PROGRAMKIT_FILES.delete(storageKey)
+    return Response.json(operation, { status: 400 })
+  }
+  return Response.json(operation, { status: 201 })
+}
+
+async function uploadSpeakerDeliverable(
+  request: Request,
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  participationId: string,
+  requirementInstanceId: string,
+) {
+  if (!env.PROGRAMKIT_FILES) {
+    return Response.json({ ok: false, error: 'File storage is not configured.' }, { status: 503 })
+  }
+  const state = await readWorkspace(stub)
+  const participation = state.participations.find(
+    (entry) =>
+      entry.id === participationId &&
+      entry.eventId === state.activeEventId &&
+      entry.portalAccessKey === request.headers.get('x-programkit-portal-key'),
+  )
+  const instance = state.requirementInstances.find(
+    (entry) => entry.id === requirementInstanceId && entry.participationId === participation?.id,
+  )
+  const definition = instance
+    ? state.requirementDefinitions.find(
+        (entry) => entry.id === instance.definitionId && entry.kind === 'file',
+      )
+    : null
+  if (!participation || !instance || !definition) {
+    return Response.json({ ok: false, error: 'This file task is unavailable.' }, { status: 403 })
+  }
+  const form = await request.formData()
+  const value = form.get('file')
+  if (!(value instanceof File)) {
+    return Response.json({ ok: false, error: 'Choose a file to upload.' }, { status: 400 })
+  }
+  const acceptedTypes = definition.acceptedContentTypes ?? []
+  if (acceptedTypes.length > 0 && !acceptedTypes.includes(value.type)) {
+    return Response.json(
+      { ok: false, error: 'This file type is not accepted for the task.' },
+      { status: 415 },
+    )
+  }
+  const maximum = definition.maxSizeBytes ?? 50_000_000
+  if (value.size < 1 || value.size > maximum) {
+    return Response.json(
+      {
+        ok: false,
+        error: `Choose a non-empty file smaller than ${Math.round(maximum / 1_000_000)} MB.`,
+      },
+      { status: 413 },
+    )
+  }
+  const filename = safeAssetFilename(value.name)
+  const nonce = crypto.randomUUID().replaceAll('-', '')
+  const storageKey = `${state.activeEventId}/deliverables/${instance.id}/${nonce}-${filename}`
+  await env.PROGRAMKIT_FILES.put(storageKey, value.stream(), {
+    httpMetadata: { contentType: value.type },
+    customMetadata: {
+      eventId: state.activeEventId,
+      participationId,
+      requirementInstanceId: instance.id,
+      definitionId: definition.id,
+    },
+  })
+  const person = state.people.find((entry) => entry.id === participation.personId)
+  const operation = await executePortalOperation(
+    stub,
+    participation.id,
+    participation.portalAccessKey,
+    'asset.register',
+    {
+      input: {
+        ownerType: 'requirement',
+        ownerId: instance.id,
+        kind:
+          definition.systemKey === 'final_slides' ||
+          /slides|deck|presentation/iu.test(definition.label)
+            ? 'slides'
+            : 'supporting_document',
+        filename,
+        contentType: value.type,
+        sizeBytes: value.size,
+        storageKey,
+      },
+      actor: {
+        type: 'participant' as const,
+        id: participation.id,
+        name: person ? `${person.firstName} ${person.lastName}` : 'Portal participant',
+        scopes: ['assets:write'],
+      },
+      idempotencyKey: `deliverable:${storageKey}`,
+    },
+  )
+  if (!operation.ok) {
+    await env.PROGRAMKIT_FILES.delete(storageKey)
+    return Response.json(operation, { status: 400 })
+  }
+  return Response.json(operation, { status: 201 })
+}
+
+async function downloadStoredAsset(
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  assetId: string,
+  allowed: (state: Awaited<ReturnType<typeof readWorkspace>>, assetId: string) => boolean,
+) {
+  if (!env.PROGRAMKIT_FILES) return new Response(null, { status: 404 })
+  const state = await readWorkspace(stub)
+  if (!allowed(state, assetId)) return new Response(null, { status: 404 })
+  const asset = state.assets.find(
+    (entry) => entry.id === assetId && entry.eventId === state.activeEventId,
+  )
+  if (!asset) return new Response(null, { status: 404 })
+  const object = await env.PROGRAMKIT_FILES.get(asset.storageKey)
+  if (!object) return new Response(null, { status: 404 })
+  const headers = new Headers({
+    'cache-control': 'private, no-store',
+    'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(asset.filename)}`,
+  })
+  object.writeHttpMetadata(headers)
+  headers.set('etag', object.httpEtag)
+  return new Response(object.body, { headers })
+}
+
+async function exportStoredAssets(
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  requestedIds: ReadonlySet<string>,
+) {
+  if (!env.PROGRAMKIT_FILES) {
+    return Response.json({ ok: false, error: 'File storage is not configured.' }, { status: 503 })
+  }
+  const state = await readWorkspace(stub)
+  const plan = createStoredAssetExportPlan(state, requestedIds)
+  if (plan.length === 0) {
+    return Response.json(
+      { ok: false, error: 'Choose at least one uploaded file.' },
+      { status: 400 },
+    )
+  }
+  let totalBytes = 0
+  const files: Array<{ name: string; data: Uint8Array }> = []
+  for (const entry of plan) {
+    const object = await env.PROGRAMKIT_FILES.get(entry.storageKey)
+    if (!object) continue
+    totalBytes += object.size
+    if (totalBytes > 100_000_000) {
+      return Response.json(
+        { ok: false, error: 'The selected files exceed the 100 MB export limit.' },
+        { status: 413 },
+      )
+    }
+    files.push({
+      name: entry.path,
+      data: new Uint8Array(await object.arrayBuffer()),
+    })
+  }
+  if (files.length === 0) {
+    return Response.json(
+      { ok: false, error: 'The selected files are no longer available.' },
+      { status: 404 },
+    )
+  }
+  const archive = createStoredZip(files, new Date())
+  return new Response(archive, {
+    headers: {
+      'cache-control': 'private, no-store',
+      'content-disposition': `attachment; filename="programkit-latest-files-${new Date().toISOString().slice(0, 10)}.zip"`,
+      'content-length': String(archive.byteLength),
+      'content-type': 'application/zip',
+    },
   })
 }
 
-async function deliverPendingAcceleventsExports(
-  stub: DurableObjectStub<WorkspaceDurableObject>,
+async function publicHeadshot(
   env: Env,
-  exportId: string,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  assetId: string,
 ) {
-  if (!env.ACCELEVENTS_API_KEY) return
+  if (!env.PROGRAMKIT_FILES) return new Response(null, { status: 404 })
   const state = await readWorkspace(stub)
-  for (const batch of state.acceleventsExports.filter((entry) => entry.id === exportId)) {
-    const pending = batch.items.filter((entry) => entry.status === 'pending_provider')
-    if (pending.length === 0) continue
-    const speakerProviderIds = new Map(
-      batch.items
-        .filter((entry) => entry.resource === 'speaker' && entry.providerId)
-        .map((entry) => [entry.externalKey, entry.providerId!]),
-    )
-    for (const item of pending) {
-      try {
-        const providerId = await deliverAcceleventsItem(
-          fetch,
-          env.ACCELEVENTS_API_KEY,
-          batch.eventUrl,
-          item,
-          speakerProviderIds,
-        )
-        if (item.resource === 'speaker') speakerProviderIds.set(item.externalKey, providerId)
-        await recordAcceleventsResult(stub, batch, item, { status: 'delivered', providerId })
-      } catch (error) {
-        await recordAcceleventsResult(stub, batch, item, {
-          status: 'failed',
-          lastError: providerFailure(error),
-        })
-      }
-    }
-  }
+  const asset = state.assets.find(
+    (entry) =>
+      entry.id === assetId && entry.eventId === state.activeEventId && entry.kind === 'headshot',
+  )
+  if (!asset) return new Response(null, { status: 404 })
+  const object = await env.PROGRAMKIT_FILES.get(asset.storageKey)
+  if (!object) return new Response(null, { status: 404 })
+  const headers = new Headers({
+    'cache-control': 'public, max-age=31536000, immutable',
+    'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(asset.filename)}`,
+  })
+  object.writeHttpMetadata(headers)
+  headers.set('etag', object.httpEtag)
+  return new Response(object.body, { headers })
 }
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env, context: ExecutionContext) {
     const url = new URL(request.url)
-    const stub = workspaceStub(env, request)
+    const profile = deploymentProfile(env)
+    let hostedPrincipal: HostedPrincipal | null = null
+    let apiKeyPrincipal: ApiKeyPrincipal | null = null
+    const publicEventId = profile === 'hosted-app' ? hostedPublicEventId(request, url) : null
+    const hostedPublicDocument =
+      isDocumentNavigation(request) &&
+      isHostedPublicDocument(url.pathname) &&
+      (Boolean(publicEventId) || url.pathname === '/access')
+    const hostedPublicApi = Boolean(publicEventId) && url.pathname.startsWith('/public/')
 
-    const portalAssetCollectionMatch = url.pathname.match(/^\/api\/v1\/portal\/([^/]+)\/assets$/u)
-    if (request.method === 'POST' && portalAssetCollectionMatch) {
-      const participationId = decodeURIComponent(portalAssetCollectionMatch[1])
-      const declaredLength = Number(request.headers.get('content-length'))
+    if (profile === 'hosted-app' && url.pathname.startsWith('/public/v1/access/discover/')) {
+      const discoveryResponse = await handleExternalAccessDiscovery(request, env, url)
+      if (discoveryResponse) return discoveryResponse
+    }
+
+    if (
+      profile === 'hosted-app' &&
+      publicEventId &&
+      url.pathname.startsWith('/public/v1/access/')
+    ) {
+      const accessResponse = await handleExternalAccessRequest(request, env, url, publicEventId)
+      if (accessResponse) return accessResponse
+    }
+
+    const presentedBearer = bearerToken(request)
+    if (
+      profile === 'hosted-app' &&
+      url.pathname.startsWith('/api/') &&
+      presentedBearer?.startsWith('pk_live_')
+    ) {
+      apiKeyPrincipal = await resolveApiKeyPrincipal(env, request)
+      if (!apiKeyPrincipal) {
+        return Response.json(
+          { ok: false, error: 'API key is invalid or inactive.' },
+          { status: 401, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+    }
+
+    if (profile === 'hosted-app' && request.method === 'GET' && url.pathname === '/auth/invite') {
+      const token = url.searchParams.get('token') ?? ''
+      if (!invitationTokenPattern.test(token)) return redirect(url, '/login?error=invitation')
+      const headers = new Headers({ location: '/login?invite=1', 'cache-control': 'no-store' })
+      headers.append('set-cookie', authCookie(invitationCookieName, token, url, 7 * 24 * 60 * 60))
+      return new Response(null, { status: 302, headers })
+    }
+
+    if (
+      profile === 'hosted-app' &&
+      (url.pathname === '/auth/verify' || url.pathname.startsWith('/api/v1/auth/'))
+    ) {
+      const authResponse = await handleHostedAuthRequest(request, env, url)
+      if (authResponse) return authResponse
+    }
+
+    if (profile === 'hosted-app') {
+      const needsIdentity =
+        (request.method === 'GET' && isDocumentNavigation(request)) ||
+        url.pathname.startsWith('/api/') ||
+        url.pathname === '/mcp'
+      if (needsIdentity && !apiKeyPrincipal)
+        hostedPrincipal = await resolveHostedPrincipal(env, request)
+
+      const pendingInvitation = cookie(request, invitationCookieName)
+      if (hostedPrincipal && pendingInvitation) {
+        return acceptHostedInvitation(env, hostedPrincipal, pendingInvitation, url)
+      }
+
+      if (hostedPrincipal && !hostedPrincipal.membership) {
+        if (request.method === 'GET' && isDocumentNavigation(request)) {
+          const headers = new Headers({
+            location: '/login?error=access',
+            'cache-control': 'no-store',
+          })
+          headers.append('set-cookie', clearAuthCookie(sessionCookieName, url))
+          headers.append('set-cookie', clearAuthCookie(eventCookieName, url))
+          return new Response(null, { status: 302, headers })
+        }
+        return Response.json(
+          { ok: false, error: 'Event access was not found.' },
+          { status: 403, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+
+      if (request.method === 'GET' && url.pathname === '/login' && hostedPrincipal) {
+        return redirect(url, '/')
+      }
       if (
-        Number.isFinite(declaredLength) &&
-        declaredLength > maximumRequirementFileBytes + 128_000
+        request.method === 'GET' &&
+        isDocumentNavigation(request) &&
+        !isHostedAlwaysPublicPage(url.pathname) &&
+        !hostedPublicDocument &&
+        !hostedPrincipal
       ) {
-        return json({ error: 'Choose a file no larger than 8 MB.' }, { status: 413 })
+        return redirect(url, '/login')
       }
-      let formData: FormData
-      try {
-        formData = await request.formData()
-      } catch {
-        return json({ error: 'The upload form could not be read.' }, { status: 400 })
+      if (
+        !hostedPrincipal &&
+        !apiKeyPrincipal &&
+        (url.pathname.startsWith('/api/') || url.pathname === '/mcp')
+      ) {
+        return Response.json(
+          { ok: false, error: 'Sign in to continue.' },
+          { status: 401, headers: { 'cache-control': 'no-store' } },
+        )
       }
-      const requirementInstanceId = formData.get('requirementInstanceId')
-      const upload = formData.get('file')
-      if (typeof requirementInstanceId !== 'string' || !(upload instanceof File)) {
-        return json({ error: 'Choose a requirement and a file to upload.' }, { status: 400 })
+      if (!hostedPrincipal && url.pathname.startsWith('/public/') && !hostedPublicApi) {
+        return Response.json(
+          { ok: false, error: 'Open this page from an event-specific public link.' },
+          { status: 401, headers: { 'cache-control': 'no-store' } },
+        )
       }
-      if (upload.size <= 0 || upload.size > maximumRequirementFileBytes) {
-        return json({ error: 'Choose a file between 1 byte and 8 MB.' }, { status: 400 })
-      }
+    }
 
-      const state = await readWorkspace(stub)
-      const requirement = state.requirementInstances.find(
-        (entry) => entry.id === requirementInstanceId && entry.participationId === participationId,
+    if (profile === 'hosted-site') {
+      if (url.pathname === '/demo') {
+        return Response.redirect(env.PROGRAMKIT_DEMO_ORIGIN ?? new URL('/', url), 302)
+      }
+      if (
+        url.pathname.startsWith('/api/') ||
+        url.pathname.startsWith('/public/') ||
+        url.pathname === '/mcp'
+      ) {
+        return new Response(null, { status: 404 })
+      }
+      if (
+        request.method === 'GET' &&
+        isDocumentNavigation(request) &&
+        !isStaticOrLegalPath(url.pathname)
+      ) {
+        return redirect(url, '/')
+      }
+    }
+
+    if (profile === 'hosted-app' && (url.pathname === '/demo' || demoIdFromPath(url.pathname))) {
+      return redirect(url, '/')
+    }
+
+    if (
+      profile === 'hosted-demo' &&
+      request.method === 'GET' &&
+      isDocumentNavigation(request) &&
+      !isStaticOrLegalPath(url.pathname) &&
+      !demoIdFromPath(url.pathname) &&
+      !url.pathname.startsWith('/api/') &&
+      !url.pathname.startsWith('/public/') &&
+      url.pathname !== '/mcp' &&
+      !isDemoId(cookie(request, demoCookieName))
+    ) {
+      return redirect(url, '/')
+    }
+
+    if (
+      profile === 'hosted-demo' &&
+      !isDemoId(cookie(request, demoCookieName)) &&
+      (url.pathname === '/mcp' ||
+        ((url.pathname.startsWith('/api/') || url.pathname.startsWith('/public/')) &&
+          url.pathname !== '/api/v1/demos' &&
+          url.pathname !== '/api/v1/demos/current'))
+    ) {
+      return Response.json(
+        { ok: false, error: 'Create or open a private demo first.' },
+        { status: 401, headers: { 'cache-control': 'no-store' } },
       )
-      if (!requirement) {
-        return json({ error: 'That requirement is not available in this portal.' }, { status: 404 })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/v1/demos') {
+      if (profile === 'hosted-app') return new Response(null, { status: 404 })
+      if (!sameOrigin(request, url)) {
+        return Response.json(
+          { ok: false, error: 'Cross-origin demo requests are not allowed.' },
+          { status: 403 },
+        )
       }
-      const filename = safeFilename(upload.name)
-      const storageKey = `workspaces/${state.workspace.id}/participants/${participationId}/${crypto.randomUUID()}/${filename}`
-      try {
-        await env.PROGRAMKIT_ASSETS.put(storageKey, upload.stream(), {
-          httpMetadata: { contentType: upload.type },
-          customMetadata: {
-            filename,
-            participationId,
-            requirementInstanceId,
+      const id = createDemoId()
+      const createdAt = new Date().toISOString()
+      const expiresAt = demoExpiresAt()
+      const stub = workspaceStub(env, demoWorkspaceKey(id))
+      const initialized = await stub.fetch(
+        new Request('http://workspace.internal/internal/demo/initialize', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id, createdAt, expiresAt }),
+        }),
+      )
+      if (!initialized.ok) {
+        return Response.json(
+          { ok: false, error: 'The demo workspace could not be created.' },
+          { status: 500 },
+        )
+      }
+      return Response.json(
+        {
+          ok: true,
+          demo: {
+            createdAt,
+            expiresAt,
+            url: new URL(`/demo/${id}`, url.origin).toString(),
           },
+        },
+        { status: 201, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+
+    const capabilityId = demoIdFromPath(url.pathname)
+    if (request.method === 'GET' && capabilityId) {
+      const { response, body } = await demoStatus(
+        workspaceStub(env, demoWorkspaceKey(capabilityId)),
+      )
+      if (!response.ok || !body.active || !body.demo) {
+        const headers = new Headers({
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'no-store',
         })
-      } catch {
-        return json({ error: 'The file could not be stored. Try again.' }, { status: 502 })
+        headers.append('set-cookie', clearDemoCookie(url))
+        return new Response(
+          '<!doctype html><meta name="viewport" content="width=device-width"><title>Demo unavailable</title><main style="font:16px system-ui;max-width:32rem;margin:20vh auto;padding:24px"><h1>This demo is no longer available.</h1><p>ProgramKit demos expire after seven days.</p><a href="/">Create a new demo</a></main>',
+          {
+            status: response.status === 404 ? 404 : 410,
+            headers,
+          },
+        )
+      }
+      const headers = new Headers({ location: '/', 'cache-control': 'no-store' })
+      headers.append('set-cookie', demoCookie(capabilityId, url, body.demo.expiresAt))
+      return new Response(null, { status: 302, headers })
+    }
+
+    if (url.pathname === '/api/v1/demos/current') {
+      const id = cookie(request, demoCookieName)
+      if (!isDemoId(id)) {
+        return Response.json(
+          { ok: true, active: false },
+          { headers: { 'cache-control': 'no-store' } },
+        )
+      }
+      const stub = workspaceStub(env, demoWorkspaceKey(id))
+      if (request.method === 'GET') {
+        const { response, body } = await demoStatus(stub)
+        if (!response.ok || !body.active || !body.demo) {
+          return Response.json(
+            { ok: true, active: false },
+            {
+              headers: {
+                'cache-control': 'no-store',
+                'set-cookie': clearDemoCookie(url),
+              },
+            },
+          )
+        }
+        return Response.json(
+          {
+            ok: true,
+            active: true,
+            demo: {
+              createdAt: body.demo.createdAt,
+              expiresAt: body.demo.expiresAt,
+              url: new URL(`/demo/${id}`, url.origin).toString(),
+            },
+          },
+          { headers: { 'cache-control': 'no-store' } },
+        )
+      }
+      if (request.method === 'POST') {
+        if (!sameOrigin(request, url)) {
+          return Response.json(
+            { ok: false, error: 'Cross-origin demo requests are not allowed.' },
+            { status: 403 },
+          )
+        }
+        return Response.json(
+          { ok: true, active: false },
+          {
+            headers: { 'cache-control': 'no-store', 'set-cookie': clearDemoCookie(url) },
+          },
+        )
+      }
+      return new Response(null, { status: 405, headers: { allow: 'GET, POST' } })
+    }
+
+    if (profile === 'hosted-app' && hostedPrincipal) {
+      if (request.method === 'GET' && url.pathname === '/api/v1/account') {
+        return Response.json(
+          { ok: true, account: hostedPrincipal.account },
+          { headers: { 'cache-control': 'no-store' } },
+        )
       }
 
-      const actor = participantActor(participationId)
-      let operationResponse: Response
-      try {
-        operationResponse = await stub.fetch(
-          withActor(
-            new Request(
-              `http://workspace.internal/api/v1/portal/${encodeURIComponent(participationId)}/operations/requirement.submit-file`,
-              {
+      const apiKeysMatch = url.pathname.match(
+        /^\/api\/v1\/events\/([^/]+)\/api-keys(?:\/([^/]+))?$/u,
+      )
+      if (apiKeysMatch) {
+        const eventId = decodeURIComponent(apiKeysMatch[1])
+        if (eventId !== hostedPrincipal.membership!.eventId) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        const access = eventAccessStub(env, eventId)!
+        const actor = eventAccessActor(hostedPrincipal)
+
+        if (request.method === 'GET' && !apiKeysMatch[2]) {
+          const listedResponse = await access.fetch(
+            new Request('http://event-access.internal/internal/event-access/api-keys/list', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ eventId, actor }),
+            }),
+          )
+          const listed = (await listedResponse.json()) as EventAccessResponse
+          return listedResponse.ok
+            ? Response.json(
+                { ok: true, apiKeys: listed.apiKeys ?? [] },
+                { headers: { 'cache-control': 'no-store' } },
+              )
+            : Response.json(
+                { ok: false, error: listed.error ?? 'API keys could not be loaded.' },
+                { status: listedResponse.status },
+              )
+        }
+
+        if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+        if (request.method === 'POST' && !apiKeysMatch[2]) {
+          const input = (await request.json()) as {
+            name?: unknown
+            scopes?: unknown
+            expiresAt?: unknown
+          }
+          const createdResponse = await access.fetch(
+            new Request('http://event-access.internal/internal/event-access/api-keys/create', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ ...input, eventId, actor }),
+            }),
+          )
+          const created = (await createdResponse.json()) as EventAccessResponse
+          return createdResponse.ok && created.apiKey && created.token
+            ? Response.json(
+                { ok: true, apiKey: created.apiKey, token: created.token },
+                { status: 201, headers: { 'cache-control': 'no-store' } },
+              )
+            : Response.json(
+                { ok: false, error: created.error ?? 'API key could not be created.' },
+                { status: createdResponse.status },
+              )
+        }
+
+        if (request.method === 'DELETE' && apiKeysMatch[2]) {
+          const revokedResponse = await access.fetch(
+            new Request('http://event-access.internal/internal/event-access/api-keys/revoke', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                eventId,
+                actor,
+                apiKeyId: decodeURIComponent(apiKeysMatch[2]),
+              }),
+            }),
+          )
+          const revoked = (await revokedResponse.json()) as EventAccessResponse
+          return revokedResponse.ok
+            ? Response.json(
+                { ok: true, apiKey: revoked.apiKey },
+                { headers: { 'cache-control': 'no-store' } },
+              )
+            : Response.json(
+                { ok: false, error: revoked.error ?? 'API key could not be revoked.' },
+                { status: revokedResponse.status },
+              )
+        }
+      }
+
+      const teamMatch = url.pathname.match(/^\/api\/v1\/events\/([^/]+)\/team$/u)
+      if (request.method === 'GET' && teamMatch) {
+        const eventId = decodeURIComponent(teamMatch[1])
+        if (eventId !== hostedPrincipal.membership!.eventId) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        const membership = hostedPrincipal.membership!
+        if (membership.role === 'member') {
+          return Response.json(
+            {
+              ok: true,
+              team: {
+                currentMembershipId: membership.id,
+                currentRole: membership.role,
+                members: [membership],
+                invitations: [],
+              },
+            },
+            { headers: { 'cache-control': 'no-store' } },
+          )
+        }
+        const access = eventAccessStub(env, eventId)!
+        const actor = eventAccessActor(hostedPrincipal)
+        const [membersResponse, invitationsResponse] = await Promise.all([
+          access.fetch(
+            new Request('http://event-access.internal/internal/event-access/memberships/list', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ eventId, actor }),
+            }),
+          ),
+          access.fetch(
+            new Request('http://event-access.internal/internal/event-access/invitations/list', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ eventId, actor }),
+            }),
+          ),
+        ])
+        const membersBody = (await membersResponse.json()) as EventAccessResponse
+        const invitationsBody = (await invitationsResponse.json()) as EventAccessResponse
+        if (!membersResponse.ok || !invitationsResponse.ok) {
+          return Response.json(
+            {
+              ok: false,
+              error:
+                membersBody.error ?? invitationsBody.error ?? 'Team access could not be loaded.',
+            },
+            { status: Math.max(membersResponse.status, invitationsResponse.status) },
+          )
+        }
+        return Response.json(
+          {
+            ok: true,
+            team: {
+              currentMembershipId: membership.id,
+              currentRole: membership.role,
+              members: membersBody.memberships ?? [],
+              invitations: (invitationsBody.invitations ?? []).filter(
+                (invitation) => invitation.status === 'pending',
+              ),
+            },
+          },
+          { headers: { 'cache-control': 'no-store' } },
+        )
+      }
+
+      const invitationsMatch = url.pathname.match(
+        /^\/api\/v1\/events\/([^/]+)\/invitations(?:\/([^/]+))?$/u,
+      )
+      if (invitationsMatch) {
+        const eventId = decodeURIComponent(invitationsMatch[1])
+        if (eventId !== hostedPrincipal.membership!.eventId) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+        const access = eventAccessStub(env, eventId)!
+        const actor = eventAccessActor(hostedPrincipal)
+
+        if (request.method === 'POST' && !invitationsMatch[2]) {
+          if (!env.EMAIL || !env.PROGRAMKIT_EMAIL_FROM) {
+            return Response.json(
+              { ok: false, error: 'Invitation email is not configured.' },
+              { status: 503 },
+            )
+          }
+          const input = (await request.json()) as { email?: unknown; role?: unknown }
+          const createdResponse = await access.fetch(
+            new Request('http://event-access.internal/internal/event-access/invitations/create', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ eventId, actor, email: input.email, role: input.role }),
+            }),
+          )
+          const created = (await createdResponse.json()) as EventAccessResponse
+          if (!createdResponse.ok || !created.invitation || !created.token) {
+            return Response.json(
+              { ok: false, error: created.error ?? 'The invitation could not be created.' },
+              { status: createdResponse.status },
+            )
+          }
+          const event = hostedPrincipal.account.events.find(
+            (candidate) => candidate.id === eventId,
+          )!
+          const invitationUrl = new URL('/auth/invite', configuredAppOrigin(env, url))
+          invitationUrl.searchParams.set('token', created.token)
+          const safeInvitationUrl = escapeHtml(invitationUrl.toString())
+          const safeEventName = escapeHtml(event.name)
+          try {
+            await env.EMAIL.send({
+              to: created.invitation.email,
+              from: env.PROGRAMKIT_EMAIL_FROM,
+              replyTo: env.PROGRAMKIT_SUPPORT_EMAIL,
+              subject: `Join ${event.name} in ProgramKit`,
+              text: `${hostedPrincipal.account.user.name} invited you to help manage ${event.name} in ProgramKit.\n\nAccept the invitation: ${invitationUrl.toString()}\n\nThis invitation expires in seven days.`,
+              html: `<div style="font-family:Inter,system-ui,sans-serif;color:#18181b;line-height:1.5"><h1 style="font-size:22px">Join ${safeEventName}</h1><p>${escapeHtml(hostedPrincipal.account.user.name)} invited you to help manage this event in ProgramKit.</p><p><a href="${safeInvitationUrl}" style="display:inline-block;border-radius:999px;background:#2563eb;color:white;padding:10px 16px;text-decoration:none">Accept invitation</a></p><p style="color:#71717a;font-size:14px">This invitation expires in seven days.</p></div>`,
+            })
+          } catch {
+            await access.fetch(
+              new Request('http://event-access.internal/internal/event-access/invitations/revoke', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
-                  input: {
-                    requirementInstanceId,
-                    filename,
-                    contentType: upload.type,
-                    sizeBytes: upload.size,
-                    storageKey,
-                  },
-                  expectedVersions: { [requirement.id]: requirement.version },
-                  idempotencyKey: crypto.randomUUID(),
+                  eventId,
+                  actor,
+                  invitationId: created.invitation.id,
                 }),
-              },
-            ),
-            actor,
-          ),
+              }),
+            )
+            return Response.json(
+              { ok: false, error: 'The invitation email could not be sent. Try again.' },
+              { status: 503 },
+            )
+          }
+          return Response.json(
+            { ok: true, invitation: created.invitation },
+            { status: 201, headers: { 'cache-control': 'no-store' } },
+          )
+        }
+
+        if (request.method === 'DELETE' && invitationsMatch[2]) {
+          const revokedResponse = await access.fetch(
+            new Request('http://event-access.internal/internal/event-access/invitations/revoke', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                eventId,
+                actor,
+                invitationId: decodeURIComponent(invitationsMatch[2]),
+              }),
+            }),
+          )
+          const revoked = (await revokedResponse.json()) as EventAccessResponse
+          return revokedResponse.ok
+            ? Response.json({ ok: true }, { headers: { 'cache-control': 'no-store' } })
+            : Response.json(
+                { ok: false, error: revoked.error ?? 'The invitation could not be canceled.' },
+                { status: revokedResponse.status },
+              )
+        }
+      }
+
+      const memberMatch = url.pathname.match(/^\/api\/v1\/events\/([^/]+)\/members\/([^/]+)$/u)
+      if (request.method === 'DELETE' && memberMatch) {
+        if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+        const eventId = decodeURIComponent(memberMatch[1])
+        if (eventId !== hostedPrincipal.membership!.eventId) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        const access = eventAccessStub(env, eventId)!
+        const revokedResponse = await access.fetch(
+          new Request('http://event-access.internal/internal/event-access/memberships/revoke', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              eventId,
+              actor: eventAccessActor(hostedPrincipal),
+              membershipId: decodeURIComponent(memberMatch[2]),
+            }),
+          }),
         )
-      } catch {
-        await env.PROGRAMKIT_ASSETS.delete(storageKey).catch(() => undefined)
-        return json({ error: 'The upload could not be recorded. Try again.' }, { status: 502 })
+        const revoked = (await revokedResponse.json()) as EventAccessResponse
+        if (!revokedResponse.ok || !revoked.membership) {
+          return Response.json(
+            { ok: false, error: revoked.error ?? 'Team access could not be removed.' },
+            { status: revokedResponse.status },
+          )
+        }
+        const targetShard = (await hashValue(revoked.membership.email)).slice(0, 32)
+        await authStub(env, targetShard)?.fetch(
+          new Request('http://auth.internal/internal/memberships/unlink', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              userId: revoked.membership.userId,
+              eventId,
+              membershipId: revoked.membership.id,
+            }),
+          }),
+        )
+        return Response.json({ ok: true }, { headers: { 'cache-control': 'no-store' } })
       }
-      if (!operationResponse.ok) {
-        await env.PROGRAMKIT_ASSETS.delete(storageKey).catch(() => undefined)
+
+      if (request.method === 'POST' && url.pathname === '/api/v1/events') {
+        if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+        let input: NormalizedHostedEventCreateInput
+        try {
+          input = normalizeHostedEventCreateInput(await request.json())
+        } catch (caught) {
+          return Response.json(
+            {
+              ok: false,
+              error: caught instanceof Error ? caught.message : 'Enter valid event details.',
+            },
+            { status: 400, headers: { 'cache-control': 'no-store' } },
+          )
+        }
+        const stub = authStub(env, hostedPrincipal.authShard)!
+        const createdResponse = await stub.fetch(
+          new Request('http://auth.internal/internal/events/create', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              token: hostedPrincipal.sessionToken,
+              name: input.name,
+            }),
+          }),
+        )
+        const created = (await createdResponse.json()) as {
+          ok: boolean
+          event?: AuthEventSummary
+          error?: string
+        }
+        if (!createdResponse.ok || !created.event) {
+          return Response.json(
+            { ok: false, error: created.error ?? 'The event could not be created.' },
+            { status: createdResponse.status },
+          )
+        }
+        const settings = {
+          startsAt: input.startsAt,
+          endsAt: input.endsAt,
+          timezone: input.timezone,
+          venue: input.venue,
+          city: input.city,
+        }
+        await initializeHostedEvent(env, created.event, created.event.createdAt, settings)
+        const membership = await initializeHostedEventAccess(
+          env,
+          created.event,
+          eventAccessActor(hostedPrincipal),
+        )
+        await linkHostedMembership(env, hostedPrincipal, created.event, membership)
+        const headers = new Headers({ 'cache-control': 'no-store' })
+        headers.append(
+          'set-cookie',
+          authCookie(eventCookieName, created.event.id, url, 30 * 24 * 60 * 60),
+        )
+        return Response.json({ ok: true, event: created.event }, { status: 201, headers })
       }
-      return operationResponse
+
+      if (request.method === 'POST' && url.pathname === '/api/v1/account/active-event') {
+        if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+        const input = (await request.json()) as { eventId?: unknown }
+        const event = hostedPrincipal.account.events.find(
+          (candidate) => candidate.id === input.eventId,
+        )
+        if (!event) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        const access = await resolveHostedEventAccess(env, hostedPrincipal, event)
+        if (!access) {
+          return Response.json({ ok: false, error: 'Event access was not found.' }, { status: 403 })
+        }
+        const headers = new Headers({ 'cache-control': 'no-store' })
+        headers.append('set-cookie', authCookie(eventCookieName, event.id, url, 30 * 24 * 60 * 60))
+        return Response.json({ ok: true, activeEventId: event.id }, { headers })
+      }
     }
 
-    const portalAssetMatch = url.pathname.match(
-      /^\/api\/v1\/portal\/([^/]+)\/assets\/([^/]+)\/content$/u,
+    const oauthWebhookMatch = url.pathname.match(
+      /^\/api\/v1\/integrations\/airtable\/webhook\/([^/]+)$/u,
     )
-    if (request.method === 'GET' && portalAssetMatch) {
-      const participationId = decodeURIComponent(portalAssetMatch[1])
-      const assetId = decodeURIComponent(portalAssetMatch[2])
-      const state = await readWorkspace(stub)
-      if (!participantCanAccessAsset(state, participationId, assetId)) {
-        return json({ error: 'File not found.' }, { status: 404 })
-      }
-      const asset = state.assets.find((entry) => entry.id === assetId)!
-      const object = await env.PROGRAMKIT_ASSETS.get(asset.storageKey)
-      if (!object) return json({ error: 'File not found.' }, { status: 404 })
-      const asciiFilename = asset.filename.replace(/[^\x20-\x7e]/gu, '_').replace(/["\\]/gu, '_')
-      const headers = new Headers()
-      object.writeHttpMetadata(headers)
-      headers.set('cache-control', 'private, no-store')
-      headers.set(
-        'content-disposition',
-        `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(asset.filename)}`,
+    if (request.method === 'POST' && oauthWebhookMatch) {
+      const webhookWorkspaceKey = decodeURIComponent(oauthWebhookMatch[1])
+      if (!workspaceKeyPattern.test(webhookWorkspaceKey)) return new Response(null, { status: 404 })
+      return workspaceStub(env, webhookWorkspaceKey).fetch(
+        new Request('http://workspace.internal/internal/airtable/webhook', {
+          method: 'POST',
+          headers: {
+            'content-type': request.headers.get('content-type') ?? 'application/json',
+            'x-airtable-content-mac': request.headers.get('x-airtable-content-mac') ?? '',
+          },
+          body: await request.arrayBuffer(),
+        }),
       )
-      headers.set('content-length', String(asset.sizeBytes))
-      headers.set('etag', object.httpEtag)
-      headers.set('x-content-type-options', 'nosniff')
-      return new Response(object.body, { headers })
+    }
+    let key = publicEventId
+      ? eventWorkspaceKey(publicEventId)
+      : apiKeyPrincipal
+        ? eventWorkspaceKey(apiKeyPrincipal.eventId)
+        : hostedPrincipal
+          ? eventWorkspaceKey(hostedPrincipal.account.activeEventId)
+          : workspaceKey(env, request)
+    let newWorkspaceCookie: string | undefined
+    if (
+      !env.AIRTABLE_BASE_ID &&
+      key === 'demo' &&
+      url.pathname === '/api/v1/integrations/airtable/oauth/start'
+    ) {
+      key = `try_${crypto.randomUUID().replaceAll('-', '')}`
+      newWorkspaceCookie = key
+    }
+    const stub = workspaceStub(env, key)
+
+    if (profile === 'hosted-app' && hostedPrincipal && isDocumentNavigation(request)) {
+      context.waitUntil(syncExternalAccessDirectory(env, stub).catch(() => undefined))
+    }
+
+    if (apiKeyPrincipal && !isApiKeyAccessiblePath(url.pathname)) {
+      return Response.json(
+        { ok: false, error: 'This endpoint is not available to API keys.' },
+        { status: 403, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+
+    if (
+      profile === 'hosted-app' &&
+      publicEventId &&
+      (hostedPublicDocument || hostedPublicApi) &&
+      !(await hostedEventExists(stub, publicEventId))
+    ) {
+      return unavailablePublicEvent(request)
+    }
+
+    const requiresDemoWorkspace =
+      profile === 'hosted-demo' &&
+      isDemoId(cookie(request, demoCookieName)) &&
+      (isDocumentNavigation(request) ||
+        url.pathname.startsWith('/api/') ||
+        url.pathname.startsWith('/public/') ||
+        url.pathname === '/mcp')
+    if (requiresDemoWorkspace) {
+      const { response, body } = await demoStatus(stub)
+      if (!response.ok || !body.active || !body.demo) {
+        const headers = new Headers({
+          'cache-control': 'no-store',
+          'set-cookie': clearDemoCookie(url),
+        })
+        if (request.method === 'GET' && isDocumentNavigation(request)) {
+          headers.set('location', new URL('/', url.origin).toString())
+          return new Response(null, { status: 302, headers })
+        }
+        return Response.json(
+          { ok: false, error: 'This demo is no longer available.' },
+          { status: 410, headers },
+        )
+      }
+    }
+
+    if (url.pathname.startsWith('/api/v1/integrations/airtable/')) {
+      if (profile === 'hosted-app' && hostedPrincipal && !hostedPrincipal.scopes.includes('*')) {
+        return Response.json(
+          { ok: false, error: 'Administrator access is required.' },
+          { status: 403 },
+        )
+      }
+      const integrationResponse = await handleAirtableIntegration(
+        request,
+        env,
+        url,
+        stub,
+        key,
+        newWorkspaceCookie,
+      )
+      if (integrationResponse) return integrationResponse
+    }
+
+    if (request.method === 'POST' && url.pathname === '/webhooks/airtable') {
+      if (!env.AIRTABLE_WEBHOOK_MAC_SECRET || !env.AIRTABLE_BASE_ID) {
+        return new Response(null, { status: 404 })
+      }
+      if (
+        !(await verifyAirtableWebhookMac(
+          await request.clone().arrayBuffer(),
+          request.headers.get('x-airtable-content-mac'),
+          env.AIRTABLE_WEBHOOK_MAC_SECRET,
+        ))
+      ) {
+        return new Response(null, { status: 401 })
+      }
+      const body = (await request.json()) as { base?: { id?: string } }
+      if (body.base?.id !== env.AIRTABLE_BASE_ID) return new Response(null, { status: 403 })
+      context.waitUntil(
+        stub.fetch(
+          new Request('http://workspace.internal/internal/airtable/refresh', { method: 'POST' }),
+        ),
+      )
+      return new Response(null, { status: 204 })
+    }
+
+    const speakerDeliverableMatch = url.pathname.match(
+      /^\/public\/v1\/portal\/([^/]+)\/requirements\/([^/]+)\/assets$/u,
+    )
+    if (request.method === 'POST' && speakerDeliverableMatch) {
+      if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+      return uploadSpeakerDeliverable(
+        request,
+        env,
+        stub,
+        decodeURIComponent(speakerDeliverableMatch[1]),
+        decodeURIComponent(speakerDeliverableMatch[2]),
+      )
+    }
+
+    const speakerAssetMatch = url.pathname.match(
+      /^\/public\/v1\/portal\/([^/]+)\/assets\/([^/]+)$/u,
+    )
+    if (request.method === 'GET' && speakerAssetMatch) {
+      const participationId = decodeURIComponent(speakerAssetMatch[1])
+      const portalKey = request.headers.get('x-programkit-portal-key')
+      return downloadStoredAsset(
+        env,
+        stub,
+        decodeURIComponent(speakerAssetMatch[2]),
+        (state, assetId) => {
+          const participation = state.participations.find(
+            (entry) => entry.id === participationId && entry.portalAccessKey === portalKey,
+          )
+          const asset = state.assets.find((entry) => entry.id === assetId)
+          if (!participation || !asset) return false
+          if (asset.owner.type === 'person') return asset.owner.id === participation.personId
+          if (asset.owner.type === 'participation') return asset.owner.id === participation.id
+          if (asset.owner.type !== 'requirement') return false
+          return state.requirementInstances.some(
+            (entry) => entry.id === asset.owner.id && entry.participationId === participation.id,
+          )
+        },
+      )
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/v1/assets/export') {
+      const requestedIds = new Set(
+        (url.searchParams.get('ids') ?? '')
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean),
+      )
+      return exportStoredAssets(env, stub, requestedIds)
+    }
+
+    const operatorAssetMatch = url.pathname.match(/^\/api\/v1\/assets\/([^/]+)$/u)
+    if (request.method === 'GET' && operatorAssetMatch) {
+      return downloadStoredAsset(
+        env,
+        stub,
+        decodeURIComponent(operatorAssetMatch[1]),
+        (state, assetId) =>
+          state.assets.some(
+            (entry) => entry.id === assetId && entry.eventId === state.activeEventId,
+          ),
+      )
+    }
+
+    const organizerHeadshotMatch = url.pathname.match(
+      /^\/api\/v1\/people\/([^/]+)\/assets\/headshot$/u,
+    )
+    if (request.method === 'POST' && organizerHeadshotMatch) {
+      if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+      return uploadOrganizerHeadshot(
+        request,
+        env,
+        stub,
+        decodeURIComponent(organizerHeadshotMatch[1]),
+        profile === 'hosted-app' && hostedPrincipal
+          ? hostedStaffActor(hostedPrincipal)
+          : demoStaffActor,
+      )
+    }
+
+    const speakerHeadshotMatch = url.pathname.match(
+      /^\/public\/v1\/portal\/([^/]+)\/assets\/headshot$/u,
+    )
+    if (request.method === 'POST' && speakerHeadshotMatch) {
+      if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+      return uploadSpeakerHeadshot(request, env, stub, decodeURIComponent(speakerHeadshotMatch[1]))
+    }
+
+    const publicHeadshotMatch = url.pathname.match(/^\/public\/v1\/assets\/([^/]+)$/u)
+    if (request.method === 'GET' && publicHeadshotMatch) {
+      return publicHeadshot(env, stub, decodeURIComponent(publicHeadshotMatch[1]))
     }
 
     if (url.pathname === '/mcp') {
+      if (profile === 'hosted-app' && hostedPrincipal && !hostedPrincipal.scopes.includes('*')) {
+        return Response.json(
+          { ok: false, error: 'Administrator access is required.' },
+          { status: 403 },
+        )
+      }
       return handleMcpRequest(request, {
         readState: () => readWorkspace(stub),
         execute: (operation, operationRequest) =>
@@ -385,14 +2915,37 @@ export default {
       })
     }
 
+    if (isHostedDemoReset(profile, request.method, url.pathname)) {
+      return Response.json(
+        { ok: false, error: 'The demonstration reset is not available for hosted events.' },
+        { status: 403, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+
     if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/public/')) {
-      const portalMatch = url.pathname.match(/^\/api\/v1\/portal\/([^/]+)\//u)
-      const reviewerMatch = url.pathname.match(/^\/api\/v1\/reviewers\/([^/]+)\//u)
+      const portalMatch = url.pathname.match(/^\/(?:api|public)\/v1\/portal\/([^/]+)\//u)
+      const reviewerMatch = url.pathname.match(/^\/(?:api|public)\/v1\/reviewers\/([^/]+)\//u)
       const publicSubmissionMatch = url.pathname.match(
         /^\/public\/v1\/submission-forms\/([^/]+)\//u,
       )
+      const portalActorName = portalMatch
+        ? await readWorkspace(stub).then((state) => {
+            const participation = state.participations.find(
+              (entry) => entry.id === decodeURIComponent(portalMatch[1]),
+            )
+            const person = participation
+              ? state.people.find((entry) => entry.id === participation.personId)
+              : null
+            return person ? `${person.firstName} ${person.lastName}` : 'Portal participant'
+          })
+        : null
       const actor = portalMatch
-        ? participantActor(decodeURIComponent(portalMatch[1]))
+        ? ({
+            type: 'participant' as const,
+            id: decodeURIComponent(portalMatch[1]),
+            name: portalActorName ?? 'Portal participant',
+            scopes: ['participations:write', 'requirements:write', 'portal:write', 'assets:write'],
+          } satisfies OperationRequest['actor'])
         : reviewerMatch
           ? ({
               type: 'reviewer' as const,
@@ -407,66 +2960,75 @@ export default {
                 name: 'Public submitter',
                 scopes: ['submissions:write', 'submissions:submit'],
               } satisfies OperationRequest['actor'])
-            : url.pathname.startsWith('/public/')
-              ? publicReaderActor
-              : demoStaffActor
-      const response = await stub.fetch(withActor(request, actor))
-      const operatorOperation = url.pathname.startsWith('/api/v1/operations/')
-        ? decodeURIComponent(url.pathname.slice('/api/v1/operations/'.length))
-        : null
-      if (response.ok && operatorOperation) {
-        let operationData: Record<string, unknown> = {}
-        try {
-          const operationResponse = (await response.clone().json()) as OperationResponse
-          operationData =
-            operationResponse.data && typeof operationResponse.data === 'object'
-              ? (operationResponse.data as Record<string, unknown>)
-              : {}
-        } catch {
-          operationData = {}
-        }
-        if (
-          operatorOperation === 'campaign.send' ||
-          operatorOperation === 'campaign.retry-deliveries'
-        ) {
-          const campaign = operationData.campaign
-          if (
-            campaign &&
-            typeof campaign === 'object' &&
-            typeof (campaign as Record<string, unknown>).id === 'string'
-          ) {
-            ctx.waitUntil(
-              deliverPendingCampaigns(
-                stub,
-                env,
-                (campaign as Record<string, unknown>).id as string,
-              ),
-            )
-          }
-        }
-        if (
-          operatorOperation === 'accelevents.prepare-export' ||
-          operatorOperation === 'accelevents.retry-export'
-        ) {
-          const acceleventsExport = operationData.export
-          if (
-            acceleventsExport &&
-            typeof acceleventsExport === 'object' &&
-            typeof (acceleventsExport as Record<string, unknown>).id === 'string'
-          ) {
-            ctx.waitUntil(
-              deliverPendingAcceleventsExports(
-                stub,
-                env,
-                (acceleventsExport as Record<string, unknown>).id as string,
-              ),
-            )
-          }
-        }
+            : profile === 'hosted-app' && hostedPrincipal
+              ? hostedStaffActor(hostedPrincipal)
+              : profile === 'hosted-app' && apiKeyPrincipal
+                ? apiKeyPrincipal.actor
+                : url.pathname.startsWith('/public/')
+                  ? publicReaderActor
+                  : demoStaffActor
+      const proxiedResponse = await stub.fetch(withActor(request, actor))
+      if (
+        profile === 'hosted-app' &&
+        request.method === 'POST' &&
+        proxiedResponse.ok &&
+        url.pathname.includes('/operations/')
+      ) {
+        context.waitUntil(syncExternalAccessDirectory(env, stub).catch(() => undefined))
       }
-      return response
+      return proxiedResponse
     }
 
-    return env.ASSETS.fetch(request)
+    const assetResponse = await env.ASSETS.fetch(request)
+    if (!assetResponse.headers.get('content-type')?.includes('text/html')) return assetResponse
+
+    const renderedProfile =
+      profile === 'hosted-site'
+        ? 'hosted-site-entry'
+        : profile === 'hosted-demo' && !isDemoId(cookie(request, demoCookieName))
+          ? 'hosted-demo-entry'
+          : profile === 'hosted-app' && !hostedPrincipal && !hostedPublicDocument
+            ? 'hosted-app-entry'
+            : profile
+    const headers = new Headers(assetResponse.headers)
+    headers.set('cache-control', 'no-store')
+    if (profile === 'hosted-app' && hostedPublicDocument && publicEventId) {
+      headers.append('set-cookie', hostedPublicEventCookie(publicEventId, url))
+    }
+    const response = new Response(assetResponse.body, assetResponse)
+    for (const [name, value] of headers) response.headers.set(name, value)
+    // Only the workspace itself is worth installing to a home screen, so the
+    // manifest and the iOS standalone tags are withheld from the marketing site
+    // and the demo. Without them iOS never enters standalone mode, which also
+    // keeps `black-translucent`, and the safe-area padding it demands, off
+    // pages that were never laid out for it.
+    const installable =
+      renderedProfile === 'single-workspace' ||
+      renderedProfile === 'hosted-app' ||
+      renderedProfile === 'hosted-app-entry'
+    return new HTMLRewriter()
+      .on('head', {
+        element(element) {
+          element.append(
+            `<meta name="programkit-deployment-profile" content="${renderedProfile}">`,
+            { html: true },
+          )
+          if (!installable) return
+          element.append(
+            [
+              '<link rel="manifest" href="/site.webmanifest">',
+              '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">',
+              '<meta name="apple-mobile-web-app-capable" content="yes">',
+              '<meta name="mobile-web-app-capable" content="yes">',
+              '<meta name="apple-mobile-web-app-title" content="ProgramKit">',
+              // Translucent hands us the status bar strip: the workspace header
+              // paints white behind the clock instead of iOS drawing its own bar.
+              '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
+            ].join(''),
+            { html: true },
+          )
+        },
+      })
+      .transform(response)
   },
 } satisfies ExportedHandler<Env>

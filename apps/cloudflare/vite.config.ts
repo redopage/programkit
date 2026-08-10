@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
     }),
     react(),
     tailwindcss(),
-    ...(mode === 'test' ? [] : [cloudflare()]),
+    ...(mode === 'test' ? [] : [cloudflare({ configPath: '../../wrangler.jsonc' })]),
   ],
   resolve: {
     alias: [

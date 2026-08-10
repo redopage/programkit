@@ -23,6 +23,7 @@ import type {
   CampaignDeliveryStatus,
   ChangeSetStatus,
   ParticipationStatus,
+  PortalResourcePage,
   RequirementStatus,
   SubmissionStatus,
   SubmissionReceiptDeliveryStatus,
@@ -148,6 +149,8 @@ const statusLabels: Record<string, string> = {
   waitlisted: 'Waitlisted',
   committed: 'Committed',
   stale: 'Stale',
+  published: 'Published',
+  archived: 'Archived',
 }
 
 export function StatusBadge({
@@ -162,6 +165,9 @@ export function StatusBadge({
     | ChangeSetStatus
     | SubmissionStatus
     | SubmissionReceiptDeliveryStatus
+    | PortalResourcePage['status']
+    | 'queued'
+    | 'failed'
   label?: string
 }) {
   return (
@@ -173,21 +179,26 @@ export function StatusBadge({
         (status === 'confirmed' ||
           status === 'accepted' ||
           status === 'approved' ||
-          status === 'committed') &&
+          status === 'committed' ||
+          status === 'published') &&
           'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-700/10',
         (status === 'invited' ||
           status === 'submitted' ||
           status === 'in_review' ||
-          status === 'awaiting_approval') &&
+          status === 'awaiting_approval' ||
+          status === 'queued') &&
           'bg-amber-50 text-amber-700 ring-1 ring-amber-700/10',
-        (status === 'revision_requested' || status === 'stale') &&
+        (status === 'revision_requested' || status === 'stale' || status === 'failed') &&
           'bg-rose-50 text-rose-700 ring-1 ring-rose-700/10',
         (status === 'prospect' ||
           status === 'draft' ||
           status === 'not_started' ||
           status === 'waitlisted') &&
           'bg-zinc-100 text-zinc-700 ring-1 ring-zinc-950/5',
-        (status === 'declined' || status === 'withdrawn' || status === 'rejected') &&
+        (status === 'declined' ||
+          status === 'withdrawn' ||
+          status === 'rejected' ||
+          status === 'archived') &&
           'bg-zinc-100 text-zinc-500 ring-1 ring-zinc-950/5',
         status === 'waived' && 'bg-sky-50 text-sky-700 ring-1 ring-sky-700/10',
         status === 'sent' && 'bg-violet-50 text-violet-700 ring-1 ring-violet-700/10',
@@ -642,17 +653,9 @@ export function StatGrid({
 }) {
   return (
     <div className="@container">
-      <dl className="grid grid-cols-2 @3xl:grid-cols-4">
-        {stats.map((stat, index) => (
-          <div
-            key={stat.label}
-            className={cx(
-              'border-zinc-950/5 py-3',
-              index % 2 === 1 ? 'border-l pl-5' : 'pr-5',
-              index > 1 && 'border-t @3xl:border-t-0',
-              index === 2 && '@3xl:border-l @3xl:pl-5',
-            )}
-          >
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-zinc-950/5 ring-1 ring-zinc-950/5 @3xl:grid-cols-4">
+        {stats.map((stat) => (
+          <div key={stat.label} className="bg-white px-4 py-3.5 sm:px-5">
             <dt className="truncate text-base font-medium text-zinc-500 sm:text-sm">
               {stat.label}
             </dt>
@@ -968,11 +971,13 @@ export function ErrorState({
   description,
   onRetry,
   retrying = false,
+  action,
 }: {
   title: string
   description: string
   onRetry?: () => void
   retrying?: boolean
+  action?: ReactNode
 }) {
   return (
     <div className="py-12 text-center">
@@ -981,7 +986,9 @@ export function ErrorState({
       <p className="mx-auto max-w-[52ch] text-pretty text-base text-zinc-500 sm:text-sm">
         {description}
       </p>
-      {onRetry ? (
+      {action ? (
+        <div className="flex justify-center pt-4">{action}</div>
+      ) : onRetry ? (
         <div className="flex justify-center pt-4">
           <Button size="compact" disabled={retrying} onClick={onRetry}>
             {retrying ? 'Trying again…' : 'Try again'}
@@ -1085,14 +1092,14 @@ export function ToastViewport() {
     <div className="pointer-events-none fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-60 flex justify-center sm:bottom-6">
       <div
         role="status"
-        className="pointer-events-auto flex max-w-md items-start gap-3 rounded-2xl bg-zinc-950/90 py-3 pr-2 pl-3 text-white shadow-xl ring-1 ring-white/10 backdrop-blur-xl motion-safe:animate-rise-in"
+        className="pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl bg-zinc-950/90 py-2 pr-2 pl-3 text-white shadow-xl ring-1 ring-white/10 backdrop-blur-xl motion-safe:animate-rise-in"
       >
         {toast.tone === 'success' ? (
-          <CheckCircleIcon className="size-4 h-lh shrink-0 fill-emerald-400" />
+          <CheckCircleIcon className="size-4 shrink-0 fill-emerald-400" />
         ) : toast.tone === 'error' ? (
-          <ExclamationTriangleIcon className="size-4 h-lh shrink-0 fill-red-400" />
+          <ExclamationTriangleIcon className="size-4 shrink-0 fill-red-400" />
         ) : (
-          <InformationCircleIcon className="size-4 h-lh shrink-0 fill-sky-400" />
+          <InformationCircleIcon className="size-4 shrink-0 fill-sky-400" />
         )}
         <p className="min-w-0 flex-1 text-base text-pretty sm:text-sm">{toast.message}</p>
         <IconButton

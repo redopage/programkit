@@ -1,4 +1,21 @@
-import type { SubmissionFieldKind, SubmissionFieldPurpose, SubmissionFormField } from './types.ts'
+import type {
+  SubmissionFieldKind,
+  SubmissionFieldPurpose,
+  SubmissionForm,
+  SubmissionFormField,
+} from './types.ts'
+
+export type SubmissionFormAvailability = 'draft' | 'scheduled' | 'open' | 'closed'
+
+export function submissionFormAvailability(
+  form: SubmissionForm,
+  at: number = Date.now(),
+): SubmissionFormAvailability {
+  if (form.status !== 'open') return form.status
+  if (form.opensAt && Date.parse(form.opensAt) > at) return 'scheduled'
+  if (form.closesAt && Date.parse(form.closesAt) <= at) return 'closed'
+  return 'open'
+}
 
 export const requiredSubmissionFieldPurposes = [
   'first_name',

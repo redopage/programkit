@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as OperatorRouteImport } from './routes/_operator'
+import { Route as AccessRouteImport } from './routes/access'
 import { Route as AgendaRouteImport } from './routes/agenda'
+import { Route as DemoRouteImport } from './routes/demo'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as OperatorIndexRouteImport } from './routes/_operator.index'
 import { Route as OperatorAgentRouteImport } from './routes/_operator.agent'
 import { Route as OperatorChangesRouteImport } from './routes/_operator.changes'
 import { Route as OperatorCommunicationsRouteImport } from './routes/_operator.communications'
+import { Route as OperatorCrmRouteImport } from './routes/_operator.crm'
+import { Route as OperatorFilesRouteImport } from './routes/_operator.files'
 import { Route as OperatorFormsRouteImport } from './routes/_operator.forms'
 import { Route as OperatorIntegrationsRouteImport } from './routes/_operator.integrations'
 import { Route as OperatorPeopleRouteImport } from './routes/_operator.people'
@@ -30,14 +36,37 @@ import { Route as EmbedSpeakersRouteImport } from './routes/embed.speakers'
 import { Route as PortalParticipationIdRouteImport } from './routes/portal.$participationId'
 import { Route as ReviewerReviewerIdRouteImport } from './routes/reviewer.$reviewerId'
 import { Route as SubmitFormSlugRouteImport } from './routes/submit.$formSlug'
+import { Route as PortalParticipationIdPortalAccessKeyRouteImport } from './routes/portal.$participationId_.$portalAccessKey'
+import { Route as ReviewerReviewerIdReviewerAccessKeyRouteImport } from './routes/reviewer.$reviewerId_.$reviewerAccessKey'
+import { Route as SubmitFormSlugMineSpeakerAccessKeyRouteImport } from './routes/submit.$formSlug_.mine.$speakerAccessKey'
 
 const OperatorRoute = OperatorRouteImport.update({
   id: '/_operator',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccessRoute = AccessRouteImport.update({
+  id: '/access',
+  path: '/access',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgendaRoute = AgendaRouteImport.update({
   id: '/agenda',
   path: '/agenda',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OperatorIndexRoute = OperatorIndexRouteImport.update({
@@ -58,6 +87,16 @@ const OperatorChangesRoute = OperatorChangesRouteImport.update({
 const OperatorCommunicationsRoute = OperatorCommunicationsRouteImport.update({
   id: '/communications',
   path: '/communications',
+  getParentRoute: () => OperatorRoute,
+} as any)
+const OperatorCrmRoute = OperatorCrmRouteImport.update({
+  id: '/crm',
+  path: '/crm',
+  getParentRoute: () => OperatorRoute,
+} as any)
+const OperatorFilesRoute = OperatorFilesRouteImport.update({
+  id: '/files',
+  path: '/files',
   getParentRoute: () => OperatorRoute,
 } as any)
 const OperatorFormsRoute = OperatorFormsRouteImport.update({
@@ -135,13 +174,37 @@ const SubmitFormSlugRoute = SubmitFormSlugRouteImport.update({
   path: '/submit/$formSlug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PortalParticipationIdPortalAccessKeyRoute =
+  PortalParticipationIdPortalAccessKeyRouteImport.update({
+    id: '/portal/$participationId_/$portalAccessKey',
+    path: '/portal/$participationId/$portalAccessKey',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ReviewerReviewerIdReviewerAccessKeyRoute =
+  ReviewerReviewerIdReviewerAccessKeyRouteImport.update({
+    id: '/reviewer/$reviewerId_/$reviewerAccessKey',
+    path: '/reviewer/$reviewerId/$reviewerAccessKey',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const SubmitFormSlugMineSpeakerAccessKeyRoute =
+  SubmitFormSlugMineSpeakerAccessKeyRouteImport.update({
+    id: '/submit/$formSlug_/mine/$speakerAccessKey',
+    path: '/submit/$formSlug/mine/$speakerAccessKey',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof OperatorIndexRoute
+  '/access': typeof AccessRoute
   '/agenda': typeof AgendaRoute
+  '/demo': typeof DemoRoute
+  '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/agent': typeof OperatorAgentRoute
   '/changes': typeof OperatorChangesRoute
   '/communications': typeof OperatorCommunicationsRoute
+  '/crm': typeof OperatorCrmRoute
+  '/files': typeof OperatorFilesRoute
   '/forms': typeof OperatorFormsRoute
   '/integrations': typeof OperatorIntegrationsRoute
   '/people': typeof OperatorPeopleRoute
@@ -157,12 +220,21 @@ export interface FileRoutesByFullPath {
   '/portal/$participationId': typeof PortalParticipationIdRoute
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
+  '/portal/$participationId/$portalAccessKey': typeof PortalParticipationIdPortalAccessKeyRoute
+  '/reviewer/$reviewerId/$reviewerAccessKey': typeof ReviewerReviewerIdReviewerAccessKeyRoute
+  '/submit/$formSlug/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
 export interface FileRoutesByTo {
+  '/access': typeof AccessRoute
   '/agenda': typeof AgendaRoute
+  '/demo': typeof DemoRoute
+  '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/agent': typeof OperatorAgentRoute
   '/changes': typeof OperatorChangesRoute
   '/communications': typeof OperatorCommunicationsRoute
+  '/crm': typeof OperatorCrmRoute
+  '/files': typeof OperatorFilesRoute
   '/forms': typeof OperatorFormsRoute
   '/integrations': typeof OperatorIntegrationsRoute
   '/people': typeof OperatorPeopleRoute
@@ -179,14 +251,23 @@ export interface FileRoutesByTo {
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
   '/': typeof OperatorIndexRoute
+  '/portal/$participationId/$portalAccessKey': typeof PortalParticipationIdPortalAccessKeyRoute
+  '/reviewer/$reviewerId/$reviewerAccessKey': typeof ReviewerReviewerIdReviewerAccessKeyRoute
+  '/submit/$formSlug/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_operator': typeof OperatorRouteWithChildren
+  '/access': typeof AccessRoute
   '/agenda': typeof AgendaRoute
+  '/demo': typeof DemoRoute
+  '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/_operator/agent': typeof OperatorAgentRoute
   '/_operator/changes': typeof OperatorChangesRoute
   '/_operator/communications': typeof OperatorCommunicationsRoute
+  '/_operator/crm': typeof OperatorCrmRoute
+  '/_operator/files': typeof OperatorFilesRoute
   '/_operator/forms': typeof OperatorFormsRoute
   '/_operator/integrations': typeof OperatorIntegrationsRoute
   '/_operator/people': typeof OperatorPeopleRoute
@@ -203,15 +284,24 @@ export interface FileRoutesById {
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
   '/_operator/': typeof OperatorIndexRoute
+  '/portal/$participationId_/$portalAccessKey': typeof PortalParticipationIdPortalAccessKeyRoute
+  '/reviewer/$reviewerId_/$reviewerAccessKey': typeof ReviewerReviewerIdReviewerAccessKeyRoute
+  '/submit/$formSlug_/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/access'
     | '/agenda'
+    | '/demo'
+    | '/privacy'
+    | '/terms'
     | '/agent'
     | '/changes'
     | '/communications'
+    | '/crm'
+    | '/files'
     | '/forms'
     | '/integrations'
     | '/people'
@@ -227,12 +317,21 @@ export interface FileRouteTypes {
     | '/portal/$participationId'
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
+    | '/portal/$participationId/$portalAccessKey'
+    | '/reviewer/$reviewerId/$reviewerAccessKey'
+    | '/submit/$formSlug/mine/$speakerAccessKey'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/access'
     | '/agenda'
+    | '/demo'
+    | '/privacy'
+    | '/terms'
     | '/agent'
     | '/changes'
     | '/communications'
+    | '/crm'
+    | '/files'
     | '/forms'
     | '/integrations'
     | '/people'
@@ -249,13 +348,22 @@ export interface FileRouteTypes {
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
     | '/'
+    | '/portal/$participationId/$portalAccessKey'
+    | '/reviewer/$reviewerId/$reviewerAccessKey'
+    | '/submit/$formSlug/mine/$speakerAccessKey'
   id:
     | '__root__'
     | '/_operator'
+    | '/access'
     | '/agenda'
+    | '/demo'
+    | '/privacy'
+    | '/terms'
     | '/_operator/agent'
     | '/_operator/changes'
     | '/_operator/communications'
+    | '/_operator/crm'
+    | '/_operator/files'
     | '/_operator/forms'
     | '/_operator/integrations'
     | '/_operator/people'
@@ -272,16 +380,26 @@ export interface FileRouteTypes {
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
     | '/_operator/'
+    | '/portal/$participationId_/$portalAccessKey'
+    | '/reviewer/$reviewerId_/$reviewerAccessKey'
+    | '/submit/$formSlug_/mine/$speakerAccessKey'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   OperatorRoute: typeof OperatorRouteWithChildren
+  AccessRoute: typeof AccessRoute
   AgendaRoute: typeof AgendaRoute
+  DemoRoute: typeof DemoRoute
+  PrivacyRoute: typeof PrivacyRoute
+  TermsRoute: typeof TermsRoute
   EmbedItineraryRoute: typeof EmbedItineraryRoute
   EmbedSpeakersRoute: typeof EmbedSpeakersRoute
   PortalParticipationIdRoute: typeof PortalParticipationIdRoute
   ReviewerReviewerIdRoute: typeof ReviewerReviewerIdRoute
   SubmitFormSlugRoute: typeof SubmitFormSlugRoute
+  PortalParticipationIdPortalAccessKeyRoute: typeof PortalParticipationIdPortalAccessKeyRoute
+  ReviewerReviewerIdReviewerAccessKeyRoute: typeof ReviewerReviewerIdReviewerAccessKeyRoute
+  SubmitFormSlugMineSpeakerAccessKeyRoute: typeof SubmitFormSlugMineSpeakerAccessKeyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -293,11 +411,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperatorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/access': {
+      id: '/access'
+      path: '/access'
+      fullPath: '/access'
+      preLoaderRoute: typeof AccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agenda': {
       id: '/agenda'
       path: '/agenda'
       fullPath: '/agenda'
       preLoaderRoute: typeof AgendaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_operator/': {
@@ -326,6 +472,20 @@ declare module '@tanstack/react-router' {
       path: '/communications'
       fullPath: '/communications'
       preLoaderRoute: typeof OperatorCommunicationsRouteImport
+      parentRoute: typeof OperatorRoute
+    }
+    '/_operator/crm': {
+      id: '/_operator/crm'
+      path: '/crm'
+      fullPath: '/crm'
+      preLoaderRoute: typeof OperatorCrmRouteImport
+      parentRoute: typeof OperatorRoute
+    }
+    '/_operator/files': {
+      id: '/_operator/files'
+      path: '/files'
+      fullPath: '/files'
+      preLoaderRoute: typeof OperatorFilesRouteImport
       parentRoute: typeof OperatorRoute
     }
     '/_operator/forms': {
@@ -433,6 +593,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubmitFormSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/portal/$participationId_/$portalAccessKey': {
+      id: '/portal/$participationId_/$portalAccessKey'
+      path: '/portal/$participationId/$portalAccessKey'
+      fullPath: '/portal/$participationId/$portalAccessKey'
+      preLoaderRoute: typeof PortalParticipationIdPortalAccessKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reviewer/$reviewerId_/$reviewerAccessKey': {
+      id: '/reviewer/$reviewerId_/$reviewerAccessKey'
+      path: '/reviewer/$reviewerId/$reviewerAccessKey'
+      fullPath: '/reviewer/$reviewerId/$reviewerAccessKey'
+      preLoaderRoute: typeof ReviewerReviewerIdReviewerAccessKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/submit/$formSlug_/mine/$speakerAccessKey': {
+      id: '/submit/$formSlug_/mine/$speakerAccessKey'
+      path: '/submit/$formSlug/mine/$speakerAccessKey'
+      fullPath: '/submit/$formSlug/mine/$speakerAccessKey'
+      preLoaderRoute: typeof SubmitFormSlugMineSpeakerAccessKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -440,6 +621,8 @@ interface OperatorRouteChildren {
   OperatorAgentRoute: typeof OperatorAgentRoute
   OperatorChangesRoute: typeof OperatorChangesRoute
   OperatorCommunicationsRoute: typeof OperatorCommunicationsRoute
+  OperatorCrmRoute: typeof OperatorCrmRoute
+  OperatorFilesRoute: typeof OperatorFilesRoute
   OperatorFormsRoute: typeof OperatorFormsRoute
   OperatorIntegrationsRoute: typeof OperatorIntegrationsRoute
   OperatorPeopleRoute: typeof OperatorPeopleRoute
@@ -457,6 +640,8 @@ const OperatorRouteChildren: OperatorRouteChildren = {
   OperatorAgentRoute: OperatorAgentRoute,
   OperatorChangesRoute: OperatorChangesRoute,
   OperatorCommunicationsRoute: OperatorCommunicationsRoute,
+  OperatorCrmRoute: OperatorCrmRoute,
+  OperatorFilesRoute: OperatorFilesRoute,
   OperatorFormsRoute: OperatorFormsRoute,
   OperatorIntegrationsRoute: OperatorIntegrationsRoute,
   OperatorPeopleRoute: OperatorPeopleRoute,
@@ -476,12 +661,22 @@ const OperatorRouteWithChildren = OperatorRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   OperatorRoute: OperatorRouteWithChildren,
+  AccessRoute: AccessRoute,
   AgendaRoute: AgendaRoute,
+  DemoRoute: DemoRoute,
+  PrivacyRoute: PrivacyRoute,
+  TermsRoute: TermsRoute,
   EmbedItineraryRoute: EmbedItineraryRoute,
   EmbedSpeakersRoute: EmbedSpeakersRoute,
   PortalParticipationIdRoute: PortalParticipationIdRoute,
   ReviewerReviewerIdRoute: ReviewerReviewerIdRoute,
   SubmitFormSlugRoute: SubmitFormSlugRoute,
+  PortalParticipationIdPortalAccessKeyRoute:
+    PortalParticipationIdPortalAccessKeyRoute,
+  ReviewerReviewerIdReviewerAccessKeyRoute:
+    ReviewerReviewerIdReviewerAccessKeyRoute,
+  SubmitFormSlugMineSpeakerAccessKeyRoute:
+    SubmitFormSlugMineSpeakerAccessKeyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

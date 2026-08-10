@@ -3,6 +3,18 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "license": "Apache-2.0",
+  "homepage": "https://programkit.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://forge.smol.ai/andheller/programkit.git"
+  },
+  "bugs": {
+    "url": "https://forge.smol.ai/andheller/programkit/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
   "packageManager": "pnpm@11.20.0",
   "scripts": {
     "dev": "pnpm --filter @programkit/app-cloudflare dev",
@@ -16,8 +28,24 @@
     "format:check": "prettier --check .",
     "check": "pnpm test && pnpm lint && pnpm format:check && pnpm build && pnpm plugin:validate",
     "deploy": "pnpm deploy:cloudflare",
-    "deploy:cloudflare": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy",
+    "deploy:cloudflare": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --config ../../wrangler.jsonc",
+    "deploy:site": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env site --config ../../wrangler.jsonc",
+    "deploy:demo": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env demo --config ../../wrangler.jsonc",
+    "deploy:app": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env app --config ../../wrangler.jsonc",
+    "airtable:setup": "pnpm --filter @programkit/core build && node scripts/airtable.mjs setup",
+    "airtable:seed": "pnpm --filter @programkit/core build && node scripts/airtable.mjs seed",
+    "airtable:verify": "pnpm --filter @programkit/core build && node scripts/airtable.mjs verify",
     "plugin:validate": "node scripts/validate-plugin.mjs"
+  },
+  "cloudflare": {
+    "bindings": {
+      "AIRTABLE_OAUTH_CLIENT_ID": {
+        "description": "Optional. Register an Airtable OAuth integration using your deployed callback URL, then add its client ID as a Worker secret."
+      },
+      "AIRTABLE_OAUTH_CLIENT_SECRET": {
+        "description": "Optional. Add the server-side secret from your Airtable OAuth integration. PKCE works without one."
+      }
+    }
   },
   "dependencies": {
     "@programkit/agent": "workspace:*",

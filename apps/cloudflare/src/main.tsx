@@ -4,8 +4,23 @@ import ReactDOM from 'react-dom/client'
 import { App } from '@programkit/web'
 import '@programkit/web/styles.css'
 
+const deploymentProfile =
+  document.querySelector<HTMLMetaElement>('meta[name="programkit-deployment-profile"]')?.content ??
+  'single-workspace'
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <App
+      deploymentProfile={
+        deploymentProfile === 'hosted-demo' ||
+        deploymentProfile === 'hosted-demo-entry' ||
+        deploymentProfile === 'hosted-site' ||
+        deploymentProfile === 'hosted-site-entry' ||
+        deploymentProfile === 'hosted-app' ||
+        deploymentProfile === 'hosted-app-entry'
+          ? deploymentProfile
+          : 'single-workspace'
+      }
+    />
   </React.StrictMode>,
 )

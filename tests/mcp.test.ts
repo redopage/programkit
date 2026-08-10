@@ -97,6 +97,7 @@ describe('MCP server', () => {
             id: string
             label: string
             required: boolean
+            automaticReminders: boolean
             dueAt?: string
           }>
           rows: unknown[]
@@ -110,6 +111,7 @@ describe('MCP server', () => {
         id: definition.id,
         label: definition.label,
         required: definition.required,
+        automaticReminders: definition.automaticReminders,
         ...(definition.dueAt ? { dueAt: definition.dueAt } : {}),
       })),
     )

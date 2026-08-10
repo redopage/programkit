@@ -1,0 +1,12 @@
+# Recommended: register an Airtable OAuth integration for your deployment.
+# Copy this file to the repository root as .dev.vars for local development.
+# The callback must exactly match your origin plus:
+# /api/v1/integrations/airtable/oauth/callback
+AIRTABLE_OAUTH_CLIENT_ID=your_oauth_client_id
+AIRTABLE_OAUTH_CLIENT_SECRET=your_optional_server_side_client_secret
+
+# Advanced single-install fallback. Never ask hosted users to paste a PAT.
+# Never commit the real token or webhook secret.
+AIRTABLE_TOKEN=pat_your_scoped_personal_access_token
+AIRTABLE_BASE_ID=app_your_programkit_base_id
+AIRTABLE_WEBHOOK_MAC_SECRET=base64_secret_returned_when_the_webhook_is_created

@@ -1,5 +1,7 @@
 import { executeOperation } from './engine.ts'
-import { eventCalendar, eventCalendarFilename } from './calendar.ts'
+import { calendarDate, calendarEscape, eventCalendar, eventCalendarFilename } from './calendar.ts'
+import { evaluationRoundIsBlind } from './reviews.ts'
+import { createWorkspaceExportArchive, workspaceExportFilename } from './export.ts'
 import { operationManifest } from './manifest.ts'
 import { publicAgenda, readinessSummary, scheduleConflicts } from './selectors.ts'
 import { defaultActor } from './utils.ts'
@@ -52,8 +54,10 @@ function publicState(state: WorkspaceState) {
   return clone
 }
 
-function participantState(state: WorkspaceState, participationId: string) {
-  const participation = state.participations.find((entry) => entry.id === participationId)
+function participantState(state: WorkspaceState, participationId: string, portalAccessKey: string) {
+  const participation = state.participations.find(
+    (entry) => entry.id === participationId && entry.portalAccessKey === portalAccessKey,
+  )
   if (!participation) return null
   const person = state.people.find((entry) => entry.id === participation.personId)
   if (!person) return null
@@ -78,31 +82,44 @@ function participantState(state: WorkspaceState, participationId: string) {
   )
   clone.submissionReceiptDeliveries = []
   const submissionIds = new Set(clone.submissions.map((entry) => entry.id))
-  clone.assets = (state.assets ?? [])
-    .filter(
-      (entry) =>
-        (entry.owner.type === 'submission' && submissionIds.has(entry.owner.id)) ||
-        (entry.owner.type === 'participation' && entry.owner.id === participationId) ||
-        (entry.owner.type === 'person' && entry.owner.id === person.id),
-    )
-    .map((entry) => ({ ...structuredClone(entry), storageKey: '' }))
-  clone.portalResources = (state.portalResources ?? [])
-    .filter((entry) => entry.eventId === participation.eventId && entry.status === 'published')
-    .sort((left, right) => left.sortOrder - right.sortOrder)
-    .map((entry) => structuredClone(entry))
+  const requirementIds = new Set(clone.requirementInstances.map((entry) => entry.id))
+  clone.assets = (state.assets ?? []).filter(
+    (entry) =>
+      (entry.owner.type === 'submission' && submissionIds.has(entry.owner.id)) ||
+      (entry.owner.type === 'participation' && entry.owner.id === participationId) ||
+      (entry.owner.type === 'person' && entry.owner.id === person.id) ||
+      (entry.owner.type === 'requirement' && requirementIds.has(entry.owner.id)),
+  )
+  const assetIds = new Set(clone.assets.map((entry) => entry.id))
+  clone.assetComments = (state.assetComments ?? []).filter((entry) => assetIds.has(entry.assetId))
   clone.reviewers = []
   clone.reviewerTeams = []
   clone.evaluationPlans = []
   clone.reviewerAssignments = []
   clone.scorecards = []
   clone.reviewDecisions = []
-  clone.tracks = []
-  clone.rooms = []
-  clone.sessions = []
-  clone.placements = []
+  const sessionIds = new Set(participation.sessionIds)
+  clone.sessions = state.sessions.filter(
+    (entry) => entry.eventId === participation.eventId && sessionIds.has(entry.id),
+  )
+  const trackIds = new Set(clone.sessions.map((entry) => entry.trackId))
+  clone.tracks = state.tracks.filter(
+    (entry) => entry.eventId === participation.eventId && trackIds.has(entry.id),
+  )
+  clone.placements = state.placements.filter((entry) => sessionIds.has(entry.sessionId))
+  const roomIds = new Set(clone.placements.map((entry) => entry.roomId))
+  clone.rooms = state.rooms.filter(
+    (entry) => entry.eventId === participation.eventId && roomIds.has(entry.id),
+  )
   clone.scheduleReleases = []
   clone.campaigns = []
-  clone.campaignDeliveries = []
+  clone.outboundMessages = []
+  clone.portalResources = (state.portalResources ?? [])
+    .filter((entry) => entry.eventId === participation.eventId && entry.status === 'published')
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+  clone.portalResourcePages = (state.portalResourcePages ?? [])
+    .filter((entry) => entry.eventId === participation.eventId && entry.status === 'published')
+    .sort((left, right) => left.sortOrder - right.sortOrder)
   clone.changeSets = []
   clone.integrations = []
   clone.acceleventsExports = []
@@ -123,7 +140,7 @@ function projectionBase(state: WorkspaceState) {
   clone.submissions = []
   clone.submissionReceiptDeliveries = []
   clone.assets = []
-  clone.portalResources = []
+  clone.assetComments = []
   clone.reviewers = []
   clone.reviewerTeams = []
   clone.evaluationPlans = []
@@ -136,7 +153,9 @@ function projectionBase(state: WorkspaceState) {
   clone.placements = []
   clone.scheduleReleases = []
   clone.campaigns = []
-  clone.campaignDeliveries = []
+  clone.outboundMessages = []
+  clone.portalResources = []
+  clone.portalResourcePages = []
   clone.changeSets = []
   clone.integrations = []
   clone.acceleventsExports = []
@@ -145,10 +164,12 @@ function projectionBase(state: WorkspaceState) {
   return clone
 }
 
-function publicSubmissionState(state: WorkspaceState, slug: string) {
+function publicSubmissionState(state: WorkspaceState, slug: string, speakerAccessKey = '') {
   const form = state.submissionForms.find(
     (entry) =>
-      entry.slug === slug && entry.eventId === state.activeEventId && entry.status === 'open',
+      entry.slug === slug &&
+      entry.eventId === state.activeEventId &&
+      (entry.status !== 'draft' || speakerAccessKey.length > 0),
   )
   if (!form) return null
   const projected = projectionBase(state)
@@ -158,12 +179,27 @@ function publicSubmissionState(state: WorkspaceState, slug: string) {
   projected.submissionFormFields = state.submissionFormFields
     .filter((entry) => entry.formId === form.id)
     .map((entry) => structuredClone(entry))
+  projected.tracks = state.tracks
+    .filter((entry) => entry.eventId === form.eventId)
+    .map((entry) => structuredClone(entry))
+  if (speakerAccessKey) {
+    projected.submissions = state.submissions
+      .filter((entry) => entry.formId === form.id && entry.speakerAccessKey === speakerAccessKey)
+      .map((entry) => structuredClone(entry))
+    const submissionIds = new Set(projected.submissions.map((entry) => entry.id))
+    projected.assets = state.assets
+      .filter((entry) => entry.owner.type === 'submission' && submissionIds.has(entry.owner.id))
+      .map((entry) => structuredClone(entry))
+  }
   return projected
 }
 
-function reviewerState(state: WorkspaceState, reviewerId: string) {
+function reviewerState(state: WorkspaceState, reviewerId: string, accessKey: string) {
   const reviewer = state.reviewers.find(
-    (entry) => entry.id === reviewerId && entry.eventId === state.activeEventId,
+    (entry) =>
+      entry.id === reviewerId &&
+      entry.eventId === state.activeEventId &&
+      entry.accessKey === accessKey,
   )
   if (!reviewer) return null
   const projected = projectionBase(state)
@@ -199,7 +235,13 @@ function reviewerState(state: WorkspaceState, reviewerId: string) {
     .filter((entry) => submissionIds.has(entry.id))
     .map((submission) => {
       const plan = plans.find((entry) => entry.formId === submission.formId)
-      if (!plan?.blindReview) return structuredClone(submission)
+      const submissionAssignments = assignments.filter(
+        (entry) => entry.submissionId === submission.id,
+      )
+      const canSeeIdentity = submissionAssignments.some(
+        (assignment) => !evaluationRoundIsBlind(plan, assignment.roundId),
+      )
+      if (canSeeIdentity) return structuredClone(submission)
       const hiddenKeys = new Set(
         fields
           .filter(
@@ -209,6 +251,7 @@ function reviewerState(state: WorkspaceState, reviewerId: string) {
       )
       return {
         ...structuredClone(submission),
+        contributors: [],
         answers: Object.fromEntries(
           Object.entries(submission.answers).filter(([key]) => !hiddenKeys.has(key)),
         ),
@@ -300,6 +343,138 @@ function paginate<T>(items: T[], url: URL) {
 function includesQuery(query: string, values: Array<string | null | undefined>) {
   if (!query) return true
   return values.some((value) => value?.toLocaleLowerCase().includes(query))
+}
+
+function publicFeedHeaders(contentType: string, extra: HeadersInit = {}) {
+  return {
+    'access-control-allow-methods': 'GET, OPTIONS',
+    'access-control-allow-origin': '*',
+    'cache-control': 'public, max-age=60',
+    'content-type': contentType,
+    ...extra,
+  }
+}
+
+function publicProgramFeed(state: WorkspaceState, url: URL) {
+  const event = state.events.find((entry) => entry.id === state.activeEventId)
+  if (!event) return null
+  const track = url.searchParams.get('track')
+  const room = url.searchParams.get('room')
+  const includeDescriptions = url.searchParams.get('descriptions') !== 'hide'
+  const sessions = publicAgenda(state)
+    .filter(
+      (entry) =>
+        entry.session != null &&
+        (!track || entry.track?.id === track) &&
+        (!room || entry.room?.id === room),
+    )
+    .map((entry) => ({
+      id: entry.session!.id,
+      title: entry.session!.title,
+      ...(includeDescriptions ? { description: entry.session!.summary } : {}),
+      format: entry.session!.format,
+      startsAt: entry.placement.startsAt,
+      endsAt: entry.placement.endsAt,
+      room: entry.room ? { id: entry.room.id, name: entry.room.name } : null,
+      track: entry.track
+        ? { id: entry.track.id, name: entry.track.name, color: entry.track.color }
+        : null,
+      speakers: entry.speakers.map((speaker) => ({
+        id: speaker.id,
+        name: speaker.name,
+        title: speaker.title,
+        company: speaker.company,
+      })),
+    }))
+  return {
+    event: {
+      id: event.id,
+      name: event.name,
+      slug: event.slug,
+      venue: event.venue,
+      city: event.city,
+      startsAt: event.startsAt,
+      endsAt: event.endsAt,
+      timezone: event.timezone,
+      publishedScheduleVersion: event.publishedScheduleVersion,
+    },
+    sessions,
+  }
+}
+
+function xmlEscape(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
+}
+
+function publicProgramXml(feed: NonNullable<ReturnType<typeof publicProgramFeed>>) {
+  const event = feed.event
+  const sessions = feed.sessions
+    .map(
+      (session) => `  <session id="${xmlEscape(session.id)}">
+    <title>${xmlEscape(session.title)}</title>
+${session.description !== undefined ? `    <description>${xmlEscape(session.description)}</description>\n` : ''}    <format>${xmlEscape(session.format)}</format>
+    <startsAt>${xmlEscape(session.startsAt)}</startsAt>
+    <endsAt>${xmlEscape(session.endsAt)}</endsAt>
+    <room${session.room ? ` id="${xmlEscape(session.room.id)}"` : ''}>${xmlEscape(session.room?.name ?? '')}</room>
+    <track${session.track ? ` id="${xmlEscape(session.track.id)}" color="${xmlEscape(session.track.color)}"` : ''}>${xmlEscape(session.track?.name ?? '')}</track>
+    <speakers>
+${session.speakers
+  .map(
+    (speaker) =>
+      `      <speaker id="${xmlEscape(speaker.id)}" title="${xmlEscape(speaker.title)}" company="${xmlEscape(speaker.company)}">${xmlEscape(speaker.name)}</speaker>`,
+  )
+  .join('\n')}
+    </speakers>
+  </session>`,
+    )
+    .join('\n')
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<program eventId="${xmlEscape(event.id)}" version="${event.publishedScheduleVersion ?? ''}">
+  <event>
+    <name>${xmlEscape(event.name)}</name>
+    <venue>${xmlEscape(event.venue)}</venue>
+    <city>${xmlEscape(event.city)}</city>
+    <startsAt>${xmlEscape(event.startsAt)}</startsAt>
+    <endsAt>${xmlEscape(event.endsAt)}</endsAt>
+    <timezone>${xmlEscape(event.timezone)}</timezone>
+  </event>
+  <sessions>
+${sessions}
+  </sessions>
+</program>`
+}
+
+function publicProgramCalendar(feed: NonNullable<ReturnType<typeof publicProgramFeed>>) {
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//ProgramKit//Published program//EN',
+    'CALSCALE:GREGORIAN',
+    `X-WR-CALNAME:${calendarEscape(feed.event.name)}`,
+    ...feed.sessions.flatMap((session) => [
+      'BEGIN:VEVENT',
+      `UID:${calendarEscape(session.id)}@programkit.dev`,
+      `DTSTAMP:${calendarDate(feed.event.startsAt)}`,
+      `DTSTART:${calendarDate(session.startsAt)}`,
+      `DTEND:${calendarDate(session.endsAt)}`,
+      `SUMMARY:${calendarEscape(session.title)}`,
+      ...(session.description !== undefined
+        ? [`DESCRIPTION:${calendarEscape(session.description)}`]
+        : []),
+      `LOCATION:${calendarEscape(session.room?.name ?? feed.event.venue)}`,
+      ...(session.speakers.length > 0
+        ? [`CONTACT:${calendarEscape(session.speakers.map((speaker) => speaker.name).join(', '))}`]
+        : []),
+      'END:VEVENT',
+    ]),
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n')
 }
 
 export interface CoreRequestContext {
@@ -442,12 +617,27 @@ export async function handleCoreRequest(
     return json(paginate(speakers, url))
   }
 
-  if (request.method === 'GET' && path === '/api/v1/export') {
+  if (request.method === 'GET' && (path === '/api/v1/export' || path === '/api/v1/export.json')) {
     if (!hasScope(actor, 'workspace:export')) return forbidden('workspace:export')
     const state = await repository.read()
+    const exportedAt = new Date().toISOString()
+    if (path === '/api/v1/export') {
+      const archive = createWorkspaceExportArchive(state, exportedAt)
+      const body = archive.buffer.slice(
+        archive.byteOffset,
+        archive.byteOffset + archive.byteLength,
+      ) as ArrayBuffer
+      return new Response(body, {
+        headers: {
+          'cache-control': 'no-store',
+          'content-disposition': `attachment; filename="${workspaceExportFilename(state, exportedAt)}"`,
+          'content-type': 'application/zip',
+        },
+      })
+    }
     return json(
       {
-        exportedAt: new Date().toISOString(),
+        exportedAt,
         format: 'programkit.workspace.v1',
         state: publicState(state),
       },
@@ -470,6 +660,32 @@ export async function handleCoreRequest(
         headers: { 'cache-control': 'public, max-age=60' },
       },
     )
+  }
+
+  const publicProgramFormat = path.match(/^\/public\/v1\/program\.(json|xml|ics)$/u)?.[1]
+  if (request.method === 'OPTIONS' && publicProgramFormat) {
+    return new Response(null, { status: 204, headers: publicFeedHeaders('text/plain') })
+  }
+
+  if (request.method === 'GET' && publicProgramFormat) {
+    const state = await repository.read()
+    const feed = publicProgramFeed(state, url)
+    if (!feed) return json({ error: 'Published program not found.' }, { status: 404 })
+    if (publicProgramFormat === 'json') {
+      return new Response(JSON.stringify(feed), {
+        headers: publicFeedHeaders('application/json; charset=utf-8'),
+      })
+    }
+    if (publicProgramFormat === 'xml') {
+      return new Response(publicProgramXml(feed), {
+        headers: publicFeedHeaders('application/xml; charset=utf-8'),
+      })
+    }
+    return new Response(publicProgramCalendar(feed), {
+      headers: publicFeedHeaders('text/calendar; charset=utf-8', {
+        'content-disposition': `attachment; filename="${feed.event.slug}-program.ics"`,
+      }),
+    })
   }
 
   if (request.method === 'GET' && path === '/public/v1/program/state') {
@@ -501,32 +717,44 @@ export async function handleCoreRequest(
   if (request.method === 'GET' && publicSubmissionStateMatch) {
     const slug = decodeURIComponent(publicSubmissionStateMatch[1])
     const state = await repository.read()
-    const projected = publicSubmissionState(state, slug)
+    const projected = publicSubmissionState(
+      state,
+      slug,
+      url.searchParams.get('speakerAccessKey') ?? '',
+    )
     if (!projected) return json({ error: 'Submission form not found.' }, { status: 404 })
     return json(projectionPayload(projected))
   }
 
-  const reviewerStateMatch = path.match(/^\/api\/v1\/reviewers\/([^/]+)\/state$/u)
+  const reviewerStateMatch = path.match(/^\/(?:api|public)\/v1\/reviewers\/([^/]+)\/state$/u)
   if (request.method === 'GET' && reviewerStateMatch) {
     const reviewerId = decodeURIComponent(reviewerStateMatch[1])
     if (actor.type !== 'reviewer' || actor.id !== reviewerId) {
       return json({ error: 'The reviewer session does not match this workspace.' }, { status: 403 })
     }
     const state = await repository.read()
-    const projected = reviewerState(state, reviewerId)
-    if (!projected) return json({ error: 'Reviewer not found.' }, { status: 404 })
+    const projected = reviewerState(
+      state,
+      reviewerId,
+      request.headers.get('x-programkit-reviewer-key') ?? '',
+    )
+    if (!projected) return json({ error: 'This reviewer link is unavailable.' }, { status: 403 })
     return json(projectionPayload(projected))
   }
 
-  const portalStateMatch = path.match(/^\/api\/v1\/portal\/([^/]+)\/state$/u)
+  const portalStateMatch = path.match(/^\/(?:api|public)\/v1\/portal\/([^/]+)\/state$/u)
   if (request.method === 'GET' && portalStateMatch) {
     const participationId = decodeURIComponent(portalStateMatch[1])
     if (actor.type !== 'participant' || actor.id !== participationId) {
       return json({ error: 'The participant session does not match this portal.' }, { status: 403 })
     }
     const state = await repository.read()
-    const projected = participantState(state, participationId)
-    if (!projected) return json({ error: 'Participant not found.' }, { status: 404 })
+    const projected = participantState(
+      state,
+      participationId,
+      request.headers.get('x-programkit-portal-key') ?? '',
+    )
+    if (!projected) return json({ error: 'This speaker link is unavailable.' }, { status: 403 })
     return json({
       state: projected,
       derived: {
@@ -539,8 +767,12 @@ export async function handleCoreRequest(
   const operatorOperation = path.startsWith('/api/v1/operations/')
     ? decodeURIComponent(path.slice('/api/v1/operations/'.length))
     : null
-  const portalOperationMatch = path.match(/^\/api\/v1\/portal\/([^/]+)\/operations\/(.+)$/u)
-  const reviewerOperationMatch = path.match(/^\/api\/v1\/reviewers\/([^/]+)\/operations\/(.+)$/u)
+  const portalOperationMatch = path.match(
+    /^\/(?:api|public)\/v1\/portal\/([^/]+)\/operations\/(.+)$/u,
+  )
+  const reviewerOperationMatch = path.match(
+    /^\/(?:api|public)\/v1\/reviewers\/([^/]+)\/operations\/(.+)$/u,
+  )
   const publicSubmissionOperationMatch = path.match(
     /^\/public\/v1\/submission-forms\/([^/]+)\/operations\/(.+)$/u,
   )
@@ -556,6 +788,18 @@ export async function handleCoreRequest(
       : null
     if (participationId && (actor.type !== 'participant' || actor.id !== participationId)) {
       return json({ error: 'The participant session does not match this portal.' }, { status: 403 })
+    }
+    if (participationId) {
+      const state = await repository.read()
+      const validPortalLink = state.participations.some(
+        (participation) =>
+          participation.id === participationId &&
+          participation.eventId === state.activeEventId &&
+          participation.portalAccessKey === request.headers.get('x-programkit-portal-key'),
+      )
+      if (!validPortalLink) {
+        return json({ error: 'This speaker link is unavailable.' }, { status: 403 })
+      }
     }
     const reviewerId = reviewerOperationMatch ? decodeURIComponent(reviewerOperationMatch[1]) : null
     if (reviewerId && (actor.type !== 'reviewer' || actor.id !== reviewerId)) {
@@ -581,7 +825,10 @@ export async function handleCoreRequest(
           publicSubmissionOperationMatch?.[2] ??
           '',
       )
-    if (reviewerId && operation !== 'review.submit-scorecard') {
+    if (
+      reviewerId &&
+      !['review.submit-scorecard', 'review.recuse', 'review.restore-recusal'].includes(operation)
+    ) {
       return json(
         { error: 'That operation is not available in the reviewer workspace.' },
         {
@@ -589,10 +836,23 @@ export async function handleCoreRequest(
         },
       )
     }
+    if (reviewerId) {
+      const state = await repository.read()
+      const validReviewerLink = state.reviewers.some(
+        (reviewer) =>
+          reviewer.id === reviewerId &&
+          reviewer.eventId === state.activeEventId &&
+          reviewer.accessKey === request.headers.get('x-programkit-reviewer-key'),
+      )
+      if (!validReviewerLink) {
+        return json({ error: 'This reviewer link is unavailable.' }, { status: 403 })
+      }
+    }
     if (
       submissionFormSlug &&
       operation !== 'submission.create' &&
-      operation !== 'submission.submit'
+      operation !== 'submission.submit' &&
+      operation !== 'submission.update'
     ) {
       return json(
         { error: 'That operation is not available on a public submission form.' },
@@ -613,12 +873,16 @@ export async function handleCoreRequest(
           if (operation === 'submission.create' && body.input.formId !== form.id) {
             throw new Error('This submission link cannot write to that form.')
           }
-          if (operation === 'submission.submit') {
+          if (operation === 'submission.submit' || operation === 'submission.update') {
             const submission = state.submissions.find(
               (entry) => entry.id === body.input.submissionId,
             )
-            if (!submission || submission.formId !== form.id) {
-              throw new Error('This submission link cannot submit that draft.')
+            if (
+              !submission ||
+              submission.formId !== form.id ||
+              submission.speakerAccessKey !== body.input.speakerAccessKey
+            ) {
+              throw new Error('This speaker link cannot update that submission.')
             }
           }
         }

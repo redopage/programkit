@@ -42,9 +42,9 @@ export function normalizeWorkspaceState(state: WorkspaceState) {
     delivery.attachmentNames ??= delivery.attachments.map((attachment) => attachment.filename)
   }
   for (const campaign of state.campaigns) {
-    campaign.includeEventInvite ??= false
+    campaign.includeCalendarInvite ??= false
     campaign.queuedAt ??= null
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 9)
+  state.schemaVersion = Math.max(state.schemaVersion, 14)
   return state
 }

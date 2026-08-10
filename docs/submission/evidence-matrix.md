@@ -19,13 +19,13 @@ the local candidate; Andrew's provider and public-release gates remain separate.
 
 ## Bonus posture
 
-| Bonus                | Honest position                                                                                                                          |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Cloudflare           | Strong: one Worker composes the React client, API, SQLite-backed Durable Object state, and private R2 uploads.                           |
-| API                  | Strong: event-scoped reads, named writes, operation manifest, versions, idempotency, audit events, export, calendar, and health routes.  |
-| Speed                | Production bundles build successfully; final walkthrough should show navigation and mutation latency, not quote an unmeasured benchmark. |
-| Airtable persistence | Not claimed. The repository contains a documented reconciliation design and tested comparison primitive, not a delivered runtime mirror. |
-| Forge                | Not pursued. Splitting the contributor path is not worth a tiny bonus before the golden path is final.                                   |
+| Bonus                | Honest position                                                                                                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloudflare           | Strong: one Worker composes the React client, API, SQLite-backed Durable Object state, and private R2 uploads.                                                                                                                                                                        |
+| API                  | Strong: event-scoped reads, named writes, operation manifest, versions, idempotency, audit events, export, calendar, and health routes.                                                                                                                                               |
+| Speed                | Production bundles build successfully; final walkthrough should show navigation and mutation latency, not quote an unmeasured benchmark.                                                                                                                                              |
+| Airtable persistence | Optional and experimental. The repository includes OAuth/token setup, acknowledged writes, cached reads, webhook refresh, and reconciliation coverage, but the evaluator path keeps Airtable disconnected and does not present it as a competition requirement or production default. |
+| Forge                | Not pursued. Splitting the contributor path is not worth a tiny bonus before the golden path is final.                                                                                                                                                                                |
 
 ## Final external gates
 

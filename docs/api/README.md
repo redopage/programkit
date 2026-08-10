@@ -5,8 +5,53 @@ application. Reads use conventional event-scoped resources. Writes use named ope
 app, API clients, and later agent tools all reach the same validation, authorization, idempotency,
 and audit path.
 
-The reference Worker uses demo actors and is not safe for real participant data. Production API
-tokens, workspace membership, and scopes are still required; see [Security](../../SECURITY.md).
+The hosted app resolves its browser actor and event from a verified staff session and account
+membership. The local sample and hosted demo still use demo actors. The hosted app also accepts
+event-scoped API keys on the documented integration routes. Review [Security](../../SECURITY.md)
+before using real participant data.
+
+## Hosted account endpoints
+
+These browser endpoints are available only on the hosted app. Mutations require the same origin.
+
+| Method | Path                           | Purpose                                              |
+| ------ | ------------------------------ | ---------------------------------------------------- |
+| `POST` | `/api/v1/auth/password`        | Create an account or sign in with email and password |
+| `POST` | `/api/v1/auth/magic-link`      | Request a one-time staff sign-in link                |
+| `GET`  | `/auth/verify?token=...`       | Exchange the link for a secure session               |
+| `POST` | `/api/v1/auth/logout`          | Revoke the current session                           |
+| `GET`  | `/api/v1/account`              | Read the signed-in user's accessible events          |
+| `POST` | `/api/v1/events`               | Create and select an isolated empty event            |
+| `POST` | `/api/v1/account/active-event` | Select an event from verified membership             |
+| `POST` | `/public/v1/access/password`   | Create or restore an event participant account       |
+| `GET`  | `/public/v1/access/session`    | Resolve that account's event-scoped destinations     |
+| `POST` | `/public/v1/access/logout`     | Revoke the participant session                       |
+
+Password requests include `email`, `password`, and `intent`, where intent is `signup` or `signin`.
+Passwords must contain 10 to 128 characters. Passwords are never returned or stored directly.
+
+Participant credentials use the same password policy but a separate per-event session. They never
+create a staff membership. After authentication, the Worker matches the normalized account email
+to submissions, reviewer records, and accepted-speaker participation records in that event. It
+returns only the corresponding record-scoped destinations. The underlying capability remains the
+authorization boundary for each projected surface.
+
+Event team access uses these same-origin browser endpoints:
+
+| Method   | Path                                                  | Purpose                                     |
+| -------- | ----------------------------------------------------- | ------------------------------------------- |
+| `GET`    | `/api/v1/events/{eventId}/team`                       | List current access and pending invitations |
+| `POST`   | `/api/v1/events/{eventId}/invitations`                | Email a seven-day, single-use invitation    |
+| `DELETE` | `/api/v1/events/{eventId}/invitations/{invitationId}` | Cancel a pending invitation                 |
+| `DELETE` | `/api/v1/events/{eventId}/members/{membershipId}`     | Revoke event access                         |
+| `GET`    | `/auth/invite?token=...`                              | Accept after account sign-in                |
+
+Owners can manage administrators and viewers. Administrators can manage viewers. Viewers receive
+read scopes only. The raw invitation token is emailed and is never returned by a team-list read.
+
+These routes are application session APIs, not the future third-party OAuth API. Token and
+tenancy details are in
+[Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).
 
 ## Resource reads
 
@@ -47,9 +92,9 @@ Example:
 curl 'http://localhost:4173/api/v1/events/evt_nyc_2026/sessions?status=ready&pageSize=25'
 ```
 
-These resources are designed for websites, a future Airtable or similar mirror, and narrow
-integrations. The operator application currently reads its richer projection from `/api/v1/state`;
-that endpoint is an application bootstrap payload, not the preferred public integration contract.
+These resources are designed for websites, Airtable tools, and narrow integrations. The operator
+application currently reads its richer projection from `/api/v1/state`; that endpoint is an
+application bootstrap payload, not the preferred public integration contract.
 
 ## Named writes
 
@@ -136,25 +181,22 @@ reviewer projections receive none. See [Portal resources and public embeds](../p
 
 ## Domain events and export
 
-| Method | Path                             | Purpose                                           |
-| ------ | -------------------------------- | ------------------------------------------------- |
-| `GET`  | `/api/v1/domain-events?limit=50` | Read the newest accepted domain events            |
-| `GET`  | `/api/v1/export`                 | Download the versioned logical workspace document |
-| `GET`  | `/api/v1/health`                 | Check schema and workspace revision               |
+| Method | Path                             | Purpose                                            |
+| ------ | -------------------------------- | -------------------------------------------------- |
+| `GET`  | `/api/v1/domain-events?limit=50` | Read the newest accepted domain events             |
+| `GET`  | `/api/v1/export`                 | Download a ZIP with the JSON backup and CSV tables |
+| `GET`  | `/api/v1/export.json`            | Download the versioned logical workspace document  |
+| `GET`  | `/api/v1/health`                 | Check schema and workspace revision                |
 
-The active event also exposes a public, standards-based calendar download:
+The ZIP contains `workspace.json`, a manifest, a short README, and one UTF-8 CSV for every record
+collection. Nested values use dot-separated columns, and the manifest records every table's row
+count. The JSON document is the lossless logical backup. CSV files are intended for inspection,
+spreadsheets, and migration work.
 
-```text
-GET /public/v1/events/{eventId}/calendar.ics
-```
-
-The response is `text/calendar` with a safe attachment filename and RFC 5545 line folding.
-
-The domain-event route is an operator feed, not a delivery guarantee. Neither production webhooks
-nor an Airtable mirror is implemented. When either is built, the plan is for it to use a
-transactional outbox with independent attempt and cursor records so a temporary provider failure
-cannot lose accepted work. The Airtable mirror in particular is a
-[planned design only](../integrations/airtable.md).
+The domain-event route is an operator feed, not a delivery guarantee. The Airtable persistence
+adapter uses stable-ID upserts and cache acknowledgement. Production hardening still needs a
+durable partial-write retry journal and webhook cursor so a temporary provider failure cannot lose
+accepted work.
 
 ## Public and scoped projections
 
@@ -164,26 +206,81 @@ ProgramKit does not return the operator workspace to every client.
 | ------------------ | ------------------------------------------ |
 | Public program     | `/public/v1/program/state`                 |
 | Public agenda data | `/public/agenda.json`                      |
+| Public JSON feed   | `/public/v1/program.json`                  |
+| Public XML feed    | `/public/v1/program.xml`                   |
+| Public iCal feed   | `/public/v1/program.ics`                   |
 | Public CFP         | `/public/v1/submission-forms/{slug}/state` |
-| Reviewer workspace | `/api/v1/reviewers/{reviewerId}/state`     |
+| Reviewer workspace | `/public/v1/reviewers/{reviewerId}/state`  |
 | Speaker portal     | `/api/v1/portal/{participationId}/state`   |
 
 Each scoped surface has an ownership check and, where writes are allowed, a narrow operation
 allowlist. Public program data comes only from the latest immutable schedule release.
 
-The `/embed/speakers` and `/embed/itinerary` web routes consume the public-program path above. They
-do not introduce broader API projections or write operations.
+On `app.programkit.dev`, organizers share same-origin agenda, submission, and reviewer links. A
+reviewer link has the form `/reviewer/{reviewerId}/{accessKey}?event={eventId}`. Its projection API
+requires the same capability in the `x-programkit-reviewer-key` header and exposes only that
+reviewer's queue and scorecard operations. The Worker verifies the event and sets an HTTP-only
+event-routing cookie for the public projection requests made by that page. This cookie cannot call
+operator endpoints or select another event. Local and disposable demo workspaces omit the event
+query because their workspace is already scoped by the host.
+
+The JSON, XML, and iCal feeds accept `event`, `track`, `room`, and `descriptions=hide` query
+parameters. They use the same published-program selector as the interactive views, allow
+cross-origin `GET` requests, and cache for one minute. JSON and XML are data feeds for websites and
+integrations. iCal returns a downloadable event calendar with one entry per matching published
+session.
+
+## External API key contract
+
+Owners and administrators create event-scoped API keys under **Infrastructure & API**. The
+management surface supports list, create, copy-once, and immediate revocation:
+
+- an organizer creates a named, event-scoped key and chooses explicit read or write scopes;
+- the secret is shown once, only a hash is stored, and a non-secret prefix identifies the key;
+- keys may expire, are independently revocable, and record their last successful use;
+- clients send `Authorization: Bearer pk_live_...` over HTTPS;
+- the host resolves the key to a server-owned event, actor, and scopes before core code runs; and
+- requests use the same named operations, validation, authorization, idempotency rules, and audit
+  events as the web application.
+
+API keys can access these routes:
+
+```text
+GET  /api/v1/health
+GET  /api/v1/manifest
+GET  /api/v1/domain-events
+GET  /api/v1/events
+GET  /api/v1/events/{eventId}
+GET  /api/v1/events/{eventId}/sessions
+GET  /api/v1/events/{eventId}/speakers
+GET  /api/v1/events/{eventId}/submissions
+GET  /api/v1/export
+GET  /api/v1/export.json
+POST /api/v1/operations/{operationName}
+```
+
+The event ID encoded in the non-secret portion of the key selects exactly one event Durable
+Object. A valid key cannot call account, team, file, Airtable, key-management, or MCP routes. Core
+authorization then checks the key's scopes before reading or applying an operation.
+
+```bash
+curl https://app.programkit.dev/api/v1/events \
+  -H "Authorization: Bearer $PROGRAMKIT_API_KEY"
+```
+
+OAuth remains a later addition for integrations that need delegated installation across many
+ProgramKit accounts.
 
 ## Production API milestones
 
 The next API work is intentionally practical:
 
-1. API-token and OAuth identity with event-scoped read and write scopes.
-2. Signed webhooks with endpoint subscriptions, retry history, replay, and secret rotation.
-3. Bulk import operations capped at a documented batch size with per-item results.
-4. Direct-to-R2 upload initiation and finalize endpoints with type, size, ownership, and scanning
+1. Signed webhooks with endpoint subscriptions, retry history, replay, and secret rotation.
+2. Bulk import operations capped at a documented batch size with per-item results.
+3. Direct-to-R2 upload initiation and finalize endpoints with type, size, ownership, and scanning
    checks.
-5. OpenAPI output generated from the same schemas used to validate named operations.
+4. OpenAPI output generated from the same schemas used to validate named operations.
+5. Delegated OAuth for third-party apps that install across many ProgramKit events.
 
 Do not add a second write implementation for REST-shaped routes. A resource-style convenience
 endpoint may translate into a named operation, but the core operation remains the source of truth.

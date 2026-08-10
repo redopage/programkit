@@ -122,9 +122,10 @@ Return to `/` or the repository README.
 > All of this is one Cloudflare Worker: the React client, the API, SQLite-backed Durable Object
 > state, and private R2 files, factored into three publishable packages — core, web, and agent. The
 > API exposes the same scoped reads and named writes you just watched, plus an operation manifest,
-> health, calendar, and logical export. What we did not do is claim the unfinished parts: Airtable
-> runtime sync, production identity, and provider activation are documented as open rather than
-> demonstrated. The trade is a smaller product where the path you just saw is the path that works.
+> health, calendar, and logical export. The repository also includes an experimental Airtable-backed
+> mode, but it stays optional and disconnected during this walkthrough. Production identity
+> hardening and provider activation are documented as host work rather than demonstrated. The trade
+> is a smaller product where the path you just saw is the path that works.
 
 End on the public repository URL and `programkit.dev`.
 
