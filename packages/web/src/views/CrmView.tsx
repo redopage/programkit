@@ -72,6 +72,7 @@ export function CrmView() {
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(false)
   const [savingSegment, setSavingSegment] = useState(false)
+  const [enrollmentIds, setEnrollmentIds] = useState<string[] | null>(null)
   const [outreachIds, setOutreachIds] = useState<string[] | null>(null)
   const [reviewingDuplicates, setReviewingDuplicates] = useState(false)
   if (!payload) return null
@@ -109,20 +110,6 @@ export function CrmView() {
     )
   }
 
-  const enrollSelected = async () => {
-    const alreadyEnrolled = new Set(state.speakerPipeline.map((entry) => entry.personId))
-    for (const selectedPersonId of selectedIds.filter((id) => !alreadyEnrolled.has(id))) {
-      await execute(
-        'crm.pipeline.enroll',
-        { personId: selectedPersonId, stage: 'identified' },
-        undefined,
-        'Added to the speaker pipeline.',
-      )
-    }
-    setSelectedIds([])
-    setTab('pipeline')
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -133,7 +120,7 @@ export function CrmView() {
               <>
                 <Button
                   variant="secondary"
-                  onClick={() => void enrollSelected()}
+                  onClick={() => setEnrollmentIds([...selectedIds])}
                   disabled={mutating}
                 >
                   <ArrowRightIcon className="size-4 h-lh shrink-0 fill-current" />
@@ -275,7 +262,15 @@ export function CrmView() {
       ) : null}
 
       {tab === 'pipeline' ? (
-        <PipelineBoard state={state} execute={execute} mutating={mutating} onOpen={setPersonId} />
+        <div className="flex flex-col gap-4">
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={() => setEnrollmentIds([])}>
+              <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
+              Enroll contact
+            </Button>
+          </div>
+          <PipelineBoard state={state} execute={execute} mutating={mutating} onOpen={setPersonId} />
+        </div>
       ) : null}
 
       {tab === 'segments' ? (
@@ -342,6 +337,20 @@ export function CrmView() {
         onClose={() => setImporting(false)}
         execute={execute}
         mutating={mutating}
+        existingEmails={state.people.map((person) => person.email)}
+      />
+      <EnrollmentDialog
+        open={enrollmentIds !== null}
+        onClose={() => setEnrollmentIds(null)}
+        execute={execute}
+        mutating={mutating}
+        state={state}
+        initialPersonIds={enrollmentIds ?? []}
+        onEnrolled={() => {
+          setEnrollmentIds(null)
+          setSelectedIds([])
+          setTab('pipeline')
+        }}
       />
       <SaveSegmentDialog
         open={savingSegment}
@@ -373,6 +382,7 @@ export function CrmView() {
           execute={execute}
           mutating={mutating}
           onClose={() => setPersonId(null)}
+          onEnroll={(nextPersonId) => setEnrollmentIds([nextPersonId])}
         />
       ) : null}
     </div>
@@ -404,7 +414,7 @@ function CrmOverview({
           { label: 'Contacts', value: dashboard.totalContacts },
           { label: 'Events', value: dashboard.eventCount },
           { label: 'Returning speakers', value: dashboard.returningSpeakers },
-          { label: 'Active prospects', value: dashboard.pipelineProspects },
+          { label: 'Prospects', value: dashboard.pipelineProspects },
         ]}
       />
       <div className="grid gap-8 lg:grid-cols-2">
@@ -802,19 +812,169 @@ function AddContactDialog({
   )
 }
 
-function ImportContactsDialog({
+function EnrollmentDialog({
   open,
   onClose,
   execute,
   mutating,
+  state,
+  initialPersonIds,
+  onEnrolled,
 }: {
   open: boolean
   onClose: () => void
   execute: ExecuteOperation
   mutating: boolean
+  state: WorkspaceState
+  initialPersonIds: string[]
+  onEnrolled: () => void
+}) {
+  const enrolledIds = new Set(state.speakerPipeline.map((entry) => entry.personId))
+  const availablePeople = state.people
+    .filter((person) => !enrolledIds.has(person.id))
+    .sort((left, right) =>
+      `${left.lastName} ${left.firstName}`.localeCompare(`${right.lastName} ${right.firstName}`),
+    )
+  const selectedPeople = state.people.filter(
+    (person) => initialPersonIds.includes(person.id) && !enrolledIds.has(person.id),
+  )
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    const personIds =
+      selectedPeople.length > 0 ? selectedPeople.map((person) => person.id) : [data.get('personId')]
+    for (const personId of personIds) {
+      if (typeof personId !== 'string' || !personId) continue
+      const response = await execute(
+        'crm.pipeline.enroll',
+        {
+          personId,
+          stage: data.get('stage'),
+          score: data.get('score') || undefined,
+          rationale: data.get('rationale'),
+        },
+        undefined,
+        `Added ${personIds.length === 1 ? 'contact' : `${personIds.length} contacts`} to the speaker pipeline.`,
+      )
+      if (!response.ok) return
+    }
+    onEnrolled()
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={
+        selectedPeople.length > 1 ? `Enroll ${selectedPeople.length} contacts` : 'Enroll contact'
+      }
+      description="Add sourcing context now so the next person knows why this speaker is a fit."
+    >
+      <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
+        {selectedPeople.length > 0 ? (
+          <div className="divide-y divide-zinc-950/5 rounded-2xl bg-zinc-50 px-3 ring-1 ring-zinc-950/5">
+            {selectedPeople.map((person) => (
+              <div key={person.id} className="flex min-w-0 items-center gap-3 py-2.5">
+                <Avatar src={person.avatarUrl} name={`${person.firstName} ${person.lastName}`} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-medium text-zinc-950 sm:text-sm">
+                    {person.firstName} {person.lastName}
+                  </p>
+                  <p className="truncate text-base text-zinc-500 sm:text-sm">
+                    {person.title || person.company || person.email}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <label className="grid gap-1.5">
+            <span className="text-base font-medium sm:text-sm">Contact</span>
+            <select name="personId" required className={selectControl}>
+              <option value="">Choose a contact</option>
+              {availablePeople.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.firstName} {person.lastName} · {person.company || person.email}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1.5">
+            <span className="text-base font-medium sm:text-sm">Starting stage</span>
+            <select name="stage" defaultValue="identified" className={selectControl}>
+              {pipelineStages.map((stage) => (
+                <option key={stage} value={stage}>
+                  {sentenceCase(stage)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-base font-medium sm:text-sm">Fit score</span>
+            <input
+              name="score"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              inputMode="numeric"
+              placeholder="0–100"
+              className={textControl}
+            />
+          </label>
+        </div>
+        <label className="grid gap-1.5">
+          <span className="text-base font-medium sm:text-sm">Why they are a fit</span>
+          <textarea
+            name="rationale"
+            rows={3}
+            placeholder="Track record, topic fit, audience, or referral context"
+            className={textAreaControl}
+          />
+        </label>
+        <div className="flex gap-2">
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={mutating || (selectedPeople.length === 0 && availablePeople.length === 0)}
+          >
+            Enroll
+          </Button>
+          <Button onClick={onClose}>Cancel</Button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+function ImportContactsDialog({
+  open,
+  onClose,
+  execute,
+  mutating,
+  existingEmails,
+}: {
+  open: boolean
+  onClose: () => void
+  execute: ExecuteOperation
+  mutating: boolean
+  existingEmails: string[]
 }) {
   const [rows, setRows] = useState<SpeakerCsvRow[]>([])
   const [error, setError] = useState('')
+  const knownEmails = new Set(existingEmails.map((email) => email.toLocaleLowerCase()))
+  const seenEmails = new Set<string>()
+  const preview = rows.map((row) => {
+    const email = row.email.toLocaleLowerCase()
+    const duplicate = knownEmails.has(email) || seenEmails.has(email)
+    seenEmails.add(email)
+    return { row, duplicate }
+  })
+  const importCount = preview.filter((item) => !item.duplicate).length
+  const skippedCount = preview.length - importCount
   const choose = async (file?: File) => {
     if (!file) return
     try {
@@ -830,7 +990,7 @@ function ImportContactsDialog({
       'person.import',
       { people: rows, addToActiveEvent: false },
       undefined,
-      `${rows.length} contacts imported.`,
+      `${importCount} contact${importCount === 1 ? '' : 's'} imported${skippedCount > 0 ? `, ${skippedCount} skipped` : ''}.`,
     )
     if (response.ok) {
       setRows([])
@@ -843,9 +1003,12 @@ function ImportContactsDialog({
       onClose={onClose}
       title="Import contacts"
       description="Use name or first_name and last_name, plus email. Company, title, and bio are optional."
+      size="wide"
     >
       <div className="grid gap-4">
         <input
+          name="contactsCsv"
+          aria-label="Choose a contacts CSV file"
           type="file"
           accept=".csv,text/csv"
           onChange={(event) => void choose(event.target.files?.[0])}
@@ -856,13 +1019,67 @@ function ImportContactsDialog({
             {error}
           </p>
         ) : null}
-        {rows.length > 0 ? (
-          <p className="text-sm text-zinc-600">Ready to import {rows.length} contacts.</p>
+        {preview.length > 0 ? (
+          <div className="grid gap-3">
+            <p className="text-base text-zinc-600 sm:text-sm">
+              <span className="font-medium tabular-nums text-zinc-950">{importCount}</span> ready to
+              import
+              {skippedCount > 0 ? (
+                <>
+                  {' · '}
+                  <span className="font-medium tabular-nums text-amber-700">
+                    {skippedCount}
+                  </span>{' '}
+                  already in the directory
+                </>
+              ) : null}
+            </p>
+            <div className="-mx-5 -my-2 overflow-x-auto whitespace-nowrap sm:-mx-6">
+              <div className="inline-block min-w-full px-5 py-2 align-middle sm:px-6">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-zinc-950/10">
+                      {['Contact', 'Email', 'Company', 'Result'].map((heading) => (
+                        <th
+                          key={heading}
+                          className="whitespace-nowrap py-2.5 pr-4 text-left text-sm font-medium text-zinc-500"
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-950/5">
+                    {preview.slice(0, 8).map(({ row, duplicate }, index) => (
+                      <tr key={`${row.email}:${index}`}>
+                        <td className="py-2.5 pr-4 text-sm font-medium text-zinc-950">
+                          {row.firstName} {row.lastName}
+                        </td>
+                        <td className="py-2.5 pr-4 text-sm text-zinc-600">{row.email}</td>
+                        <td className="py-2.5 pr-4 text-sm text-zinc-600">{row.company || '—'}</td>
+                        <td className="py-2.5 text-sm font-medium">
+                          <span className={duplicate ? 'text-amber-700' : 'text-emerald-700'}>
+                            {duplicate ? 'Skip duplicate' : 'Import'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {preview.length > 8 ? (
+              <p className="text-base text-zinc-500 sm:text-sm">
+                {preview.length - 8} more {preview.length - 8 === 1 ? 'row' : 'rows'} will use the
+                same validation.
+              </p>
+            ) : null}
+          </div>
         ) : null}
         <div className="flex gap-2">
           <Button
             variant="primary"
-            disabled={mutating || rows.length === 0}
+            disabled={mutating || importCount === 0}
             onClick={() => void submit()}
           >
             <ArrowUpTrayIcon className="size-4 h-lh fill-current" />
@@ -942,51 +1159,133 @@ function OutreachDialog({
   mutating: boolean
   people: Person[]
 }) {
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('Hi {{first_name}},\n\n')
+  const [queuedCount, setQueuedCount] = useState<number | null>(null)
+  const previewPerson = people[0]
+  const previewSubject = previewPerson
+    ? subject.replaceAll('{{first_name}}', previewPerson.firstName)
+    : subject
+  const previewBody = previewPerson
+    ? body.replaceAll('{{first_name}}', previewPerson.firstName)
+    : body
+  const close = () => {
+    setSubject('')
+    setBody('Hi {{first_name}},\n\n')
+    setQueuedCount(null)
+    onClose()
+  }
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const data = new FormData(event.currentTarget)
     const response = await execute(
       'crm.outreach.queue',
       {
         personIds: people.map((person) => person.id),
-        subject: data.get('subject'),
-        body: data.get('body'),
+        subject,
+        body,
       },
       undefined,
       `Outreach queued for ${people.length} ${people.length === 1 ? 'contact' : 'contacts'}.`,
     )
-    if (response.ok) onClose()
+    if (response.ok) setQueuedCount(people.length)
   }
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={close}
       title={`Email ${people.length} contact${people.length === 1 ? '' : 's'}`}
-      description="Use {{first_name}} to personalize each message."
+      description={
+        queuedCount === null
+          ? 'Personalize once, then review a resolved message before sending.'
+          : undefined
+      }
+      size="wide"
     >
-      <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
-        <label className="grid gap-1.5">
-          <span className="text-sm font-medium">Subject</span>
-          <input name="subject" required className={textControl} />
-        </label>
-        <label className="grid gap-1.5">
-          <span className="text-sm font-medium">Message</span>
-          <textarea
-            name="body"
-            required
-            rows={7}
-            defaultValue={'Hi {{first_name}},\n\n'}
-            className={textAreaControl}
-          />
-        </label>
-        <div className="flex gap-2">
-          <Button type="submit" variant="primary" disabled={mutating || people.length === 0}>
-            <EnvelopeIcon className="size-4 h-lh fill-current" />
-            Queue messages
+      {queuedCount !== null ? (
+        <div className="grid place-items-start gap-4 py-4">
+          <div className="rounded-2xl bg-emerald-50 px-4 py-3 ring-1 ring-emerald-950/10">
+            <p className="text-base font-medium text-emerald-950 sm:text-sm">
+              {queuedCount} personalized {queuedCount === 1 ? 'message is' : 'messages are'} queued.
+            </p>
+            <p className="text-pretty text-base text-emerald-800/80 sm:text-sm">
+              Delivery status and a copy of every message are available in Communications.
+            </p>
+          </div>
+          <Button variant="primary" onClick={close}>
+            Done
           </Button>
-          <Button onClick={onClose}>Cancel</Button>
         </div>
-      </form>
+      ) : (
+        <form className="@container/outreach grid gap-5" onSubmit={(event) => void submit(event)}>
+          <div className="grid gap-5 @2xl/outreach:grid-cols-2">
+            <div className="grid content-start gap-4">
+              <label className="grid gap-1.5">
+                <span className="text-base font-medium sm:text-sm">Subject</span>
+                <input
+                  name="subject"
+                  required
+                  value={subject}
+                  onChange={(event) => setSubject(event.target.value)}
+                  placeholder="Speak at DevFlow Conf 2027?"
+                  className={textControl}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-base font-medium sm:text-sm">Message</span>
+                <textarea
+                  name="body"
+                  required
+                  rows={9}
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                  className={textAreaControl}
+                />
+              </label>
+              <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+                Use <code>{'{{first_name}}'}</code> to personalize the subject or message.
+              </p>
+            </div>
+            <div className="min-w-0 rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
+              <div className="flex min-w-0 items-center gap-3 border-b border-zinc-950/5 pb-3">
+                {previewPerson ? (
+                  <Avatar
+                    src={previewPerson.avatarUrl}
+                    name={`${previewPerson.firstName} ${previewPerson.lastName}`}
+                  />
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-medium text-zinc-950 sm:text-sm">
+                    {previewPerson
+                      ? `${previewPerson.firstName} ${previewPerson.lastName}`
+                      : 'Recipient preview'}
+                  </p>
+                  <p className="truncate text-base text-zinc-500 sm:text-sm">
+                    {previewPerson?.email ?? 'Select at least one contact.'}
+                  </p>
+                </div>
+                {people.length > 1 ? (
+                  <span className="shrink-0 text-base tabular-nums text-zinc-400 sm:text-sm">
+                    +{people.length - 1}
+                  </span>
+                ) : null}
+              </div>
+              <p className="pt-4 text-base font-medium text-zinc-950 sm:text-sm">
+                {previewSubject || 'Your subject appears here'}
+              </p>
+              <p className="whitespace-pre-wrap pt-3 text-pretty text-base text-zinc-600 sm:text-sm">
+                {previewBody || 'Your message appears here.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" variant="primary" disabled={mutating || people.length === 0}>
+              <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
+              Queue messages
+            </Button>
+            <Button onClick={close}>Cancel</Button>
+          </div>
+        </form>
+      )}
     </Dialog>
   )
 }
@@ -1009,46 +1308,58 @@ function DuplicateDialog({
       open={open}
       onClose={onClose}
       title="Possible duplicates"
-      description="Merge only when both profiles belong to the same person."
+      description="Compare both profiles carefully. A merge cannot be undone."
       size="wide"
     >
       <div className="divide-y divide-zinc-950/5">
-        {groups.map((group) => (
-          <div
-            key={group.map((person) => person.id).join(':')}
-            className="grid gap-3 py-4 sm:grid-cols-[1fr_auto]"
-          >
-            <div className="flex flex-wrap gap-3">
-              {group.map((person) => (
-                <div
-                  key={person.id}
-                  className="rounded-xl bg-zinc-50 px-3 py-2 ring-1 ring-zinc-950/5"
-                >
-                  <p className="text-sm font-medium">
-                    {person.firstName} {person.lastName}
+        {groups.map((group) => {
+          const [primary, duplicate] = group
+          return (
+            <div key={group.map((person) => person.id).join(':')} className="grid gap-4 py-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl bg-zinc-50 p-3 ring-1 ring-zinc-950/5">
+                  <p className="text-base font-medium text-zinc-950 sm:text-sm">Keep</p>
+                  <p className="pt-2 text-base font-medium text-zinc-950 sm:text-sm">
+                    {primary.firstName} {primary.lastName}
                   </p>
-                  <p className="text-sm text-zinc-500">{person.email}</p>
+                  <p className="text-base text-zinc-500 sm:text-sm">{primary.email}</p>
+                  <p className="text-base text-zinc-500 sm:text-sm">
+                    {[primary.title, primary.company].filter(Boolean).join(' at ') || 'No role set'}
+                  </p>
                 </div>
-              ))}
+                <div className="rounded-2xl bg-zinc-50 p-3 ring-1 ring-zinc-950/5">
+                  <p className="text-base font-medium text-zinc-950 sm:text-sm">Merge</p>
+                  <p className="pt-2 text-base font-medium text-zinc-950 sm:text-sm">
+                    {duplicate.firstName} {duplicate.lastName}
+                  </p>
+                  <p className="text-base text-zinc-500 sm:text-sm">{duplicate.email}</p>
+                  <p className="text-base text-zinc-500 sm:text-sm">
+                    {[duplicate.title, duplicate.company].filter(Boolean).join(' at ') ||
+                      'No role set'}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <Button
+                  size="compact"
+                  variant="secondary"
+                  disabled={mutating}
+                  onClick={() =>
+                    void execute(
+                      'person.merge',
+                      { primaryPersonId: primary.id, duplicatePersonId: duplicate.id },
+                      undefined,
+                      'Contacts merged.',
+                    )
+                  }
+                >
+                  <ArrowsRightLeftIcon className="size-4 h-lh shrink-0 fill-current" />
+                  Keep {primary.firstName}, merge {duplicate.firstName}
+                </Button>
+              </div>
             </div>
-            <Button
-              size="compact"
-              variant="secondary"
-              disabled={mutating}
-              onClick={() =>
-                void execute(
-                  'person.merge',
-                  { primaryPersonId: group[0].id, duplicatePersonId: group[1].id },
-                  undefined,
-                  'Contacts merged.',
-                )
-              }
-            >
-              <ArrowsRightLeftIcon className="size-4 h-lh fill-current" />
-              Merge into {group[0].firstName}
-            </Button>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </Dialog>
   )
@@ -1060,12 +1371,14 @@ function ContactDrawer({
   execute,
   mutating,
   onClose,
+  onEnroll,
 }: {
   person: Person
   state: WorkspaceState
   execute: ExecuteOperation
   mutating: boolean
   onClose: () => void
+  onEnroll: (personId: string) => void
 }) {
   const connections = contactConnections(state, person.id)
   const notes = state.contactNotes.filter((note) => note.personId === person.id)
@@ -1306,14 +1619,7 @@ function ContactDrawer({
               className="mt-3"
               size="compact"
               disabled={mutating}
-              onClick={() =>
-                void execute(
-                  'crm.pipeline.enroll',
-                  { personId: person.id, stage: 'identified' },
-                  undefined,
-                  'Added to the speaker pipeline.',
-                )
-              }
+              onClick={() => onEnroll(person.id)}
             >
               Add to pipeline
             </Button>

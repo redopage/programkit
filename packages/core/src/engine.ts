@@ -3279,7 +3279,7 @@ function applyHandler(
             trigger: 'crm.outreach.queue',
             recipientName: `${person.firstName} ${person.lastName}`,
             recipientEmail: person.email,
-            subject,
+            subject: subject.replaceAll('{{first_name}}', person.firstName),
             body: body.replaceAll('{{first_name}}', person.firstName),
           },
           timestamp,

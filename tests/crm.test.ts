@@ -151,7 +151,7 @@ describe('ProgramKit speaker CRM', () => {
     const result = executeOperation(state, 'crm.outreach.queue', {
       input: {
         personIds: people.map((person) => person.id),
-        subject: 'AIE speaker invitation',
+        subject: '{{first_name}}, join the AIE program',
         body: 'Hi {{first_name}}, we would love to have you join us.',
       },
     })
@@ -162,6 +162,11 @@ describe('ProgramKit speaker CRM', () => {
         expect.objectContaining({ kind: 'crm_outreach', recipientEmail: people[1].email }),
       ]),
     )
-    expect(result.state.outboundMessages?.[0].body).not.toContain('{{first_name}}')
+    const firstMessage = result.state.outboundMessages?.find(
+      (message) => message.recipientEmail === people[0].email,
+    )
+    expect(firstMessage?.subject).toContain(people[0].firstName)
+    expect(firstMessage?.subject).not.toContain('{{first_name}}')
+    expect(firstMessage?.body).not.toContain('{{first_name}}')
   })
 })
