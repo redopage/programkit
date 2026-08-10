@@ -549,9 +549,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                             onDragEnd={stopDragging}
                             className={cx(
                               'focus-ring w-full cursor-grab rounded-xl bg-white p-3 text-left shadow-sm ring-1 motion-safe:transition-transform motion-safe:hover:-translate-y-px active:cursor-grabbing',
-                              placementConflicts.some(
-                                (conflict) => conflict.severity === 'error',
-                              )
+                              placementConflicts.some((conflict) => conflict.severity === 'error')
                                 ? 'ring-rose-500/40'
                                 : 'ring-zinc-950/10',
                               dropTarget?.roomId === room.id &&
