@@ -81,7 +81,10 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
     activeAssignments.length === 0 ? 0 : Math.round((completed / activeAssignments.length) * 100)
   const plan = (state.evaluationPlans ?? []).find((entry) => entry.eventId === state.activeEventId)
   const reviewerTeamIds = new Set(
-    plan?.rounds.map((round) => evaluationRoundReviewerTeamId(plan, round.id)) ?? [],
+    plan?.rounds.flatMap((round) => [
+      evaluationRoundReviewerTeamId(plan, round.id),
+      ...(round.categoryRoutes ?? []).map((route) => route.reviewerTeamId),
+    ]) ?? [],
   )
   const reviewerIds = new Set(
     (state.reviewerTeams ?? [])
@@ -581,6 +584,25 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                           </li>
                         ))}
                       </ul>
+                      {round.categoryRoutes && round.categoryRoutes.length > 0 ? (
+                        <ul
+                          role="list"
+                          className="flex flex-wrap gap-x-3 gap-y-1 pt-3 text-sm text-zinc-500"
+                        >
+                          {round.categoryRoutes.map((route) => {
+                            const track = state.tracks.find((entry) => entry.id === route.trackId)
+                            const routedTeam = state.reviewerTeams.find(
+                              (entry) => entry.id === route.reviewerTeamId,
+                            )
+                            return (
+                              <li key={route.trackId}>
+                                {track?.name ?? 'Unknown category'} →{' '}
+                                {routedTeam?.name ?? 'Unknown pool'}
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      ) : null}
                     </article>
                   )
                 })}

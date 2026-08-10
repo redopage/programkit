@@ -2026,6 +2026,133 @@ describe('ProgramKit operation engine', () => {
     })
   })
 
+  it('routes submitted proposals to category-specific reviewer pools', () => {
+    let state = createSeedState()
+    state.reviewerAssignments = []
+    state.scorecards = []
+
+    const createdPool = executeOperation(state, 'reviewer-team.create', {
+      input: {
+        name: 'Build track committee',
+        reviewerIds: ['rev_003'],
+      },
+    })
+    expect(createdPool.response.ok).toBe(true)
+    state = createdPool.state
+    const routedTeam = state.reviewerTeams.find((team) => team.name === 'Build track committee')!
+    const plan = state.evaluationPlans[0]
+    const round = plan.rounds[0]
+    const configured = executeOperation(state, 'evaluation-plan.update', {
+      input: {
+        planId: plan.id,
+        rounds: [
+          {
+            ...round,
+            reviewerTeamId: plan.reviewerTeamId,
+            blindReview: plan.blindReview,
+            criteria: plan.criteria,
+            categoryRoutes: [
+              {
+                trackId: 'trk_build',
+                reviewerTeamId: routedTeam.id,
+              },
+            ],
+          },
+        ],
+      },
+      expectedVersions: { [plan.id]: plan.version },
+    })
+    expect(configured.response.ok, JSON.stringify(configured.response)).toBe(true)
+    state = configured.state
+
+    const source = state.submissions.find((submission) => submission.id === 'sub_005')!
+    state.submissions.push({
+      ...structuredClone(source),
+      id: 'sub_category_route',
+      status: 'draft',
+      submittedAt: null,
+      decidedAt: null,
+      convertedParticipationId: null,
+      convertedSessionId: null,
+      speakerAccessKey: 'speaker_category_route',
+      version: 1,
+    })
+    const submitted = executeOperation(state, 'submission.submit', {
+      input: { submissionId: 'sub_category_route' },
+    })
+
+    expect(submitted.response.ok, JSON.stringify(submitted.response)).toBe(true)
+    expect(
+      submitted.state.reviewerAssignments.filter(
+        (assignment) => assignment.submissionId === 'sub_category_route',
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        reviewerId: 'rev_003',
+        roundId: round.id,
+      }),
+    ])
+    expect(
+      submitted.state.domainEvents.find(
+        (event) =>
+          event.type === 'submission.submitted' && event.aggregate.id === 'sub_category_route',
+      )?.data,
+    ).toMatchObject({
+      trackId: 'trk_build',
+      reviewerTeamId: routedTeam.id,
+    })
+  })
+
+  it('adds category routes without rewriting existing review assignments', () => {
+    let state = createSeedState()
+    const createdPool = executeOperation(state, 'reviewer-team.create', {
+      input: {
+        name: 'Build track committee',
+        reviewerIds: ['rev_003'],
+      },
+    })
+    expect(createdPool.response.ok).toBe(true)
+    state = createdPool.state
+
+    const routedTeam = state.reviewerTeams.find((team) => team.name === 'Build track committee')!
+    const plan = state.evaluationPlans[0]
+    const round = plan.rounds[0]
+    const assignmentsBefore = structuredClone(state.reviewerAssignments)
+    const configured = executeOperation(state, 'evaluation-plan.update', {
+      input: {
+        planId: plan.id,
+        name: plan.name,
+        submissionKinds: plan.submissionKinds,
+        rounds: [
+          {
+            ...round,
+            opensAt: '2026-08-01T00:00:00.000Z',
+            closesAt: '2026-08-31T23:59:59.999Z',
+            reviewerTeamId: plan.reviewerTeamId,
+            blindReview: plan.blindReview,
+            criteria: plan.criteria,
+            categoryRoutes: [
+              {
+                trackId: 'trk_build',
+                reviewerTeamId: routedTeam.id,
+              },
+            ],
+          },
+        ],
+      },
+      expectedVersions: { [plan.id]: plan.version },
+    })
+
+    expect(configured.response.ok, JSON.stringify(configured.response)).toBe(true)
+    expect(configured.state.evaluationPlans[0].rounds[0].categoryRoutes).toEqual([
+      {
+        trackId: 'trk_build',
+        reviewerTeamId: routedTeam.id,
+      },
+    ])
+    expect(configured.state.reviewerAssignments).toEqual(assignmentsBefore)
+  })
+
   it('keeps assigned reviews tied to an immutable review policy', () => {
     const state = createSeedState()
     const plan = state.evaluationPlans[0]

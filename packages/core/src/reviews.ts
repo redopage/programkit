@@ -19,8 +19,13 @@ export function evaluationRoundCriteria(
 export function evaluationRoundReviewerTeamId(
   plan: EvaluationPlan | undefined,
   roundId: Id | undefined,
+  trackId?: Id,
 ): Id | undefined {
   const round = evaluationRound(plan, roundId)
+  if (trackId) {
+    const route = round?.categoryRoutes?.find((entry) => entry.trackId === trackId)
+    if (route) return route.reviewerTeamId
+  }
   return round?.reviewerTeamId ?? plan?.reviewerTeamId
 }
 

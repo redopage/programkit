@@ -296,6 +296,10 @@ export interface EvaluationRound {
   opensAt?: ISODateTime | null
   closesAt?: ISODateTime | null
   reviewerTeamId?: Id
+  categoryRoutes?: Array<{
+    trackId: Id
+    reviewerTeamId: Id
+  }>
   blindReview?: boolean
   criteria?: EvaluationCriterion[]
   reviewersPerSubmission: number

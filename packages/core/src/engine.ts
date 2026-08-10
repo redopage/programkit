@@ -157,7 +157,10 @@ function initializeProgramCollections(state: WorkspaceState) {
   }
   for (const campaign of state.campaigns) campaign.includeCalendarInvite ??= false
   for (const message of state.outboundMessages ?? []) message.calendarAttachment ??= null
-  state.schemaVersion = Math.max(state.schemaVersion, 12)
+  for (const plan of state.evaluationPlans) {
+    for (const round of plan.rounds) round.categoryRoutes ??= []
+  }
+  state.schemaVersion = Math.max(state.schemaVersion, 13)
 }
 
 function queueOutboundMessage(
@@ -414,6 +417,36 @@ function parseEvaluationRounds(
     if (opensAt && closesAt && new Date(opensAt) >= new Date(closesAt)) {
       throw new OperationError('INVALID_INPUT', 'A review round must close after it opens.')
     }
+    const categoryRoutes = Array.isArray(record.categoryRoutes)
+      ? record.categoryRoutes
+          .map((entry, routeIndex) => {
+            const route = assertRecord(entry, `rounds.${index}.categoryRoutes.${routeIndex}`)
+            const trackId = assertString(
+              route.trackId,
+              `rounds.${index}.categoryRoutes.${routeIndex}.trackId`,
+            )
+            const routedTeamId = assertString(
+              route.reviewerTeamId,
+              `rounds.${index}.categoryRoutes.${routeIndex}.reviewerTeamId`,
+            )
+            const track = findRequired(state.tracks, trackId, 'track')
+            const routedTeam = findRequired(state.reviewerTeams, routedTeamId, 'reviewer team')
+            if (track.eventId !== eventId || routedTeam.eventId !== eventId) {
+              throw new OperationError(
+                'FORBIDDEN',
+                'Category routing cannot cross event boundaries.',
+              )
+            }
+            return { trackId, reviewerTeamId: routedTeamId }
+          })
+          .sort((left, right) => left.trackId.localeCompare(right.trackId))
+      : []
+    if (new Set(categoryRoutes.map((route) => route.trackId)).size !== categoryRoutes.length) {
+      throw new OperationError(
+        'INVALID_INPUT',
+        `Each category can be routed only once in “${assertString(record.name, `rounds.${index}.name`)}”.`,
+      )
+    }
     return {
       id,
       name: assertString(record.name, `rounds.${index}.name`),
@@ -421,6 +454,7 @@ function parseEvaluationRounds(
       opensAt,
       closesAt,
       reviewerTeamId,
+      categoryRoutes,
       blindReview: optionalBoolean(record.blindReview, false),
       criteria: parseEvaluationCriteria(record.criteria, index),
       reviewersPerSubmission: boundedInteger(
@@ -1575,9 +1609,12 @@ function applyHandler(
         (entry) => entry.formId === form.id && entry.submissionKinds.includes(submission.kind),
       )
       const createdAssignments = []
+      const trackId = stringAnswer(state, submission, 'track')
+      let routedReviewerTeamId: string | undefined
       if (plan) {
         const round = [...plan.rounds].sort((left, right) => left.order - right.order)[0]
-        const teamId = evaluationRoundReviewerTeamId(plan, round?.id)
+        const teamId = evaluationRoundReviewerTeamId(plan, round?.id, trackId)
+        routedReviewerTeamId = teamId
         const team = state.reviewerTeams.find((entry) => entry.id === teamId)
         const activeReviewerIds = (team?.reviewerIds ?? []).filter(
           (reviewerId) =>
@@ -1627,6 +1664,8 @@ function applyHandler(
         summary: `Submitted “${submissionTitle}” for review.`,
         data: {
           formId: form.id,
+          reviewerTeamId: routedReviewerTeamId,
+          trackId,
           assignmentIds: createdAssignments.map((entry) => entry.id),
           confirmationMessageId: confirmationMessage.id,
         },
@@ -1850,12 +1889,6 @@ function applyHandler(
       if (reviewer.eventId !== state.activeEventId || reviewer.status !== 'active') {
         throw new OperationError('INVALID_INPUT', 'Choose an active reviewer for this event.')
       }
-      const teamId = evaluationRoundReviewerTeamId(plan, round.id)
-      const team = state.reviewerTeams.find((entry) => entry.id === teamId)
-      if (!team?.reviewerIds.includes(reviewer.id)) {
-        throw new OperationError('FORBIDDEN', 'The reviewer is not in this round’s reviewer pool.')
-      }
-
       const submissionIds = [...new Set(assertStringArray(input.submissionIds, 'submissionIds'))]
       if (submissionIds.length === 0) {
         throw new OperationError('INVALID_INPUT', 'Select at least one proposal to assign.', {
@@ -1878,7 +1911,10 @@ function applyHandler(
       ).length
       let available = Math.max(0, maxAssignments - existingForReviewer)
       const assignments = []
-      const skipped: Array<{ submissionId: string; reason: 'existing' | 'cap' | 'track' }> = []
+      const skipped: Array<{
+        submissionId: string
+        reason: 'existing' | 'cap' | 'track' | 'pool'
+      }> = []
 
       for (const submissionId of submissionIds) {
         const submission = findRequired(state.submissions, submissionId, 'submission')
@@ -1905,6 +1941,13 @@ function applyHandler(
         }
         if (trackValues && !trackValues.has(stringAnswer(state, submission, 'track'))) {
           skipped.push({ submissionId, reason: 'track' })
+          continue
+        }
+        const submissionTrackId = stringAnswer(state, submission, 'track')
+        const teamId = evaluationRoundReviewerTeamId(plan, round.id, submissionTrackId)
+        const team = state.reviewerTeams.find((entry) => entry.id === teamId)
+        if (!team?.reviewerIds.includes(reviewer.id)) {
+          skipped.push({ submissionId, reason: 'pool' })
           continue
         }
         if (

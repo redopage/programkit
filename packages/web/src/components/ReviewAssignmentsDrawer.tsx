@@ -31,15 +31,26 @@ export function ReviewAssignmentsDrawer({ open, onClose }: { open: boolean; onCl
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([])
 
   const round = rounds.find((entry) => entry.id === roundId) ?? rounds[0]
-  const reviewerTeamId = plan && round ? evaluationRoundReviewerTeamId(plan, round.id) : undefined
-  const reviewerTeam = state?.reviewerTeams.find((entry) => entry.id === reviewerTeamId)
-  const reviewers = useMemo(
-    () =>
-      (reviewerTeam?.reviewerIds ?? [])
-        .map((id) => state?.reviewers.find((entry) => entry.id === id))
-        .filter((entry) => entry?.status === 'active'),
-    [reviewerTeam?.reviewerIds, state?.reviewers],
-  )
+  const reviewerTeamIds = useMemo(() => {
+    if (!plan || !round) return []
+    if (trackValue !== 'all') {
+      return [evaluationRoundReviewerTeamId(plan, round.id, trackValue)].filter(Boolean)
+    }
+    return [
+      evaluationRoundReviewerTeamId(plan, round.id),
+      ...(round.categoryRoutes ?? []).map((route) => route.reviewerTeamId),
+    ].filter((id, index, values) => Boolean(id) && values.indexOf(id) === index)
+  }, [plan, round, trackValue])
+  const reviewers = useMemo(() => {
+    const reviewerIds = new Set(
+      (state?.reviewerTeams ?? [])
+        .filter((team) => reviewerTeamIds.includes(team.id))
+        .flatMap((team) => team.reviewerIds),
+    )
+    return [...reviewerIds]
+      .map((id) => state?.reviewers.find((entry) => entry.id === id))
+      .filter((entry) => entry?.status === 'active')
+  }, [reviewerTeamIds, state?.reviewerTeams, state?.reviewers])
   const reviewer = reviewers.find((entry) => entry?.id === reviewerId) ?? reviewers[0]
   const trackField = state?.submissionFormFields.find(
     (field) => field.formId === plan?.formId && field.purpose === 'track',
@@ -89,7 +100,7 @@ export function ReviewAssignmentsDrawer({ open, onClose }: { open: boolean; onCl
       reviewers.some((candidate) => candidate?.id === current) ? current : (reviewers[0]?.id ?? ''),
     )
     setSelectedSubmissionIds([])
-  }, [open, reviewerTeamId, reviewers])
+  }, [open, reviewerTeamIds, reviewers])
 
   if (!state) return null
 

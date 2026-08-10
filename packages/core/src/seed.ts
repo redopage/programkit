@@ -868,6 +868,8 @@ const evaluationPlans: EvaluationPlan[] = [
         id: 'rnd_program_review',
         name: 'Program committee review',
         order: 1,
+        opensAt: '2026-07-15T04:00:00.000Z',
+        closesAt: '2026-08-12T03:59:00.000Z',
         reviewersPerSubmission: 2,
         minimumCompletedReviews: 2,
       },
@@ -1238,7 +1240,7 @@ const integrations: Integration[] = [
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 12,
+    schemaVersion: 13,
     revision: 1,
     workspace: {
       id: 'wrk_aie',

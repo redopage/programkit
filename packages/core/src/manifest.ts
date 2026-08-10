@@ -207,7 +207,8 @@ export const operationManifest = [
   {
     name: 'evaluation-plan.create',
     title: 'Create evaluation plan',
-    description: 'Create an event review plan with independent rounds, pools, and scorecards.',
+    description:
+      'Create an event review plan with independent rounds, category routing, pools, and scorecards.',
     kind: 'command',
     scopes: ['reviews:configure'],
     risk: 'administrative',
@@ -220,7 +221,8 @@ export const operationManifest = [
   {
     name: 'evaluation-plan.update',
     title: 'Update evaluation plan',
-    description: 'Update review rounds, dates, reviewer pools, identity rules, and scorecards.',
+    description:
+      'Update review rounds, dates, category routes, reviewer pools, identity rules, and scorecards.',
     kind: 'command',
     scopes: ['reviews:configure'],
     risk: 'administrative',

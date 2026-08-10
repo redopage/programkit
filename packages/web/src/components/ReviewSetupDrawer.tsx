@@ -20,6 +20,7 @@ import {
   type Reviewer,
   type ReviewerTeam,
   type SubmissionForm,
+  type Track,
 } from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -29,6 +30,8 @@ type SetupView = 'plan' | 'reviewers'
 type CriterionDraft = {
   id: string
   label: string
+  description: string
+  required: boolean
   kind: 'numeric' | 'select' | 'long_text'
   minimum: number
   maximum: number
@@ -41,6 +44,7 @@ type RoundDraft = {
   opensOn: string
   closesOn: string
   reviewerTeamId: string
+  categoryRoutes: Array<{ trackId: string; reviewerTeamId: string }>
   blindReview: boolean
   reviewersPerSubmission: number
   minimumCompletedReviews: number
@@ -55,6 +59,8 @@ function criterionDraft(criterion?: EvaluationCriterion): CriterionDraft {
   return {
     id: criterion?.id ?? localId('crt'),
     label: criterion?.label ?? 'New criterion',
+    description: criterion?.description ?? '',
+    required: criterion?.required ?? true,
     kind: criterion ? evaluationCriterionKind(criterion) : 'numeric',
     minimum: criterion?.minimum ?? 1,
     maximum: criterion?.maximum ?? 5,
@@ -70,6 +76,7 @@ function roundDraft(plan: EvaluationPlan, round: EvaluationRound): RoundDraft {
     opensOn: round.opensAt?.slice(0, 10) ?? '',
     closesOn: round.closesAt?.slice(0, 10) ?? '',
     reviewerTeamId: evaluationRoundReviewerTeamId(plan, round.id) ?? '',
+    categoryRoutes: round.categoryRoutes?.map((route) => ({ ...route })) ?? [],
     blindReview: evaluationRoundIsBlind(plan, round.id),
     reviewersPerSubmission: round.reviewersPerSubmission,
     minimumCompletedReviews: round.minimumCompletedReviews,
@@ -84,6 +91,7 @@ function blankRound(teamId = '', index = 0): RoundDraft {
     opensOn: '',
     closesOn: '',
     reviewerTeamId: teamId,
+    categoryRoutes: [],
     blindReview: false,
     reviewersPerSubmission: 2,
     minimumCompletedReviews: 2,
@@ -115,6 +123,10 @@ export function ReviewSetupDrawer({
   const plan = state?.evaluationPlans.find((entry) => entry.eventId === state.activeEventId)
   const teams = useMemo(
     () => state?.reviewerTeams.filter((team) => team.eventId === state.activeEventId) ?? [],
+    [state],
+  )
+  const tracks = useMemo(
+    () => state?.tracks.filter((track) => track.eventId === state.activeEventId) ?? [],
     [state],
   )
   const reviewers = useMemo(
@@ -185,14 +197,16 @@ export function ReviewSetupDrawer({
         opensAt: dayBoundary(round.opensOn, 'open'),
         closesAt: dayBoundary(round.closesOn, 'close'),
         reviewerTeamId: round.reviewerTeamId,
+        categoryRoutes: round.categoryRoutes,
         blindReview: round.blindReview,
         reviewersPerSubmission: round.reviewersPerSubmission,
         minimumCompletedReviews: round.minimumCompletedReviews,
         criteria: round.criteria.map((criterion) => ({
           id: criterion.id,
           label: criterion.label,
+          description: criterion.description,
           kind: criterion.kind,
-          required: true,
+          required: criterion.required,
           ...(criterion.kind === 'numeric'
             ? {
                 minimum: criterion.minimum,
@@ -271,6 +285,7 @@ export function ReviewSetupDrawer({
           plan={plan}
           forms={forms}
           teams={teams}
+          tracks={tracks}
           planName={planName}
           setPlanName={setPlanName}
           formId={formId}
@@ -316,6 +331,7 @@ function PlanEditor({
   plan,
   forms,
   teams,
+  tracks,
   planName,
   setPlanName,
   formId,
@@ -331,6 +347,7 @@ function PlanEditor({
   plan: EvaluationPlan | undefined
   forms: SubmissionForm[]
   teams: ReviewerTeam[]
+  tracks: Track[]
   planName: string
   setPlanName: (value: string) => void
   formId: string
@@ -503,6 +520,67 @@ function PlanEditor({
                 </span>
               </label>
             </div>
+
+            {tracks.length > 1 && teams.length > 1 ? (
+              <div className="pt-5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 className="text-base font-medium text-zinc-950 sm:text-sm">
+                    Category routing
+                  </h3>
+                  <span className="text-sm text-zinc-500">Optional</span>
+                </div>
+                <div className="divide-y divide-zinc-950/5 pt-2">
+                  {tracks.map((track) => {
+                    const routedTeamId =
+                      round.categoryRoutes.find((route) => route.trackId === track.id)
+                        ?.reviewerTeamId ?? ''
+                    return (
+                      <label
+                        key={track.id}
+                        className="grid items-center gap-2 py-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,1fr)]"
+                      >
+                        <span className="min-w-0 truncate text-base text-zinc-700 sm:text-sm">
+                          {track.name}
+                        </span>
+                        <SelectShell>
+                          <select
+                            aria-label={`Reviewer pool for ${track.name}`}
+                            value={routedTeamId}
+                            onChange={(event) => {
+                              const nextTeamId = event.target.value
+                              updateRound(round.id, {
+                                categoryRoutes: nextTeamId
+                                  ? [
+                                      ...round.categoryRoutes.filter(
+                                        (route) => route.trackId !== track.id,
+                                      ),
+                                      { trackId: track.id, reviewerTeamId: nextTeamId },
+                                    ]
+                                  : round.categoryRoutes.filter(
+                                      (route) => route.trackId !== track.id,
+                                    ),
+                              })
+                            }}
+                            className={selectControl}
+                          >
+                            <option value="">
+                              Use{' '}
+                              {teams.find((team) => team.id === round.reviewerTeamId)?.name ??
+                                'default pool'}
+                            </option>
+                            {teams.map((team) => (
+                              <option key={team.id} value={team.id}>
+                                {team.name}
+                              </option>
+                            ))}
+                          </select>
+                        </SelectShell>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             <div className="flex items-center justify-between gap-4 pt-6">
               <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Scorecard</h3>
