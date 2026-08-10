@@ -76,7 +76,7 @@ describe('workspace export archive', () => {
     expect(csv).toContain('"weightedAggregate"')
     expect(csv).toContain('"criterionAverages.Attendee value"')
     expect(csv).toContain('"The boring parts of trustworthy agents"')
-    expect(csv).toContain('"4.7"')
+    expect(csv).toContain('"4.67"')
     expect(csv).toContain('"recommendations.accept"')
   })
 })
