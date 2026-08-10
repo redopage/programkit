@@ -1042,6 +1042,72 @@ async function uploadSpeakerHeadshot(
   return Response.json(operation, { status: 201 })
 }
 
+async function uploadOrganizerHeadshot(
+  request: Request,
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  personId: string,
+  actor: OperationRequest['actor'],
+) {
+  if (!env.PROGRAMKIT_FILES) {
+    return Response.json({ ok: false, error: 'File storage is not configured.' }, { status: 503 })
+  }
+  const state = await readWorkspace(stub)
+  const participation = state.participations.find(
+    (entry) => entry.eventId === state.activeEventId && entry.personId === personId,
+  )
+  if (!participation || !state.people.some((entry) => entry.id === personId)) {
+    return Response.json({ ok: false, error: 'This speaker was not found.' }, { status: 404 })
+  }
+  const form = await request.formData()
+  const value = form.get('file')
+  if (!(value instanceof File)) {
+    return Response.json({ ok: false, error: 'Choose an image to upload.' }, { status: 400 })
+  }
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  if (!allowedTypes.has(value.type)) {
+    return Response.json(
+      { ok: false, error: 'Headshots must be JPEG, PNG, or WebP images.' },
+      { status: 415 },
+    )
+  }
+  if (value.size < 1 || value.size > 8_000_000) {
+    return Response.json(
+      { ok: false, error: 'Choose a non-empty image smaller than 8 MB.' },
+      { status: 413 },
+    )
+  }
+  const filename = safeAssetFilename(value.name)
+  const nonce = crypto.randomUUID().replaceAll('-', '')
+  const storageKey = `${state.activeEventId}/people/${personId}/${nonce}-${filename}`
+  await env.PROGRAMKIT_FILES.put(storageKey, value.stream(), {
+    httpMetadata: { contentType: value.type },
+    customMetadata: {
+      eventId: state.activeEventId,
+      participationId: participation.id,
+      personId,
+    },
+  })
+  const operation = await executeWorkspaceOperation(stub, 'asset.register', {
+    input: {
+      ownerType: 'person',
+      ownerId: personId,
+      kind: 'headshot',
+      filename,
+      contentType: value.type,
+      sizeBytes: value.size,
+      storageKey,
+    },
+    actor,
+    idempotencyKey: `headshot:${storageKey}`,
+  })
+  if (!operation.ok) {
+    await env.PROGRAMKIT_FILES.delete(storageKey)
+    return Response.json(operation, { status: 400 })
+  }
+  return Response.json(operation, { status: 201 })
+}
+
 async function uploadSpeakerDeliverable(
   request: Request,
   env: Env,
@@ -1947,6 +2013,22 @@ export default {
           state.assets.some(
             (entry) => entry.id === assetId && entry.eventId === state.activeEventId,
           ),
+      )
+    }
+
+    const organizerHeadshotMatch = url.pathname.match(
+      /^\/api\/v1\/people\/([^/]+)\/assets\/headshot$/u,
+    )
+    if (request.method === 'POST' && organizerHeadshotMatch) {
+      if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+      return uploadOrganizerHeadshot(
+        request,
+        env,
+        stub,
+        decodeURIComponent(organizerHeadshotMatch[1]),
+        profile === 'hosted-app' && hostedPrincipal
+          ? hostedStaffActor(hostedPrincipal)
+          : demoStaffActor,
       )
     }
 

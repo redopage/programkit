@@ -655,6 +655,36 @@ describe('ProgramKit operation engine', () => {
       actor: participant,
     })
     expect(denied.response.error?.code).toBe('FORBIDDEN')
+
+    const replaced = executeOperation(result.state, 'asset.register', {
+      input: {
+        ownerType: 'person',
+        ownerId: 'per_003',
+        kind: 'headshot',
+        filename: 'jordan-headshot-final.png',
+        contentType: 'image/png',
+        sizeBytes: 52_000,
+        storageKey: 'evt_aie_2026/people/per_003/jordan-headshot-final.png',
+      },
+      actor: {
+        type: 'staff',
+        id: 'usr_admin',
+        name: 'Jordan Alvarez',
+        scopes: ['assets:write'],
+      },
+    })
+    expect(replaced.response.ok).toBe(true)
+    expect(replaced.state.assets.filter((entry) => entry.owner.id === 'per_003')).toEqual([
+      expect.objectContaining({ version: 1, isLatest: false }),
+      expect.objectContaining({
+        version: 2,
+        isLatest: true,
+        uploadedBy: { type: 'staff', id: 'usr_admin', name: 'Jordan Alvarez' },
+      }),
+    ])
+    expect(replaced.state.people.find((entry) => entry.id === 'per_003')?.avatarUrl).toBe(
+      `/public/v1/assets/${replaced.state.assets.at(-1)?.id}`,
+    )
   })
 
   it('versions speaker deliverables and keeps an attributed comment thread', () => {

@@ -269,11 +269,13 @@ function PersonDrawer({
   open: boolean
   onClose: () => void
 }) {
-  const { payload, execute, mutating } = useWorkspace()
+  const { payload, execute, mutating, refresh } = useWorkspace()
   const [tab, setTab] = useState<'details' | 'requirements' | 'activity'>('details')
   const [editing, setEditing] = useState(false)
   const [copied, setCopied] = useState(false)
   const [inviteDrafted, setInviteDrafted] = useState(false)
+  const [uploadingHeadshot, setUploadingHeadshot] = useState(false)
+  const [headshotError, setHeadshotError] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({
     firstName: '',
     lastName: '',
@@ -383,6 +385,44 @@ function PersonDrawer({
     if (!response.ok) return
     setInviteDrafted(true)
     window.setTimeout(() => setInviteDrafted(false), 1800)
+  }
+
+  async function uploadHeadshot(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const value = new FormData(form).get('file')
+    if (!(value instanceof File) || value.size === 0) {
+      setHeadshotError('Choose an image to upload.')
+      return
+    }
+    setUploadingHeadshot(true)
+    setHeadshotError(null)
+    try {
+      const body = new FormData()
+      body.set('file', value)
+      const response = await fetch(
+        `/api/v1/people/${encodeURIComponent(currentPerson.id)}/assets/headshot`,
+        { method: 'POST', body },
+      )
+      const result = (await response.json()) as {
+        ok?: boolean
+        error?: string | { message?: string }
+      }
+      if (!response.ok || !result.ok) {
+        setHeadshotError(
+          typeof result.error === 'string'
+            ? result.error
+            : (result.error?.message ?? 'The headshot could not be uploaded.'),
+        )
+        return
+      }
+      form.reset()
+      await refresh()
+    } catch {
+      setHeadshotError('The headshot could not be uploaded. Try again.')
+    } finally {
+      setUploadingHeadshot(false)
+    }
   }
 
   return (
@@ -610,6 +650,44 @@ function PersonDrawer({
                 </form>
                 <div>
                   <h3 className="text-base font-medium text-zinc-950 sm:text-sm">Speaker files</h3>
+                  <form
+                    className="mt-2 flex flex-col gap-2 rounded-2xl bg-zinc-50 p-3 ring-1 ring-zinc-950/5"
+                    onSubmit={(event) => void uploadHeadshot(event)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <Avatar
+                        src={currentPerson.avatarUrl}
+                        name={`${currentPerson.firstName} ${currentPerson.lastName}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <label
+                          className="block text-sm font-medium text-zinc-950"
+                          htmlFor="headshot-file"
+                        >
+                          Replace headshot
+                        </label>
+                        <p className="text-sm text-zinc-500">JPEG, PNG, or WebP up to 8 MB.</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        id="headshot-file"
+                        name="file"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="min-w-0 flex-1 text-sm text-zinc-600 file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-3 file:py-1.5 file:font-medium file:text-zinc-700 file:shadow-xs file:ring-1 file:ring-zinc-950/10"
+                      />
+                      <Button type="submit" size="compact" disabled={uploadingHeadshot}>
+                        <ArrowUpTrayIcon className="size-4 h-lh shrink-0 fill-current" />
+                        {uploadingHeadshot ? 'Uploading' : 'Upload'}
+                      </Button>
+                    </div>
+                    {headshotError ? (
+                      <p role="alert" className="text-sm text-red-700">
+                        {headshotError}
+                      </p>
+                    ) : null}
+                  </form>
                   {headshots.length > 0 ? (
                     <ul role="list" className="divide-y divide-zinc-950/5 pt-1">
                       {headshots.map((asset) => (
