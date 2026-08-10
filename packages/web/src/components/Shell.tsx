@@ -213,6 +213,10 @@ function SidebarUtilities({
     navigate(to)
     onNavigate?.()
   }
+  const openExternal = (to: string) => {
+    window.open(to, '_blank', 'noopener,noreferrer')
+    onNavigate?.()
+  }
   const copyLink = async () => {
     if (!demoUrl) return
     await navigator.clipboard.writeText(demoUrl)
@@ -236,7 +240,9 @@ function SidebarUtilities({
     {
       label: demoUrl ? 'View public page' : 'Preview public page',
       icon: ArrowTopRightOnSquareIcon,
-      action: () => open(eventId ? publicProgramPath(eventId) : '/agenda'),
+      // The attendee-facing agenda is a separate audience from the operator
+      // console, so it gets its own tab rather than replacing the current view.
+      action: () => openExternal(eventId ? publicProgramPath(eventId) : '/agenda'),
     },
     ...(demoUrl
       ? [

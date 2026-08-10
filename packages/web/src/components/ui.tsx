@@ -641,17 +641,9 @@ export function StatGrid({
 }) {
   return (
     <div className="@container">
-      <dl className="grid grid-cols-2 @3xl:grid-cols-4">
-        {stats.map((stat, index) => (
-          <div
-            key={stat.label}
-            className={cx(
-              'border-zinc-950/5 py-3',
-              index % 2 === 1 ? 'border-l pl-5' : 'pr-5',
-              index > 1 && 'border-t @3xl:border-t-0',
-              index === 2 && '@3xl:border-l @3xl:pl-5',
-            )}
-          >
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-zinc-950/5 ring-1 ring-zinc-950/5 @3xl:grid-cols-4">
+        {stats.map((stat) => (
+          <div key={stat.label} className="bg-white px-4 py-3.5 sm:px-5">
             <dt className="truncate text-base font-medium text-zinc-500 sm:text-sm">
               {stat.label}
             </dt>
