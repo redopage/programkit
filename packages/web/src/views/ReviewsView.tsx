@@ -119,7 +119,16 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
         (submission.status === 'submitted' || submission.status === 'in_review'),
     )
     .map((submission) => ({ submission, review: submissionReviewSummary(state, submission.id) }))
-    .sort((left, right) => right.review.completed - left.review.completed)
+    .sort(
+      (left, right) =>
+        left.review.completed - right.review.completed ||
+        left.review.assigned - right.review.assigned ||
+        answerText(
+          submissionAnswerByPurpose(state, left.submission, 'proposal_title'),
+        ).localeCompare(
+          answerText(submissionAnswerByPurpose(state, right.submission, 'proposal_title')),
+        ),
+    )
   const assignedSubmissionIds = new Set(
     activeAssignments.map((assignment) => assignment.submissionId),
   )
@@ -512,7 +521,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
                 <button
                   type="button"
                   className="focus-ring flex w-full items-center gap-4 rounded-lg py-4 text-left hover:bg-zinc-950/2"
-                  onClick={() => navigate('/submissions')}
+                  onClick={() => navigate(`/submissions?submission=${submission.id}`)}
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-medium text-zinc-950 sm:text-sm">
