@@ -1,11 +1,10 @@
 import { DurableObject } from 'cloudflare:workers'
 
-import { normalizeEmail } from './auth.ts'
+import { cloudflarePasswordIterations, normalizeEmail } from './auth.ts'
 
 const invitationLifetimeMs = 7 * 24 * 60 * 60 * 1_000
 const externalSessionLifetimeMs = 30 * 24 * 60 * 60 * 1_000
 const externalRateWindowMs = 60 * 60 * 1_000
-const externalPasswordIterations = 210_000
 const minimumPasswordLength = 10
 const maximumPasswordLength = 128
 const maximumPendingInvitations = 200
@@ -403,8 +402,8 @@ export class EventAccessDurableObject extends DurableObject {
         eventId: event.id,
         email,
         passwordSalt: salt,
-        passwordHash: await passwordHash(password, salt, externalPasswordIterations),
-        passwordIterations: externalPasswordIterations,
+        passwordHash: await passwordHash(password, salt, cloudflarePasswordIterations),
+        passwordIterations: cloudflarePasswordIterations,
         createdAt: now,
         lastSignedInAt: now,
       }

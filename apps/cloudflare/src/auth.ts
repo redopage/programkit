@@ -3,7 +3,9 @@ import { DurableObject } from 'cloudflare:workers'
 const magicLinkLifetimeMs = 15 * 60 * 1_000
 const sessionLifetimeMs = 30 * 24 * 60 * 60 * 1_000
 const requestWindowMs = 60 * 60 * 1_000
-const passwordIterations = 210_000
+// Cloudflare Workers currently rejects PBKDF2 iteration counts above 100,000.
+// Keep the organizer and participant derivations on the same edge-compatible bound.
+export const cloudflarePasswordIterations = 100_000
 const minimumPasswordLength = 10
 const maximumPasswordLength = 128
 
@@ -279,8 +281,8 @@ export class AuthDurableObject extends DurableObject {
       const passwordRecord: PasswordRecord = {
         userId: user.id,
         salt,
-        hash: await passwordHash(password, salt, passwordIterations),
-        iterations: passwordIterations,
+        hash: await passwordHash(password, salt, cloudflarePasswordIterations),
+        iterations: cloudflarePasswordIterations,
         createdAt: new Date().toISOString(),
       }
       await this.#ctx.storage.put(`password:${user.id}`, passwordRecord)

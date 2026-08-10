@@ -22,8 +22,9 @@ file metadata       ── event records
 `app.programkit.dev` supports email and password plus passwordless email links. Both paths resolve
 the same account object, event memberships, and 30-day session format.
 
-Password signup derives a 256-bit key with PBKDF2-SHA-256, a random per-account salt, and 210,000
-iterations. Only the derived value is stored. Password attempts have account and IP limits, and
+Password signup derives a 256-bit key with PBKDF2-SHA-256, a random per-account salt, and 100,000
+iterations, the maximum currently supported by Cloudflare Workers. Only the derived value is
+stored. Password attempts have account and IP limits, and
 sign-in failures do not disclose whether the account or password was wrong. An existing
 passwordless account cannot be claimed through open password signup. Its owner must continue with
 an email link until an authenticated password-setting flow is added.
@@ -67,7 +68,8 @@ Removing access takes effect even if an account event projection or browser cook
 
 The same event access object owns a separate participant credential namespace. A submitter can
 create an email and password account from the public CFP without receiving any staff membership.
-Participant passwords use PBKDF2-SHA-256 with a random salt and 210,000 iterations. Sessions are
+Participant passwords use PBKDF2-SHA-256 with a random salt and the same 100,000-iteration edge
+limit. Sessions are
 random, stored only by hash, event-bound, HTTP-only, and independently revocable.
 
 After participant sign-in, the Worker matches the normalized email against that event's

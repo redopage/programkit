@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AuthDurableObject } from '../apps/cloudflare/src/auth.ts'
+import { AuthDurableObject, cloudflarePasswordIterations } from '../apps/cloudflare/src/auth.ts'
 import { MemoryStorage } from './support/cloudflare-workers.ts'
 
 function request(path: string, input: Record<string, unknown>) {
@@ -42,6 +42,10 @@ describe('AuthDurableObject membership projections', () => {
   })
 
   afterEach(() => vi.useRealTimers())
+
+  it('keeps password derivation within the Cloudflare Workers PBKDF2 limit', () => {
+    expect(cloudflarePasswordIterations).toBe(100_000)
+  })
 
   it('links and unlinks event membership projections from the account switcher', async () => {
     const issuedResponse = await auth.fetch(
