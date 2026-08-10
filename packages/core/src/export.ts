@@ -263,6 +263,7 @@ const fallbackColumns: Record<CsvCollectionKey, readonly string[]> = {
     'id',
     'eventId',
     'campaignId',
+    'submissionId',
     'kind',
     'trigger',
     'recipientName',

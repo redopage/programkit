@@ -85,6 +85,7 @@ function initializeProgramCollections(state: WorkspaceState) {
   state.scorecards ??= []
   state.reviewDecisions ??= []
   state.outboundMessages ??= []
+  for (const message of state.outboundMessages) message.submissionId ??= null
   for (const submission of state.submissions) {
     submission.contributors ??= []
     submission.speakerAccessKey ??= createId('speaker')
@@ -1525,6 +1526,7 @@ function applyHandler(
         state,
         {
           campaignId: null,
+          submissionId: submission.id,
           kind: 'submission_confirmation',
           trigger: 'submission.submit',
           recipientName: `${submitterFirstName} ${submitterLastName}`.trim(),
@@ -1958,6 +1960,7 @@ function applyHandler(
           state,
           {
             campaignId: null,
+            submissionId: null,
             kind: 'reviewer_reminder',
             trigger: 'review.remind',
             recipientName: reviewer.name,
@@ -2458,37 +2461,66 @@ function applyHandler(
           sessionId: session?.id,
         },
       })
-      const decisionLabel =
-        decision === 'accepted'
-          ? 'accepted'
-          : decision === 'rejected'
-            ? 'not selected'
-            : 'waitlisted'
-      const submitterFirstName = stringAnswer(state, submission, 'first_name')
-      const submitterLastName = stringAnswer(state, submission, 'last_name')
-      const submissionTitle = stringAnswer(state, submission, 'proposal_title')
-      const event = findRequired(state.events, submission.eventId, 'event')
-      const decisionMessage = queueOutboundMessage(
-        state,
-        {
-          campaignId: null,
-          kind: 'decision_notice',
-          trigger: 'review.decide',
-          recipientName: `${submitterFirstName} ${submitterLastName}`.trim(),
-          recipientEmail: assertEmail(stringAnswer(state, submission, 'email')),
-          subject: `${event.name} decision for “${submissionTitle}”`,
-          body: `Hi ${submitterFirstName},\n\nYour proposal “${submissionTitle}” has been ${decisionLabel} for ${event.name}.${decision === 'accepted' && participation ? `\n\nYour speaker portal is ready: /portal/${participation.id}/${participation.portalAccessKey}?event=${event.id}` : ''}`,
-        },
-        timestamp,
-      )
       return {
         submission,
         decision: reviewDecision,
         person,
         participation,
         session,
-        decisionMessage,
       }
+    }
+
+    case 'submission.notify-decision': {
+      const submission = findRequired(state.submissions, input.submissionId, 'submission')
+      if (
+        submission.status !== 'accepted' &&
+        submission.status !== 'rejected' &&
+        submission.status !== 'waitlisted'
+      ) {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Record an accepted, rejected, or waitlisted decision before notifying the submitter.',
+        )
+      }
+      const decisionLabel =
+        submission.status === 'accepted'
+          ? 'accepted'
+          : submission.status === 'rejected'
+            ? 'not selected'
+            : 'waitlisted'
+      const submitterFirstName = stringAnswer(state, submission, 'first_name')
+      const submitterLastName = stringAnswer(state, submission, 'last_name')
+      const submissionTitle = stringAnswer(state, submission, 'proposal_title')
+      const event = findRequired(state.events, submission.eventId, 'event')
+      const participation = submission.convertedParticipationId
+        ? state.participations.find((entry) => entry.id === submission.convertedParticipationId)
+        : null
+      const message = queueOutboundMessage(
+        state,
+        {
+          campaignId: null,
+          submissionId: submission.id,
+          kind: 'decision_notice',
+          trigger: 'submission.notify-decision',
+          recipientName: `${submitterFirstName} ${submitterLastName}`.trim(),
+          recipientEmail: assertEmail(stringAnswer(state, submission, 'email')),
+          subject: `${event.name} decision for “${submissionTitle}”`,
+          body: `Hi ${submitterFirstName},\n\nYour proposal “${submissionTitle}” has been ${decisionLabel} for ${event.name}.${submission.status === 'accepted' && participation ? `\n\nYour speaker portal is ready: /portal/${participation.id}/${participation.portalAccessKey}?event=${event.id}` : ''}`,
+        },
+        timestamp,
+      )
+      appendEvent(state, context, {
+        type: 'submission.decision-notice-queued',
+        aggregate: { type: 'submission', id: submission.id, version: submission.version },
+        summary: `Queued the decision email for “${submissionTitle}”.`,
+        data: {
+          messageId: message.id,
+          recipientEmail: message.recipientEmail,
+          decision: submission.status,
+          deliveryMode: 'demo-outbox',
+        },
+      })
+      return { submission, message }
     }
 
     case 'person.create': {
@@ -3685,6 +3717,7 @@ function applyHandler(
             state,
             {
               campaignId: campaign.id,
+              submissionId: null,
               kind: 'campaign',
               trigger: 'campaign.send',
               recipientName: preview.recipientName,

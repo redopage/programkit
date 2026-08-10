@@ -1451,9 +1451,16 @@ describe('ProgramKit operation engine', () => {
         'review.decision-recorded',
       ]),
     )
+    expect(state.outboundMessages).toEqual([])
+    const notified = executeOperation(state, 'submission.notify-decision', {
+      input: { submissionId: submission.id },
+    })
+    expect(notified.response.ok).toBe(true)
+    state = notified.state
     expect(state.outboundMessages?.[0]).toMatchObject({
+      submissionId: submission.id,
       kind: 'decision_notice',
-      trigger: 'review.decide',
+      trigger: 'submission.notify-decision',
       recipientEmail: 'mina@plainspoken.systems',
       subject: expect.stringContaining('The boring parts of trustworthy agents'),
       body: expect.stringContaining(`/portal/${participation.id}/${participation.portalAccessKey}`),

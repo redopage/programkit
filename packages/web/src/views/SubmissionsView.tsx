@@ -2,6 +2,7 @@ import {
   ArrowTopRightOnSquareIcon,
   CheckIcon,
   ClockIcon,
+  EnvelopeIcon,
   LinkIcon,
 } from '@heroicons/react/16/solid'
 import { useMemo } from 'react'
@@ -344,12 +345,19 @@ function SubmissionDrawer({
       submission.status === 'in_review' ||
       submission.status === 'rejected' ||
       submission.status === 'waitlisted')
+  const hasDecision =
+    submission.status === 'accepted' ||
+    submission.status === 'rejected' ||
+    submission.status === 'waitlisted'
+  const decisionNotice = state.outboundMessages?.find(
+    (message) => message.submissionId === submission.id && message.kind === 'decision_notice',
+  )
   const trackValue = answerText(submissionAnswerByPurpose(state, submission, 'track'))
   const trackLabel = state.tracks.find((entry) => entry.id === trackValue)?.name ?? trackValue
   const participants = submissionParticipants(state, submission)
 
   async function decide(decision: 'accepted' | 'rejected' | 'waitlisted') {
-    const response = await execute(
+    await execute(
       'review.decide',
       {
         submissionId: submission!.id,
@@ -366,7 +374,15 @@ function SubmissionDrawer({
         ? 'Submission accepted and added to the program.'
         : `Submission ${decision}.`,
     )
-    if (response.ok) onClose()
+  }
+
+  async function notifyDecision() {
+    await execute(
+      'submission.notify-decision',
+      { submissionId: submission!.id },
+      undefined,
+      'Decision email queued.',
+    )
   }
 
   return (
@@ -375,34 +391,51 @@ function SubmissionDrawer({
       onClose={onClose}
       title={title}
       footer={
-        canDecide ? (
-          <>
-            {submission.status !== 'rejected' ? (
+        <>
+          {canDecide ? (
+            <>
+              {submission.status !== 'rejected' ? (
+                <Button
+                  size="compact"
+                  variant="danger"
+                  disabled={mutating}
+                  onClick={() => void decide('rejected')}
+                >
+                  Decline
+                </Button>
+              ) : null}
+              {submission.status !== 'waitlisted' ? (
+                <Button
+                  size="compact"
+                  disabled={mutating}
+                  onClick={() => void decide('waitlisted')}
+                >
+                  Waitlist
+                </Button>
+              ) : null}
               <Button
                 size="compact"
-                variant="danger"
+                variant="primary"
                 disabled={mutating}
-                onClick={() => void decide('rejected')}
+                onClick={() => void decide('accepted')}
               >
-                Decline
+                <CheckIcon className="size-4 h-lh shrink-0 fill-current" />
+                Accept proposal
               </Button>
-            ) : null}
-            {submission.status !== 'waitlisted' ? (
-              <Button size="compact" disabled={mutating} onClick={() => void decide('waitlisted')}>
-                Waitlist
-              </Button>
-            ) : null}
+            </>
+          ) : null}
+          {hasDecision ? (
             <Button
               size="compact"
-              variant="primary"
+              variant={decisionNotice ? 'secondary' : 'primary'}
               disabled={mutating}
-              onClick={() => void decide('accepted')}
+              onClick={() => void notifyDecision()}
             >
-              <CheckIcon className="size-4 h-lh shrink-0 fill-current" />
-              Accept proposal
+              <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
+              {decisionNotice ? 'Queue again' : 'Queue decision email'}
             </Button>
-          </>
-        ) : null
+          ) : null}
+        </>
       }
     >
       <div className="flex flex-col gap-7">
@@ -418,6 +451,14 @@ function SubmissionDrawer({
                 : 'Draft submission'}
             </p>
           </div>
+          {hasDecision ? (
+            <div className="mt-4 flex items-center justify-between gap-4 rounded-xl bg-zinc-50 px-4 py-3 ring-1 ring-zinc-950/5">
+              <span className="text-base font-medium text-zinc-950 sm:text-sm">Decision email</span>
+              <span className="text-base text-zinc-500 sm:text-sm">
+                {decisionNotice ? sentenceCase(decisionNotice.status) : 'Not queued'}
+              </span>
+            </div>
+          ) : null}
           <h3
             id="submission-summary-heading"
             className="pt-4 text-base font-medium text-zinc-950 sm:text-sm"

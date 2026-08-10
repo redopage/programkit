@@ -368,6 +368,7 @@ export interface OutboundMessage {
   id: Id
   eventId: Id
   campaignId: Id | null
+  submissionId: Id | null
   kind: 'submission_confirmation' | 'decision_notice' | 'reviewer_reminder' | 'campaign'
   trigger: string
   recipientName: string
