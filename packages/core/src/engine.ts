@@ -4043,7 +4043,10 @@ function applyHandler(
       }
       instance.status = nextStatus as RequirementStatus
       if (typeof input.value === 'string') instance.value = input.value.trim()
-      if (nextStatus === 'submitted' && !instance.submittedAt) instance.submittedAt = timestamp
+      // `submittedAt` is the time of the latest handoff, not the first attempt. The
+      // domain event stream preserves earlier submissions while the operational UI
+      // can accurately show when a requested revision came back.
+      if (nextStatus === 'submitted') instance.submittedAt = timestamp
       if (nextStatus === 'approved' || nextStatus === 'waived') instance.reviewedAt = timestamp
       instance.updatedAt = timestamp
       instance.version += 1

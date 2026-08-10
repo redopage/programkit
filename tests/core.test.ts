@@ -623,6 +623,30 @@ describe('ProgramKit operation engine', () => {
     expect(selfReactivation.response.error?.code).toBe('FORBIDDEN')
   })
 
+  it('records the latest handoff time when a requested revision is resubmitted', () => {
+    const state = createSeedState()
+    const target = state.requirementInstances.find(
+      (entry) => entry.participationId === 'par_003' && entry.submittedAt,
+    )!
+    const originalSubmittedAt = target.submittedAt
+    target.status = 'revision_requested'
+
+    const resubmitted = executeOperation(state, 'requirement.set-status', {
+      input: { requirementInstanceId: target.id, status: 'submitted' },
+      actor: {
+        type: 'participant',
+        id: target.participationId,
+        name: 'Jordan Bell',
+        scopes: ['requirements:write'],
+      },
+    })
+
+    expect(resubmitted.response.ok).toBe(true)
+    expect(
+      resubmitted.state.requirementInstances.find((entry) => entry.id === target.id)?.submittedAt,
+    ).not.toBe(originalSubmittedAt)
+  })
+
   it('creates one reusable task and lets each assigned speaker complete their own instance', () => {
     const state = createSeedState()
     const unassignedBefore = readinessRows(state).find(

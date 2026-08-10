@@ -505,18 +505,9 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
               </p>
             </div>
             {activeRooms.map((room, roomIndex) => {
-              const placement = activePlacements.find(
+              const cellPlacements = activePlacements.filter(
                 (entry) => entry.roomId === room.id && entry.startsAt === startsAt,
               )
-              const session = placement
-                ? state.sessions.find((entry) => entry.id === placement.sessionId)
-                : undefined
-              const track = session
-                ? state.tracks.find((entry) => entry.id === session.trackId)
-                : undefined
-              const placementConflicts = placement
-                ? conflicts.filter((conflict) => conflict.placementIds.includes(placement.id))
-                : []
               return (
                 <div
                   key={room.id}
@@ -536,46 +527,70 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                     draggedPlacementId && 'bg-blue-50/30',
                   )}
                 >
-                  {placement && session && track ? (
-                    <button
-                      type="button"
-                      draggable
-                      aria-describedby="schedule-drag-help"
-                      onDragStart={(event) => startDragging(event, placement.id)}
-                      onDragEnd={stopDragging}
-                      className={cx(
-                        'focus-ring w-full cursor-grab rounded-xl bg-white p-3 text-left shadow-sm ring-1 motion-safe:transition-transform motion-safe:hover:-translate-y-px active:cursor-grabbing',
-                        placementConflicts.some((conflict) => conflict.severity === 'error')
-                          ? 'ring-rose-500/40'
-                          : 'ring-zinc-950/10',
-                        dropTarget?.roomId === room.id &&
-                          dropTarget.startsAt === startsAt &&
-                          draggedPlacementId &&
-                          (targetHardConflicts.length > 0
-                            ? 'ring-2 ring-rose-500'
-                            : 'ring-2 ring-blue-500'),
-                        draggedPlacementId === placement.id && 'opacity-45',
-                      )}
-                      onClick={() => setSelectedId(placement.id)}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="text-sm tabular-nums text-zinc-500">
-                          {timeLabel(placement.startsAt)}–{timeLabel(placement.endsAt)}
-                        </span>
-                        {placementConflicts.length > 0 ? (
-                          <ExclamationTriangleIcon className="size-4 shrink-0 fill-rose-500" />
-                        ) : null}
-                      </span>
-                      <span className="block pt-2 text-pretty text-sm font-medium text-zinc-950">
-                        {session.title}
-                      </span>
-                      <span className="mt-3 flex items-center justify-between gap-2">
-                        <TrackBadge name={track.name} color={track.color} />
-                        <span className="shrink-0 text-sm tabular-nums text-zinc-500">
-                          {session.expectedAttendance} expected
-                        </span>
-                      </span>
-                    </button>
+                  {cellPlacements.length > 0 ? (
+                    <div className="flex flex-col gap-2">
+                      {cellPlacements.map((placement) => {
+                        const session = state.sessions.find(
+                          (entry) => entry.id === placement.sessionId,
+                        )
+                        const track = session
+                          ? state.tracks.find((entry) => entry.id === session.trackId)
+                          : undefined
+                        const placementConflicts = conflicts.filter((conflict) =>
+                          conflict.placementIds.includes(placement.id),
+                        )
+                        return (
+                          <button
+                            key={placement.id}
+                            type="button"
+                            draggable
+                            aria-describedby="schedule-drag-help"
+                            onDragStart={(event) => startDragging(event, placement.id)}
+                            onDragEnd={stopDragging}
+                            className={cx(
+                              'focus-ring w-full cursor-grab rounded-xl bg-white p-3 text-left shadow-sm ring-1 motion-safe:transition-transform motion-safe:hover:-translate-y-px active:cursor-grabbing',
+                              placementConflicts.some(
+                                (conflict) => conflict.severity === 'error',
+                              )
+                                ? 'ring-rose-500/40'
+                                : 'ring-zinc-950/10',
+                              dropTarget?.roomId === room.id &&
+                                dropTarget.startsAt === startsAt &&
+                                draggedPlacementId &&
+                                (targetHardConflicts.length > 0
+                                  ? 'ring-2 ring-rose-500'
+                                  : 'ring-2 ring-blue-500'),
+                              draggedPlacementId === placement.id && 'opacity-45',
+                            )}
+                            onClick={() => setSelectedId(placement.id)}
+                          >
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="text-sm tabular-nums text-zinc-500">
+                                {timeLabel(placement.startsAt)}–{timeLabel(placement.endsAt)}
+                              </span>
+                              {placementConflicts.length > 0 || !session ? (
+                                <ExclamationTriangleIcon className="size-4 shrink-0 fill-rose-500" />
+                              ) : null}
+                            </span>
+                            <span className="block pt-2 text-pretty text-sm font-medium text-zinc-950">
+                              {session?.title ?? 'Missing session'}
+                            </span>
+                            {session ? (
+                              <span className="mt-3 flex items-center justify-between gap-2">
+                                {track ? (
+                                  <TrackBadge name={track.name} color={track.color} />
+                                ) : (
+                                  <span className="text-sm text-rose-700">Missing track</span>
+                                )}
+                                <span className="shrink-0 text-sm tabular-nums text-zinc-500">
+                                  {session.expectedAttendance} expected
+                                </span>
+                              </span>
+                            ) : null}
+                          </button>
+                        )
+                      })}
+                    </div>
                   ) : (
                     <div
                       className={cx(
