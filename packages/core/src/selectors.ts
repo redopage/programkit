@@ -511,6 +511,20 @@ export function campaignPreview(
   const sessions = participation.sessionIds
     .map((sessionId) => state.sessions.find((entry) => entry.id === sessionId)?.title)
     .filter((title): title is string => Boolean(title))
+  const outstandingTasks = state.requirementInstances
+    .filter(
+      (instance) =>
+        instance.participationId === participation.id &&
+        instance.status !== 'approved' &&
+        instance.status !== 'waived',
+    )
+    .map((instance) => {
+      const definition = state.requirementDefinitions.find(
+        (entry) => entry.id === instance.definitionId,
+      )
+      return definition ? `• ${definition.label} (due ${definition.dueAt.slice(0, 10)})` : null
+    })
+    .filter((line): line is string => Boolean(line))
   const replacements: Record<string, string> = {
     first_name: person.firstName,
     last_name: person.lastName,
@@ -518,6 +532,7 @@ export function campaignPreview(
     company: person.company,
     event_name: event.name,
     session: sessions.join(', ') || 'your session',
+    outstanding_tasks: outstandingTasks.join('\n') || 'No outstanding tasks',
     portal_link: `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}?event=${encodeURIComponent(event.id)}`,
   }
   const render = (value: string) =>

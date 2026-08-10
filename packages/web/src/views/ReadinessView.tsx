@@ -89,7 +89,7 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
               <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
               Add task
             </Button>
-            <Button onClick={() => navigate('/communications')}>
+            <Button onClick={() => navigate('/communications?compose=reminder')}>
               <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
               Draft reminder
             </Button>

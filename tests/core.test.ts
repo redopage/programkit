@@ -970,14 +970,21 @@ describe('ProgramKit operation engine', () => {
   it('renders campaign merge fields for a real event participant', () => {
     const state = createSeedState()
     const participation = state.participations.find(
-      (entry) => entry.eventId === state.activeEventId && entry.sessionIds.length > 0,
+      (entry) =>
+        entry.eventId === state.activeEventId &&
+        state.requirementInstances.some(
+          (instance) =>
+            instance.participationId === entry.id &&
+            instance.status !== 'approved' &&
+            instance.status !== 'waived',
+        ),
     )!
     const person = state.people.find((entry) => entry.id === participation.personId)!
     const preview = campaignPreview(
       state,
       {
         subject: 'Welcome to {{event_name}}, {{first_name}}',
-        body: 'Hi {{full_name}},\n\nYour session is {{session}}. Open {{portal_link}}.',
+        body: 'Hi {{full_name}},\n\n{{outstanding_tasks}}\n\nOpen {{portal_link}}.',
       },
       participation.id,
     )
@@ -988,6 +995,7 @@ describe('ProgramKit operation engine', () => {
     })
     expect(preview?.subject).toContain(person.firstName)
     expect(preview?.body).toContain(`/portal/${participation.id}/`)
+    expect(preview?.body).toMatch(/• .+ \(due \d{4}-\d{2}-\d{2}\)/)
     expect(`${preview?.subject}${preview?.body}`).not.toContain('{{')
   })
 

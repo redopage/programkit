@@ -7,7 +7,12 @@ import {
 } from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
 
-import { campaignPreview, participationPerson, type Campaign } from '@programkit/core'
+import {
+  campaignPreview,
+  participationPerson,
+  readinessRows,
+  type Campaign,
+} from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
@@ -31,6 +36,7 @@ type CampaignTemplate = {
   name: string
   subject: string
   body: string
+  audience: Campaign['audience']
 }
 
 const campaignTemplates: CampaignTemplate[] = [
@@ -40,6 +46,7 @@ const campaignTemplates: CampaignTemplate[] = [
     name: 'Speaker welcome',
     subject: 'Welcome to {{event_name}}, {{first_name}}',
     body: 'Hi {{first_name}},\n\nWe are glad you are joining us for {{event_name}}. Your session is {{session}}.\n\nOpen your private speaker portal to review the details:\n{{portal_link}}',
+    audience: 'all_active',
   },
   {
     id: 'portal',
@@ -47,14 +54,30 @@ const campaignTemplates: CampaignTemplate[] = [
     name: 'Speaker portal invitation',
     subject: 'Your {{event_name}} speaker portal',
     body: 'Hi {{first_name}},\n\nYour speaker portal is ready. Use it to update your profile and complete your assigned work:\n{{portal_link}}',
+    audience: 'all_active',
+  },
+  {
+    id: 'requirements',
+    label: 'Outstanding tasks',
+    name: 'Outstanding speaker tasks',
+    subject: 'Tasks to finish for {{event_name}}',
+    body: 'Hi {{first_name}},\n\nHere is what still needs your attention:\n\n{{outstanding_tasks}}\n\nOpen your speaker portal to finish these items:\n{{portal_link}}',
+    audience: 'missing_requirements',
   },
 ]
 
-export function CommunicationsView() {
+export function CommunicationsView({
+  initialCompose = null,
+}: {
+  initialCompose?: 'reminder' | null
+}) {
   const { payload } = useWorkspace()
   const [filter, setFilter] = useState<CampaignFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [composing, setComposing] = useState(false)
+  const [composeTemplateId, setComposeTemplateId] = useState(
+    initialCompose === 'reminder' ? 'requirements' : 'welcome',
+  )
+  const [composing, setComposing] = useState(Boolean(initialCompose))
   if (!payload) return null
   const { state } = payload
   const campaigns = state.campaigns.filter(
@@ -67,7 +90,13 @@ export function CommunicationsView() {
       <PageHeader
         title="Communications"
         actions={
-          <Button variant="primary" onClick={() => setComposing(true)}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              setComposeTemplateId('welcome')
+              setComposing(true)
+            }}
+          >
             <PlusIcon className="size-4 h-lh shrink-0 fill-current" />
             New campaign
           </Button>
@@ -182,7 +211,12 @@ export function CommunicationsView() {
         open={Boolean(selected)}
         onClose={() => setSelectedId(null)}
       />
-      <ComposeDrawer open={composing} onClose={() => setComposing(false)} />
+      <ComposeDrawer
+        key={composeTemplateId}
+        open={composing}
+        initialTemplateId={composeTemplateId}
+        onClose={() => setComposing(false)}
+      />
     </div>
   )
 }
@@ -285,30 +319,47 @@ function CampaignDrawer({
   )
 }
 
-function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+function ComposeDrawer({
+  open,
+  initialTemplateId,
+  onClose,
+}: {
+  open: boolean
+  initialTemplateId: string
+  onClose: () => void
+}) {
   const { payload, execute, mutating } = useWorkspace()
-  const defaultTemplate = campaignTemplates[0]
+  const defaultTemplate =
+    campaignTemplates.find((template) => template.id === initialTemplateId) ?? campaignTemplates[0]
   const [templateId, setTemplateId] = useState<string>(defaultTemplate.id)
   const [previewId, setPreviewId] = useState('')
   const [form, setForm] = useState<{
     name: string
     subject: string
     body: string
-    audience: string
+    audience: Campaign['audience']
   }>({
     name: defaultTemplate.name,
     subject: defaultTemplate.subject,
     body: defaultTemplate.body,
-    audience: 'all_active',
+    audience: defaultTemplate.audience,
   })
   if (!payload) return null
   const { state } = payload
+  const missingRequirementIds = new Set(
+    readinessRows(state)
+      .filter((row) => row.blockers > 0 && row.status !== 'prospect')
+      .map((row) => row.participationId),
+  )
   const previewRecipients = state.participations
     .filter(
       (participation) =>
         participation.eventId === state.activeEventId &&
         participation.status !== 'declined' &&
-        participation.status !== 'withdrawn',
+        participation.status !== 'withdrawn' &&
+        participation.status !== 'prospect' &&
+        (form.audience !== 'unconfirmed' || participation.status === 'invited') &&
+        (form.audience !== 'missing_requirements' || missingRequirementIds.has(participation.id)),
     )
     .map((participation) => ({
       participation,
@@ -331,6 +382,7 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
       name: template.name,
       subject: template.subject,
       body: template.body,
+      audience: template.audience,
     }))
   }
 
@@ -347,7 +399,7 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
       name: defaultTemplate.name,
       subject: defaultTemplate.subject,
       body: defaultTemplate.body,
-      audience: 'all_active',
+      audience: defaultTemplate.audience,
     })
     setTemplateId(defaultTemplate.id)
     onClose()
@@ -413,7 +465,10 @@ function ComposeDrawer({ open, onClose }: { open: boolean; onClose: () => void }
               name="audience"
               value={form.audience}
               onChange={(event) =>
-                setForm((current) => ({ ...current, audience: event.target.value }))
+                setForm((current) => ({
+                  ...current,
+                  audience: event.target.value as Campaign['audience'],
+                }))
               }
               className="focus-ring min-h-11 w-full appearance-none rounded-xl bg-white py-2 pr-9 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
             >
