@@ -1,4 +1,9 @@
-import { ArrowDownTrayIcon, ChatBubbleLeftRightIcon, DocumentIcon } from '@heroicons/react/16/solid'
+import {
+  ArrowDownTrayIcon,
+  ChatBubbleLeftRightIcon,
+  CheckCircleIcon,
+  DocumentIcon,
+} from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
 
 import type { Asset, WorkspaceState } from '@programkit/core'
@@ -6,6 +11,7 @@ import type { Asset, WorkspaceState } from '@programkit/core'
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Button,
+  Dialog,
   Drawer,
   EmptyState,
   FilterTabs,
@@ -23,6 +29,8 @@ export function FilesView() {
   const [filter, setFilter] = useState<FileFilter>('all')
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportStarted, setExportStarted] = useState(false)
   const [openRequirementId, setOpenRequirementId] = useState<string | null>(null)
   const [comment, setComment] = useState('')
   if (!payload) return null
@@ -39,7 +47,9 @@ export function FilesView() {
       return !query || row.searchable.includes(query)
     })
   const selectedSet = new Set(selectedIds)
-  const exportIds = selectedIds.length > 0 ? selectedIds : latestAssets.map((asset) => asset.id)
+  const exportIds = selectedIds.filter((assetId) =>
+    latestAssets.some((asset) => asset.id === assetId),
+  )
   const openAssets = openRequirementId
     ? state.assets
         .filter(
@@ -57,6 +67,25 @@ export function FilesView() {
     setSelectedIds((current) =>
       current.includes(assetId) ? current.filter((id) => id !== assetId) : [...current, assetId],
     )
+  }
+
+  function prepareExport() {
+    setSelectedIds((current) =>
+      current.length > 0 ? current : latestAssets.map((asset) => asset.id),
+    )
+    setExportStarted(false)
+    setExportOpen(true)
+  }
+
+  function startExport() {
+    if (exportIds.length === 0) return
+    const link = document.createElement('a')
+    link.href = `/api/v1/assets/export?ids=${encodeURIComponent(exportIds.join(','))}`
+    link.download = ''
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setExportStarted(true)
   }
 
   async function submitComment(event: FormEvent<HTMLFormElement>) {
@@ -78,15 +107,10 @@ export function FilesView() {
         title="Files"
         actions={
           latestAssets.length > 0 ? (
-            <a
-              href={`/api/v1/assets/export?ids=${encodeURIComponent(exportIds.join(','))}`}
-              className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-zinc-950 px-4 text-sm font-medium text-white shadow-sm hover:bg-zinc-800"
-            >
+            <Button variant="primary" onClick={prepareExport}>
               <ArrowDownTrayIcon className="size-4 fill-current" />
-              {selectedIds.length > 0
-                ? `Export selected (${selectedIds.length})`
-                : 'Export latest versions'}
-            </a>
+              {selectedIds.length > 0 ? `Export selected (${selectedIds.length})` : 'Export files'}
+            </Button>
           ) : null
         }
       />
@@ -332,6 +356,79 @@ export function FilesView() {
           </div>
         ) : null}
       </Drawer>
+
+      <Dialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title="Export files"
+        description="Review the latest file versions before generating the archive."
+        footer={
+          <>
+            <Button onClick={() => setExportOpen(false)}>Close</Button>
+            <Button variant="primary" disabled={exportIds.length === 0} onClick={startExport}>
+              <ArrowDownTrayIcon className="size-4 fill-current" />
+              Generate ZIP
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-5">
+          <div className="rounded-xl bg-zinc-50 px-4 py-3 ring-1 ring-zinc-950/5">
+            <p className="text-sm font-medium text-zinc-950">Speaker and task folders</p>
+            <p className="mt-0.5 text-sm text-zinc-500">
+              The ZIP includes only the latest selected version, grouped by speaker and task.
+            </p>
+          </div>
+
+          <fieldset>
+            <div className="flex items-center justify-between gap-4">
+              <legend className="text-sm font-semibold text-zinc-950">Files</legend>
+              <span className="text-sm tabular-nums text-zinc-500">
+                {exportIds.length} selected
+              </span>
+            </div>
+            <div className="mt-2 max-h-64 overflow-y-auto rounded-xl ring-1 ring-zinc-950/10">
+              {latestAssets.map((asset) => {
+                const row = fileContext(state, asset)
+                return (
+                  <label
+                    key={asset.id}
+                    className="flex min-h-12 cursor-pointer items-center gap-3 border-b border-zinc-950/5 px-3 py-2.5 last:border-b-0 hover:bg-zinc-950/2"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedSet.has(asset.id)}
+                      onChange={() => {
+                        toggleAsset(asset.id)
+                        setExportStarted(false)
+                      }}
+                      className="focus-ring size-4 rounded border-zinc-300 text-blue-600"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-zinc-950">
+                        {asset.filename}
+                      </span>
+                      <span className="block truncate text-sm text-zinc-500">
+                        {row.personName} · {row.definition?.label ?? 'File'}
+                      </span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </fieldset>
+
+          {exportStarted ? (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 ring-1 ring-emerald-800/10"
+            >
+              <CheckCircleIcon className="mt-0.5 size-4 shrink-0 fill-emerald-600" />
+              <span>Your ZIP is being generated. The download will begin automatically.</span>
+            </div>
+          ) : null}
+        </div>
+      </Dialog>
     </div>
   )
 }
