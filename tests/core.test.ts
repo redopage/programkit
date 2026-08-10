@@ -1414,6 +1414,32 @@ describe('ProgramKit operation engine', () => {
     ).toMatchObject({ format: 'lightning', durationMinutes: 10 })
   })
 
+  it('prefers a current talk label over a stale panel choice id', () => {
+    const state = createSeedState()
+    const submission = state.submissions.find((entry) => entry.id === 'sub_005')!
+    const formatField = state.submissionFormFields.find(
+      (field) => field.formId === submission.formId && field.purpose === 'session_format',
+    )!
+    formatField.options = [{ value: 'panel', label: 'Talk (30 min)' }]
+    submission.answers[formatField.key] = 'panel'
+
+    const accepted = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: submission.id,
+        decision: 'accepted',
+        override: true,
+        reason: 'Approved by the program chair.',
+      },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+
+    expect(accepted.response.ok).toBe(true)
+    const converted = accepted.state.submissions.find((entry) => entry.id === submission.id)!
+    expect(
+      accepted.state.sessions.find((entry) => entry.id === converted.convertedSessionId),
+    ).toMatchObject({ format: 'talk', durationMinutes: 30 })
+  })
+
   it('creates, configures, and publishes a versioned submission form', () => {
     let state = createSeedState()
     const created = executeOperation(state, 'submission-form.create', {

@@ -757,12 +757,15 @@ function sessionFormatAnswer(
 ): Exclude<Session['format'], 'break'> {
   const stored = stringAnswer(state, submission, 'session_format')
   const displayed = submissionAnswerDisplayByPurpose(state, submission, 'session_format')
-  const normalized = `${stored} ${typeof displayed === 'string' ? displayed : ''}`.toLowerCase()
-  if (normalized.includes('keynote')) return 'keynote'
-  if (normalized.includes('lightning')) return 'lightning'
-  if (normalized.includes('workshop')) return 'workshop'
-  if (normalized.includes('panel')) return 'panel'
-  if (normalized.includes('talk')) return 'talk'
+  const candidates = [typeof displayed === 'string' ? displayed : '', stored]
+  for (const candidate of candidates) {
+    const normalized = candidate.toLowerCase()
+    if (normalized.includes('keynote')) return 'keynote'
+    if (normalized.includes('lightning')) return 'lightning'
+    if (normalized.includes('workshop')) return 'workshop'
+    if (normalized.includes('panel')) return 'panel'
+    if (normalized.includes('talk')) return 'talk'
+  }
   throw new OperationError('INVALID_INPUT', 'Choose a supported session format.', {
     session_format: 'Use Keynote, Talk, Lightning Talk, Workshop, or Panel.',
   })
