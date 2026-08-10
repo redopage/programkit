@@ -540,9 +540,10 @@ function AddTaskDrawer({ open, onClose }: { open: boolean; onClose: () => void }
             name="dueDate"
             required
             value={form.dueDate}
-            onInput={(event) =>
-              setForm((current) => ({ ...current, dueDate: event.currentTarget.value }))
-            }
+            onInput={(event) => {
+              const dueDate = event.currentTarget.value
+              setForm((current) => ({ ...current, dueDate }))
+            }}
             className={textControl}
           />
         </label>
