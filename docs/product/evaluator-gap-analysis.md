@@ -1,7 +1,7 @@
 # Competition evaluator readiness
 
 This is the current capability audit against `killmysaas-evals` commit
-`d99935c3e3c6c50c6b9292220260ccfe2df6d6d4`: 96 rubric items across 20 browser
+`2b0f7956ab0c6f4868d41356e495b3a225badaab`: 98 rubric items across 20 browser
 scenarios. It is not a claimed score. The detailed implementation and verification map for each
 area lives in [`evals`](evals/README.md).
 
@@ -9,7 +9,7 @@ area lives in [`evals`](evals/README.md).
 
 | Area                | Product coverage                                                                | Remaining evidence or risk                                                 |
 | ------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Call for Papers     | All 16 browser criteria implemented                                             | Full fresh-account evaluator replay                                        |
+| Call for Papers     | All 18 browser criteria implemented                                             | Full fresh-account evaluator replay                                        |
 | Abstract Management | All applicable criteria implemented; AI evaluation intentionally not advertised | Keep AI claims absent                                                      |
 | Speaker Management  | All 16 browser criteria implemented                                             | Real calendar-import evidence                                              |
 | Content Management  | All 14 browser criteria implemented                                             | Full fresh-account evaluator replay                                        |
@@ -23,14 +23,15 @@ manual mailbox, calendar, download, and cross-origin checks.
 
 ## How the evaluator reaches the product
 
-The V1 runner is browser-only, uses strict same-origin navigation, and does not bring usable inbox
-credentials. The official evaluation target should therefore be `app.programkit.dev`, where:
+The V1 runner is browser-only, permits the target origin and sibling subdomains of the same site,
+and does not bring usable inbox credentials. The official evaluation target should be
+`app.programkit.dev`, where:
 
 - an organizer can create an email/password account without leaving the origin;
 - every event is stored in a separate Workspace Durable Object;
-- public CFP and agenda links retain validated event context on the same origin;
+- public CFP and agenda links retain validated event context on the target site;
 - submitters create event-scoped accounts and recover only their own proposal destinations;
-- reviewer and speaker workspaces use copyable same-origin record capability links; and
+- reviewer and speaker workspaces use copyable record capability links on the target site; and
 - participant sessions never authorize operator endpoints.
 
 The anonymous seven-day demo remains useful for a fast walkthrough, but it is not the proof of
@@ -41,7 +42,8 @@ hosted identity or event membership.
 1. Start with a new organizer account and create the fixture event through the UI.
 2. Run all 20 scenarios in order without directly modifying state.
 3. Reload after every round-trip action the rubric explicitly checks.
-4. Use the same origin for organizer, public, reviewer, speaker, and attendee surfaces.
+4. Keep organizer, public, reviewer, speaker, and attendee surfaces on `programkit.dev` or its
+   sibling subdomains so the runner's containment policy can follow them.
 5. Inspect downloaded CSV, ZIP, and iCal artifacts rather than counting the click alone.
 6. Send the required messages to mailboxes we control and record subject, personalization,
    attachment, timestamp, and delivery state.

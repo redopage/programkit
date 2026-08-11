@@ -116,6 +116,7 @@ function participantState(state: WorkspaceState, participationId: string, portal
   clone.portalResourcePages = (state.portalResourcePages ?? [])
     .filter((entry) => entry.eventId === participation.eventId && entry.status === 'published')
     .sort((left, right) => left.sortOrder - right.sortOrder)
+  clone.programEmbeds = []
   clone.changeSets = []
   clone.integrations = []
   clone.domainEvents = []
@@ -149,6 +150,7 @@ function projectionBase(state: WorkspaceState) {
   clone.campaigns = []
   clone.outboundMessages = []
   clone.portalResourcePages = []
+  clone.programEmbeds = []
   clone.changeSets = []
   clone.integrations = []
   clone.domainEvents = []

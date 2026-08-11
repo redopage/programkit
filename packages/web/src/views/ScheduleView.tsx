@@ -15,7 +15,7 @@ import {
   type FormEvent,
 } from 'react'
 
-import { scheduleConflicts, type WorkspaceState } from '@programkit/core'
+import { scheduleConflicts, type ProgramEmbed, type WorkspaceState } from '@programkit/core'
 
 import { eventDateTime, toZonedDateTimeInput, zonedDateTimeInputToIso } from '../lib/date.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -37,7 +37,7 @@ import {
 
 type ScheduleMode = 'grid' | 'list'
 type SharedProgramView = 'agenda' | 'sessions' | 'speakers' | 'itinerary' | 'gallery'
-type SharedOutputFormat = 'link' | 'embed' | 'json' | 'xml' | 'ical'
+type SharedOutputFormat = 'link' | 'script' | 'embed' | 'json' | 'xml' | 'ical'
 
 const sharedProgramViews: Array<{ id: SharedProgramView; label: string }> = [
   { id: 'agenda', label: 'Agenda' },
@@ -49,7 +49,8 @@ const sharedProgramViews: Array<{ id: SharedProgramView; label: string }> = [
 
 const sharedOutputFormats: Array<{ id: SharedOutputFormat; label: string }> = [
   { id: 'link', label: 'Hosted view' },
-  { id: 'embed', label: 'Iframe embed' },
+  { id: 'script', label: 'Styled script' },
+  { id: 'embed', label: 'Basic HTML' },
   { id: 'json', label: 'JSON feed' },
   { id: 'xml', label: 'XML feed' },
   { id: 'ical', label: 'iCal feed' },
@@ -159,6 +160,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const [sharedRoomId, setSharedRoomId] = useState('all')
   const [sharedAccent, setSharedAccent] = useState('#2563eb')
   const [sharedShowDescriptions, setSharedShowDescriptions] = useState(true)
+  const [sharedName, setSharedName] = useState('')
   const [copied, setCopied] = useState(false)
   const eventForDay = payload?.state.events.find(
     (entry) => entry.id === payload.state.activeEventId,
@@ -177,6 +179,9 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const activeTracks = state.tracks.filter((track) => track.eventId === state.activeEventId)
   const activePlacements = state.placements.filter(
     (placement) => placement.eventId === state.activeEventId,
+  )
+  const savedEmbeds = (state.programEmbeds ?? []).filter(
+    (embed) => embed.eventId === state.activeEventId,
   )
   const timeLabel = (iso: string) =>
     eventDateTime(iso, event.timezone, { hour: 'numeric', minute: '2-digit' })
@@ -237,6 +242,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   if (!sharedShowDescriptions) publicUrl.searchParams.set('descriptions', 'hide')
   const publicUrlText = publicUrl.toString()
   const embedCode = `<iframe src="${escapeHtmlAttribute(publicUrlText)}" title="${escapeHtmlAttribute(`${event.name} public program`)}" loading="lazy" style="width:100%;min-height:720px;border:0"></iframe>`
+  const scriptCode = `<div data-programkit-embed data-src="${escapeHtmlAttribute(publicUrlText)}" data-title="${escapeHtmlAttribute(`${event.name} public program`)}"></div>\n<script async src="${escapeHtmlAttribute(new URL('/programkit-embed.js', publicUrl.origin).toString())}"></script>`
   const feedExtension =
     sharedOutputFormat === 'ical' ? 'ics' : sharedOutputFormat === 'xml' ? 'xml' : 'json'
   const feedUrl = new URL(
@@ -250,9 +256,11 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const shareValue =
     sharedOutputFormat === 'link'
       ? publicUrlText
-      : sharedOutputFormat === 'embed'
-        ? embedCode
-        : feedUrl.toString()
+      : sharedOutputFormat === 'script'
+        ? scriptCode
+        : sharedOutputFormat === 'embed'
+          ? embedCode
+          : feedUrl.toString()
   const outputLabel =
     sharedOutputFormats.find((format) => format.id === sharedOutputFormat)?.label ?? 'Output'
 
@@ -270,6 +278,35 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       textarea.remove()
     }
     setCopied(true)
+  }
+
+  async function saveProgramEmbed() {
+    const response = await execute(
+      'program-embed.create',
+      {
+        name: sharedName,
+        view: sharedView,
+        output: sharedOutputFormat,
+        trackId: sharedTrackId,
+        roomId: sharedRoomId,
+        accent: sharedAccent,
+        showDescriptions: sharedShowDescriptions,
+      },
+      undefined,
+      'Embed saved.',
+    )
+    if (response.ok) setSharedName('')
+  }
+
+  function loadProgramEmbed(embed: ProgramEmbed) {
+    setSharedName(embed.name)
+    setSharedView(embed.view)
+    setSharedOutputFormat(embed.output)
+    setSharedTrackId(embed.trackId ?? 'all')
+    setSharedRoomId(embed.roomId ?? 'all')
+    setSharedAccent(embed.accent)
+    setSharedShowDescriptions(embed.showDescriptions)
+    setCopied(false)
   }
 
   function startDragging(event: DragEvent<HTMLButtonElement>, placementId: string) {
@@ -690,18 +727,89 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
             <Button variant="secondary" onClick={() => setShareOpen(false)}>
               Done
             </Button>
+            <Button
+              variant="secondary"
+              disabled={mutating || !sharedName.trim()}
+              onClick={() => void saveProgramEmbed()}
+            >
+              Save embed
+            </Button>
             <Button variant="primary" onClick={() => void copyShareValue(shareValue)}>
-              {sharedOutputFormat === 'embed' ? (
+              {sharedOutputFormat === 'embed' || sharedOutputFormat === 'script' ? (
                 <CodeBracketIcon className="size-4" />
               ) : (
                 <LinkIcon className="size-4" />
               )}
-              {copied ? 'Copied' : `Copy ${sharedOutputFormat === 'embed' ? 'embed' : 'URL'}`}
+              {copied
+                ? 'Copied'
+                : `Copy ${sharedOutputFormat === 'embed' || sharedOutputFormat === 'script' ? 'code' : 'URL'}`}
             </Button>
           </>
         }
       >
         <div className="space-y-6">
+          {savedEmbeds.length > 0 ? (
+            <section aria-labelledby="saved-embeds-heading">
+              <div className="flex items-center justify-between gap-3">
+                <h3 id="saved-embeds-heading" className="text-base font-medium text-zinc-950">
+                  Saved embeds
+                </h3>
+                <span className="text-sm text-zinc-500">{savedEmbeds.length} saved</span>
+              </div>
+              <ul className="mt-2 divide-y divide-zinc-950/5 rounded-2xl bg-zinc-950/2 px-3 ring-1 ring-zinc-950/5">
+                {savedEmbeds.map((embed) => (
+                  <li
+                    key={embed.id}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-zinc-950">{embed.name}</p>
+                      <p className="text-sm text-zinc-500">
+                        {sharedProgramViews.find((view) => view.id === embed.view)?.label} ·{' '}
+                        {sharedOutputFormats.find((format) => format.id === embed.output)?.label}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="compact"
+                        variant="ghost"
+                        onClick={() => loadProgramEmbed(embed)}
+                      >
+                        Get code
+                      </Button>
+                      <Button
+                        size="compact"
+                        variant="secondary"
+                        aria-pressed={embed.enabled}
+                        disabled={mutating}
+                        onClick={() =>
+                          void execute(
+                            'program-embed.update',
+                            { embedId: embed.id, enabled: !embed.enabled },
+                            { expectedVersions: { [embed.id]: embed.version } },
+                            `${embed.name} ${embed.enabled ? 'disabled' : 'enabled'}.`,
+                          )
+                        }
+                      >
+                        {embed.enabled ? 'Enabled' : 'Disabled'}
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <Field label="Embed name" htmlFor="shared-program-name">
+            <input
+              id="shared-program-name"
+              value={sharedName}
+              onChange={(interaction) => setSharedName(interaction.target.value)}
+              placeholder={`${sharedProgramViews.find((view) => view.id === sharedView)?.label ?? 'Program'} for event site`}
+              className={textControl}
+            />
+          </Field>
+
           <div className="grid min-w-0 gap-4 sm:grid-cols-2">
             <Field label="Output" htmlFor="shared-output-format">
               <select
@@ -724,7 +832,11 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
               <select
                 id="shared-program-view"
                 value={sharedView}
-                disabled={sharedOutputFormat !== 'link' && sharedOutputFormat !== 'embed'}
+                disabled={
+                  sharedOutputFormat !== 'link' &&
+                  sharedOutputFormat !== 'embed' &&
+                  sharedOutputFormat !== 'script'
+                }
                 onChange={(interaction) => {
                   setSharedView(interaction.target.value as SharedProgramView)
                   setCopied(false)
@@ -783,7 +895,11 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                   id="shared-program-accent"
                   type="color"
                   value={sharedAccent}
-                  disabled={sharedOutputFormat !== 'link' && sharedOutputFormat !== 'embed'}
+                  disabled={
+                    sharedOutputFormat !== 'link' &&
+                    sharedOutputFormat !== 'embed' &&
+                    sharedOutputFormat !== 'script'
+                  }
                   onChange={(interaction) => {
                     setSharedAccent(interaction.target.value)
                     setCopied(false)

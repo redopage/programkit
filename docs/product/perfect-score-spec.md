@@ -1,8 +1,8 @@
 # Perfect-score specification
 
 Companion to [competition-endgame.md](competition-endgame.md). That document says where we are;
-this one defines, item by item, what a **full-credit** result looks like for all 96 rubric items
-(178 required points + 19 extra credit) and what has to exist for the evaluator to observe it.
+this one defines, item by item, what a **full-credit** result looks like for all 98 rubric items
+(183 required points + 19 extra credit) and what has to exist for the evaluator to observe it.
 
 > **Status note:** this file is the acceptance specification, not a current gap report. Many
 > historical “Build” notes below have since shipped. Use the area-by-area
@@ -175,11 +175,10 @@ Strongest area. Perfect closes eight small deltas:
 - **EMB-09**: itinerary cards must list **every speaker with title and company**.
 - **EMB-10/11**: have (localStorage + ICS); add a remove-updates-view check and confirm the ICS
   imports into a real calendar (manual half).
-- **EMB-15** full credit needs an **Embeds studio**: widget-type picker covering all five, output
-  formats **styled HTML script tag + basic HTML + JSON + XML + iCal**, plus branding/color,
-  content-filter, and field-selection options. The manual half pastes the snippet on a foreign
-  origin: the script embed must actually render cross-origin (CSP `frame-ancestors`/CORS on the
-  data endpoints).
+- **EMB-15** now has an **Embeds studio** in Schedule studio: widget-type picker covering all five,
+  output formats **styled HTML script + basic HTML + JSON + XML + iCal**, branding/color,
+  content filters, field selection, named saved embeds, and enable/disable management. The manual
+  half still pastes the snippet on a foreign origin and verifies the rendered interaction.
 - **EMB-16** — ⚠ **architectural decision.** The manual half edits a session organizer-side and
   expects the public widget to update **without republishing**. Our immutable-release model
   contradicts this. Resolution that keeps both properties: placements stay release-pinned, but

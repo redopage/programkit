@@ -24,6 +24,8 @@ screenshots.
 | CFP-14 | Verified | Decision notification includes an editable merge-field template and resolved recipient preview before queueing. The production acceptance message reached Gmail in one provider attempt.                              |
 | CFP-15 | Verified | Accepting a proposal atomically creates or reuses people, participation records, requirements, and a session carrying the proposal title, speakers, track, format, duration, and description.                         |
 | CFP-16 | Verified | The speaker dashboard removes editing outside the submission window, and the operation boundary independently rejects update and submit attempts after close.                                                         |
+| CFP-17 | Verified | A fresh organizer account can create a second event from the event switcher, and both events remain available in that switcher. Each event is backed by its own Workspace Durable Object.                             |
+| CFP-18 | Verified | Switching into a newly created event shows empty submissions, sessions, and speakers rather than the first event's records. This was exercised against the hosted app with “Forward Summit 2028.”                     |
 
 ## Draft lifecycle exercised in the browser
 

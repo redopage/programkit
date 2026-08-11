@@ -466,6 +466,25 @@ export interface PortalResourcePage {
   version: number
 }
 
+export type ProgramEmbedView = 'agenda' | 'sessions' | 'speakers' | 'itinerary' | 'gallery'
+export type ProgramEmbedOutput = 'link' | 'script' | 'embed' | 'json' | 'xml' | 'ical'
+
+export interface ProgramEmbed {
+  id: Id
+  eventId: Id
+  name: string
+  view: ProgramEmbedView
+  output: ProgramEmbedOutput
+  trackId: Id | null
+  roomId: Id | null
+  accent: string
+  showDescriptions: boolean
+  enabled: boolean
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+  version: number
+}
+
 export interface Integration {
   id: Id
   name: string
@@ -568,6 +587,7 @@ export interface WorkspaceState {
   campaigns: Campaign[]
   outboundMessages?: OutboundMessage[]
   portalResourcePages: PortalResourcePage[]
+  programEmbeds: ProgramEmbed[]
   changeSets: ChangeSet[]
   integrations: Integration[]
   domainEvents: DomainEvent[]

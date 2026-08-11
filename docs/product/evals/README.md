@@ -1,7 +1,7 @@
 # Evaluator evidence map
 
 These documents map the current product to the exact V1 `killmysaas-evals` rubric at commit
-`d99935c3e3c6c50c6b9292220260ccfe2df6d6d4`.
+`2b0f7956ab0c6f4868d41356e495b3a225badaab`.
 
 | Area                     | Evidence map                                           |
 | ------------------------ | ------------------------------------------------------ |

@@ -7,10 +7,10 @@ describes how to run it.
 ## Target
 
 Use a fresh organizer account at `app.programkit.dev`. Create the fixture event from the empty
-workspace, then keep every role and public page on that origin because the V1 runner blocks
-cross-origin navigation and cannot rely on an external inbox. Use a different disposable organizer
-account for each full run. Do not run destructive scenarios against a collaborator's long-lived
-event, and do not expose the seeded demonstration reset in the hosted app.
+workspace, then keep every role and public page on `programkit.dev` or a sibling subdomain because
+the V1 runner blocks unrelated sites and cannot rely on an external inbox. Use a different
+disposable organizer account for each full run. Do not run destructive scenarios against a
+collaborator's long-lived event, and do not expose the seeded demonstration reset in the hosted app.
 
 The seven-day demo is still the fastest product walkthrough, but its seeded capability actors do
 not prove account signup, event membership, or participant recovery.

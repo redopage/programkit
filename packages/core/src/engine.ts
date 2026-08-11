@@ -51,6 +51,7 @@ import type {
   ParticipationStatus,
   Person,
   PortalResourcePage,
+  ProgramEmbed,
   RequirementStatus,
   ReviewRecommendation,
   Session,
@@ -117,6 +118,7 @@ export function initializeProgramCollections(state: WorkspaceState) {
   state.reviewDecisions ??= []
   state.outboundMessages ??= []
   state.portalResourcePages ??= []
+  state.programEmbeds ??= []
   for (const message of state.outboundMessages) {
     message.submissionId ??= null
     message.attempts ??= 0
@@ -822,6 +824,7 @@ function allVersionedRecords(state: WorkspaceState) {
     ...state.placements,
     ...state.campaigns,
     ...(state.portalResourcePages ?? []),
+    ...(state.programEmbeds ?? []),
     ...state.changeSets,
   ]
 }
@@ -1109,6 +1112,102 @@ function applyHandler(
         data: { status: resource.status },
       })
       return { resource }
+    }
+
+    case 'program-embed.create': {
+      const name = assertString(input.name, 'name')
+      const view = assertOneOf(input.view, 'view', [
+        'agenda',
+        'sessions',
+        'speakers',
+        'itinerary',
+        'gallery',
+      ] as const)
+      const output = assertOneOf(input.output, 'output', [
+        'link',
+        'script',
+        'embed',
+        'json',
+        'xml',
+        'ical',
+      ] as const)
+      const trackId =
+        input.trackId === undefined || input.trackId === null || input.trackId === 'all'
+          ? null
+          : assertString(input.trackId, 'trackId')
+      const roomId =
+        input.roomId === undefined || input.roomId === null || input.roomId === 'all'
+          ? null
+          : assertString(input.roomId, 'roomId')
+      if (
+        trackId &&
+        !state.tracks.some((entry) => entry.id === trackId && entry.eventId === state.activeEventId)
+      ) {
+        throw new OperationError('INVALID_INPUT', 'Choose a track from the active event.', {
+          trackId: 'That track is not available in this event.',
+        })
+      }
+      if (
+        roomId &&
+        !state.rooms.some((entry) => entry.id === roomId && entry.eventId === state.activeEventId)
+      ) {
+        throw new OperationError('INVALID_INPUT', 'Choose a room from the active event.', {
+          roomId: 'That room is not available in this event.',
+        })
+      }
+      const accent =
+        typeof input.accent === 'string' && /^#[0-9a-f]{6}$/iu.test(input.accent)
+          ? input.accent.toLowerCase()
+          : '#2563eb'
+      const embed: ProgramEmbed = {
+        id: createId('emb'),
+        eventId: state.activeEventId,
+        name,
+        view,
+        output,
+        trackId,
+        roomId,
+        accent,
+        showDescriptions:
+          input.showDescriptions === undefined ? true : input.showDescriptions === true,
+        enabled: input.enabled === undefined ? true : input.enabled === true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      state.programEmbeds.push(embed)
+      appendEvent(state, context, {
+        type: 'program-embed.created',
+        aggregate: { type: 'program-embed', id: embed.id, version: embed.version },
+        summary: `Saved program embed “${embed.name}”.`,
+        data: { view: embed.view, output: embed.output, enabled: embed.enabled },
+      })
+      return { embed }
+    }
+
+    case 'program-embed.update': {
+      const embed = findRequired(state.programEmbeds, input.embedId, 'program embed')
+      if (embed.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'That embed belongs to another event.')
+      }
+      if (input.name !== undefined) embed.name = assertString(input.name, 'name')
+      if (input.enabled !== undefined) {
+        if (typeof input.enabled !== 'boolean') {
+          throw new OperationError('INVALID_INPUT', 'Enabled must be true or false.', {
+            enabled: 'Choose whether this embed is enabled.',
+          })
+        }
+        embed.enabled = input.enabled
+      }
+      embed.updatedAt = timestamp
+      embed.version += 1
+      appendEvent(state, context, {
+        type: 'program-embed.updated',
+        aggregate: { type: 'program-embed', id: embed.id, version: embed.version },
+        summary: `${embed.enabled ? 'Enabled' : 'Disabled'} program embed “${embed.name}”.`,
+        data: { name: embed.name, enabled: embed.enabled },
+      })
+      return { embed }
     }
 
     case 'track.create': {

@@ -240,6 +240,52 @@ describe('ProgramKit operation engine', () => {
     expect(insecure.response.error?.code).toBe('INVALID_INPUT')
   })
 
+  it('saves named public program embeds and keeps them isolated to an event', () => {
+    const state = createSeedState()
+    const created = executeOperation(state, 'program-embed.create', {
+      input: {
+        name: 'Main website agenda',
+        view: 'agenda',
+        output: 'script',
+        trackId: 'all',
+        roomId: 'all',
+        accent: '#2563EB',
+        showDescriptions: false,
+      },
+    })
+
+    expect(created.response.ok, JSON.stringify(created.response)).toBe(true)
+    const embed = created.state.programEmbeds[0]
+    expect(embed).toMatchObject({
+      eventId: state.activeEventId,
+      name: 'Main website agenda',
+      view: 'agenda',
+      output: 'script',
+      trackId: null,
+      roomId: null,
+      accent: '#2563eb',
+      showDescriptions: false,
+      enabled: true,
+      version: 1,
+    })
+
+    const disabled = executeOperation(created.state, 'program-embed.update', {
+      input: { embedId: embed.id, enabled: false },
+      expectedVersions: { [embed.id]: embed.version },
+    })
+    expect(disabled.response.ok, JSON.stringify(disabled.response)).toBe(true)
+    expect(disabled.state.programEmbeds[0]).toMatchObject({ enabled: false, version: 2 })
+    expect(disabled.state.domainEvents.at(-1)?.type).toBe('program-embed.updated')
+
+    const foreignState = structuredClone(created.state)
+    foreignState.activeEventId = 'evt_another'
+    const foreignUpdate = executeOperation(foreignState, 'program-embed.update', {
+      input: { embedId: embed.id, enabled: false },
+      expectedVersions: { [embed.id]: embed.version },
+    })
+    expect(foreignUpdate.response.error?.code).toBe('FORBIDDEN')
+  })
+
   it('builds program inventory and sessions from an empty event', () => {
     let state = createEmptyWorkspaceState({
       eventId: 'evt_summit',
