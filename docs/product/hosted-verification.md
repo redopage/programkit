@@ -39,6 +39,8 @@ Verified on **10 August 2026** against `https://app.programkit.dev`. Application
 - the organizer added the event's first room, Auto-place scheduled that converted session into a
   conflict-free slot, Publish schedule created the public release, and Preview agenda rendered the
   same title, speaker, track, room, date, and time;
+- a general welcome campaign moved through draft, approval, send, provider handoff, and Gmail
+  delivery with its first name, event, session, and private portal link resolved;
 - an approved campaign reached Gmail with a `text/calendar` attachment containing the matching
   title, start, end, and room;
 - the workspace ZIP passed an integrity check and contained its complete JSON backup, manifest,
