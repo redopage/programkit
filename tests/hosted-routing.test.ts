@@ -5,6 +5,7 @@ import {
   isApiKeyAccessiblePath,
   isApiKeyCredentialPath,
   isHostedDemoReset,
+  isWorkspaceCrmPath,
   normalizeHostedEventCreateInput,
   parseApiKeyToken,
   runtimeIntegrations,
@@ -129,6 +130,16 @@ describe('hosted event safety', () => {
     expect(isHostedDemoReset('hosted-app', 'POST', path)).toBe(true)
     expect(isHostedDemoReset('hosted-demo', 'POST', path)).toBe(false)
     expect(isHostedDemoReset('hosted-app', 'GET', path)).toBe(false)
+  })
+})
+
+describe('CRM routing', () => {
+  it('adapts the organization CRM surface to one workspace outside the hosted app', () => {
+    expect(isWorkspaceCrmPath('single-workspace', '/api/v1/crm/state')).toBe(true)
+    expect(isWorkspaceCrmPath('hosted-demo', '/api/v1/crm/operations/person.update')).toBe(true)
+
+    expect(isWorkspaceCrmPath('hosted-app', '/api/v1/crm/state')).toBe(false)
+    expect(isWorkspaceCrmPath('hosted-demo', '/api/v1/state')).toBe(false)
   })
 })
 

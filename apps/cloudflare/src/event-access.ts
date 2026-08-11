@@ -630,7 +630,7 @@ export class EventAccessDurableObject extends DurableObject {
     const owner = cleanActor(input.owner)
     const existingEvent = await this.#ctx.storage.get<EventAccessEvent>('event')
     if (existingEvent) {
-      const migratedEvent = existingEvent.organizationId
+      const migratedEvent = organizationIdPattern.test(existingEvent.organizationId ?? '')
         ? existingEvent
         : { ...existingEvent, organizationId: requestedEvent.organizationId }
       if (!sameEvent(migratedEvent, requestedEvent)) {
@@ -648,7 +648,7 @@ export class EventAccessDurableObject extends DurableObject {
           409,
         )
       }
-      if (!existingEvent.organizationId) await this.#ctx.storage.put('event', migratedEvent)
+      if (migratedEvent !== existingEvent) await this.#ctx.storage.put('event', migratedEvent)
       return { event: migratedEvent, membership }
     }
 

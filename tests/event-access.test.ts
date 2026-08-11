@@ -64,11 +64,12 @@ async function body(response: Response) {
 
 describe('EventAccessDurableObject', () => {
   let access: EventAccessDurableObject
+  let storage: MemoryStorage
 
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-09T12:00:00.000Z'))
-    const storage = new MemoryStorage()
+    storage = new MemoryStorage()
     access = new EventAccessDurableObject(
       { storage } as unknown as DurableObjectState,
       {} as Cloudflare.Env,
@@ -122,6 +123,37 @@ describe('EventAccessDurableObject', () => {
       ok: true,
       event: { id: event.id, organizationId: event.organizationId },
       scopes: ['*'],
+    })
+  })
+
+  it('repairs a legacy organization id while preserving event access', async () => {
+    const legacyMembership = {
+      id: 'mem_legacy_owner',
+      eventId: event.id,
+      userId: owner.userId,
+      email: owner.email,
+      role: 'owner' as const,
+      status: 'active' as const,
+      invitedByUserId: null,
+      joinedAt: event.createdAt,
+      updatedAt: event.createdAt,
+      version: 1,
+    }
+    await storage.put('event', { ...event, organizationId: 'org_legacy' })
+    await storage.put(`membership:${legacyMembership.id}`, legacyMembership)
+    await storage.put(`membership-user:${owner.userId}`, legacyMembership.id)
+
+    const response = await access.fetch(
+      request('/internal/event-access/initialize', { event, owner }),
+    )
+
+    expect(response.status).toBe(201)
+    expect(await body(response)).toMatchObject({
+      event: { id: event.id, organizationId: event.organizationId },
+      membership: { id: legacyMembership.id, role: 'owner' },
+    })
+    expect(await storage.get<typeof event>('event')).toMatchObject({
+      organizationId: event.organizationId,
     })
   })
 

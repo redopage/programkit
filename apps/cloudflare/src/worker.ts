@@ -1151,8 +1151,9 @@ async function linkHostedMembership(
       body: JSON.stringify({ token: principal.sessionToken, eventId: event.id, ...projection }),
     }),
   )
-  if (!response.ok) throw new Error('Event access could not be linked to this account.')
+  if (!response.ok) return false
   Object.assign(event, projection)
+  return true
 }
 
 async function resolveHostedEventAccess(
@@ -1186,7 +1187,7 @@ async function resolveHostedEventAccess(
     event.role !== body.membership.role
   ) {
     event.organizationId = body.event.organizationId
-    await linkHostedMembership(env, principal, event, body.membership)
+    if (!(await linkHostedMembership(env, principal, event, body.membership))) return null
   }
   return { membership: body.membership, scopes: body.scopes }
 }
@@ -1953,6 +1954,44 @@ async function handleAccountCrmRequest(
     status: response.ok ? 200 : 400,
     headers: { 'cache-control': 'no-store' },
   })
+}
+
+export function isWorkspaceCrmPath(profile: string, pathname: string) {
+  return (
+    profile !== 'hosted-app' &&
+    (pathname === '/api/v1/crm/state' || pathname.startsWith('/api/v1/crm/operations/'))
+  )
+}
+
+async function handleWorkspaceCrmRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+) {
+  if (request.method === 'GET' && url.pathname === '/api/v1/crm/state') {
+    const response = await stub.fetch(
+      withActor(new Request('http://workspace.internal/api/v1/state'), demoStaffActor),
+    )
+    return withRuntimeIntegrations(response, env)
+  }
+
+  const match = url.pathname.match(/^\/api\/v1\/crm\/operations\/([^/]+)$/u)
+  if (request.method !== 'POST' || !match) return null
+  if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+  const operation = encodeURIComponent(decodeURIComponent(match[1]))
+  return stub.fetch(
+    withActor(
+      new Request(`http://workspace.internal/api/v1/operations/${operation}`, {
+        method: 'POST',
+        headers: {
+          'content-type': request.headers.get('content-type') ?? 'application/json',
+        },
+        body: await request.arrayBuffer(),
+      }),
+      demoStaffActor,
+    ),
+  )
 }
 
 async function executePortalOperation(
@@ -3075,6 +3114,11 @@ export default {
           { status: 410, headers },
         )
       }
+    }
+
+    if (isWorkspaceCrmPath(profile, url.pathname)) {
+      const response = await handleWorkspaceCrmRequest(request, env, url, stub)
+      if (response) return response
     }
 
     if (url.pathname.startsWith('/api/v1/integrations/airtable/')) {
