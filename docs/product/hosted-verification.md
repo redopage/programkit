@@ -15,7 +15,12 @@ Verified on **10 August 2026** against `https://app.programkit.dev`:
 - the one-time callback created a session, selected the account's event, and redirected to the app;
 - a speaker portal invitation was accepted by the email provider on its first attempt;
 - the invitation reached Gmail with resolved speaker and event values; and
-- its private portal URL returned only the event-scoped speaker projection.
+- its private portal URL returned only the event-scoped speaker projection;
+- a task due in two days triggered one automatic reminder through a Durable Object alarm;
+- the reminder reached Gmail with its resolved due date, event, and private portal link;
+- the evaluator headshot and slide fixtures persisted to R2 and matched their original SHA-256
+  hashes after portal download; and
+- a second speaker capability received `404` when requesting the first speaker's slide asset.
 
 Provider acceptance is recorded as **Sent** in ProgramKit. It is not mislabeled as end-recipient
 delivery because the current email binding does not provide delivery or bounce webhooks.
