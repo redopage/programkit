@@ -39,6 +39,7 @@ import {
   type EventInvitation,
   type EventMembership,
 } from './event-access.ts'
+import { actionEmail } from './email.ts'
 
 export { AuthDurableObject, EventAccessDurableObject, WorkspaceDurableObject }
 
@@ -990,15 +991,6 @@ async function handleExternalAccessRequest(request: Request, env: Env, url: URL,
   return null
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
-}
-
 function configuredAppOrigin(env: Env, requestUrl: URL) {
   if (requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1') {
     return requestUrl.origin
@@ -1328,15 +1320,20 @@ async function handleHostedAuthRequest(request: Request, env: Env, url: URL) {
       }
       const callback = new URL('/auth/verify', configuredAppOrigin(env, url))
       callback.searchParams.set('token', scopedAuthToken(shard, issued.token))
-      const safeCallback = escapeHtml(callback.toString())
+      const emailContent = actionEmail({
+        title: 'Sign in',
+        intro: 'Use this link to continue.',
+        actionLabel: 'Sign in',
+        actionUrl: callback.toString(),
+        footnote: 'This link expires in 15 minutes and can be used once.',
+      })
       try {
         await env.EMAIL.send({
           to: issued.email ?? email,
           from: env.PROGRAMKIT_EMAIL_FROM,
           replyTo: env.PROGRAMKIT_SUPPORT_EMAIL,
-          subject: 'Sign in to ProgramKit',
-          text: `Sign in to ProgramKit: ${callback.toString()}\n\nThis link expires in 15 minutes and can be used once.`,
-          html: `<div style="font-family:Inter,system-ui,sans-serif;color:#18181b;line-height:1.5"><h1 style="font-size:22px">Sign in to ProgramKit</h1><p>Use this secure link to continue:</p><p><a href="${safeCallback}" style="display:inline-block;border-radius:10px;background:#2563eb;color:white;padding:10px 16px;text-decoration:none">Sign in</a></p><p style="color:#71717a;font-size:14px">This link expires in 15 minutes and can be used once.</p></div>`,
+          subject: 'Your sign-in link',
+          ...emailContent,
         })
       } catch {
         return Response.json(
@@ -2821,16 +2818,21 @@ export default {
           )!
           const invitationUrl = new URL('/auth/invite', configuredAppOrigin(env, url))
           invitationUrl.searchParams.set('token', created.token)
-          const safeInvitationUrl = escapeHtml(invitationUrl.toString())
-          const safeEventName = escapeHtml(event.name)
+          const inviterName = hostedPrincipal.account.user.name
+          const emailContent = actionEmail({
+            title: `Join ${event.name}`,
+            intro: `${inviterName} invited you to help manage this event.`,
+            actionLabel: 'Accept invitation',
+            actionUrl: invitationUrl.toString(),
+            footnote: 'This invitation expires in seven days.',
+          })
           try {
             await env.EMAIL.send({
               to: created.invitation.email,
               from: env.PROGRAMKIT_EMAIL_FROM,
               replyTo: env.PROGRAMKIT_SUPPORT_EMAIL,
-              subject: `Join ${event.name} in ProgramKit`,
-              text: `${hostedPrincipal.account.user.name} invited you to help manage ${event.name} in ProgramKit.\n\nAccept the invitation: ${invitationUrl.toString()}\n\nThis invitation expires in seven days.`,
-              html: `<div style="font-family:Inter,system-ui,sans-serif;color:#18181b;line-height:1.5"><h1 style="font-size:22px">Join ${safeEventName}</h1><p>${escapeHtml(hostedPrincipal.account.user.name)} invited you to help manage this event in ProgramKit.</p><p><a href="${safeInvitationUrl}" style="display:inline-block;border-radius:999px;background:#2563eb;color:white;padding:10px 16px;text-decoration:none">Accept invitation</a></p><p style="color:#71717a;font-size:14px">This invitation expires in seven days.</p></div>`,
+              subject: `You’re invited to ${event.name}`,
+              ...emailContent,
             })
           } catch {
             await access.fetch(
