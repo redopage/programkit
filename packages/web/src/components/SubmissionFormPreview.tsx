@@ -125,17 +125,19 @@ export function SubmissionFormPreview({
               <p className="max-w-[48ch] pt-3 text-pretty text-base text-zinc-600 sm:text-sm">
                 {form.description || 'Add an introduction to help speakers understand the call.'}
               </p>
-              <dl className="flex flex-col gap-3 border-t border-zinc-950/5 pt-5 mt-5">
+              <dl className="mt-5 flex flex-col gap-3 border-t border-zinc-950/5 pt-5">
                 <div>
                   <dt className="text-base font-medium text-zinc-950 sm:text-sm">Event</dt>
                   <dd className="text-base text-zinc-500 sm:text-sm">{event.name}</dd>
                 </div>
-                <div>
-                  <dt className="text-base font-medium text-zinc-950 sm:text-sm">Location</dt>
-                  <dd className="text-base text-zinc-500 sm:text-sm">
-                    {event.venue} · {event.city}
-                  </dd>
-                </div>
+                {event.venue || event.city ? (
+                  <div>
+                    <dt className="text-base font-medium text-zinc-950 sm:text-sm">Location</dt>
+                    <dd className="text-base text-zinc-500 sm:text-sm">
+                      {[event.venue, event.city].filter(Boolean).join(' · ')}
+                    </dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt className="text-base font-medium text-zinc-950 sm:text-sm">
                     Submissions close

@@ -720,11 +720,21 @@ export function createWorkspaceExportArchive(state: WorkspaceState, exportedAt: 
     ],
     ['id', 'name', 'slug', 'timezone', 'activeEventId', 'schemaVersion', 'revision'],
   )
+  const reviewResultsCsv = createReviewResultsCsv(cleanState)
+  const reviewResultRows = new Set(
+    cleanState.reviewerAssignments
+      .filter(
+        (assignment) =>
+          assignment.eventId === cleanState.activeEventId && assignment.status !== 'recused',
+      )
+      .map((assignment) => assignment.submissionId),
+  ).size
   const exportFiles: WorkspaceExportFile[] = [
     { name: 'README.txt', kind: 'readme' },
     { name: 'manifest.json', kind: 'manifest' },
     { name: 'workspace.json', kind: 'json' },
     { name: 'csv/workspace.csv', kind: 'csv', rows: 1 },
+    { name: 'csv/review-results.csv', kind: 'csv', rows: reviewResultRows },
     ...csvFiles.map(({ name, kind, rows }) => ({ name, kind, rows })),
   ]
   const manifest = {
@@ -742,8 +752,9 @@ export function createWorkspaceExportArchive(state: WorkspaceState, exportedAt: 
     notes: [
       'workspace.json is the complete logical backup.',
       'CSV files use UTF-8, a header row, CRLF line endings, and spreadsheet-safe text values.',
+      'csv/review-results.csv contains the human-readable scoring summary.',
       'Transient idempotency-cache records are intentionally omitted.',
-      'Asset metadata is included. Binary asset files are not yet bundled.',
+      'Asset metadata is included. Download stored binaries separately from the Files page.',
     ],
   }
   const readme = [
@@ -757,11 +768,12 @@ export function createWorkspaceExportArchive(state: WorkspaceState, exportedAt: 
     '',
     'workspace.json is the complete logical backup for machines and future restore tools.',
     'csv/ contains one human-readable file for every ProgramKit record collection.',
+    'csv/review-results.csv summarizes scores, recommendations, and review comments.',
     'Nested fields use dot-separated column names. Lists use | separators when possible.',
     'manifest.json lists every file and row count.',
     '',
     'Asset metadata is included in csv/assets.csv and workspace.json.',
-    'Binary headshots, slides, and documents will be bundled after R2 file storage ships.',
+    'Download the latest stored headshots, slides, and documents from the Files page.',
     '',
   ].join('\r\n')
   const files: ZipFile[] = [
@@ -769,6 +781,7 @@ export function createWorkspaceExportArchive(state: WorkspaceState, exportedAt: 
     { name: 'manifest.json', text: `${JSON.stringify(manifest, null, 2)}\n` },
     { name: 'workspace.json', text: `${JSON.stringify(jsonDocument, null, 2)}\n` },
     { name: 'csv/workspace.csv', text: workspaceCsv },
+    { name: 'csv/review-results.csv', text: reviewResultsCsv },
     ...csvFiles.map(({ name, text }) => ({ name, text })),
   ]
   return createStoredZip(files, new Date(exportedAt))

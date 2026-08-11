@@ -526,10 +526,12 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                     {eventDayLabel(event.startsAt, event.timezone, true)} to{' '}
                     {eventDayLabel(event.endsAt, event.timezone, true)}
                   </p>
-                  <p className="flex items-center gap-2 text-base sm:text-sm">
-                    <MapPinIcon className="size-4 shrink-0 fill-current" />
-                    {event.venue}, {event.city}
-                  </p>
+                  {event.venue || event.city ? (
+                    <p className="flex items-center gap-2 text-base sm:text-sm">
+                      <MapPinIcon className="size-4 shrink-0 fill-current" />
+                      {[event.venue, event.city].filter(Boolean).join(' · ')}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <dl className="grid min-w-0 grid-cols-2 gap-y-6">

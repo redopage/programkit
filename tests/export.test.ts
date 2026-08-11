@@ -39,6 +39,7 @@ describe('workspace export archive', () => {
     expect(files.has('csv/workspace.csv')).toBe(true)
     expect(files.has('csv/people.csv')).toBe(true)
     expect(files.has('csv/submissions.csv')).toBe(true)
+    expect(files.has('csv/review-results.csv')).toBe(true)
     expect(files.has('csv/portal-resource-pages.csv')).toBe(true)
 
     const manifest = JSON.parse(files.get('manifest.json')!) as {
@@ -47,6 +48,11 @@ describe('workspace export archive', () => {
     }
     expect(manifest.format).toBe('programkit.export.v2')
     expect(manifest.files).toContainEqual({ name: 'csv/people.csv', kind: 'csv', rows: 16 })
+    expect(manifest.files).toContainEqual({
+      name: 'csv/review-results.csv',
+      kind: 'csv',
+      rows: 4,
+    })
 
     const backup = JSON.parse(files.get('workspace.json')!) as {
       format: string
@@ -58,6 +64,8 @@ describe('workspace export archive', () => {
 
     expect(files.get('csv/people.csv')).toContain('"firstName","lastName","email"')
     expect(files.get('csv/submissions.csv')).toContain('"answers.email"')
+    expect(files.get('csv/review-results.csv')).toContain('"weightedAggregate"')
+    expect(files.get('csv/review-results.csv')).toContain('"recommendations.accept"')
     expect(files.get('csv/portal-resource-pages.csv')).toContain('"speaker-guide"')
   })
 
