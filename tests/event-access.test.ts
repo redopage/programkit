@@ -286,6 +286,86 @@ describe('EventAccessDurableObject', () => {
     expect(await body(duplicate)).toMatchObject({ code: 'ACCOUNT_EXISTS' })
   })
 
+  it('counts participant password failures without throttling successful sign-ins', async () => {
+    await initialize()
+    const email = 'repeat-speaker@example.com'
+    const password = 'speaker-password'
+    const ipHash = 'repeat-speaker-ip'
+    const signup = await access.fetch(
+      request('/internal/event-access/external/password', {
+        eventId: event.id,
+        email,
+        password,
+        intent: 'signup',
+        ipHash,
+      }),
+    )
+    expect(signup.status).toBe(201)
+
+    for (let index = 0; index < 12; index += 1) {
+      const response = await access.fetch(
+        request('/internal/event-access/external/password', {
+          eventId: event.id,
+          email,
+          password,
+          intent: 'signin',
+          ipHash,
+        }),
+      )
+      expect(response.status).toBe(200)
+    }
+
+    for (let index = 0; index < 12; index += 1) {
+      const response = await access.fetch(
+        request('/internal/event-access/external/password', {
+          eventId: event.id,
+          email,
+          password,
+          intent: 'signup',
+          ipHash,
+        }),
+      )
+      expect(response.status).toBe(409)
+    }
+    expect(
+      (
+        await access.fetch(
+          request('/internal/event-access/external/password', {
+            eventId: event.id,
+            email,
+            password,
+            intent: 'signin',
+            ipHash,
+          }),
+        )
+      ).status,
+    ).toBe(200)
+
+    const wrongPassword = await access.fetch(
+      request('/internal/event-access/external/password', {
+        eventId: event.id,
+        email,
+        password: 'incorrect-password',
+        intent: 'signin',
+        ipHash,
+      }),
+    )
+    expect(wrongPassword.status).toBe(401)
+    expect(
+      (
+        await access.fetch(
+          request('/internal/event-access/external/password', {
+            eventId: event.id,
+            email,
+            password,
+            intent: 'signin',
+            ipHash,
+          }),
+        )
+      ).status,
+    ).toBe(200)
+  })
+
   it('creates copy-once event API keys, verifies scopes, and revokes access', async () => {
     await initialize()
     const createdResponse = await access.fetch(

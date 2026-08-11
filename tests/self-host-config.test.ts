@@ -18,6 +18,8 @@ describe('Cloudflare self-host configuration', () => {
 
     expect(config.vars).toEqual({
       PROGRAMKIT_DEPLOYMENT_PROFILE: 'hosted-app',
+      PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_EMAIL: '10',
+      PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_IP: '40',
       PROGRAMKIT_APP_ORIGIN: 'https://events.example.com',
     })
     expect(config.routes).toEqual([{ pattern: 'events.example.com', custom_domain: true }])
@@ -37,7 +39,11 @@ describe('Cloudflare self-host configuration', () => {
       bucketName: 'programkit-assets',
     })
     expect(config).not.toHaveProperty('routes')
-    expect(config.vars).toEqual({ PROGRAMKIT_DEPLOYMENT_PROFILE: 'hosted-app' })
+    expect(config.vars).toEqual({
+      PROGRAMKIT_DEPLOYMENT_PROFILE: 'hosted-app',
+      PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_EMAIL: '10',
+      PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_IP: '40',
+    })
     expect(cleanCloudflareName('My ProgramKit', 'Worker name')).toBe('my-programkit')
     expect(cleanDomain('https://events.example.com/path')).toBe('events.example.com')
     expect(() => cleanCloudflareName('---', 'Worker name')).toThrow()

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthDurableObject, cloudflarePasswordIterations } from '../apps/cloudflare/src/auth.ts'
+import {
+  defaultPasswordFailureRateLimits,
+  passwordFailureRateLimits,
+} from '../apps/cloudflare/src/password-rate-limit.ts'
 import { MemoryStorage } from './support/cloudflare-workers.ts'
 
 function request(path: string, input: Record<string, unknown>) {
@@ -47,6 +51,22 @@ describe('AuthDurableObject membership projections', () => {
 
   it('keeps password derivation within the Cloudflare Workers PBKDF2 limit', () => {
     expect(cloudflarePasswordIterations).toBe(100_000)
+  })
+
+  it('keeps password failure limits conservative and permits bounded self-host overrides', () => {
+    expect(passwordFailureRateLimits({})).toEqual(defaultPasswordFailureRateLimits)
+    expect(
+      passwordFailureRateLimits({
+        PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_EMAIL: '25',
+        PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_IP: 80,
+      }),
+    ).toEqual({ email: 25, ip: 80 })
+    expect(
+      passwordFailureRateLimits({
+        PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_EMAIL: '0',
+        PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_IP: 'not-a-number',
+      }),
+    ).toEqual(defaultPasswordFailureRateLimits)
   })
 
   it('links and unlinks event membership projections from the account switcher', async () => {
@@ -165,6 +185,133 @@ describe('AuthDurableObject membership projections', () => {
     )
     expect(invalidResponse.status).toBe(401)
     await expect(invalidResponse.json()).resolves.toEqual({ ok: false })
+  })
+
+  it('counts password failures, not successful organizer sign-ins', async () => {
+    const email = 'repeat-organizer@example.com'
+    const password = 'correct horse battery staple'
+    const ipHash = 'repeat-organizer-ip'
+    const signup = await auth.fetch(
+      request('/internal/auth/password', {
+        email,
+        name: 'Repeat Organizer',
+        password,
+        intent: 'signup',
+        ipHash,
+      }),
+    )
+    expect(signup.status).toBe(201)
+
+    for (let index = 0; index < 12; index += 1) {
+      const response = await auth.fetch(
+        request('/internal/auth/password', { email, password, intent: 'signin', ipHash }),
+      )
+      expect(response.status).toBe(200)
+    }
+
+    for (let index = 0; index < 12; index += 1) {
+      const response = await auth.fetch(
+        request('/internal/auth/password', {
+          email,
+          name: 'Repeat Organizer',
+          password,
+          intent: 'signup',
+          ipHash,
+        }),
+      )
+      expect(response.status).toBe(401)
+    }
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', { email, password, intent: 'signin', ipHash }),
+        )
+      ).status,
+    ).toBe(200)
+
+    for (let index = 0; index < 9; index += 1) {
+      const response = await auth.fetch(
+        request('/internal/auth/password', {
+          email,
+          password: 'incorrect password',
+          intent: 'signin',
+          ipHash,
+        }),
+      )
+      expect(response.status).toBe(401)
+    }
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', { email, password, intent: 'signin', ipHash }),
+        )
+      ).status,
+    ).toBe(200)
+
+    for (let index = 0; index < 9; index += 1) {
+      await auth.fetch(
+        request('/internal/auth/password', {
+          email,
+          password: 'incorrect password',
+          intent: 'signin',
+          ipHash,
+        }),
+      )
+    }
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', { email, password, intent: 'signin', ipHash }),
+        )
+      ).status,
+    ).toBe(200)
+  })
+
+  it('blocks an organizer account after the default ten password failures', async () => {
+    const email = 'limited-organizer@example.com'
+    const password = 'correct horse battery staple'
+    const ipHash = 'limited-organizer-ip'
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', {
+            email,
+            name: 'Limited Organizer',
+            password,
+            intent: 'signup',
+            ipHash,
+          }),
+        )
+      ).status,
+    ).toBe(201)
+
+    for (let index = 0; index < defaultPasswordFailureRateLimits.email; index += 1) {
+      await auth.fetch(
+        request('/internal/auth/password', {
+          email,
+          password: 'incorrect password',
+          intent: 'signin',
+          ipHash,
+        }),
+      )
+    }
+
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', { email, password, intent: 'signin', ipHash }),
+        )
+      ).status,
+    ).toBe(401)
+
+    vi.advanceTimersByTime(60 * 60 * 1_000 + 1)
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', { email, password, intent: 'signin', ipHash }),
+        )
+      ).status,
+    ).toBe(200)
   })
 
   it('creates multiple events and honors the selected event on the next request', async () => {

@@ -28,6 +28,17 @@ access in the reference deployment.
   The account event list is a repairable switcher projection, not an authorization boundary.
 - Caller-supplied actor headers and body actors never become the trusted staff actor.
 - Logout revokes the stored session and clears its cookies.
+- Password throttling counts failed attempts only. A successful sign-in clears that email's
+  failure history, while the IP failure history remains intact so one valid account cannot reset
+  abuse protection for an entire address.
+
+The default password limits are 10 failures per normalized email and 40 failures per IP hash in
+one hour. Self-hosters can tune them with
+`PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_EMAIL` and
+`PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_IP`. Invalid or out-of-range values fall back to the safe
+defaults. Successful sign-ins never consume either allowance. Magic-link request limits are
+separate and unchanged. An account-already-exists response during signup is not a password failure
+and does not consume the sign-in allowance.
 
 The hosted app keeps participant, reviewer, MCP, and file workflows behind the staff session. Public
 CFP and agenda documents may be opened through an event-specific link. The Worker validates the

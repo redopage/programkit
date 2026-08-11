@@ -55,6 +55,8 @@ interface Env {
   PROGRAMKIT_DEMO_ORIGIN?: string
   PROGRAMKIT_EMAIL_FROM?: string
   PROGRAMKIT_SUPPORT_EMAIL?: string
+  PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_EMAIL?: string
+  PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_IP?: string
   EMAIL?: {
     send(message: {
       to: string | string[]

@@ -15,6 +15,17 @@ collaborator's long-lived event, and do not expose the seeded demonstration rese
 The seven-day demo is still the fastest product walkthrough, but its seeded capability actors do
 not prove account signup, event membership, or participant recovery.
 
+The local `killmysaas-evals/evalconfig.json` should therefore target
+`https://app.programkit.dev`, leave credentials empty for a fresh run, and use the fixture
+email/password identities through open signup. Every scenario receives a fresh browser context but
+server state persists across the ordered run. If signup reports that a fixture account already
+exists, sign in with that fixture identity instead. `demo.programkit.dev` is for human review only
+and must not be used as the automated target.
+
+Password protection does not need an evaluator exception. ProgramKit counts failed password
+attempts, resets the email failure bucket after a successful sign-in, and does not count successful
+sign-ins. The standard 10-failure email limit remains active during evaluation.
+
 ## Evidence rule
 
 A scenario is complete only when the browser can:

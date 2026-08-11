@@ -1,5 +1,11 @@
 import { DurableObject } from 'cloudflare:workers'
 
+import {
+  passwordFailureRateLimits,
+  passwordFailureRateWindowMs,
+  type PasswordFailureRateLimits,
+} from './password-rate-limit.ts'
+
 const magicLinkLifetimeMs = 15 * 60 * 1_000
 const sessionLifetimeMs = 30 * 24 * 60 * 60 * 1_000
 const requestWindowMs = 60 * 60 * 1_000
@@ -171,10 +177,12 @@ function eventSlug(name: string) {
 
 export class AuthDurableObject extends DurableObject {
   readonly #ctx: DurableObjectState
+  readonly #passwordFailureLimits: PasswordFailureRateLimits
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env)
     this.#ctx = ctx
+    this.#passwordFailureLimits = passwordFailureRateLimits(env)
   }
 
   async #rateAllows(key: string, limit: number, cooldownMs = 0) {
@@ -186,6 +194,35 @@ export class AuthDurableObject extends DurableObject {
     attempts.push(now)
     await this.#ctx.storage.put(`rate:${key}`, { attempts: attempts.slice(-limit * 2) })
     return allowed
+  }
+
+  async #passwordFailuresAllow(key: string, limit: number) {
+    const now = Date.now()
+    const storageKey = `rate:password-failure:${key}`
+    const stored = (await this.#ctx.storage.get<RateRecord>(storageKey)) ?? { attempts: [] }
+    const attempts = stored.attempts.filter(
+      (attempt) => attempt > now - passwordFailureRateWindowMs,
+    )
+    if (attempts.length !== stored.attempts.length) {
+      if (attempts.length === 0) await this.#ctx.storage.delete(storageKey)
+      else await this.#ctx.storage.put(storageKey, { attempts })
+    }
+    return attempts.length < limit
+  }
+
+  async #recordPasswordFailure(key: string, limit: number) {
+    const now = Date.now()
+    const storageKey = `rate:password-failure:${key}`
+    const stored = (await this.#ctx.storage.get<RateRecord>(storageKey)) ?? { attempts: [] }
+    const attempts = stored.attempts.filter(
+      (attempt) => attempt > now - passwordFailureRateWindowMs,
+    )
+    attempts.push(now)
+    await this.#ctx.storage.put(storageKey, { attempts: attempts.slice(-limit * 2) })
+  }
+
+  async #resetPasswordFailures(emailHash: string) {
+    await this.#ctx.storage.delete(`rate:password-failure:email:${emailHash}`)
   }
 
   async #requestMagicLink(email: string, ipHash: string) {
@@ -327,9 +364,21 @@ export class AuthDurableObject extends DurableObject {
     name?: string,
   ) {
     const emailHash = await sha256(email)
-    const emailAllowed = await this.#rateAllows(`password-email:${emailHash}`, 10, 750)
-    const ipAllowed = await this.#rateAllows(`password-ip:${ipHash}`, 40)
+    const emailAllowed = await this.#passwordFailuresAllow(
+      `email:${emailHash}`,
+      this.#passwordFailureLimits.email,
+    )
+    const ipAllowed = await this.#passwordFailuresAllow(
+      `ip:${ipHash}`,
+      this.#passwordFailureLimits.ip,
+    )
     if (!emailAllowed || !ipAllowed) return { ok: false as const }
+
+    const reject = async () => {
+      await this.#recordPasswordFailure(`email:${emailHash}`, this.#passwordFailureLimits.email)
+      await this.#recordPasswordFailure(`ip:${ipHash}`, this.#passwordFailureLimits.ip)
+      return { ok: false as const }
+    }
 
     let user = await this.#existingUserForEmail(email)
     const existingPassword = user
@@ -350,15 +399,16 @@ export class AuthDurableObject extends DurableObject {
       }
       await this.#ctx.storage.put(`password:${user.id}`, passwordRecord)
     } else {
-      if (!user || !existingPassword) return { ok: false as const }
+      if (!user || !existingPassword) return reject()
       const candidate = await passwordHash(
         password,
         existingPassword.salt,
         existingPassword.iterations,
       )
-      if (!equalHex(candidate, existingPassword.hash)) return { ok: false as const }
+      if (!equalHex(candidate, existingPassword.hash)) return reject()
     }
 
+    await this.#resetPasswordFailures(emailHash)
     const updatedUser = {
       ...user,
       name: user.name || fallbackName(user.email),

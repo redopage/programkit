@@ -74,6 +74,8 @@ export function createSelfHostConfig({ workerName, bucketName, domain = null }) 
     ],
     vars: {
       PROGRAMKIT_DEPLOYMENT_PROFILE: 'hosted-app',
+      PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_EMAIL: '10',
+      PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_IP: '40',
       ...(hostname ? { PROGRAMKIT_APP_ORIGIN: `https://${hostname}` } : {}),
     },
     ...(hostname ? { routes: [{ pattern: hostname, custom_domain: true }] } : {}),

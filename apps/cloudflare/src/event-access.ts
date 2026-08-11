@@ -2,6 +2,11 @@ import { DurableObject } from 'cloudflare:workers'
 import { apiKeyScopes, type ApiKeyScope } from '@programkit/core'
 
 import { cloudflarePasswordIterations, normalizeEmail } from './auth.ts'
+import {
+  passwordFailureRateLimits,
+  passwordFailureRateWindowMs,
+  type PasswordFailureRateLimits,
+} from './password-rate-limit.ts'
 
 const invitationLifetimeMs = 7 * 24 * 60 * 60 * 1_000
 const externalSessionLifetimeMs = 30 * 24 * 60 * 60 * 1_000
@@ -332,24 +337,45 @@ function sameEvent(left: EventAccessEvent, right: EventAccessEvent) {
 
 export class EventAccessDurableObject extends DurableObject {
   readonly #ctx: DurableObjectState
+  readonly #passwordFailureLimits: PasswordFailureRateLimits
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env)
     this.#ctx = ctx
+    this.#passwordFailureLimits = passwordFailureRateLimits(env)
   }
 
-  async #externalRateAllows(key: string, limit: number, cooldownMs = 0) {
+  async #externalPasswordFailuresAllow(key: string, limit: number) {
     const now = Date.now()
-    const storageKey = `external-rate:${key}`
+    const storageKey = `external-rate:password-failure:${key}`
     const stored = (await this.#ctx.storage.get<ExternalRateRecord>(storageKey)) ?? {
       attempts: [],
     }
-    const attempts = stored.attempts.filter((attempt) => attempt > now - externalRateWindowMs)
-    const last = attempts.at(-1)
-    const allowed = attempts.length < limit && (last == null || now - last >= cooldownMs)
+    const attempts = stored.attempts.filter(
+      (attempt) => attempt > now - passwordFailureRateWindowMs,
+    )
+    if (attempts.length !== stored.attempts.length) {
+      if (attempts.length === 0) await this.#ctx.storage.delete(storageKey)
+      else await this.#ctx.storage.put(storageKey, { attempts })
+    }
+    return attempts.length < limit
+  }
+
+  async #recordExternalPasswordFailure(key: string, limit: number) {
+    const now = Date.now()
+    const storageKey = `external-rate:password-failure:${key}`
+    const stored = (await this.#ctx.storage.get<ExternalRateRecord>(storageKey)) ?? {
+      attempts: [],
+    }
+    const attempts = stored.attempts.filter(
+      (attempt) => attempt > now - passwordFailureRateWindowMs,
+    )
     attempts.push(now)
     await this.#ctx.storage.put(storageKey, { attempts: attempts.slice(-limit * 2) })
-    return allowed
+  }
+
+  async #resetExternalPasswordFailures(emailHash: string) {
+    await this.#ctx.storage.delete(`external-rate:password-failure:email:${emailHash}`)
   }
 
   async #authenticateExternal(input: Record<string, unknown>) {
@@ -360,10 +386,25 @@ export class EventAccessDurableObject extends DurableObject {
     const intent = input.intent === 'signup' ? 'signup' : 'signin'
     const ipHash = typeof input.ipHash === 'string' ? input.ipHash : 'unknown'
     const emailHash = await sha256(email)
-    const emailAllowed = await this.#externalRateAllows(`email:${emailHash}`, 10, 750)
-    const ipAllowed = await this.#externalRateAllows(`ip:${ipHash}`, 40)
+    const emailAllowed = await this.#externalPasswordFailuresAllow(
+      `email:${emailHash}`,
+      this.#passwordFailureLimits.email,
+    )
+    const ipAllowed = await this.#externalPasswordFailuresAllow(
+      `ip:${ipHash}`,
+      this.#passwordFailureLimits.ip,
+    )
     if (!emailAllowed || !ipAllowed) {
       throw new EventAccessError('RATE_LIMITED', 'Too many sign-in attempts. Try again later.', 429)
+    }
+
+    const reject = async (error: EventAccessError): Promise<never> => {
+      await this.#recordExternalPasswordFailure(
+        `email:${emailHash}`,
+        this.#passwordFailureLimits.email,
+      )
+      await this.#recordExternalPasswordFailure(`ip:${ipHash}`, this.#passwordFailureLimits.ip)
+      throw error
     }
 
     const identityId = await this.#ctx.storage.get<string>(`external-email:${emailHash}`)
@@ -405,10 +446,8 @@ export class EventAccessDurableObject extends DurableObject {
       })
     } else {
       if (!identity) {
-        throw new EventAccessError(
-          'INVALID_CREDENTIALS',
-          'The email or password is incorrect.',
-          401,
+        return reject(
+          new EventAccessError('INVALID_CREDENTIALS', 'The email or password is incorrect.', 401),
         )
       }
       const candidate = await passwordHash(
@@ -417,16 +456,15 @@ export class EventAccessDurableObject extends DurableObject {
         identity.passwordIterations,
       )
       if (!equalHex(candidate, identity.passwordHash)) {
-        throw new EventAccessError(
-          'INVALID_CREDENTIALS',
-          'The email or password is incorrect.',
-          401,
+        return reject(
+          new EventAccessError('INVALID_CREDENTIALS', 'The email or password is incorrect.', 401),
         )
       }
       identity = { ...identity, lastSignedInAt: new Date().toISOString() }
       await this.#ctx.storage.put(`external-identity:${identity.id}`, identity)
     }
 
+    await this.#resetExternalPasswordFailures(emailHash)
     const token = randomHex(32)
     const tokenHash = await sha256(token)
     const session: ExternalSession = {

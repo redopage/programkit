@@ -23,6 +23,8 @@ export interface SelfHostConfig {
   migrations: Array<{ tag: string; new_sqlite_classes: string[] }>
   vars: {
     PROGRAMKIT_DEPLOYMENT_PROFILE: 'hosted-app'
+    PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_EMAIL: '10'
+    PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_IP: '40'
     PROGRAMKIT_APP_ORIGIN?: string
   }
   routes?: Array<{ pattern: string; custom_domain: true }>
