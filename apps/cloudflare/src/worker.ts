@@ -168,15 +168,83 @@ export function runtimeIntegrations(
   })
 }
 
-export function browserSecurityHeaders(input: HeadersInit, url: URL) {
+export function browserSecurityHeaders(
+  input: HeadersInit,
+  url: URL,
+  options: { allowEmbedding?: boolean } = {},
+) {
   const headers = new Headers(input)
   headers.set('permissions-policy', 'camera=(), geolocation=(), microphone=()')
   headers.set('referrer-policy', 'strict-origin-when-cross-origin')
   headers.set('x-content-type-options', 'nosniff')
+  if (!options.allowEmbedding) {
+    headers.set('content-security-policy', "frame-ancestors 'none'")
+    headers.set('x-frame-options', 'DENY')
+  }
   if (url.protocol === 'https:') {
     headers.set('strict-transport-security', 'max-age=31536000')
   }
   return headers
+}
+
+export function publicOperationalResponse(request: Request, url: URL) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return null
+  const body = request.method === 'HEAD' ? null : undefined
+
+  if (url.pathname === '/api/health' || url.pathname === '/healthz') {
+    return new Response(
+      body === null ? null : JSON.stringify({ ok: true, service: 'programkit', status: 'ready' }),
+      {
+        headers: browserSecurityHeaders(
+          {
+            'cache-control': 'no-store',
+            'content-type': 'application/json; charset=utf-8',
+          },
+          url,
+        ),
+      },
+    )
+  }
+
+  if (url.pathname === '/robots.txt') {
+    const text = ['User-agent: *', 'Disallow: /', ''].join('\n')
+    return new Response(body === null ? null : text, {
+      headers: browserSecurityHeaders(
+        {
+          'cache-control': 'public, max-age=86400',
+          'content-type': 'text/plain; charset=utf-8',
+        },
+        url,
+      ),
+    })
+  }
+
+  if (url.pathname === '/.well-known/security.txt') {
+    const text = [
+      'Contact: mailto:support@programkit.dev',
+      `Expires: ${new Date(Date.UTC(new Date().getUTCFullYear() + 1, 11, 31)).toISOString()}`,
+      `Canonical: ${url.origin}/.well-known/security.txt`,
+      '',
+    ].join('\n')
+    return new Response(body === null ? null : text, {
+      headers: browserSecurityHeaders(
+        {
+          'cache-control': 'public, max-age=3600',
+          'content-type': 'text/plain; charset=utf-8',
+        },
+        url,
+      ),
+    })
+  }
+
+  if (url.pathname.startsWith('/.well-known/')) {
+    return new Response(body === null ? null : 'Not found.\n', {
+      status: 404,
+      headers: browserSecurityHeaders({ 'content-type': 'text/plain; charset=utf-8' }, url),
+    })
+  }
+
+  return null
 }
 
 async function withRuntimeIntegrations(response: Response, env: Env) {
@@ -2441,6 +2509,8 @@ async function publicHeadshot(
 export default {
   async fetch(request: Request, env: Env, context: ExecutionContext) {
     const url = new URL(request.url)
+    const operationalResponse = publicOperationalResponse(request, url)
+    if (operationalResponse) return operationalResponse
     const profile = deploymentProfile(env)
     let hostedPrincipal: HostedPrincipal | null = null
     let apiKeyPrincipal: ApiKeyPrincipal | null = null
@@ -3417,7 +3487,9 @@ export default {
           : profile === 'hosted-app' && !hostedPrincipal && !hostedPublicDocument
             ? 'hosted-app-entry'
             : profile
-    const headers = browserSecurityHeaders(assetResponse.headers, url)
+    const headers = browserSecurityHeaders(assetResponse.headers, url, {
+      allowEmbedding: isHostedPublicDocument(url.pathname),
+    })
     headers.set('cache-control', 'no-store')
     if (profile === 'hosted-app' && hostedPublicDocument && publicEventId) {
       headers.append('set-cookie', hostedPublicEventCookie(publicEventId, url))

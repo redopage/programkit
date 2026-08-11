@@ -9,6 +9,7 @@ import {
   isWorkspaceCrmPath,
   normalizeHostedEventCreateInput,
   parseApiKeyToken,
+  publicOperationalResponse,
   runtimeIntegrations,
 } from '../apps/cloudflare/src/worker.ts'
 
@@ -218,16 +219,27 @@ describe('hosted runtime status', () => {
 })
 
 describe('browser response hardening', () => {
-  it('adds safe browser headers without blocking public embeds', () => {
+  it('prevents private app pages from being framed', () => {
     const headers = browserSecurityHeaders(
       { 'content-type': 'text/html; charset=utf-8' },
-      new URL('https://app.programkit.dev/access'),
+      new URL('https://app.programkit.dev/login'),
     )
 
     expect(headers.get('strict-transport-security')).toBe('max-age=31536000')
     expect(headers.get('x-content-type-options')).toBe('nosniff')
     expect(headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin')
     expect(headers.get('permissions-policy')).toContain('camera=()')
+    expect(headers.get('x-frame-options')).toBe('DENY')
+    expect(headers.get('content-security-policy')).toBe("frame-ancestors 'none'")
+  })
+
+  it('keeps public event documents embeddable', () => {
+    const headers = browserSecurityHeaders(
+      { 'content-type': 'text/html; charset=utf-8' },
+      new URL('https://app.programkit.dev/agenda'),
+      { allowEmbedding: true },
+    )
+
     expect(headers.get('x-frame-options')).toBeNull()
     expect(headers.get('content-security-policy')).toBeNull()
   })
@@ -236,5 +248,47 @@ describe('browser response hardening', () => {
     const headers = browserSecurityHeaders({}, new URL('http://localhost:4173'))
 
     expect(headers.get('strict-transport-security')).toBeNull()
+  })
+})
+
+describe('public operational endpoints', () => {
+  it.each(['/api/health', '/healthz'])('serves %s without workspace access', async (pathname) => {
+    const request = new Request(`https://app.programkit.dev${pathname}`)
+    const response = publicOperationalResponse(request, new URL(request.url))
+
+    expect(response?.status).toBe(200)
+    await expect(response?.json()).resolves.toMatchObject({
+      ok: true,
+      service: 'programkit',
+      status: 'ready',
+    })
+    expect(response?.headers.get('cache-control')).toBe('no-store')
+  })
+
+  it('serves crawler guidance instead of the SPA shell', async () => {
+    const request = new Request('https://app.programkit.dev/robots.txt')
+    const response = publicOperationalResponse(request, new URL(request.url))
+
+    expect(response?.headers.get('content-type')).toContain('text/plain')
+    await expect(response?.text()).resolves.toContain('Disallow: /')
+  })
+
+  it('serves a security contact and rejects unknown well-known files', async () => {
+    const securityRequest = new Request('https://app.programkit.dev/.well-known/security.txt')
+    const securityResponse = publicOperationalResponse(
+      securityRequest,
+      new URL(securityRequest.url),
+    )
+    await expect(securityResponse?.text()).resolves.toContain('mailto:support@programkit.dev')
+
+    const unknownRequest = new Request('https://app.programkit.dev/.well-known/example.txt')
+    const unknownResponse = publicOperationalResponse(unknownRequest, new URL(unknownRequest.url))
+    expect(unknownResponse?.status).toBe(404)
+    await expect(unknownResponse?.text()).resolves.toBe('Not found.\n')
+  })
+
+  it('does not consume unrelated application routes', () => {
+    const request = new Request('https://app.programkit.dev/forms')
+    expect(publicOperationalResponse(request, new URL(request.url))).toBeNull()
   })
 })

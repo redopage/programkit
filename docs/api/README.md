@@ -154,6 +154,10 @@ workspace revision atomically.
 | `GET`  | `/api/v1/export.json`            | Download the versioned logical workspace document  |
 | `GET`  | `/api/v1/health`                 | Check schema and workspace revision                |
 
+Deployment monitoring should use the unauthenticated `GET /api/health` or `GET /healthz` endpoint.
+Those routes expose only service readiness. `/api/v1/health` remains event-scoped and requires the
+same authenticated workspace or API-key context as the rest of the integration API.
+
 The ZIP contains `workspace.json`, a manifest, a short README, and one UTF-8 CSV for every record
 collection. Nested values use dot-separated columns, and the manifest records every table's row
 count. The JSON document is the lossless logical backup. CSV files are intended for inspection,

@@ -31,6 +31,9 @@ access in the reference deployment.
 - Password throttling counts failed attempts only. A successful sign-in clears that email's
   failure history, while the IP failure history remains intact so one valid account cannot reset
   abuse protection for an entire address.
+- Browser documents use HSTS on HTTPS, MIME-sniffing protection, a strict-origin referrer policy,
+  and a restrictive permissions policy. Private app documents also deny framing. Public event
+  documents intentionally omit the frame restriction so agenda widgets remain embeddable.
 
 The default password limits are 10 failures per normalized email and 40 failures per IP hash in
 one hour. Self-hosters can tune them with

@@ -66,6 +66,7 @@ The detailed scopes, tables, request budget, failure modes, and webhook boundary
 
 ### HTTP endpoints
 
+- `GET /api/health` or `GET /healthz` — public process health for uptime monitors
 - `GET /api/v1/health`
 - `GET /api/v1/state`
 - `GET /api/v1/manifest`
@@ -93,6 +94,14 @@ The operation body has the shape:
 ```
 
 The host supplies the actor. An `actor` in this public JSON is ignored by the HTTP layer.
+
+`/api/health` and `/healthz` deliberately return only service readiness and require no account or
+event. `/api/v1/health` is the authenticated workspace check; it includes that workspace's schema
+version and revision and should not be used as the public uptime target.
+
+The Worker also serves `robots.txt` with app-wide crawler exclusion and
+`/.well-known/security.txt` with the repository's reporting contact. Unknown `.well-known` files
+return a plain 404 instead of the SPA shell.
 
 ### Workspace routing
 
@@ -188,6 +197,7 @@ a `routes` entry in `wrangler.jsonc` or the Cloudflare dashboard.
 After deployment, verify at least:
 
 ```bash
+curl https://YOUR_HOST/api/health
 curl https://YOUR_HOST/api/v1/health
 curl https://YOUR_HOST/public/agenda.json
 ```
