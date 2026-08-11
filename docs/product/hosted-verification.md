@@ -7,7 +7,7 @@ collaborator's event as test data.
 ## Current production evidence
 
 Verified on **10 August 2026** against `https://app.programkit.dev`. Application source commit
-`13f16e5` is deployed as Worker version `87899097-d482-4d6c-96dc-e5a436c7d3e4`.
+`aae940c` is deployed as Worker version `4d1f301a-26f9-44a7-85b9-f045b11520d2`.
 
 - email/password signup created an organizer session and first event;
 - the organizer created a second event and both events retained isolated workspace state;
@@ -33,6 +33,9 @@ Verified on **10 August 2026** against `https://app.programkit.dev`. Application
 - a submitted proposal was assigned to a reviewer, its editable reminder was queued from the
   review workspace, and the message reached Gmail with the resolved outstanding count and an
   absolute private reviewer-workspace link;
+- that reviewer completed the scorecard and the organizer accepted the proposal on an event with
+  no preconfigured tracks; ProgramKit created the selected CFP track and converted the proposal
+  into its linked speaker participation and approved session atomically;
 - an approved campaign reached Gmail with a `text/calendar` attachment containing the matching
   title, start, end, and room;
 - the workspace ZIP passed an integrity check and contained its complete JSON backup, manifest,
