@@ -1445,6 +1445,40 @@ describe('ProgramKit operation engine', () => {
     ).toMatchObject({ format: 'lightning', durationMinutes: 10 })
   })
 
+  it('creates the selected CFP track when an empty event accepts its first proposal', () => {
+    const state = createSeedState()
+    const submission = state.submissions.find((entry) => entry.id === 'sub_002')!
+    const trackField = state.submissionFormFields.find(
+      (field) => field.formId === submission.formId && field.purpose === 'track',
+    )!
+    trackField.options = [{ value: 'product', label: 'Product' }]
+    submission.answers[trackField.key] = 'product'
+    state.tracks = []
+
+    const accepted = executeOperation(state, 'review.decide', {
+      input: {
+        submissionId: submission.id,
+        decision: 'accepted',
+        reason: 'The review threshold is complete.',
+      },
+      expectedVersions: { [submission.id]: submission.version },
+    })
+
+    expect(accepted.response.ok).toBe(true)
+    const track = accepted.state.tracks.find((entry) => entry.name === 'Product')
+    const converted = accepted.state.submissions.find((entry) => entry.id === submission.id)!
+    expect(track).toBeDefined()
+    expect(
+      accepted.state.sessions.find((entry) => entry.id === converted.convertedSessionId),
+    ).toMatchObject({ trackId: track?.id })
+    expect(accepted.state.domainEvents).toContainEqual(
+      expect.objectContaining({
+        type: 'track.created',
+        data: expect.objectContaining({ submissionId: submission.id }),
+      }),
+    )
+  })
+
   it('prefers a current talk label over a stale panel choice id', () => {
     const state = createSeedState()
     const submission = state.submissions.find((entry) => entry.id === 'sub_005')!

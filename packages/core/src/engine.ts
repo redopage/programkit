@@ -2619,11 +2619,41 @@ function applyHandler(
         }
         const format = sessionFormatAnswer(state, submission)
         const requestedTrackId = stringAnswer(state, submission, 'track')
-        const track =
+        const displayedTrack = submissionAnswerDisplayByPurpose(state, submission, 'track')
+        const requestedTrackName =
+          typeof displayedTrack === 'string' && displayedTrack.trim()
+            ? displayedTrack.trim()
+            : requestedTrackId
+        let track =
           state.tracks.find(
             (entry) => entry.id === requestedTrackId && entry.eventId === submission.eventId,
-          ) ?? state.tracks.find((entry) => entry.eventId === submission.eventId)
-        if (!track) throw new OperationError('INVALID_INPUT', 'The event needs at least one track.')
+          ) ??
+          state.tracks.find(
+            (entry) =>
+              entry.eventId === submission.eventId &&
+              entry.name.localeCompare(requestedTrackName, undefined, {
+                sensitivity: 'base',
+              }) === 0,
+          )
+        if (!track) {
+          track = {
+            id: createId('trk'),
+            eventId: submission.eventId,
+            name: assertString(requestedTrackName, 'track'),
+            color:
+              trackColors[
+                state.tracks.filter((entry) => entry.eventId === submission.eventId).length %
+                  trackColors.length
+              ],
+          }
+          state.tracks.push(track)
+          appendEvent(state, context, {
+            type: 'track.created',
+            aggregate: { type: 'track', id: track.id, version: 1 },
+            summary: `Created track “${track.name}” from an accepted submission.`,
+            data: { color: track.color, submissionId: submission.id },
+          })
+        }
         const defaultDurations = {
           keynote: 45,
           talk: 30,
