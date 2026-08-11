@@ -6,6 +6,9 @@ ProgramKit has moved past feature triage. The required workflows and optional Sp
 implemented. The endgame is now about trustworthy hosted execution, evaluator discoverability,
 manual delivery evidence, and a clean public handoff.
 
+The repeatable production checks and latest verified evidence live in
+[`hosted-verification.md`](hosted-verification.md).
+
 ## Submission target
 
 Use `https://app.programkit.dev` as the evaluator origin. It supports fixture-compatible

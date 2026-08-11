@@ -406,8 +406,8 @@ function MessageDrawer({
           </div>
         ) : null}
         {message.status === 'sent' ? (
-          <Callout tone="success" title="Delivered">
-            <p>ProgramKit sent this message and recorded the provider result.</p>
+          <Callout tone="success" title="Sent">
+            <p>The email provider accepted this message and ProgramKit recorded its reference.</p>
           </Callout>
         ) : message.status === 'failed' ? (
           <Callout tone="warning" title="Delivery needs attention">
