@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  browserSecurityHeaders,
   hostedPublicEventId,
   isApiKeyAccessiblePath,
   isApiKeyCredentialPath,
@@ -162,6 +163,14 @@ describe('hosted runtime status', () => {
       lastSeenAt: null,
     },
     {
+      id: 'int_calendar',
+      name: 'Calendar sync',
+      kind: 'calendar' as const,
+      status: 'not_configured' as const,
+      detail: 'Seed status.',
+      lastSeenAt: null,
+    },
+    {
       id: 'int_webhook',
       name: 'Program website webhook',
       kind: 'webhook' as const,
@@ -177,10 +186,16 @@ describe('hosted runtime status', () => {
     expect(result).toEqual([
       expect.objectContaining({ kind: 'email', status: 'connected' }),
       expect.objectContaining({ kind: 'storage', status: 'connected' }),
+      expect.objectContaining({
+        kind: 'calendar',
+        name: 'Calendar delivery',
+        status: 'connected',
+      }),
       expect.objectContaining({ kind: 'webhook', status: 'attention' }),
     ])
     expect(result[0].detail).toContain('Cloudflare Email Service')
     expect(result[1].detail).toContain('Cloudflare R2')
+    expect(result[2].detail).toContain('Google Calendar')
     expect(integrations[0]).toMatchObject({ status: 'not_configured', detail: 'Seed status.' })
   })
 
@@ -195,5 +210,31 @@ describe('hosted runtime status', () => {
       status: 'not_configured',
       detail: 'Connect object storage before accepting file uploads.',
     })
+    expect(result[2]).toMatchObject({
+      name: 'Calendar delivery',
+      status: 'connected',
+    })
+  })
+})
+
+describe('browser response hardening', () => {
+  it('adds safe browser headers without blocking public embeds', () => {
+    const headers = browserSecurityHeaders(
+      { 'content-type': 'text/html; charset=utf-8' },
+      new URL('https://app.programkit.dev/access'),
+    )
+
+    expect(headers.get('strict-transport-security')).toBe('max-age=31536000')
+    expect(headers.get('x-content-type-options')).toBe('nosniff')
+    expect(headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin')
+    expect(headers.get('permissions-policy')).toContain('camera=()')
+    expect(headers.get('x-frame-options')).toBeNull()
+    expect(headers.get('content-security-policy')).toBeNull()
+  })
+
+  it('does not ask local HTTP development to remember HSTS', () => {
+    const headers = browserSecurityHeaders({}, new URL('http://localhost:4173'))
+
+    expect(headers.get('strict-transport-security')).toBeNull()
   })
 })

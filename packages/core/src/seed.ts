@@ -1323,10 +1323,11 @@ const integrations: Integration[] = [
   },
   {
     id: 'int_calendar',
-    name: 'Calendar sync',
+    name: 'Calendar delivery',
     kind: 'calendar',
-    status: 'not_configured',
-    detail: 'Calendar export and availability sync are not configured.',
+    status: 'connected',
+    detail:
+      'iCal feeds, attendee downloads, and speaker calendar attachments work with Google Calendar, Outlook, and Apple Calendar.',
     lastSeenAt: null,
   },
   {

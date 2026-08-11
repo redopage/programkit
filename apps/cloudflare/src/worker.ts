@@ -155,8 +155,28 @@ export function runtimeIntegrations(
           : 'Connect object storage before accepting file uploads.',
       }
     }
+    if (integration.kind === 'calendar') {
+      return {
+        ...integration,
+        name: 'Calendar delivery',
+        status: 'connected' as const,
+        detail:
+          'iCal feeds, attendee downloads, and speaker calendar attachments work with Google Calendar, Outlook, and Apple Calendar.',
+      }
+    }
     return { ...integration }
   })
+}
+
+export function browserSecurityHeaders(input: HeadersInit, url: URL) {
+  const headers = new Headers(input)
+  headers.set('permissions-policy', 'camera=(), geolocation=(), microphone=()')
+  headers.set('referrer-policy', 'strict-origin-when-cross-origin')
+  headers.set('x-content-type-options', 'nosniff')
+  if (url.protocol === 'https:') {
+    headers.set('strict-transport-security', 'max-age=31536000')
+  }
+  return headers
 }
 
 async function withRuntimeIntegrations(response: Response, env: Env) {
@@ -3397,7 +3417,7 @@ export default {
           : profile === 'hosted-app' && !hostedPrincipal && !hostedPublicDocument
             ? 'hosted-app-entry'
             : profile
-    const headers = new Headers(assetResponse.headers)
+    const headers = browserSecurityHeaders(assetResponse.headers, url)
     headers.set('cache-control', 'no-store')
     if (profile === 'hosted-app' && hostedPublicDocument && publicEventId) {
       headers.append('set-cookie', hostedPublicEventCookie(publicEventId, url))

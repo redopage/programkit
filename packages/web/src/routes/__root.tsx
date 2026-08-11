@@ -3,6 +3,7 @@ import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
 import { WorkspaceBoundary } from '../components/WorkspaceBoundary.tsx'
 import { Button, ToastViewport } from '../components/ui.tsx'
 import { useProgramNavigate } from '../lib/navigation.ts'
+import { routeUsesWorkspaceShell } from '../lib/route-shell.ts'
 import { WorkspaceProvider } from '../lib/workspace.tsx'
 
 export const Route = createRootRoute({
@@ -12,7 +13,7 @@ export const Route = createRootRoute({
 
 function RootRoute() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  if (pathname === '/privacy' || pathname === '/terms' || pathname === '/demo') return <Outlet />
+  if (!routeUsesWorkspaceShell(pathname)) return <Outlet />
   return (
     <WorkspaceProvider>
       <WorkspaceBoundary>
