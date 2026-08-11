@@ -209,6 +209,11 @@ management surface supports list, create, copy-once, and immediate revocation:
 - requests use the same named operations, validation, authorization, idempotency rules, and audit
   events as the web application.
 
+The **Agent operations** preset grants the bundled plugin's least-privilege scope set. It can read
+people, participation, requirements, schedules, and change proposals; draft communications; and
+propose schedule moves. It cannot approve, commit, send, publish, manage files, or administer the
+event.
+
 API keys can access these routes:
 
 ```text

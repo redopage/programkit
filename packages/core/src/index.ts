@@ -1,4 +1,6 @@
 export { executeOperation } from './engine.ts'
+export { agentApiKeyScopes, apiKeyScopes } from './api-keys.ts'
+export type { ApiKeyScope } from './api-keys.ts'
 export { createAcceleventsExport } from './accelevents.ts'
 export type { AcceleventsExport } from './accelevents.ts'
 export {

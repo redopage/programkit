@@ -31,7 +31,25 @@ PROGRAMKIT_MCP_URL=https://your-programkit.example/mcp \
 ```
 
 The output is `packages/agent/build/programkit`. The build updates both `mcp.json` and `.mcp.json`
-and leaves the source package unchanged.
+and leaves the source package unchanged. The generated Codex extension reads its bearer token from
+`PROGRAMKIT_API_KEY` by default. A self-host can choose another environment variable name:
+
+```bash
+PROGRAMKIT_MCP_URL=https://events.example.com/mcp \
+PROGRAMKIT_MCP_BEARER_TOKEN_ENV_VAR=MY_PROGRAMKIT_KEY \
+  pnpm --filter @programkit/agent plugin:bundle
+```
+
+The build also creates a local Codex marketplace. Install the complete bundle, including its five
+ProgramKit skills, with:
+
+```bash
+codex plugin marketplace add ./packages/agent/build
+codex plugin add programkit@programkit
+```
+
+Start a new Codex session after installation. If the deployment origin changes, rebuild the bundle,
+refresh the `programkit` marketplace, and reinstall the plugin from the Plugins Directory.
 
 ## Authentication
 
@@ -43,6 +61,21 @@ For hosted ProgramKit, an agent client must authenticate to `/mcp` with a client
 credential. A signed-in owner session works in the same browser, while server-to-server clients
 should use a scoped ProgramKit API key supplied by the client. ProgramKit binds that credential to
 one event before the MCP handler can read or propose changes.
+
+In the hosted app, open **Infrastructure & API**, create a key with **Agent operations** access,
+and save the copy-once secret as `PROGRAMKIT_API_KEY` in the agent client's environment. The plugin
+bundle reads that variable without writing the secret into its files. To connect only the MCP server
+without installing the bundled skills, register any ProgramKit deployment directly with:
+
+```bash
+codex mcp add programkit \
+  --url https://YOUR_PROGRAMKIT_HOST/mcp \
+  --bearer-token-env-var PROGRAMKIT_API_KEY
+```
+
+The endpoint is not tied to `app.programkit.dev`. A self-host uses its own origin and the same
+event-scoped key flow. Do not put the key in the plugin directory, command arguments, URL, or source
+control.
 
 ## Airtable
 

@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers'
+import { apiKeyScopes, type ApiKeyScope } from '@programkit/core'
 
 import { cloudflarePasswordIterations, normalizeEmail } from './auth.ts'
 
@@ -17,34 +18,6 @@ const tokenPattern = /^([a-z][a-z0-9_-]{2,79})\.([a-f0-9]{64})$/u
 export type EventRole = 'owner' | 'admin' | 'member'
 export type EventMembershipStatus = 'active' | 'revoked'
 export type EventInvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
-
-export const apiKeyScopes = [
-  'workspace:read',
-  'workspace:export',
-  'events:read',
-  'events:write',
-  'submission-forms:write',
-  'submission-forms:publish',
-  'submissions:write',
-  'submissions:submit',
-  'reviews:configure',
-  'reviews:write',
-  'reviews:decide',
-  'sessions:write',
-  'schedule:draft',
-  'schedule:publish',
-  'people:write',
-  'participations:write',
-  'requirements:write',
-  'assets:write',
-  'portal:write',
-  'communications:write',
-  'communications:draft',
-  'communications:approve',
-  'communications:send',
-] as const
-
-export type ApiKeyScope = (typeof apiKeyScopes)[number]
 
 export interface EventAccessEvent {
   id: string

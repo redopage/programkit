@@ -21,17 +21,17 @@ Cloudflare Worker ── Workers Static Assets (Vite web build)
   ├── event access object     ── authoritative membership, roles, and invitations
   ├── event Durable Object    ── authoritative event records and serialized mutations
   ├── Airtable                 ── optional experimental team integration
-  ├── R2                      ── private uploads and generated files (next)
+  ├── R2                      ── private uploads and generated files
   ├── Durable Object alarm   ── email delivery, retries, and task reminders
   └── Email Service           ── sending domain and app binding (configured)
 ```
 
 The runnable application currently includes the Worker, static assets, one account-sharded
 identity object for hosted users, one access object per event, and one SQLite-backed workspace
-object per event. The official
-demo root creates isolated hosted trials that expire after seven days. Local and self-hosted
-installations need no D1 database, R2 bucket, queue, or email binding to run the deterministic
-sample workspace.
+object per event. The official demo root creates isolated hosted trials that expire after seven
+days. Local development needs no D1 database, R2 bucket, queue, or email binding to run the
+deterministic sample workspace. The production self-host walkthrough provisions R2 and enables the
+complete account and multi-event assembly without requiring mail.
 
 ## Official hosted environments
 
@@ -40,16 +40,16 @@ code, migrations, tests, and documentation together while isolating runtime stat
 
 | Profile | Host                  | Worker            | Purpose                         | Email                     |
 | ------- | --------------------- | ----------------- | ------------------------------- | ------------------------- |
-| default | A self-hosted domain  | `programkit`      | Complete zero-config product    | None required             |
+| default | Local or private test | `programkit`      | Single deterministic workspace  | None required             |
 | `site`  | `programkit.dev`      | `programkit-site` | Public site, no workspace API   | No binding                |
 | `demo`  | `demo.programkit.dev` | `programkit-demo` | Seven-day sample workspaces     | No binding                |
 | `app`   | `app.programkit.dev`  | `programkit-app`  | Staff sessions and event stores | Restricted sender binding |
 
 The site profile serves the small public homepage and rejects workspace APIs. The demo host
-rejects operator or API access until a private demo has been created or opened. The app host uses
-passwordless staff sessions, an account event index, live role-scoped event membership, and one
-empty workspace object per new event. Participant, reviewer, MCP, account recovery, and file
-identities remain incomplete, so real conference data is still out of scope.
+rejects operator or API access until a private demo has been created or opened. The app and
+generated self-host profiles use password or optional magic-link staff sessions, an account event
+index, live role-scoped event membership, and one workspace object per event. Participant and
+reviewer access, private files, API keys, and MCP credentials stay scoped to that event.
 
 Deploy the official profiles with:
 
@@ -180,16 +180,61 @@ SQLite-backed Durable Object together in `workerd`.
 
 ## Deploy
 
+### Recommended self-host walkthrough
+
+For a production-style installation from a local checkout, authenticate Wrangler and run:
+
+```bash
+pnpm selfhost:setup
+pnpm selfhost:deploy
+```
+
+The setup command asks for a Worker name, an R2 bucket name, and an optional custom domain. It:
+
+- verifies the active Cloudflare account;
+- refuses to overwrite an existing Worker or reuse an unrelated R2 bucket without an explicit
+  override;
+- creates the R2 bucket when needed;
+- generates an ignored `.programkit/wrangler.json` with all three Durable Object bindings,
+  migrations, static assets, R2, and the authenticated `hosted-app` profile.
+
+The resulting deployment has open password sign-up and does not require an email provider. Add a
+Cloudflare Email binding later if you want magic links and transactional mail. Each event gets its
+own Durable Object, while the account object provides a fast event switcher without cross-event
+scans.
+
+For a repeatable non-interactive setup:
+
+```bash
+pnpm selfhost:setup -- \
+  --name my-programkit \
+  --bucket my-programkit-assets \
+  --domain events.example.com
+```
+
+Rerunning the command reuses the names recorded in `.programkit/self-host.json`. If you deliberately
+want to adopt existing resources, pass `--reuse-worker` and/or `--reuse-bucket`. Use
+`--no-provision` only to generate and inspect the configuration without contacting Cloudflare.
+
+ProgramKit serves the web app, HTTP API, public forms and agenda, and `/mcp` from this one Worker.
+An operator can create an **Agent operations** API key under **Infrastructure & API** and connect an
+AI client to `https://YOUR_HOST/mcp`; no second service or plugin deployment is required. The
+portable plugin bundle can be generated for that same domain. See
+[Agent Plugins and MCP](docs/integrations/agent-plugins.md).
+
+### One-click local sample
+
 Use the Deploy to Cloudflare button for the shortest path:
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
 
 Cloudflare clones the public repository, builds it, and provisions the SQLite Durable Object from
-the root `wrangler.jsonc`. The application runs immediately with its isolated demo store. Airtable
-is an optional second setup step because every self-hosted callback domain needs its own Airtable
-OAuth registration.
+the root `wrangler.jsonc`. This path intentionally starts the single deterministic workspace and is
+best for trying the code. Use the walkthrough above when you need accounts, multiple events, R2
+files, and event-scoped API keys. Airtable remains an optional follow-up because every self-hosted
+callback domain needs its own Airtable OAuth registration.
 
-For a local checkout, authenticate Wrangler, review `wrangler.jsonc`, then run:
+For the checked-in single-workspace profile, review `wrangler.jsonc`, then run:
 
 ```bash
 pnpm deploy

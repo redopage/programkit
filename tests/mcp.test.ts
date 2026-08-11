@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { createSeedState, executeOperation, type WorkspaceState } from '@programkit/core'
-import { handleMcpRequest } from '@programkit/agent'
+import {
+  agentApiKeyScopes,
+  createSeedState,
+  executeOperation,
+  type WorkspaceState,
+} from '@programkit/core'
+import { handleMcpRequest, mcpRequiredScopes } from '@programkit/agent'
 
 function harness() {
   let state = createSeedState()
@@ -60,6 +65,10 @@ function modernRequest(
 }
 
 describe('MCP server', () => {
+  it('keeps the API-key preset aligned with every exposed MCP capability', () => {
+    expect([...agentApiKeyScopes].sort()).toEqual(mcpRequiredScopes)
+  })
+
   it('enforces credential scopes before reading or drafting', async () => {
     const test = harness()
     const denied = await handleMcpRequest(

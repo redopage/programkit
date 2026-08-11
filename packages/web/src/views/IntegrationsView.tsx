@@ -11,7 +11,7 @@ import {
   TableCellsIcon,
   TrashIcon,
 } from '@heroicons/react/16/solid'
-import { createAcceleventsExport } from '@programkit/core'
+import { agentApiKeyScopes, createAcceleventsExport } from '@programkit/core'
 import { useEffect, useState } from 'react'
 
 import { ProgramKitMark } from '../components/brand.tsx'
@@ -45,10 +45,24 @@ interface ApiKeyRecord {
 
 const apiScopeGroups = [
   {
+    id: 'agent',
+    label: 'Agent operations',
+    detail: 'Read program data, draft messages, and propose schedule changes.',
+    scopes: agentApiKeyScopes,
+  },
+  {
     id: 'read',
     label: 'Read program data',
     detail: 'Events, submissions, speakers, sessions, and change history.',
-    scopes: ['workspace:read', 'events:read'],
+    scopes: [
+      'workspace:read',
+      'events:read',
+      'people:read',
+      'participations:read',
+      'requirements:read',
+      'schedule:read',
+      'changes:read',
+    ],
   },
   {
     id: 'export',
@@ -633,6 +647,7 @@ function ApiKeysSection({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [newSecret, setNewSecret] = useState<string | null>(null)
+  const [newSecretIsAgent, setNewSecretIsAgent] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const selectedScopes = apiScopeGroups
@@ -663,6 +678,7 @@ function ApiKeysSection({
       }
       onChange([body.apiKey, ...(apiKeys ?? [])])
       setNewSecret(body.token)
+      setNewSecretIsAgent(selectedGroups.includes('agent'))
       setName('')
       setSelectedGroups(['read'])
       setExpiry('90')
@@ -746,6 +762,18 @@ function ApiKeysSection({
           <code className="mt-4 block overflow-x-auto rounded-xl bg-white/10 px-3 py-2 text-sm text-zinc-100 ring-1 ring-inset ring-white/10">
             {newSecret}
           </code>
+          {newSecretIsAgent ? (
+            <div className="mt-4 border-t border-white/10 pt-4">
+              <p className="text-sm font-medium text-white">Connect Codex</p>
+              <p className="pt-1 text-sm text-zinc-400">
+                Save the key as <code>PROGRAMKIT_API_KEY</code>, then register this event-scoped
+                endpoint.
+              </p>
+              <code className="mt-3 block overflow-x-auto rounded-xl bg-white/10 px-3 py-2 text-sm text-zinc-100 ring-1 ring-inset ring-white/10">
+                {`codex mcp add programkit --url ${window.location.origin}/mcp --bearer-token-env-var PROGRAMKIT_API_KEY`}
+              </code>
+            </div>
+          ) : null}
           <button
             type="button"
             className="focus-ring mt-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white"

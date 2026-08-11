@@ -165,10 +165,29 @@ PROGRAMKIT_MCP_URL=https://programkit.example.com/mcp \
 PROGRAMKIT_MCP_URL=https://programkit.example.com/mcp pnpm plugin:bundle
 ```
 
+The bundle includes a local Codex marketplace at `build/.agents/plugins/marketplace.json`. From the
+repository root, install the generated plugin with:
+
+```bash
+codex plugin marketplace add ./packages/agent/build
+codex plugin add programkit@programkit
+```
+
 The script validates the URL, safely replaces only the generated `<agent-package>/build/programkit`
 directory (`packages/agent/build/programkit` in this monorepo), and changes only the copied
 `mcp.json` and `.mcp.json`. The source plugin remains unchanged. Credentials are rejected in
 `PROGRAMKIT_MCP_URL`; use client-managed authorization instead of embedding a secret in the URL.
+The generated Codex configuration references `PROGRAMKIT_API_KEY` by default. Set
+`PROGRAMKIT_MCP_BEARER_TOKEN_ENV_VAR` while bundling to use a different environment variable name.
+
+For a hosted or production self-hosted event, create a key with **Agent operations** access in
+**Infrastructure & API**, store it in the client environment, and register the deployment:
+
+```bash
+codex mcp add programkit \
+  --url https://YOUR_PROGRAMKIT_HOST/mcp \
+  --bearer-token-env-var PROGRAMKIT_API_KEY
+```
 
 Use either `packages/agent/plugin/programkit` for localhost development or the generated directory
 in a compatible client. Install `programkit`, then start a new agent task so the bundled skills and

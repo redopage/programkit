@@ -104,9 +104,18 @@ Cloudflare is the supported runtime. One Worker serves the app and API, Workers 
 serves the Vite build, and one SQLite-backed Durable Object owns each event.
 
 ```bash
-pnpm check
-pnpm deploy
+pnpm selfhost:setup
+pnpm selfhost:deploy
 ```
+
+The setup walkthrough checks Cloudflare access, protects existing Worker and R2 names, creates the
+upload bucket, and writes an ignored `.programkit/wrangler.json` for that installation. The deployed
+app includes password sign-up, multiple event workspaces, private R2 uploads, event-scoped API keys,
+and the MCP endpoint on the same origin. Email and Airtable are optional follow-up integrations.
+
+Use `pnpm dev` when you only want the deterministic local sample without accounts or Cloudflare
+resources. See [Deployment](DEPLOYMENT.md) for non-interactive flags, custom domains, and the exact
+self-hosted boundary.
 
 The official environments use the same code with isolated runtime state:
 

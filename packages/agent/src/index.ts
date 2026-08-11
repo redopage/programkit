@@ -1,1 +1,1 @@
-export { handleMcpRequest, mcpTools, type McpContext } from './mcp.ts'
+export { handleMcpRequest, mcpRequiredScopes, mcpTools, type McpContext } from './mcp.ts'

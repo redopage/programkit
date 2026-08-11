@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { EventAccessDurableObject } from '../apps/cloudflare/src/event-access.ts'
+import { agentApiKeyScopes } from '@programkit/core'
 import { MemoryStorage } from './support/cloudflare-workers.ts'
 
 const event = {
@@ -353,6 +354,34 @@ describe('EventAccessDurableObject', () => {
       }),
     )
     expect(afterRevocation.status).toBe(401)
+  })
+
+  it('accepts the complete least-privilege Agent Plugin scope preset', async () => {
+    await initialize()
+    const createdResponse = await access.fetch(
+      request('/internal/event-access/api-keys/create', {
+        eventId: event.id,
+        actor: owner,
+        name: 'ProgramKit agent',
+        scopes: agentApiKeyScopes,
+      }),
+    )
+    const created = await body(createdResponse)
+
+    expect(createdResponse.status).toBe(201)
+    expect(created.apiKey?.scopes).toEqual([...agentApiKeyScopes].sort())
+
+    const verified = await access.fetch(
+      request('/internal/event-access/api-keys/verify', {
+        eventId: event.id,
+        apiKeyId: created.apiKey!.id,
+        token: created.token,
+      }),
+    )
+    expect(await body(verified)).toMatchObject({
+      ok: true,
+      scopes: [...agentApiKeyScopes].sort(),
+    })
   })
 
   it('rejects the wrong participant password and invalidates logout immediately', async () => {

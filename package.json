@@ -32,6 +32,8 @@
     "deploy:site": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env site --config ../../wrangler.jsonc",
     "deploy:demo": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env demo --config ../../wrangler.jsonc",
     "deploy:app": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env app --config ../../wrangler.jsonc",
+    "selfhost:setup": "node scripts/cloudflare-self-host.mjs setup",
+    "selfhost:deploy": "node scripts/cloudflare-self-host.mjs deploy",
     "competition:preflight": "node scripts/competition-preflight.mjs",
     "airtable:setup": "pnpm --filter @programkit/core build && node scripts/airtable.mjs setup",
     "airtable:seed": "pnpm --filter @programkit/core build && node scripts/airtable.mjs seed",

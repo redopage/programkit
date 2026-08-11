@@ -26,23 +26,6 @@ interface JsonRpcRequest {
   params?: Record<string, unknown>
 }
 
-const agentActor = {
-  type: 'agent' as const,
-  id: 'agent_programkit',
-  name: 'ProgramKit Agent',
-  scopes: [
-    'workspace:read',
-    'people:read',
-    'participations:read',
-    'requirements:read',
-    'schedule:read',
-    'schedule:draft',
-    'communications:draft',
-    'changes:read',
-    'changes:propose',
-  ],
-}
-
 const toolScopes: Record<string, string[]> = {
   get_event_context: ['workspace:read'],
   search_people: ['people:read', 'participations:read'],
@@ -72,6 +55,17 @@ const resourceScopes: Record<string, string[]> = {
     'schedule:read',
     'changes:read',
   ],
+}
+
+export const mcpRequiredScopes = [
+  ...new Set([...Object.values(toolScopes).flat(), ...Object.values(resourceScopes).flat()]),
+].sort()
+
+const agentActor = {
+  type: 'agent' as const,
+  id: 'agent_programkit',
+  name: 'ProgramKit Agent',
+  scopes: mcpRequiredScopes,
 }
 
 function contextActor(context: McpContext) {
