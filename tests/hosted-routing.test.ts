@@ -6,6 +6,7 @@ import {
   isHostedDemoReset,
   normalizeHostedEventCreateInput,
   parseApiKeyToken,
+  runtimeIntegrations,
 } from '../apps/cloudflare/src/worker.ts'
 
 const eventId = 'evt_1234567890abcdef12345678'
@@ -120,5 +121,60 @@ describe('hosted event safety', () => {
     expect(isHostedDemoReset('hosted-app', 'POST', path)).toBe(true)
     expect(isHostedDemoReset('hosted-demo', 'POST', path)).toBe(false)
     expect(isHostedDemoReset('hosted-app', 'GET', path)).toBe(false)
+  })
+})
+
+describe('hosted runtime status', () => {
+  const integrations = [
+    {
+      id: 'int_email',
+      name: 'Transactional email',
+      kind: 'email' as const,
+      status: 'not_configured' as const,
+      detail: 'Seed status.',
+      lastSeenAt: null,
+    },
+    {
+      id: 'int_storage',
+      name: 'Asset storage',
+      kind: 'storage' as const,
+      status: 'not_configured' as const,
+      detail: 'Seed status.',
+      lastSeenAt: null,
+    },
+    {
+      id: 'int_webhook',
+      name: 'Program website webhook',
+      kind: 'webhook' as const,
+      status: 'attention' as const,
+      detail: 'Stored event status.',
+      lastSeenAt: null,
+    },
+  ]
+
+  it('reports configured Cloudflare bindings without mutating persisted event state', () => {
+    const result = runtimeIntegrations(integrations, { email: true, storage: true })
+
+    expect(result).toEqual([
+      expect.objectContaining({ kind: 'email', status: 'connected' }),
+      expect.objectContaining({ kind: 'storage', status: 'connected' }),
+      expect.objectContaining({ kind: 'webhook', status: 'attention' }),
+    ])
+    expect(result[0].detail).toContain('Cloudflare Email Service')
+    expect(result[1].detail).toContain('Cloudflare R2')
+    expect(integrations[0]).toMatchObject({ status: 'not_configured', detail: 'Seed status.' })
+  })
+
+  it('keeps unavailable runtime services honest', () => {
+    const result = runtimeIntegrations(integrations, { email: false, storage: false })
+
+    expect(result[0]).toMatchObject({
+      status: 'not_configured',
+      detail: 'Connect an email service before sending real notifications.',
+    })
+    expect(result[1]).toMatchObject({
+      status: 'not_configured',
+      detail: 'Connect object storage before accepting file uploads.',
+    })
   })
 })

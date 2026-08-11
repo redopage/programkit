@@ -115,6 +115,55 @@ export function isApiKeyAccessiblePath(pathname: string) {
   )
 }
 
+interface RuntimeIntegrationCapabilities {
+  email: boolean
+  storage: boolean
+}
+
+export function runtimeIntegrations(
+  integrations: WorkspaceState['integrations'],
+  capabilities: RuntimeIntegrationCapabilities,
+) {
+  return integrations.map((integration) => {
+    if (integration.kind === 'email') {
+      return {
+        ...integration,
+        status: capabilities.email ? ('connected' as const) : ('not_configured' as const),
+        detail: capabilities.email
+          ? 'Cloudflare Email Service sends notifications and calendar attachments.'
+          : 'Connect an email service before sending real notifications.',
+      }
+    }
+    if (integration.kind === 'storage') {
+      return {
+        ...integration,
+        status: capabilities.storage ? ('connected' as const) : ('not_configured' as const),
+        detail: capabilities.storage
+          ? 'Cloudflare R2 stores headshots and speaker deliverables.'
+          : 'Connect object storage before accepting file uploads.',
+      }
+    }
+    return { ...integration }
+  })
+}
+
+async function withRuntimeIntegrations(response: Response, env: Env) {
+  if (!response.ok) return response
+  const body = (await response.json()) as {
+    state?: WorkspaceState
+    derived?: unknown
+  }
+  if (!body.state) return response
+  body.state.integrations = runtimeIntegrations(body.state.integrations, {
+    email: Boolean(env.EMAIL && env.PROGRAMKIT_EMAIL_FROM),
+    storage: Boolean(env.PROGRAMKIT_FILES),
+  })
+  const headers = new Headers(response.headers)
+  headers.delete('content-length')
+  headers.set('content-type', 'application/json; charset=utf-8')
+  return new Response(JSON.stringify(body), { status: response.status, headers })
+}
+
 function isDocumentNavigation(request: Request) {
   return (
     request.headers.get('sec-fetch-dest') === 'document' ||
@@ -2968,6 +3017,9 @@ export default {
                   ? publicReaderActor
                   : demoStaffActor
       const proxiedResponse = await stub.fetch(withActor(request, actor))
+      if (request.method === 'GET' && url.pathname === '/api/v1/state') {
+        return withRuntimeIntegrations(proxiedResponse, env)
+      }
       if (
         profile === 'hosted-app' &&
         request.method === 'POST' &&
