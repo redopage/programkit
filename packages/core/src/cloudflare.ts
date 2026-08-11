@@ -9,7 +9,7 @@ import {
 import { AIRTABLE_SCHEMA_VERSION } from './airtable-schema.ts'
 import { AirtableWorkspaceStore, type AirtableWebhookRegistration } from './airtable-store.ts'
 import { verifyAirtableWebhookMac } from './airtable-webhook.ts'
-import { executeOperation } from './engine.ts'
+import { executeOperation, initializeProgramCollections } from './engine.ts'
 import { handleCoreRequest } from './http.ts'
 import { nextRequirementReminderAt } from './reminders.ts'
 import type { WorkspaceRepository } from './repository.ts'
@@ -79,6 +79,8 @@ function initializeEventState(metadata: EventMetadata) {
 class DurableObjectRepository implements WorkspaceRepository {
   constructor(private readonly storage: DurableObjectStorage) {}
 
+  static readonly normalizationVersion = 1
+
   async #readFrom(storage: DurableObjectStorage | DurableObjectTransaction) {
     const metadata = await storage.get<{ chunks: number }>('workspace-state:meta')
     if (metadata) {
@@ -116,9 +118,26 @@ class DurableObjectRepository implements WorkspaceRepository {
   async read() {
     return this.storage.transaction(async (transaction) => {
       const current = await this.#readFrom(transaction)
-      if (current) return current
+      if (current) {
+        const normalizedVersion = await transaction.get<number>(
+          'workspace-state:normalized-version',
+        )
+        if (normalizedVersion !== DurableObjectRepository.normalizationVersion) {
+          initializeProgramCollections(current)
+          await this.#writeTo(transaction, current)
+          await transaction.put(
+            'workspace-state:normalized-version',
+            DurableObjectRepository.normalizationVersion,
+          )
+        }
+        return current
+      }
       const seeded = createSeedState()
       await this.#writeTo(transaction, seeded)
+      await transaction.put(
+        'workspace-state:normalized-version',
+        DurableObjectRepository.normalizationVersion,
+      )
       return seeded
     })
   }

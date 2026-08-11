@@ -99,7 +99,7 @@ interface ApplyContext {
   emittedEventIds: string[]
 }
 
-function initializeProgramCollections(state: WorkspaceState) {
+export function initializeProgramCollections(state: WorkspaceState) {
   for (const event of state.events) event.version ??= 1
   state.contactNotes ??= []
   state.crmSegments ??= []
