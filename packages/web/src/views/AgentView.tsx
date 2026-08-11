@@ -1,5 +1,6 @@
 import {
   ArrowRightIcon,
+  ArrowTopRightOnSquareIcon,
   CheckCircleIcon,
   CpuChipIcon,
   LockClosedIcon,
@@ -87,7 +88,7 @@ export function AgentView({ navigate }: { navigate: (to: string) => void }) {
               Run a seeded agent task
             </h2>
             <p className="max-w-[70ch] text-pretty text-base text-zinc-300 sm:text-sm">
-              This local runner exercises the same operations exposed through MCP. Try a readiness
+              This runner exercises the same operations exposed through MCP. Try a readiness
               reminder or a schedule proposal.
             </p>
           </div>
@@ -188,13 +189,24 @@ export function AgentView({ navigate }: { navigate: (to: string) => void }) {
       </div>
 
       <section aria-labelledby="skills-heading">
-        <div className="border-b border-zinc-950/5 pb-2">
-          <h2 id="skills-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-            Packaged skills
-          </h2>
-          <p className="text-base text-zinc-500 sm:text-sm">
-            Portable operating procedures, kept separate from business logic.
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-zinc-950/5 pb-2">
+          <div>
+            <h2 id="skills-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+              Agent Plugin
+            </h2>
+            <p className="text-base text-zinc-500 sm:text-sm">
+              Portable Agent Plugins 1.0 skills and an MCP connection.
+            </p>
+          </div>
+          <a
+            href="https://forge.smol.ai/andheller/programkit/tree/main/packages/agent/plugin/programkit"
+            target="_blank"
+            rel="noreferrer"
+            className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-full bg-white px-3 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/10 hover:bg-zinc-50"
+          >
+            View plugin
+            <ArrowTopRightOnSquareIcon className="size-4 shrink-0 fill-current" />
+          </a>
         </div>
         <div className="grid gap-px overflow-hidden rounded-xl bg-zinc-950/5 ring-1 ring-zinc-950/5 sm:grid-cols-2">
           {[
@@ -213,6 +225,10 @@ export function AgentView({ navigate }: { navigate: (to: string) => void }) {
             [
               'Preflight publication',
               'Verify readiness, schedule integrity, exports, and remaining warnings.',
+            ],
+            [
+              'Reconcile Airtable',
+              'Compare a separately authorized base and prepare a field-level plan before writes.',
             ],
           ].map(([title, description]) => (
             <div key={title} className="bg-white p-5">
