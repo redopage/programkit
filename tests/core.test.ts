@@ -107,6 +107,22 @@ describe('ProgramKit operation engine', () => {
       averageScore: 4.67,
     })
     expect(reviewerQueue(state, 'rev_001')).toHaveLength(3)
+    const seededDeliverables = state.assets.filter((asset) => asset.owner.type === 'requirement')
+    expect(seededDeliverables.filter((asset) => asset.isLatest)).toHaveLength(3)
+    expect(
+      seededDeliverables
+        .filter((asset) => asset.owner.id === 'rqi_1_3')
+        .map((asset) => ({ version: asset.version, isLatest: asset.isLatest })),
+    ).toEqual([
+      { version: 1, isLatest: false },
+      { version: 2, isLatest: true },
+    ])
+    expect(state.assetComments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ assetId: 'ast_headshot_robin_v2' }),
+        expect.objectContaining({ assetId: 'ast_slides_cameron_v1' }),
+      ]),
+    )
     expect(
       submissionFormPublishReadiness(
         state.submissionFormFields.filter((field) => field.formId === 'frm_cfp_2026'),

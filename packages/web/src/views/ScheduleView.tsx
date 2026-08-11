@@ -174,6 +174,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const { state } = payload
   const conflicts = scheduleConflicts(state)
   const hardConflicts = conflicts.filter((conflict) => conflict.severity === 'error')
+  const capacityWarnings = conflicts.filter((conflict) => conflict.type === 'capacity')
   const event = state.events.find((entry) => entry.id === state.activeEventId)!
   const activeRooms = state.rooms.filter((room) => room.eventId === state.activeEventId)
   const activeTracks = state.tracks.filter((track) => track.eventId === state.activeEventId)
@@ -405,21 +406,48 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       />
 
       <Callout
-        tone={hardConflicts.length > 0 ? 'danger' : unscheduled.length > 0 ? 'info' : 'success'}
+        tone={
+          hardConflicts.length > 0
+            ? 'danger'
+            : unscheduled.length > 0
+              ? 'info'
+              : capacityWarnings.length > 0
+                ? 'warning'
+                : 'success'
+        }
         title={
           hardConflicts.length > 0
             ? `${hardConflicts.length} blocking conflict${hardConflicts.length === 1 ? '' : 's'} before publish`
             : unscheduled.length > 0
               ? `${unscheduled.length} session${unscheduled.length === 1 ? '' : 's'} still ${unscheduled.length === 1 ? 'needs' : 'need'} a time`
-              : 'The schedule is ready to publish'
+              : capacityWarnings.length > 0
+                ? `Ready with ${capacityWarnings.length} capacity warning${capacityWarnings.length === 1 ? '' : 's'}`
+                : 'The schedule is ready to publish'
         }
       >
-        <p>
-          {hardConflicts[0]?.message ??
-            (unscheduled.length > 0
-              ? 'Assign them one at a time or let ProgramKit find open slots.'
-              : `${conflicts.length} non-blocking capacity warning${conflicts.length === 1 ? '' : 's'} remain.`)}
-        </p>
+        {hardConflicts.length > 0 ? (
+          <ul className="mt-1 space-y-1">
+            {hardConflicts.slice(0, 3).map((conflict) => (
+              <li key={conflict.id}>{conflict.message}</li>
+            ))}
+            {hardConflicts.length > 3 ? (
+              <li className="font-medium">And {hardConflicts.length - 3} more.</li>
+            ) : null}
+          </ul>
+        ) : unscheduled.length > 0 ? (
+          <p>Assign them one at a time or let ProgramKit find open slots.</p>
+        ) : capacityWarnings.length > 0 ? (
+          <ul className="mt-1 space-y-1">
+            {capacityWarnings.slice(0, 3).map((conflict) => (
+              <li key={conflict.id}>{conflict.message}</li>
+            ))}
+            {capacityWarnings.length > 3 ? (
+              <li className="font-medium">And {capacityWarnings.length - 3} more.</li>
+            ) : null}
+          </ul>
+        ) : (
+          <p>No room, speaker, duration, or capacity conflicts found.</p>
+        )}
       </Callout>
 
       {moveFeedback ? (

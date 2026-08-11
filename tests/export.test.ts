@@ -150,6 +150,7 @@ describe('selected file export plan', () => {
   it('uses the newest legacy upload when explicit latest flags are absent', () => {
     const state = createSeedState()
     const instance = state.requirementInstances[1]
+    state.assets = state.assets.filter((asset) => asset.owner.type !== 'requirement')
     state.assets.push(
       {
         id: 'ast_legacy_1',

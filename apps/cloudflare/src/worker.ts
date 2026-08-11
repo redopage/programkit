@@ -12,6 +12,7 @@ import {
   verifyAirtableWebhookMac,
   type OperationRequest,
   type OperationResponse,
+  type Asset,
   type WorkspaceState,
 } from '@programkit/core'
 import {
@@ -2273,6 +2274,43 @@ async function uploadSpeakerDeliverable(
   return Response.json(operation, { status: 201 })
 }
 
+function demoPdf(title: string) {
+  const safeTitle = title.replaceAll(/[^\x20-\x7e]/gu, '').replaceAll(/[()\\]/gu, '')
+  const stream = `BT /F1 18 Tf 72 720 Td (${safeTitle}) Tj 0 -30 Td /F1 11 Tf (ProgramKit demo file) Tj ET`
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+  ]
+  let body = '%PDF-1.4\n'
+  const offsets = [0]
+  objects.forEach((object, index) => {
+    offsets.push(body.length)
+    body += `${index + 1} 0 obj\n${object}\nendobj\n`
+  })
+  const xref = body.length
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  body += offsets
+    .slice(1)
+    .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`)
+    .join('')
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return new TextEncoder().encode(body)
+}
+
+function seededDemoAssetBytes(asset: Asset) {
+  if (!asset.storageKey.startsWith('demo/deliverables/')) return null
+  if (asset.contentType === 'application/pdf') return demoPdf(asset.filename)
+  if (asset.contentType === 'image/png') {
+    const encoded =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl3dCoAAAAASUVORK5CYII='
+    return Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0))
+  }
+  return null
+}
+
 async function downloadStoredAsset(
   env: Env,
   stub: DurableObjectStub<WorkspaceDurableObject>,
@@ -2287,14 +2325,20 @@ async function downloadStoredAsset(
   )
   if (!asset) return new Response(null, { status: 404 })
   const object = await env.PROGRAMKIT_FILES.get(asset.storageKey)
-  if (!object) return new Response(null, { status: 404 })
+  const seededBytes = object ? null : seededDemoAssetBytes(asset)
+  if (!object && !seededBytes) return new Response(null, { status: 404 })
   const headers = new Headers({
     'cache-control': 'private, no-store',
     'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(asset.filename)}`,
   })
-  object.writeHttpMetadata(headers)
-  headers.set('etag', object.httpEtag)
-  return new Response(object.body, { headers })
+  if (object) {
+    object.writeHttpMetadata(headers)
+    headers.set('etag', object.httpEtag)
+    return new Response(object.body, { headers })
+  }
+  headers.set('content-type', asset.contentType)
+  headers.set('content-length', String(seededBytes!.byteLength))
+  return new Response(seededBytes, { headers })
 }
 
 async function exportStoredAssets(
@@ -2317,8 +2361,10 @@ async function exportStoredAssets(
   const files: Array<{ name: string; data: Uint8Array }> = []
   for (const entry of plan) {
     const object = await env.PROGRAMKIT_FILES.get(entry.storageKey)
-    if (!object) continue
-    totalBytes += object.size
+    const asset = state.assets.find((candidate) => candidate.id === entry.assetId)
+    const seededBytes = object || !asset ? null : seededDemoAssetBytes(asset)
+    if (!object && !seededBytes) continue
+    totalBytes += object?.size ?? seededBytes!.byteLength
     if (totalBytes > 100_000_000) {
       return Response.json(
         { ok: false, error: 'The selected files exceed the 100 MB export limit.' },
@@ -2327,7 +2373,7 @@ async function exportStoredAssets(
     }
     files.push({
       name: entry.path,
-      data: new Uint8Array(await object.arrayBuffer()),
+      data: object ? new Uint8Array(await object.arrayBuffer()) : seededBytes!,
     })
   }
   if (files.length === 0) {
