@@ -155,6 +155,42 @@ describe('automatic speaker task reminders', () => {
     })
   })
 
+  it('delivers reviewer reminders with an absolute private workspace link', async () => {
+    const reviewer = createSeedState().reviewers.find((entry) => entry.id === 'rev_001')!
+    const reminded = executeOperation(createSeedState(), 'review.remind', {
+      input: { reviewerIds: [reviewer.id] },
+    })
+    expect(reminded.response.ok).toBe(true)
+
+    const storage = new MemoryStorage()
+    storage.values.set('workspace-state', reminded.state)
+    const sent: Array<Record<string, unknown>> = []
+    const workspace = new WorkspaceDurableObject(
+      { storage } as unknown as DurableObjectState,
+      {
+        PROGRAMKIT_APP_ORIGIN: 'https://app.programkit.dev',
+        PROGRAMKIT_EMAIL_FROM: 'notifications@mail.programkit.dev',
+        EMAIL: {
+          async send(message: Record<string, unknown>) {
+            sent.push(message)
+            return { messageId: 'provider-reviewer-reminder-001' }
+          },
+        },
+      } as unknown as Cloudflare.Env,
+    )
+
+    await workspace.alarm()
+    expect(sent).toContainEqual(
+      expect.objectContaining({
+        to: reviewer.email,
+        subject: expect.stringContaining('waiting in'),
+        text: expect.stringContaining(
+          `https://app.programkit.dev/reviewer/${reviewer.id}/${reviewer.accessKey}?event=${reminded.state.activeEventId}`,
+        ),
+      }),
+    )
+  })
+
   it('persists provider failures and retries them from the next alarm', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2027-01-01T18:00:00.000Z'))

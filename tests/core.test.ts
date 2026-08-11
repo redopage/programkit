@@ -2770,7 +2770,11 @@ describe('ProgramKit operation engine', () => {
     )
 
     const reminded = executeOperation(state, 'review.remind', {
-      input: { reviewerIds: [reviewer.id] },
+      input: {
+        reviewerIds: [reviewer.id],
+        subject: '{{full_name}}: {{outstanding_reviews}} for {{event_name}}',
+        body: 'Hi {{first_name}}, open {{reviewer_link}} to finish {{outstanding_reviews}}.',
+      },
     })
 
     expect(reminded.response.ok).toBe(true)
@@ -2800,9 +2804,15 @@ describe('ProgramKit operation engine', () => {
     expect(reminded.state.outboundMessages?.[0]).toMatchObject({
       kind: 'reviewer_reminder',
       recipientEmail: reviewer.email,
-      subject: expect.stringContaining(`${outstanding.length} review`),
+      subject: expect.stringContaining(
+        `${reviewer.name}: ${outstanding.length} review${outstanding.length === 1 ? '' : 's'}`,
+      ),
       status: 'queued',
     })
+    expect(reminded.state.outboundMessages?.[0]?.body).toContain(
+      `/reviewer/${reviewer.id}/${reviewer.accessKey}?event=${state.activeEventId}`,
+    )
+    expect(reminded.state.outboundMessages?.[0]?.body).not.toContain('{{')
 
     const completedReviewer = reminded.state.reviewers.find((entry) => entry.id === 'rev_003')!
     const skipped = executeOperation(reminded.state, 'review.remind', {

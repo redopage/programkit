@@ -86,6 +86,8 @@ export {
   nextActions,
   readinessRows,
   readinessSummary,
+  reviewerReminderMessagePreview,
+  reviewerReminderMessageTemplate,
   reviewerQueue,
   scheduleConflicts,
   submissionAnswerByPurpose,
@@ -99,7 +101,10 @@ export {
   submissionReviewSummary,
   visibleSubmissionFormFields,
 } from './selectors.ts'
-export type { SubmissionDecisionMessageTemplate } from './selectors.ts'
+export type {
+  ReviewerReminderMessageTemplate,
+  SubmissionDecisionMessageTemplate,
+} from './selectors.ts'
 export { createEmptyWorkspaceState, createSeedState } from './seed.ts'
 export {
   requiredSubmissionFieldPurposes,

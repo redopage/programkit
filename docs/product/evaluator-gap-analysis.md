@@ -7,15 +7,15 @@ area lives in [`evals`](evals/README.md).
 
 ## Current position
 
-| Area                | Product coverage                                                    | Remaining evidence or risk                                                 |
-| ------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Call for Papers     | All 16 browser criteria implemented                                 | Live confirmation and decision-email delivery                              |
-| Abstract Management | 13 criteria implemented; AI evaluation intentionally not advertised | Live reviewer reminder delivery; keep AI claims absent                     |
-| Speaker Management  | All 16 browser criteria implemented                                 | Live invite, bulk mail, automatic reminder, and calendar-import evidence   |
-| Content Management  | All 14 browser criteria implemented                                 | Live reminder delivery and downloaded ZIP inspection                       |
-| AI Agenda           | All 8 browser criteria implemented                                  | Full fresh-workspace browser chain and publish evidence                    |
-| Public Widgets      | All 16 browser criteria implemented                                 | Cross-origin iframe check and real calendar import                         |
-| Speaker CRM         | All 12 optional criteria implemented                                | Full chained browser evidence after fresh import and second-event creation |
+| Area                | Product coverage                                                                | Remaining evidence or risk                                                 |
+| ------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Call for Papers     | All 16 browser criteria implemented                                             | Live confirmation and decision-email delivery                              |
+| Abstract Management | All applicable criteria implemented; AI evaluation intentionally not advertised | Keep AI claims absent                                                      |
+| Speaker Management  | All 16 browser criteria implemented                                             | Live invite, bulk mail, automatic reminder, and calendar-import evidence   |
+| Content Management  | All 14 browser criteria implemented                                             | Live reminder delivery and downloaded ZIP inspection                       |
+| AI Agenda           | All 8 browser criteria implemented                                              | Full fresh-workspace browser chain and publish evidence                    |
+| Public Widgets      | All 16 browser criteria implemented                                             | Cross-origin iframe check and real calendar import                         |
+| Speaker CRM         | All 12 optional criteria implemented                                            | Full chained browser evidence after fresh import and second-event creation |
 
 “Implemented” means the product has a real user action, an authorized server transition, persisted
 state, and focused automated coverage. It does not replace the evaluator's own screenshots or the

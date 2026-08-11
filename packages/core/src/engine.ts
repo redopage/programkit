@@ -24,6 +24,8 @@ import {
   submissionAnswerErrors,
   submissionDecisionMessagePreview,
   submissionDecisionMessageTemplate,
+  reviewerReminderMessagePreview,
+  reviewerReminderMessageTemplate,
   submissionDecisionReadiness,
   submissionReviewSummary,
 } from './selectors.ts'
@@ -2194,14 +2196,16 @@ function applyHandler(
         if (reviewer.eventId !== state.activeEventId || reviewer.status !== 'active') {
           throw new OperationError('INVALID_INPUT', 'Only active reviewers can be reminded.')
         }
-        const outstanding = state.reviewerAssignments.filter(
-          (assignment) =>
-            assignment.eventId === state.activeEventId &&
-            assignment.reviewerId === reviewer.id &&
-            assignment.status !== 'completed' &&
-            assignment.status !== 'recused',
-        )
-        if (outstanding.length === 0) {
+        const defaults = reviewerReminderMessageTemplate()
+        const preview = reviewerReminderMessagePreview(state, reviewer, {
+          subject:
+            input.subject === undefined ? defaults.subject : assertString(input.subject, 'subject'),
+          body: input.body === undefined ? defaults.body : assertString(input.body, 'body'),
+        })
+        if (!preview) {
+          throw new OperationError('NOT_FOUND', 'The reviewer event was not found.')
+        }
+        if (preview.outstanding === 0) {
           throw new OperationError(
             'INVALID_INPUT',
             `${reviewer.name} has no outstanding reviews to remind them about.`,
@@ -2209,7 +2213,6 @@ function applyHandler(
         }
         reviewer.lastRemindedAt = timestamp
         reviewer.version += 1
-        const event = findRequired(state.events, reviewer.eventId, 'event')
         const message = queueOutboundMessage(
           state,
           {
@@ -2217,22 +2220,22 @@ function applyHandler(
             submissionId: null,
             kind: 'reviewer_reminder',
             trigger: 'review.remind',
-            recipientName: reviewer.name,
-            recipientEmail: reviewer.email,
-            subject: `${outstanding.length} review${outstanding.length === 1 ? '' : 's'} waiting in ${event.name}`,
-            body: `Hi ${reviewer.name.split(' ')[0]},\n\nYou have ${outstanding.length} outstanding review${outstanding.length === 1 ? '' : 's'} for ${event.name}. Open your reviewer workspace to finish the assigned scorecards.`,
+            recipientName: preview.recipientName,
+            recipientEmail: preview.recipientEmail,
+            subject: preview.subject,
+            body: preview.body,
           },
           timestamp,
         )
-        reminded.push({ reviewer, outstanding: outstanding.length, message })
+        reminded.push({ reviewer, outstanding: preview.outstanding, message })
         appendEvent(state, context, {
           type: 'reviewer.reminder-sent',
           aggregate: { type: 'reviewer', id: reviewer.id, version: reviewer.version },
-          summary: `Sent ${reviewer.name} a reminder for ${outstanding.length} outstanding review${outstanding.length === 1 ? '' : 's'}.`,
+          summary: `Queued ${reviewer.name} a reminder for ${preview.outstanding} outstanding review${preview.outstanding === 1 ? '' : 's'}.`,
           data: {
             reviewerId: reviewer.id,
             recipient: reviewer.email,
-            outstandingAssignmentIds: outstanding.map((assignment) => assignment.id),
+            outstandingAssignmentIds: preview.outstandingAssignmentIds,
             deliveryMode: 'durable-outbox',
           },
         })

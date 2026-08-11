@@ -7,6 +7,7 @@ import type {
   NextActionTone,
   Participation,
   ReadinessRow,
+  Reviewer,
   ReviewerAssignment,
   ScheduleConflict,
   Submission,
@@ -222,6 +223,61 @@ export function submissionDecisionMessagePreview(
   return {
     recipientName: replacements.full_name,
     recipientEmail,
+    subject: render(template.subject),
+    body: render(template.body),
+  }
+}
+
+export interface ReviewerReminderMessageTemplate {
+  subject: string
+  body: string
+}
+
+export function reviewerReminderMessageTemplate(): ReviewerReminderMessageTemplate {
+  return {
+    subject: '{{outstanding_reviews}} waiting in {{event_name}}',
+    body: `Hi {{first_name}},\n\nYou have {{outstanding_reviews}} for {{event_name}}. Open your reviewer workspace: {{reviewer_link}}`,
+  }
+}
+
+export function reviewerReminderMessagePreview(
+  state: WorkspaceState,
+  reviewer: Reviewer,
+  template: ReviewerReminderMessageTemplate = reviewerReminderMessageTemplate(),
+) {
+  const event = state.events.find(
+    (entry) => entry.id === reviewer.eventId && entry.id === state.activeEventId,
+  )
+  if (!event || reviewer.status !== 'active') return null
+  const outstandingAssignments = state.reviewerAssignments.filter(
+    (assignment) =>
+      assignment.eventId === event.id &&
+      assignment.reviewerId === reviewer.id &&
+      assignment.status !== 'completed' &&
+      assignment.status !== 'recused',
+  )
+  const [firstName = reviewer.name, ...lastNames] = reviewer.name.trim().split(/\s+/u)
+  const outstanding = outstandingAssignments.length
+  const replacements: Record<string, string> = {
+    first_name: firstName,
+    last_name: lastNames.join(' '),
+    full_name: reviewer.name,
+    event_name: event.name,
+    outstanding_count: String(outstanding),
+    outstanding_reviews: `${outstanding} review${outstanding === 1 ? '' : 's'}`,
+    reviewer_link: `/reviewer/${encodeURIComponent(reviewer.id)}/${encodeURIComponent(reviewer.accessKey)}?event=${encodeURIComponent(event.id)}`,
+  }
+  const render = (value: string) =>
+    Object.entries(replacements).reduce(
+      (result, [token, replacement]) => result.replaceAll(`{{${token}}}`, replacement),
+      value,
+    )
+  return {
+    reviewerId: reviewer.id,
+    recipientName: reviewer.name,
+    recipientEmail: reviewer.email,
+    outstanding,
+    outstandingAssignmentIds: outstandingAssignments.map((assignment) => assignment.id),
     subject: render(template.subject),
     body: render(template.body),
   }

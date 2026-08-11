@@ -564,7 +564,9 @@ export class WorkspaceDurableObject extends DurableObject {
   #absoluteMessageBody(body: string) {
     const origin = this.#env.PROGRAMKIT_APP_ORIGIN
     if (!origin) return body
-    return body.replace(/\/portal\/[^\s]+/gu, (path) => new URL(path, origin).toString())
+    return body.replace(/\/(?:portal|reviewer|submit)\/[^\s]+/gu, (path) =>
+      new URL(path, origin).toString(),
+    )
   }
 
   async #deliverOutboundMessages(at: string) {

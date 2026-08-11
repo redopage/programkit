@@ -18,6 +18,8 @@ import {
   evaluationRoundIsBlind,
   evaluationRoundReviewerTeamId,
   createReviewResultsCsv,
+  reviewerReminderMessagePreview,
+  reviewerReminderMessageTemplate,
   submissionAnswerByPurpose,
   submissionReviewSummary,
   type SubmissionAnswerValue,
@@ -25,6 +27,7 @@ import {
 
 import {
   Button,
+  Dialog,
   PageHeader,
   ProgressBar,
   StatusBadge,
@@ -66,6 +69,8 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   const [setupOpen, setSetupOpen] = useState(false)
   const [assignmentsOpen, setAssignmentsOpen] = useState(false)
   const [reminderReviewerIds, setReminderReviewerIds] = useState<string[]>([])
+  const [reminderComposerOpen, setReminderComposerOpen] = useState(false)
+  const [reminderMessage, setReminderMessage] = useState(reviewerReminderMessageTemplate())
   const [scoreOrder, setScoreOrder] = useState<'descending' | 'ascending'>('descending')
   const [exported, setExported] = useState(false)
   const [copiedReviewerId, setCopiedReviewerId] = useState<string | null>(null)
@@ -112,6 +117,14 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
         right.outstanding - left.outstanding ||
         left.reviewer.name.localeCompare(right.reviewer.name),
     )
+  const reminderPreviews = reminderReviewerIds
+    .map((reviewerId) => reviewers.find((reviewer) => reviewer.id === reviewerId))
+    .flatMap((reviewer) => {
+      if (!reviewer) return []
+      const preview = reviewerReminderMessagePreview(state, reviewer, reminderMessage)
+      return preview ? [preview] : []
+    })
+  const sampleReminder = reminderPreviews[0]
   const inReview = (state.submissions ?? [])
     .filter(
       (submission) =>
@@ -157,11 +170,23 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
   async function remindReviewers() {
     const response = await execute(
       'review.remind',
-      { reviewerIds: reminderReviewerIds },
+      {
+        reviewerIds: reminderReviewerIds,
+        subject: reminderMessage.subject,
+        body: reminderMessage.body,
+      },
       undefined,
-      `Reminder${reminderReviewerIds.length === 1 ? '' : 's'} sent.`,
+      `Reminder${reminderReviewerIds.length === 1 ? '' : 's'} queued.`,
     )
-    if (response.ok) setReminderReviewerIds([])
+    if (response.ok) {
+      setReminderReviewerIds([])
+      setReminderComposerOpen(false)
+    }
+  }
+
+  function reviewReminders() {
+    setReminderMessage(reviewerReminderMessageTemplate())
+    setReminderComposerOpen(true)
   }
 
   function reviewerLink(reviewerId: string, accessKey: string) {
@@ -279,12 +304,9 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
               Select anyone who is behind and send one reminder.
             </p>
           </div>
-          <Button
-            disabled={mutating || reminderReviewerIds.length === 0}
-            onClick={() => void remindReviewers()}
-          >
+          <Button disabled={mutating || reminderReviewerIds.length === 0} onClick={reviewReminders}>
             <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
-            Send reminder{reminderReviewerIds.length === 1 ? '' : 's'}
+            Review reminder{reminderReviewerIds.length === 1 ? '' : 's'}
           </Button>
         </div>
         <div className="-mx-4 overflow-x-auto sm:-mx-6">
@@ -693,6 +715,86 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
           </div>
         </div>
       </section>
+      <Dialog
+        open={reminderComposerOpen}
+        onClose={() => {
+          if (!mutating) setReminderComposerOpen(false)
+        }}
+        title={`Review reminder${reminderReviewerIds.length === 1 ? '' : 's'}`}
+        description="Each reviewer receives their own count and private workspace link."
+        footer={
+          <>
+            <Button
+              size="compact"
+              disabled={mutating}
+              onClick={() => setReminderComposerOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="compact"
+              variant="primary"
+              disabled={
+                mutating ||
+                reminderReviewerIds.length === 0 ||
+                !reminderMessage.subject.trim() ||
+                !reminderMessage.body.trim()
+              }
+              onClick={() => void remindReviewers()}
+            >
+              <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
+              Queue reminder{reminderReviewerIds.length === 1 ? '' : 's'}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div className="rounded-xl bg-zinc-50 px-4 py-2.5 ring-1 ring-zinc-950/5">
+            <p className="text-sm text-zinc-500">
+              {reminderPreviews.length} recipient{reminderPreviews.length === 1 ? '' : 's'}
+            </p>
+            <p className="truncate pt-0.5 text-base font-medium text-zinc-950 sm:text-sm">
+              {reminderPreviews.map((preview) => preview.recipientName).join(', ')}
+            </p>
+          </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-base font-medium text-zinc-950 sm:text-sm">Subject</span>
+            <input
+              type="text"
+              required
+              value={reminderMessage.subject}
+              onChange={(event) =>
+                setReminderMessage((current) => ({ ...current, subject: event.target.value }))
+              }
+              className="focus-ring min-h-11 rounded-xl bg-white px-3.5 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-base font-medium text-zinc-950 sm:text-sm">Message</span>
+            <textarea
+              required
+              rows={4}
+              value={reminderMessage.body}
+              onChange={(event) =>
+                setReminderMessage((current) => ({ ...current, body: event.target.value }))
+              }
+              className="focus-ring resize-y rounded-xl bg-white px-3.5 py-2.5 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:text-sm"
+            />
+          </label>
+          <p className="text-pretty text-sm text-zinc-500">
+            Merge fields: {'{{first_name}}'}, {'{{full_name}}'}, {'{{event_name}}'},{' '}
+            {'{{outstanding_reviews}}'}, and {'{{reviewer_link}}'}.
+          </p>
+          {sampleReminder ? (
+            <div className="rounded-xl bg-zinc-950 px-4 py-4 text-white shadow-lg">
+              <p className="text-sm font-medium">{sampleReminder.subject}</p>
+              <p className="line-clamp-3 whitespace-pre-wrap pt-2 text-pretty text-sm text-zinc-300">
+                {sampleReminder.body}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </Dialog>
       <ReviewAssignmentsDrawer open={assignmentsOpen} onClose={() => setAssignmentsOpen(false)} />
       <ReviewSetupDrawer open={setupOpen} onClose={() => setSetupOpen(false)} />
     </div>
