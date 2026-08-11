@@ -75,7 +75,7 @@ ProgramKit has three reusable packages and one supported deployment assembly:
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/core`   | Domain records, named operations, validation, authorization, invariants, selectors, audit events, and repository contracts                |
 | `packages/web`    | React 19 interface, TanStack Router routes, TanStack Query state, and scoped organizer, submitter, reviewer, speaker, and public surfaces |
-| `packages/agent`  | Optional MCP server, plugin manifest, and operational skills                                                                              |
+| `packages/agent`  | Optional MCP server, portable Agent Plugin, Codex extension, and operational skills                                                       |
 | `apps/cloudflare` | Worker, static assets, API composition, identity, and Durable Object persistence                                                          |
 
 ```text
@@ -146,6 +146,7 @@ Worker build, and plugin validation.
 - [Architecture](ARCHITECTURE.md)
 - [Deployment](DEPLOYMENT.md)
 - [HTTP API](docs/api/README.md)
+- [Agent Plugins and MCP](docs/integrations/agent-plugins.md)
 - [Security](SECURITY.md)
 - [Operations](OPERATIONS.md)
 - [Agent navigation](docs/agents/README.md)

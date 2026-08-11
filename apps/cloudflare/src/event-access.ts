@@ -10,6 +10,7 @@ const maximumPasswordLength = 128
 const maximumPendingInvitations = 200
 const maximumApiKeys = 50
 const eventIdPattern = /^[a-z][a-z0-9_-]{2,79}$/u
+const organizationIdPattern = /^org_[a-f0-9]{24}$/u
 const eventSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u
 const tokenPattern = /^([a-z][a-z0-9_-]{2,79})\.([a-f0-9]{64})$/u
 
@@ -47,6 +48,7 @@ export type ApiKeyScope = (typeof apiKeyScopes)[number]
 
 export interface EventAccessEvent {
   id: string
+  organizationId: string
   name: string
   slug: string
   createdAt: string
@@ -273,6 +275,10 @@ function cleanEvent(input: InitializeInput['event']): EventAccessEvent {
   if (!eventIdPattern.test(id)) {
     throw new EventAccessError('INVALID_INPUT', 'event.id is invalid.', 400)
   }
+  const organizationId = cleanIdentifier(input?.organizationId, 'event.organizationId')
+  if (!organizationIdPattern.test(organizationId)) {
+    throw new EventAccessError('INVALID_INPUT', 'event.organizationId is invalid.', 400)
+  }
   const name = typeof input?.name === 'string' ? input.name.trim().replace(/\s+/gu, ' ') : ''
   if (name.length < 2 || name.length > 80) {
     throw new EventAccessError('INVALID_INPUT', 'event.name is invalid.', 400)
@@ -285,7 +291,7 @@ function cleanEvent(input: InitializeInput['event']): EventAccessEvent {
   if (!createdAt || !Number.isFinite(Date.parse(createdAt))) {
     throw new EventAccessError('INVALID_INPUT', 'event.createdAt must be an ISO date.', 400)
   }
-  return { id, name, slug, createdAt }
+  return { id, organizationId, name, slug, createdAt }
 }
 
 function cleanActor(input: Partial<EventAccessActor> | undefined): EventAccessActor {
@@ -343,7 +349,12 @@ function json(body: unknown, init?: ResponseInit) {
 }
 
 function sameEvent(left: EventAccessEvent, right: EventAccessEvent) {
-  return left.id === right.id && left.name === right.name && left.slug === right.slug
+  return (
+    left.id === right.id &&
+    left.organizationId === right.organizationId &&
+    left.name === right.name &&
+    left.slug === right.slug
+  )
 }
 
 export class EventAccessDurableObject extends DurableObject {
@@ -619,7 +630,10 @@ export class EventAccessDurableObject extends DurableObject {
     const owner = cleanActor(input.owner)
     const existingEvent = await this.#ctx.storage.get<EventAccessEvent>('event')
     if (existingEvent) {
-      if (!sameEvent(existingEvent, requestedEvent)) {
+      const migratedEvent = existingEvent.organizationId
+        ? existingEvent
+        : { ...existingEvent, organizationId: requestedEvent.organizationId }
+      if (!sameEvent(migratedEvent, requestedEvent)) {
         throw new EventAccessError(
           'EVENT_ALREADY_INITIALIZED',
           'This access object already belongs to another event.',
@@ -634,7 +648,8 @@ export class EventAccessDurableObject extends DurableObject {
           409,
         )
       }
-      return { event: existingEvent, membership }
+      if (!existingEvent.organizationId) await this.#ctx.storage.put('event', migratedEvent)
+      return { event: migratedEvent, membership }
     }
 
     const now = new Date().toISOString()
@@ -677,7 +692,7 @@ export class EventAccessDurableObject extends DurableObject {
     if (!membership || membership.eventId !== event.id) {
       throw new EventAccessError('MEMBERSHIP_NOT_FOUND', 'Event membership was not found.', 404)
     }
-    return { membership, scopes: eventScopesForRole(membership.role) }
+    return { event, membership, scopes: eventScopesForRole(membership.role) }
   }
 
   async #listMemberships(input: ActorInput) {

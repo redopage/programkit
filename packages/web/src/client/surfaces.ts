@@ -9,6 +9,8 @@ function decodedSegment(value: string) {
 }
 
 export function surfaceFromPathname(pathname: string): ProgramKitSurface {
+  if (pathname === '/crm' || pathname.startsWith('/crm/')) return { kind: 'crm' }
+
   const speakerSubmissions = pathname.match(/^\/submit\/([^/]+)\/mine\/([^/]+)(?:\/|$)/u)
   if (speakerSubmissions) {
     return {

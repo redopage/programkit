@@ -10,11 +10,13 @@ const minimumPasswordLength = 10
 const maximumPasswordLength = 128
 const maximumDirectoryEventsPerEmail = 50
 const hostedEventIdPattern = /^evt_[a-f0-9]{24}$/u
+const hostedOrganizationIdPattern = /^org_[a-f0-9]{24}$/u
 
 interface AuthUser {
   id: string
   name: string
   email: string
+  organizationId: string
   eventIds: string[]
   createdAt: string
   lastSignedInAt: string
@@ -22,6 +24,7 @@ interface AuthUser {
 
 export interface AuthEventSummary {
   id: string
+  organizationId: string
   name: string
   slug: string
   role: 'owner' | 'admin' | 'member'
@@ -212,9 +215,11 @@ export class AuthDurableObject extends DurableObject {
 
     const now = new Date().toISOString()
     const userId = `usr_${randomHex(12)}`
+    const organizationId = `org_${randomHex(12)}`
     const eventId = `evt_${randomHex(12)}`
     const event: AuthEventSummary = {
       id: eventId,
+      organizationId,
       name: 'My first event',
       slug: 'my-first-event',
       role: 'owner',
@@ -224,6 +229,7 @@ export class AuthDurableObject extends DurableObject {
       id: userId,
       name: normalizeName(name, email),
       email,
+      organizationId,
       eventIds: [eventId],
       createdAt: now,
       lastSignedInAt: now,
@@ -243,11 +249,31 @@ export class AuthDurableObject extends DurableObject {
   }
 
   async #account(user: AuthUser, preferredEventId?: string | null): Promise<AuthAccount> {
-    const events = (
+    const organizationId =
+      user.organizationId || `org_${user.id.replace(/^usr_/u, '').slice(0, 24)}`
+    if (!user.organizationId) {
+      user = { ...user, organizationId }
+      await this.#ctx.storage.put(`user:${user.id}`, user)
+    }
+    const storedEvents = (
       await Promise.all(
         user.eventIds.map((eventId) => this.#ctx.storage.get<AuthEventSummary>(`event:${eventId}`)),
       )
     ).filter((event): event is AuthEventSummary => Boolean(event))
+    const events = await Promise.all(
+      storedEvents.map(async (event) => {
+        if (event.organizationId) return event
+        const migrated = {
+          ...event,
+          organizationId:
+            event.role === 'owner'
+              ? organizationId
+              : `org_${event.id.replace(/^evt_/u, '').slice(0, 24)}`,
+        }
+        await this.#ctx.storage.put(`event:${event.id}`, migrated)
+        return migrated
+      }),
+    )
     if (events.length === 0) throw new Error('This account does not have an event.')
     const activeEventId = events.some((event) => event.id === preferredEventId)
       ? preferredEventId!
@@ -378,6 +404,9 @@ export class AuthDurableObject extends DurableObject {
     }
     const event: AuthEventSummary = {
       id: eventId,
+      organizationId: resolved.account.events.find(
+        (candidate) => candidate.id === resolved.account.activeEventId,
+      )!.organizationId,
       name: cleanName,
       slug,
       role: 'owner',
@@ -601,6 +630,8 @@ export class AuthDurableObject extends DurableObject {
           : null
       const projection =
         typeof input.eventId === 'string' &&
+        typeof input.organizationId === 'string' &&
+        hostedOrganizationIdPattern.test(input.organizationId) &&
         typeof input.membershipId === 'string' &&
         typeof input.membershipVersion === 'number' &&
         typeof input.name === 'string' &&
@@ -610,6 +641,7 @@ export class AuthDurableObject extends DurableObject {
         typeof input.joinedAt === 'string'
           ? ({
               id: input.eventId,
+              organizationId: input.organizationId,
               membershipId: input.membershipId,
               membershipVersion: input.membershipVersion,
               name: input.name,

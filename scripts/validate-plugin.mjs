@@ -3,6 +3,20 @@ import { resolve } from 'node:path'
 
 const pluginRoot = resolve('packages/agent/plugin/programkit')
 const errors = []
+const portablePluginSchema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
+const portableMcpSchema = 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json'
+const portableManifestFields = new Set([
+  '$schema',
+  'name',
+  'version',
+  'description',
+  'author',
+  'homepage',
+  'repository',
+  'license',
+  'keywords',
+  'extensions',
+])
 
 async function readJson(path) {
   try {
@@ -29,6 +43,19 @@ if (manifest) {
   requireString(manifest.interface?.shortDescription, 'plugin.interface.shortDescription')
 }
 
+const portableManifest = await readJson(resolve(pluginRoot, 'plugin.json'))
+if (portableManifest) {
+  if (portableManifest.$schema !== portablePluginSchema)
+    errors.push(`plugin.$schema must be ${portablePluginSchema}.`)
+  requireString(portableManifest.name, 'portable plugin.name')
+  requireString(portableManifest.version, 'portable plugin.version')
+  requireString(portableManifest.description, 'portable plugin.description')
+  for (const field of Object.keys(portableManifest)) {
+    if (!portableManifestFields.has(field))
+      errors.push(`portable plugin.${field} is not defined by Agent Plugins 1.0.0.`)
+  }
+}
+
 const mcpConfig = await readJson(resolve(pluginRoot, '.mcp.json'))
 const mcpServer = mcpConfig?.mcpServers?.['programkit']
 if (!mcpServer || mcpServer.type !== 'http')
@@ -37,6 +64,18 @@ try {
   if (mcpServer) new URL(mcpServer.url)
 } catch {
   errors.push('programkit MCP URL must be valid.')
+}
+
+const portableMcpConfig = await readJson(resolve(pluginRoot, 'mcp.json'))
+const portableMcpServer = portableMcpConfig?.mcpServers?.['programkit']
+if (portableMcpConfig?.$schema !== portableMcpSchema)
+  errors.push(`mcp.$schema must be ${portableMcpSchema}.`)
+if (!portableMcpServer || portableMcpServer.type !== 'streamable-http')
+  errors.push('programkit must define a portable Streamable HTTP MCP server.')
+try {
+  if (portableMcpServer) new URL(portableMcpServer.url)
+} catch {
+  errors.push('portable programkit MCP URL must be valid.')
 }
 
 const skillsRoot = resolve(pluginRoot, 'skills')

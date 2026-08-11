@@ -5,6 +5,7 @@ import { MemoryStorage } from './support/cloudflare-workers.ts'
 
 const event = {
   id: 'evt_0123456789abcdef01234567',
+  organizationId: 'org_0123456789abcdef01234567',
   name: 'AIE NYC 2027',
   slug: 'aie-nyc-2027',
   createdAt: '2026-08-09T12:00:00.000Z',
@@ -117,7 +118,11 @@ describe('EventAccessDurableObject', () => {
         ...owner,
       }),
     )
-    expect(await body(response)).toMatchObject({ ok: true, scopes: ['*'] })
+    expect(await body(response)).toMatchObject({
+      ok: true,
+      event: { id: event.id, organizationId: event.organizationId },
+      scopes: ['*'],
+    })
   })
 
   it('keeps invitation tokens hashed and enforces email-bound single use', async () => {

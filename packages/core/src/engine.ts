@@ -3019,6 +3019,117 @@ function applyHandler(
       return { person, participation, created: true }
     }
 
+    case 'person.reuse-in-event': {
+      const personId = assertString(input.personId, 'personId')
+      const firstName = assertString(input.firstName, 'firstName')
+      const lastName = assertString(input.lastName, 'lastName')
+      const email = assertEmail(input.email)
+      const byId = state.people.find((entry) => entry.id === personId)
+      if (byId && byId.email.toLowerCase() !== email) {
+        throw new OperationError(
+          'IDENTITY_CONFLICT',
+          'That contact identifier already belongs to another email address.',
+        )
+      }
+      let person = byId ?? state.people.find((entry) => entry.email.toLowerCase() === email)
+      const createdPerson = !person
+      if (!person) {
+        const tags = [
+          ...new Set(
+            (Array.isArray(input.tags) ? assertStringArray(input.tags, 'tags') : [])
+              .map((tag) => tag.trim().toLowerCase())
+              .filter(Boolean),
+          ),
+        ]
+        if (tags.length > 20 || tags.some((tag) => tag.length > 40)) {
+          throw new OperationError(
+            'INVALID_INPUT',
+            'A contact can have up to 20 tags, each no longer than 40 characters.',
+          )
+        }
+        person = {
+          id: personId,
+          firstName,
+          lastName,
+          email,
+          company: optionalString(input.company),
+          title: optionalString(input.title),
+          city: optionalString(input.city),
+          timezone:
+            typeof input.timezone === 'string' && input.timezone.trim().length > 0
+              ? assertTimeZone(input.timezone)
+              : state.workspace.timezone,
+          bio: optionalString(input.bio),
+          avatarUrl:
+            typeof input.avatarUrl === 'string' && input.avatarUrl.trim().length > 0
+              ? input.avatarUrl.trim()
+              : `https://assets.ui.sh/avatars/${(state.people.length % 12) + 1}.webp`,
+          tags,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          version: 1,
+        }
+        state.people.push(person)
+        appendEvent(state, context, {
+          type: 'person.created',
+          aggregate: { type: 'person', id: person.id, version: 1 },
+          summary: `Reused ${firstName} ${lastName} in this event.`,
+          data: { source: 'organization_crm' },
+        })
+      }
+
+      const existing = state.participations.find(
+        (entry) => entry.personId === person!.id && entry.eventId === state.activeEventId,
+      )
+      if (existing) {
+        return {
+          person,
+          participation: existing,
+          createdPerson,
+          createdParticipation: false,
+        }
+      }
+
+      const participation: Participation = {
+        id: createId('par'),
+        eventId: state.activeEventId,
+        personId: person.id,
+        portalAccessKey: createId('portal'),
+        roles: ['speaker'],
+        status: 'prospect',
+        sessionIds: [],
+        internalNotes: '',
+        publicTitle: person.title,
+        publicCompany: person.company,
+        confirmedAt: null,
+        updatedAt: timestamp,
+        version: 1,
+      }
+      state.participations.push(participation)
+      for (const definition of state.requirementDefinitions.filter(
+        (entry) => entry.eventId === state.activeEventId,
+      )) {
+        state.requirementInstances.push({
+          id: createId('rqi'),
+          definitionId: definition.id,
+          participationId: participation.id,
+          status: 'not_started',
+          value: '',
+          submittedAt: null,
+          reviewedAt: null,
+          updatedAt: timestamp,
+          version: 1,
+        })
+      }
+      appendEvent(state, context, {
+        type: 'participation.created',
+        aggregate: { type: 'participation', id: participation.id, version: 1 },
+        summary: `Added ${person.firstName} ${person.lastName} to the active event.`,
+        data: { personId: person.id, eventId: state.activeEventId, roles: participation.roles },
+      })
+      return { person, participation, createdPerson, createdParticipation: true }
+    }
+
     case 'person.merge': {
       const primary = findRequired(state.people, input.primaryPersonId, 'primary person')
       const duplicate = findRequired(state.people, input.duplicatePersonId, 'duplicate person')

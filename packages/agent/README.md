@@ -1,7 +1,7 @@
 # `@programkit/agent`
 
-The agent package exposes ProgramKit through a stateless HTTP MCP server and includes the Program
-Ops Codex plugin. The server can read operational records, create campaign drafts, and propose
+The agent package exposes ProgramKit through a stateless HTTP MCP server and includes a portable
+[Agent Plugins 1.0](https://agent-plugins.org/) package with an optional Codex extension. The server can read operational records, create campaign drafts, and propose
 schedule moves. Core permissions still make approval, commit, send, publish, secret management, and
 destructive operations human-only.
 
@@ -133,11 +133,14 @@ The reference Cloudflare Worker in the repository routes `POST /mcp` to this han
 Durable Object-backed context. Other hosts can provide the same two context functions with their
 own repository and command adapter.
 
-## MCP client and Codex plugin setup
+## Agent Plugin and MCP client setup
 
 For local development, run `pnpm dev` at the repository root. The checked-in plugin source at
-`plugin/programkit` already points to `http://localhost:4173/mcp`. A generic MCP client can register
-the same endpoint directly:
+`plugin/programkit` already points to `http://localhost:4173/mcp`. Its root `plugin.json`,
+`mcp.json`, and `skills/` directory are the portable package. `.codex-plugin/plugin.json` and
+`.mcp.json` add Codex-specific presentation and connection metadata without duplicating skills.
+
+A generic MCP client can register the same endpoint directly:
 
 ```json
 {
@@ -164,26 +167,26 @@ PROGRAMKIT_MCP_URL=https://programkit.example.com/mcp pnpm plugin:bundle
 
 The script validates the URL, safely replaces only the generated `<agent-package>/build/programkit`
 directory (`packages/agent/build/programkit` in this monorepo), and changes only the copied
-`.mcp.json`. The source plugin remains unchanged. Credentials are rejected in `PROGRAMKIT_MCP_URL`; use an
-authorization header or client OAuth flow instead of embedding a secret in the URL.
+`mcp.json` and `.mcp.json`. The source plugin remains unchanged. Credentials are rejected in
+`PROGRAMKIT_MCP_URL`; use client-managed authorization instead of embedding a secret in the URL.
 
 Use either `packages/agent/plugin/programkit` for localhost development or the generated directory
-as the plugin source in a Codex marketplace. Install `programkit` from that marketplace, then start
-a new Codex task so the four bundled skills and MCP tool catalog are loaded together. The same
-generated `.mcp.json` can be registered directly by another compatible MCP client.
+in a compatible client. Install `programkit`, then start a new agent task so the bundled skills and
+MCP tool catalog are loaded together. See the
+[Agent Plugins guide](../../docs/integrations/agent-plugins.md) for portable packaging,
+authentication, and optional Airtable coordination.
 
 ## Authentication boundary
 
-The repository's reference Worker is a passwordless demo. Its `/mcp` route is not authenticated,
-the agent identity is fixed, and `x-programkit-workspace-key` selects demo storage rather than authorizing
-access. Same-origin validation and agent tool restrictions are defense in depth, not user
-authentication. Do not expose the reference endpoint to real customer data.
+The hosted app authenticates `/mcp` with an owner session or an event-scoped ProgramKit API key.
+The Worker resolves the credential before selecting the event Durable Object. Hosted demos require
+a live demo capability. A self-hosted deployment must preserve the same credential-to-event binding
+and must not trust caller-supplied workspace selectors.
 
-A production host must authenticate MCP with OAuth or an equivalent gateway, bind the workspace to
-verified claims, derive the actor and scopes server-side, rate-limit calls, and ignore caller-supplied
-identity or workspace selectors. Keep provider secrets outside workspace state. The host must also
-preserve the core rule that agents can draft and propose but cannot approve, commit, send, publish,
-or manage secrets.
+Agent Plugins 1.0 leaves OAuth and credential storage to the client. Do not put credentials in
+`plugin.json`, `mcp.json`, skill files, or endpoint URLs. Keep provider secrets outside workspace
+state and preserve the rule that agents can draft and propose but cannot approve, commit, send,
+publish, or manage secrets.
 
 ## Troubleshooting
 

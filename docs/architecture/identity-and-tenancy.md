@@ -8,7 +8,7 @@ account session
         │
         ▼
 account Auth Durable Object
-  user, sessions, event switcher projection
+  user, organization, sessions, event switcher projection
         │
         ├── event A ── Event Access Durable Object ── Workspace Durable Object
         └── event B ── Event Access Durable Object ── Workspace Durable Object
@@ -61,6 +61,10 @@ The account object owns:
 - a repairable projection of the user's event memberships; and
 - the event index used by the switcher.
 
+An owner-created account receives one stable organization ID. Events created from that account
+inherit it. An invitation carries the target event's organization ID, so access to an unrelated
+event does not make its people visible in the owner's organization CRM.
+
 Each event has a separate `EventAccessDurableObject` that is authoritative for membership. It owns
 active and revoked memberships, owner and administrator policy, and pending invitations. The
 Worker validates the selected membership there on every hosted request, then derives role scopes.
@@ -95,11 +99,17 @@ Worker then derives the workspace object name from that verified event ID and in
 with server-owned role scopes as the trusted staff actor.
 
 Creating a second event initializes a separate empty object. Switching events changes only the
-selected-event cookie. It does not copy state, scan other objects, or merge caches.
+selected-event cookie and never copies the event workspace.
 
-Cross-event screens should read the small event index from the account object. They must not list
-or scan every workspace object. D1 remains a future rebuildable projection for organization-wide
-search and analytics, not a primary database.
+The organization CRM is the one intentional cross-event projection. It starts from the account's
+small event index, filters to the active event's organization ID, and performs a bounded fan-out to
+those event objects. It deduplicates contacts in memory while keeping each participation,
+session, note, segment, and pipeline record owned by its event. Reusing a contact writes a stable
+person identity and a new participation into the selected target event through named operations.
+
+This is appropriate for the small number of events in the supported V1 installation. A larger
+installation should project domain events into D1 for organization-wide search and analytics
+instead of increasing fan-out. D1 remains rebuildable and is not a second primary database.
 
 ## Airtable and Durable Object ownership
 

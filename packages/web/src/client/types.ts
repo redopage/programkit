@@ -7,6 +7,7 @@ import type {
 
 export type ProgramKitSurface =
   | { kind: 'operator' }
+  | { kind: 'crm' }
   | { kind: 'submission'; formSlug: string; speakerAccessKey?: string }
   | { kind: 'reviewer'; reviewerId: string; reviewerAccessKey?: string }
   | { kind: 'speaker'; participationId: string; portalAccessKey?: string }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   hostedPublicEventId,
   isApiKeyAccessiblePath,
+  isApiKeyCredentialPath,
   isHostedDemoReset,
   normalizeHostedEventCreateInput,
   parseApiKeyToken,
@@ -67,12 +68,19 @@ describe('hosted API key routing', () => {
     expect(isApiKeyAccessiblePath(`/api/v1/events/${eventId}/submissions`)).toBe(true)
     expect(isApiKeyAccessiblePath('/api/v1/operations/session.update')).toBe(true)
     expect(isApiKeyAccessiblePath('/api/v1/export')).toBe(true)
+    expect(isApiKeyAccessiblePath('/mcp')).toBe(true)
 
     expect(isApiKeyAccessiblePath('/api/v1/state')).toBe(false)
     expect(isApiKeyAccessiblePath('/api/v1/account')).toBe(false)
     expect(isApiKeyAccessiblePath(`/api/v1/events/${eventId}/api-keys`)).toBe(false)
     expect(isApiKeyAccessiblePath('/api/v1/assets/export')).toBe(false)
     expect(isApiKeyAccessiblePath('/api/v1/integrations/airtable/status')).toBe(false)
+  })
+
+  it('resolves API-key credentials for both REST and MCP requests', () => {
+    expect(isApiKeyCredentialPath('/api/v1/events')).toBe(true)
+    expect(isApiKeyCredentialPath('/mcp')).toBe(true)
+    expect(isApiKeyCredentialPath('/login')).toBe(false)
   })
 })
 

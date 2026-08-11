@@ -20,6 +20,7 @@ async function body(response: Response) {
       user: { id: string; name: string; email: string }
       events: Array<{
         id: string
+        organizationId: string
         name: string
         slug: string
         membershipId?: string
@@ -71,6 +72,7 @@ describe('AuthDurableObject membership projections', () => {
       request('/internal/memberships/link', {
         token: sessionToken,
         eventId,
+        organizationId: 'org_abcdefabcdefabcdefabcdef',
         membershipId: 'mem_abcdefabcdefabcdefabcdef',
         membershipVersion: 1,
         name: 'Shared conference',
@@ -91,6 +93,7 @@ describe('AuthDurableObject membership projections', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: eventId,
+          organizationId: 'org_abcdefabcdefabcdefabcdef',
           role: 'admin',
           membershipId: 'mem_abcdefabcdefabcdefabcdef',
           membershipVersion: 1,
@@ -217,6 +220,7 @@ describe('AuthDurableObject membership projections', () => {
     const selected = await body(selectedResponse)
     expect(selected.account!.activeEventId).toBe(created.event.id)
     expect(selected.account!.events).toHaveLength(3)
+    expect(new Set(selected.account!.events.map((event) => event.organizationId))).toHaveLength(1)
     expect(selected.account!.events.map((event) => event.id)).toEqual(
       expect.arrayContaining([firstEventId, created.event.id, duplicate.event.id]),
     )

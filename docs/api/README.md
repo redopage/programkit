@@ -14,18 +14,20 @@ before using real participant data.
 
 These browser endpoints are available only on the hosted app. Mutations require the same origin.
 
-| Method | Path                           | Purpose                                              |
-| ------ | ------------------------------ | ---------------------------------------------------- |
-| `POST` | `/api/v1/auth/password`        | Create an account or sign in with email and password |
-| `POST` | `/api/v1/auth/magic-link`      | Request a one-time staff sign-in link                |
-| `GET`  | `/auth/verify?token=...`       | Exchange the link for a secure session               |
-| `POST` | `/api/v1/auth/logout`          | Revoke the current session                           |
-| `GET`  | `/api/v1/account`              | Read the signed-in user's accessible events          |
-| `POST` | `/api/v1/events`               | Create and select an isolated empty event            |
-| `POST` | `/api/v1/account/active-event` | Select an event from verified membership             |
-| `POST` | `/public/v1/access/password`   | Create or restore an event participant account       |
-| `GET`  | `/public/v1/access/session`    | Resolve that account's event-scoped destinations     |
-| `POST` | `/public/v1/access/logout`     | Revoke the participant session                       |
+| Method | Path                            | Purpose                                              |
+| ------ | ------------------------------- | ---------------------------------------------------- |
+| `POST` | `/api/v1/auth/password`         | Create an account or sign in with email and password |
+| `POST` | `/api/v1/auth/magic-link`       | Request a one-time staff sign-in link                |
+| `GET`  | `/auth/verify?token=...`        | Exchange the link for a secure session               |
+| `POST` | `/api/v1/auth/logout`           | Revoke the current session                           |
+| `GET`  | `/api/v1/account`               | Read the signed-in user's accessible events          |
+| `POST` | `/api/v1/events`                | Create and select an isolated empty event            |
+| `POST` | `/api/v1/account/active-event`  | Select an event from verified membership             |
+| `GET`  | `/api/v1/crm/state`             | Read the signed-in organization's contact projection |
+| `POST` | `/api/v1/crm/operations/{name}` | Run an organization CRM operation                    |
+| `POST` | `/public/v1/access/password`    | Create or restore an event participant account       |
+| `GET`  | `/public/v1/access/session`     | Resolve that account's event-scoped destinations     |
+| `POST` | `/public/v1/access/logout`      | Revoke the participant session                       |
 
 Password requests include `email`, `password`, and `intent`, where intent is `signup` or `signin`.
 Passwords must contain 10 to 128 characters. Passwords are never returned or stored directly.
@@ -52,6 +54,11 @@ read scopes only. The raw invitation token is emailed and is never returned by a
 These routes are application session APIs, not the future third-party OAuth API. Token and
 tenancy details are in
 [Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).
+
+The CRM projection combines only events with the active event's server-owned organization ID.
+Contacts are deduplicated by normalized email while participations retain their event IDs. Adding
+an existing contact to another event writes that stable person identity and a new participation to
+the target event object. It does not merge the underlying event databases or grant event access.
 
 ## Resource reads
 
@@ -216,11 +223,13 @@ GET  /api/v1/events/{eventId}/submissions
 GET  /api/v1/export
 GET  /api/v1/export.json
 POST /api/v1/operations/{operationName}
+POST /mcp
 ```
 
 The event ID encoded in the non-secret portion of the key selects exactly one event Durable
-Object. A valid key cannot call account, team, file, Airtable, key-management, or MCP routes. Core
-authorization then checks the key's scopes before reading or applying an operation.
+Object. A valid key cannot call account, team, file, Airtable, or key-management routes. MCP tools
+also check the key's scopes before reading or proposing work. Core authorization then checks the
+same scopes before applying an operation.
 
 ```bash
 curl https://app.programkit.dev/api/v1/events \

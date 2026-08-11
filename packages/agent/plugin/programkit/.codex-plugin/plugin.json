@@ -20,7 +20,7 @@
       "Draft a reminder for incomplete speakers.",
       "Propose fixes for schedule conflicts."
     ],
-    "brandColor": "#047857"
+    "brandColor": "#2563EB"
   },
   "mcpServers": "./.mcp.json"
 }

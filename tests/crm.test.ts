@@ -40,6 +40,49 @@ describe('ProgramKit speaker CRM', () => {
     ).toHaveLength(2)
   })
 
+  it('reuses a stable organization contact inside an isolated event workspace', () => {
+    const state = createSeedState()
+    state.people = []
+    state.participations = []
+    state.requirementInstances = []
+    const reused = executeOperation(state, 'person.reuse-in-event', {
+      input: {
+        personId: 'per_shared_contact',
+        firstName: 'Jordan',
+        lastName: 'Alvarez',
+        email: 'jordan@example.com',
+        company: 'Northstar',
+        title: 'Head of Engineering',
+        tags: ['Keynote'],
+      },
+    })
+
+    expect(reused.response.ok).toBe(true)
+    expect(reused.state.people).toEqual([
+      expect.objectContaining({
+        id: 'per_shared_contact',
+        email: 'jordan@example.com',
+        tags: ['keynote'],
+      }),
+    ])
+    expect(reused.state.participations).toEqual([
+      expect.objectContaining({ personId: 'per_shared_contact', eventId: state.activeEventId }),
+    ])
+
+    const repeated = executeOperation(reused.state, 'person.reuse-in-event', {
+      input: {
+        personId: 'per_shared_contact',
+        firstName: 'Jordan',
+        lastName: 'Alvarez',
+        email: 'jordan@example.com',
+      },
+    })
+    expect(repeated.response.ok).toBe(true)
+    expect(repeated.state.people).toHaveLength(1)
+    expect(repeated.state.participations).toHaveLength(1)
+    expect(repeated.response.data).toMatchObject({ createdParticipation: false })
+  })
+
   it('persists contact tags, notes, and reusable segments', () => {
     let state = createSeedState()
     const person = state.people[0]

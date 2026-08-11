@@ -384,6 +384,20 @@ export const operationManifest = [
     emits: ['participation.created'],
   },
   {
+    name: 'person.reuse-in-event',
+    title: 'Reuse contact in active event',
+    description:
+      'Reuse a known organization contact in the active event while preserving their stable identity.',
+    kind: 'command',
+    scopes: ['people:write', 'participations:write'],
+    risk: 'internal',
+    agentPolicy: 'propose_only',
+    reversible: true,
+    supportsDryRun: true,
+    requiredInput: ['personId', 'firstName', 'lastName', 'email'],
+    emits: ['person.created', 'participation.created'],
+  },
+  {
     name: 'person.merge',
     title: 'Merge duplicate contacts',
     description: 'Merge a duplicate person into a chosen primary contact and preserve links.',

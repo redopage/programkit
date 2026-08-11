@@ -41,16 +41,18 @@ not maintain a second version of product or architecture facts.
 7. Use the [HTTP API](api/README.md) for integrations and data sync.
 8. Read the [Airtable integration guide](integrations/airtable.md) before testing the experimental
    Airtable-backed mode.
-9. Use the [Accelevents handoff](integrations/accelevents.md) to move a published program into
-   Accelevents without changing ProgramKit's source of truth.
-10. Read the [Cloudflare email guide](integrations/email.md) before enabling confirmations or
+9. Use [Agent Plugins and MCP](integrations/agent-plugins.md) to connect an AI client without
+   embedding credentials in the portable package.
+10. Use the [Accelevents handoff](integrations/accelevents.md) to move a published program into
+    Accelevents without changing ProgramKit's source of truth.
+11. Read the [Cloudflare email guide](integrations/email.md) before enabling confirmations or
     reminders.
-11. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
+12. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
     notifications.
-12. Read [Identity, events, and storage ownership](architecture/identity-and-tenancy.md) before
+13. Read [Identity, events, and storage ownership](architecture/identity-and-tenancy.md) before
     changing sign-in, membership, event routing, Airtable ownership, or R2 boundaries.
-13. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
-14. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
+14. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
+15. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
 
 ### I want to contribute
 

@@ -9,6 +9,7 @@ import type {
 
 const surfaceOperationAllowlist: Record<ProgramKitSurface['kind'], ReadonlySet<string> | null> = {
   operator: null,
+  crm: null,
   submission: new Set(['submission.create', 'submission.submit', 'submission.update']),
   reviewer: new Set(['review.submit-scorecard', 'review.recuse', 'review.restore-recusal']),
   speaker: new Set([
@@ -65,6 +66,8 @@ function stateEndpoint(surface: ProgramKitSurface) {
       return '/public/v1/program/state'
     case 'operator':
       return '/api/v1/state'
+    case 'crm':
+      return '/api/v1/crm/state'
   }
 }
 
@@ -79,6 +82,8 @@ function operationEndpoint(surface: ProgramKitSurface, operation: string) {
       return `/public/v1/portal/${encodeURIComponent(surface.participationId)}/operations/${encodedOperation}`
     case 'operator':
       return `/api/v1/operations/${encodedOperation}`
+    case 'crm':
+      return `/api/v1/crm/operations/${encodedOperation}`
     case 'public-program':
       throw new Error('The public program is read-only.')
   }
@@ -97,7 +102,7 @@ function currentPublicEventId() {
 }
 
 function scopedEndpoint(surface: ProgramKitSurface, endpoint: string) {
-  return surface.kind === 'operator'
+  return surface.kind === 'operator' || surface.kind === 'crm'
     ? endpoint
     : withPublicEventScope(endpoint, currentPublicEventId())
 }

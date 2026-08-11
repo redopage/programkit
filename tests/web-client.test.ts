@@ -71,6 +71,7 @@ describe('ProgramKit web client', () => {
 
   it('maps deep links to explicit surfaces', () => {
     expect(surfaceFromPathname('/forms')).toEqual({ kind: 'operator' })
+    expect(surfaceFromPathname('/crm')).toEqual({ kind: 'crm' })
     expect(surfaceFromPathname('/submit/aie-nyc-2026-cfp')).toEqual({
       kind: 'submission',
       formSlug: 'aie-nyc-2026-cfp',
@@ -86,6 +87,37 @@ describe('ProgramKit web client', () => {
       portalAccessKey: 'portal_123',
     })
     expect(surfaceKey(surfaceFromPathname('/agenda'))).toBe('public-program')
+  })
+
+  it('uses the account-scoped CRM endpoints', async () => {
+    const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      Response.json(
+        init?.method === 'POST'
+          ? {
+              ok: true,
+              data: {},
+              eventIds: [],
+              warnings: [],
+              approvalRequired: false,
+              stateRevision: 2,
+              traceId: 'trace_crm',
+            }
+          : emptyPayload,
+      ),
+    )
+    const client = createProgramKitHttpClient({ fetch })
+
+    await client.readSurface({ kind: 'crm' }, new AbortController().signal)
+    expect(fetch).toHaveBeenLastCalledWith('/api/v1/crm/state', expect.any(Object))
+
+    await client.execute({ kind: 'crm' }, 'person.add-to-event', {
+      personId: 'per_001',
+      eventId: 'evt_002',
+    })
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/v1/crm/operations/person.add-to-event',
+      expect.objectContaining({ method: 'POST' }),
+    )
   })
 
   it('parses the speaker fixture shape including quoted biographies', () => {

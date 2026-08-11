@@ -16,6 +16,7 @@ const serverInfo = { name: 'programkit', version: '0.1.0' }
 export interface McpContext {
   readState: () => Promise<WorkspaceState>
   execute: (operation: string, request: OperationRequest) => Promise<OperationResponse>
+  actor?: NonNullable<OperationRequest['actor']>
 }
 
 interface JsonRpcRequest {
@@ -30,6 +31,7 @@ const agentActor = {
   id: 'agent_programkit',
   name: 'ProgramKit Agent',
   scopes: [
+    'workspace:read',
     'people:read',
     'participations:read',
     'requirements:read',
@@ -39,6 +41,46 @@ const agentActor = {
     'changes:read',
     'changes:propose',
   ],
+}
+
+const toolScopes: Record<string, string[]> = {
+  get_event_context: ['workspace:read'],
+  search_people: ['people:read', 'participations:read'],
+  get_readiness_report: ['people:read', 'participations:read', 'requirements:read'],
+  get_schedule: ['schedule:read'],
+  validate_schedule: ['schedule:read'],
+  get_change_set: ['changes:read'],
+  list_change_sets: ['changes:read'],
+  preflight_program_publish: [
+    'workspace:read',
+    'participations:read',
+    'schedule:read',
+    'changes:read',
+  ],
+  draft_campaign: ['communications:draft'],
+  propose_schedule_move: ['schedule:draft', 'changes:propose'],
+}
+
+const resourceScopes: Record<string, string[]> = {
+  'ops://workspace/manifest': ['workspace:read'],
+  'ops://events/current/summary': ['workspace:read'],
+  'ops://events/current/readiness': ['people:read', 'participations:read', 'requirements:read'],
+  'ops://events/current/schedule': ['schedule:read'],
+  'ops://events/current/preflight': [
+    'workspace:read',
+    'participations:read',
+    'schedule:read',
+    'changes:read',
+  ],
+}
+
+function contextActor(context: McpContext) {
+  return context.actor ?? agentActor
+}
+
+function hasScopes(context: McpContext, required: string[]) {
+  const scopes = contextActor(context).scopes
+  return scopes.includes('*') || required.every((scope) => scopes.includes(scope))
 }
 
 const emptySchema = { type: 'object', additionalProperties: false } as const
@@ -461,6 +503,12 @@ function validateModernHeaders(request: Request, message: JsonRpcRequest) {
 }
 
 async function callTool(name: string, args: Record<string, unknown>, context: McpContext) {
+  if (!hasScopes(context, toolScopes[name] ?? [])) {
+    return toolResult(
+      { error: 'This credential does not have access to that ProgramKit tool.' },
+      true,
+    )
+  }
   const state = await context.readState()
   if (name === 'get_event_context') {
     return toolResult({
@@ -630,7 +678,7 @@ async function callTool(name: string, args: Record<string, unknown>, context: Mc
         body: asString(args.body, 'body'),
         audience: asString(args.audience, 'audience'),
       },
-      actor: agentActor,
+      actor: contextActor(context),
       idempotencyKey: crypto.randomUUID(),
     })
     return toolResult(
@@ -656,7 +704,7 @@ async function callTool(name: string, args: Record<string, unknown>, context: Mc
       mode: 'propose',
       reason: asString(args.reason, 'reason'),
       expectedVersions: { [placementId]: Number(args.expectedVersion) },
-      actor: agentActor,
+      actor: contextActor(context),
       idempotencyKey: crypto.randomUUID(),
     })
     return toolResult(
@@ -715,6 +763,7 @@ function listedResources() {
 }
 
 async function readResource(uri: string, context: McpContext) {
+  if (!hasScopes(context, resourceScopes[uri] ?? [])) return null
   const state = await context.readState()
   let data: unknown
   if (uri === 'ops://workspace/manifest') data = { operations: operationManifest }

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "programkit",
+  "version": "0.1.0",
+  "description": "Operate conference submissions, speakers, readiness, communications, and schedules.",
+  "author": {
+    "name": "ProgramKit contributors",
+    "url": "https://programkit.dev"
+  },
+  "homepage": "https://programkit.dev",
+  "repository": "https://forge.smol.ai/andheller/programkit",
+  "license": "Apache-2.0",
+  "keywords": ["conference", "speaker-management", "program-operations", "scheduling"]
+}

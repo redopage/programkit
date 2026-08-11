@@ -6,6 +6,8 @@ import {
   createStoredZip,
   exchangeAirtableAuthorizationCode,
   listAirtableBases,
+  readinessSummary,
+  scheduleConflicts,
   submissionAnswerByPurpose,
   verifyAirtableWebhookMac,
   type OperationRequest,
@@ -19,6 +21,7 @@ import {
   type AuthEventSummary,
   type AuthMembershipProjection,
 } from './auth.ts'
+import { mergeOrganizationCrmState } from './organization-crm.ts'
 import {
   createDemoId,
   demoCookieName,
@@ -104,6 +107,7 @@ function isStaticOrLegalPath(pathname: string) {
 
 export function isApiKeyAccessiblePath(pathname: string) {
   return (
+    pathname === '/mcp' ||
     pathname === '/api/v1/health' ||
     pathname === '/api/v1/manifest' ||
     pathname === '/api/v1/domain-events' ||
@@ -113,6 +117,10 @@ export function isApiKeyAccessiblePath(pathname: string) {
     pathname === '/api/v1/export.json' ||
     /^\/api\/v1\/operations\/[^/]+$/u.test(pathname)
   )
+}
+
+export function isApiKeyCredentialPath(pathname: string) {
+  return pathname.startsWith('/api/') || pathname === '/mcp'
 }
 
 interface RuntimeIntegrationCapabilities {
@@ -1126,6 +1134,7 @@ function membershipProjection(
 ): AuthMembershipProjection {
   return {
     id: event.id,
+    organizationId: event.organizationId,
     name: event.name,
     slug: event.slug,
     role: membership.role,
@@ -1176,13 +1185,15 @@ async function resolveHostedEventAccess(
     body = { ok: true, membership, scopes: ['*'] }
     response = new Response(null, { status: 200 })
   }
-  if (!response.ok || !body.membership || !body.scopes) return null
+  if (!response.ok || !body.event || !body.membership || !body.scopes) return null
 
   if (
+    event.organizationId !== body.event.organizationId ||
     event.membershipId !== body.membership.id ||
     event.membershipVersion !== body.membership.version ||
     event.role !== body.membership.role
   ) {
+    event.organizationId = body.event.organizationId
     await linkHostedMembership(env, principal, event, body.membership)
   }
   return { membership: body.membership, scopes: body.scopes }
@@ -1485,6 +1496,7 @@ async function acceptHostedInvitation(
     principal,
     {
       id: body.event.id,
+      organizationId: body.event.organizationId,
       name: body.event.name,
       slug: body.event.slug,
       createdAt: body.event.createdAt,
@@ -1706,6 +1718,244 @@ async function executeWorkspaceOperation(
     ),
   )
   return (await response.json()) as OperationResponse
+}
+
+interface OrganizationWorkspace {
+  event: AuthEventSummary
+  state: WorkspaceState
+  stub: DurableObjectStub<WorkspaceDurableObject>
+  scopes: string[]
+}
+
+async function organizationWorkspaces(env: Env, principal: HostedPrincipal) {
+  const activeEvent = principal.account.events.find(
+    (event) => event.id === principal.account.activeEventId,
+  )
+  if (!activeEvent) return []
+  const events = principal.account.events.filter(
+    (event) => event.organizationId === activeEvent.organizationId,
+  )
+  const ordered = [activeEvent, ...events.filter((event) => event.id !== activeEvent.id)]
+  const workspaces = await Promise.all(
+    ordered.map(async (event): Promise<OrganizationWorkspace | null> => {
+      const access =
+        event.id === principal.account.activeEventId
+          ? { scopes: principal.scopes }
+          : await resolveHostedEventAccess(env, principal, event)
+      if (!access) return null
+      const stub = workspaceStub(env, eventWorkspaceKey(event.id))
+      return { event, state: await readWorkspace(stub), stub, scopes: access.scopes }
+    }),
+  )
+  return workspaces.filter((entry): entry is OrganizationWorkspace => Boolean(entry))
+}
+
+function workspaceContainingPerson(workspaces: OrganizationWorkspace[], personId: string) {
+  return workspaces.find((workspace) =>
+    workspace.state.people.some((person) => person.id === personId),
+  )
+}
+
+function workspaceForCrmOperation(
+  workspaces: OrganizationWorkspace[],
+  operation: string,
+  input: Record<string, unknown>,
+) {
+  if (
+    operation === 'person.update' ||
+    operation === 'person.add-note' ||
+    operation === 'crm.pipeline.enroll'
+  ) {
+    return typeof input.personId === 'string'
+      ? workspaceContainingPerson(workspaces, input.personId)
+      : null
+  }
+  if (operation === 'person.merge') {
+    if (typeof input.primaryPersonId !== 'string' || typeof input.duplicatePersonId !== 'string') {
+      return null
+    }
+    const primary = workspaceContainingPerson(workspaces, input.primaryPersonId)
+    return primary?.state.people.some((person) => person.id === input.duplicatePersonId)
+      ? primary
+      : null
+  }
+  if (operation === 'crm.pipeline.move' || operation === 'crm.pipeline.add-note') {
+    return typeof input.entryId === 'string'
+      ? workspaces.find((workspace) =>
+          workspace.state.speakerPipeline.some((entry) => entry.id === input.entryId),
+        )
+      : null
+  }
+  return workspaces[0]
+}
+
+async function copyOrganizationHeadshot(
+  env: Env,
+  source: OrganizationWorkspace,
+  sourcePersonId: string,
+  target: OrganizationWorkspace,
+  targetPersonId: string,
+  actor: OperationRequest['actor'],
+) {
+  if (!env.PROGRAMKIT_FILES) return null
+  const sourceAsset = source.state.assets.find(
+    (asset) =>
+      asset.kind === 'headshot' &&
+      asset.owner.type === 'person' &&
+      asset.owner.id === sourcePersonId,
+  )
+  if (!sourceAsset) return null
+  if (
+    target.state.assets.some(
+      (asset) =>
+        asset.kind === 'headshot' &&
+        asset.owner.type === 'person' &&
+        asset.owner.id === targetPersonId,
+    )
+  ) {
+    return null
+  }
+  const object = await env.PROGRAMKIT_FILES.get(sourceAsset.storageKey)
+  if (!object) return null
+  const storageKey = `${target.event.id}/people/${targetPersonId}/${crypto.randomUUID().replaceAll('-', '')}-${safeAssetFilename(sourceAsset.filename)}`
+  await env.PROGRAMKIT_FILES.put(storageKey, object.body, {
+    httpMetadata: object.httpMetadata,
+    customMetadata: {
+      eventId: target.event.id,
+      personId: targetPersonId,
+      copiedFromEventId: source.event.id,
+    },
+  })
+  const registered = await executeWorkspaceOperation(target.stub, 'asset.register', {
+    input: {
+      ownerType: 'person',
+      ownerId: targetPersonId,
+      kind: 'headshot',
+      filename: sourceAsset.filename,
+      contentType: sourceAsset.contentType,
+      sizeBytes: sourceAsset.sizeBytes,
+      storageKey,
+    },
+    actor,
+    idempotencyKey: `organization-headshot:${sourceAsset.id}:${target.event.id}`,
+  })
+  if (!registered.ok) await env.PROGRAMKIT_FILES.delete(storageKey)
+  return registered
+}
+
+async function handleAccountCrmRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  principal: HostedPrincipal,
+) {
+  const workspaces = await organizationWorkspaces(env, principal)
+  if (request.method === 'GET' && url.pathname === '/api/v1/crm/state') {
+    const state = mergeOrganizationCrmState(workspaces)
+    if (!state) {
+      return Response.json(
+        { ok: false, error: 'The organization CRM could not be loaded.' },
+        { status: 404 },
+      )
+    }
+    return Response.json(
+      {
+        state,
+        derived: {
+          readiness: readinessSummary(workspaces[0].state),
+          scheduleConflicts: scheduleConflicts(workspaces[0].state),
+        },
+      },
+      { headers: { 'cache-control': 'no-store' } },
+    )
+  }
+
+  const match = url.pathname.match(/^\/api\/v1\/crm\/operations\/([^/]+)$/u)
+  if (request.method !== 'POST' || !match) return null
+  if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+  const operation = decodeURIComponent(match[1])
+  const operationRequest = (await request.json()) as OperationRequest
+
+  if (operation === 'person.add-to-event') {
+    const personId = operationRequest.input.personId
+    const eventId = operationRequest.input.eventId
+    if (typeof personId !== 'string' || typeof eventId !== 'string') {
+      return Response.json(
+        { ok: false, error: { code: 'INVALID_INPUT', message: 'Choose a contact and event.' } },
+        { status: 400 },
+      )
+    }
+    const source = workspaceContainingPerson(workspaces, personId)
+    const target = workspaces.find((workspace) => workspace.event.id === eventId)
+    const person = source?.state.people.find((entry) => entry.id === personId)
+    if (!source || !target || !person) {
+      return Response.json(
+        {
+          ok: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'That organization contact or event was not found.',
+          },
+        },
+        { status: 404 },
+      )
+    }
+    const actor = { ...hostedStaffActor(principal), scopes: target.scopes }
+    const reused = await executeWorkspaceOperation(target.stub, 'person.reuse-in-event', {
+      ...operationRequest,
+      input: {
+        personId: person.id,
+        firstName: person.firstName,
+        lastName: person.lastName,
+        email: person.email,
+        company: person.company,
+        title: person.title,
+        city: person.city,
+        timezone: person.timezone,
+        bio: person.bio,
+        avatarUrl: person.avatarUrl,
+        tags: person.tags,
+      },
+      actor,
+    })
+    if (!reused.ok) return Response.json(reused, { status: 400 })
+    const targetPersonId = (reused.data as { person?: { id?: string } } | undefined)?.person?.id
+    const registered = targetPersonId
+      ? await copyOrganizationHeadshot(env, source, person.id, target, targetPersonId, actor)
+      : null
+    return Response.json(
+      registered?.ok
+        ? {
+            ...reused,
+            eventIds: [...reused.eventIds, ...registered.eventIds],
+            stateRevision: registered.stateRevision,
+          }
+        : reused,
+      { status: 201, headers: { 'cache-control': 'no-store' } },
+    )
+  }
+
+  const target = workspaceForCrmOperation(workspaces, operation, operationRequest.input)
+  if (!target) {
+    return Response.json(
+      {
+        ok: false,
+        error: {
+          code: 'CROSS_EVENT_OPERATION_UNAVAILABLE',
+          message: 'Open the event that owns both records before making this change.',
+        },
+      },
+      { status: 409 },
+    )
+  }
+  const response = await executeWorkspaceOperation(target.stub, operation, {
+    ...operationRequest,
+    actor: { ...hostedStaffActor(principal), scopes: target.scopes },
+  })
+  return Response.json(response, {
+    status: response.ok ? 200 : 400,
+    headers: { 'cache-control': 'no-store' },
+  })
 }
 
 async function executePortalOperation(
@@ -2114,7 +2364,7 @@ export default {
     const presentedBearer = bearerToken(request)
     if (
       profile === 'hosted-app' &&
-      url.pathname.startsWith('/api/') &&
+      isApiKeyCredentialPath(url.pathname) &&
       presentedBearer?.startsWith('pk_live_')
     ) {
       apiKeyPrincipal = await resolveApiKeyPrincipal(env, request)
@@ -2373,6 +2623,14 @@ export default {
           { ok: true, account: hostedPrincipal.account },
           { headers: { 'cache-control': 'no-store' } },
         )
+      }
+
+      if (
+        url.pathname === '/api/v1/crm/state' ||
+        url.pathname.startsWith('/api/v1/crm/operations/')
+      ) {
+        const crmResponse = await handleAccountCrmRequest(request, env, url, hostedPrincipal)
+        if (crmResponse) return crmResponse
       }
 
       const apiKeysMatch = url.pathname.match(
@@ -2961,6 +3219,9 @@ export default {
         readState: () => readWorkspace(stub),
         execute: (operation, operationRequest) =>
           executeWorkspaceOperation(stub, operation, operationRequest),
+        actor: apiKeyPrincipal
+          ? { ...apiKeyPrincipal.actor, type: 'agent', name: 'ProgramKit API agent' }
+          : undefined,
       })
     }
 

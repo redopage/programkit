@@ -60,6 +60,53 @@ function modernRequest(
 }
 
 describe('MCP server', () => {
+  it('enforces credential scopes before reading or drafting', async () => {
+    const test = harness()
+    const denied = await handleMcpRequest(
+      modernRequest('tools/call', { name: 'get_schedule', arguments: {} }),
+      {
+        ...test.context,
+        actor: {
+          type: 'agent',
+          id: 'key_limited',
+          name: 'Limited integration',
+          scopes: ['people:read'],
+        },
+      },
+    )
+    const deniedBody = (await denied.json()) as {
+      result: { isError: boolean; structuredContent: { error: string } }
+    }
+    expect(deniedBody.result.isError).toBe(true)
+    expect(deniedBody.result.structuredContent.error).toContain('does not have access')
+
+    const drafted = await handleMcpRequest(
+      modernRequest('tools/call', {
+        name: 'draft_campaign',
+        arguments: {
+          name: 'Scoped reminder',
+          subject: 'Complete your profile',
+          body: 'Please complete your remaining program tasks.',
+          audience: 'missing_requirements',
+        },
+      }),
+      {
+        ...test.context,
+        actor: {
+          type: 'agent',
+          id: 'key_campaign',
+          name: 'Campaign integration',
+          scopes: ['communications:draft'],
+        },
+      },
+    )
+    const draftedBody = (await drafted.json()) as {
+      result: { isError: boolean; structuredContent: { status: string } }
+    }
+    expect(draftedBody.result.isError).toBe(false)
+    expect(draftedBody.result.structuredContent.status).toBe('draft')
+  })
+
   it('implements current stateless discovery and a curated tool catalog', async () => {
     const test = harness()
     const discovery = await handleMcpRequest(modernRequest('server/discover', {}), test.context)
