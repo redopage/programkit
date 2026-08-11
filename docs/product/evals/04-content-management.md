@@ -6,22 +6,22 @@ coverage rather than treating seeded data as evidence.
 
 ## Current coverage
 
-| Rubric | Status         | ProgramKit evidence                                                                                                                                                                                                          |
-| ------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CNT-01 | Verified       | `/readiness` creates reusable file requests with instructions, a due date, optional session scope, file constraints, and an exact speaker selection. One definition creates a separate tracked instance for every assignee.  |
-| CNT-02 | Verified       | The private speaker portal lists only that speaker's assigned tasks and due dates. File requests accept an R2-backed upload against the requirement and immediately move the instance to submitted.                          |
-| CNT-03 | Verified       | Portal projections contain one participation, its person, sessions, requirements, assets, and comments. Capability checks guard every portal read and mutation; hosted organizer routes still require staff authentication.  |
-| CNT-04 | Verified       | Re-uploading the same requirement creates another immutable asset version. The portal and organizer file drawer list every version, mark the latest, and retain an individual download action for older versions.            |
-| CNT-05 | Verified       | `asset.comment` stores an attributed author and timestamp. Speaker and organizer views resolve the same thread across every version in the requirement slot and both roles can reply.                                        |
-| CNT-06 | Verified       | The upload control states the accepted types and configured maximum size before selection. The server enforces the same content-type allowlist and byte limit.                                                               |
-| CNT-07 | Verified       | `/readiness` derives the full speaker-by-task matrix, deadlines, progress, and status from live requirement instances. All, incomplete, overdue, and review filters visibly change the result set.                           |
-| CNT-08 | Partial manual | The outstanding-task reminder path resolves each speaker's incomplete task names and due dates into personalized outbox entries and confirms the action in the UI. Provider delivery remains manual evidence.                |
-| CNT-09 | Verified       | The session drawer edits title, abstract, format, duration, track, and content status. Saves use version checks and persist into both the session detail and list.                                                           |
-| CNT-10 | Verified       | The organizer speaker drawer edits public bio fields and now uploads or replaces a headshot directly from the admin surface. Staff uploads use the same R2/versioned asset pipeline, refresh the avatar, and survive reload. |
-| CNT-11 | Verified       | Every session edit snapshots a restorable revision with actor and timestamp. The history drawer restores an exact earlier version rather than applying a blanket undo.                                                       |
-| CNT-12 | Verified       | Session content status is explicit: `ready` is presented as Approved. Public agenda selection includes only approved sessions from the latest published schedule release.                                                    |
-| CNT-13 | Verified       | `/files` aggregates latest deliverables with filename, speaker, session, upload time, review status, and total version count. Its drawer exposes all versions and the cross-role comment thread.                             |
-| CNT-14 | Verified       | Organizers can multi-select latest files, review or deselect them in the export dialog, and generate a ZIP grouped as `Speaker/Task/Filename`. The shared server plan rejects stale version IDs and handles path collisions. |
+| Rubric | Status   | ProgramKit evidence                                                                                                                                                                                                                                            |
+| ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CNT-01 | Verified | `/readiness` creates reusable file requests with instructions, a due date, optional session scope, file constraints, and an exact speaker selection. One definition creates a separate tracked instance for every assignee.                                    |
+| CNT-02 | Verified | The private speaker portal lists only that speaker's assigned tasks and due dates. File requests accept an R2-backed upload against the requirement and immediately move the instance to submitted.                                                            |
+| CNT-03 | Verified | Portal projections contain one participation, its person, sessions, requirements, assets, and comments. Capability checks guard every portal read and mutation; hosted organizer routes still require staff authentication.                                    |
+| CNT-04 | Verified | Re-uploading the same requirement creates another immutable asset version. The portal and organizer file drawer list every version, mark the latest, and retain an individual download action for older versions.                                              |
+| CNT-05 | Verified | `asset.comment` stores an attributed author and timestamp. Speaker and organizer views resolve the same thread across every version in the requirement slot and both roles can reply.                                                                          |
+| CNT-06 | Verified | The upload control states the accepted types and configured maximum size before selection. The server enforces the same content-type allowlist and byte limit.                                                                                                 |
+| CNT-07 | Verified | `/readiness` derives the full speaker-by-task matrix, deadlines, progress, and status from live requirement instances. All, incomplete, overdue, and review filters visibly change the result set.                                                             |
+| CNT-08 | Verified | The outstanding-task reminder path resolves each speaker's incomplete task names and due dates into personalized outbox entries. A production automatic reminder reached a controlled Gmail inbox, and the provider attempt remains visible in Communications. |
+| CNT-09 | Verified | The session drawer edits title, abstract, format, duration, track, and content status. Saves use version checks and persist into both the session detail and list.                                                                                             |
+| CNT-10 | Verified | The organizer speaker drawer edits public bio fields and now uploads or replaces a headshot directly from the admin surface. Staff uploads use the same R2/versioned asset pipeline, refresh the avatar, and survive reload.                                   |
+| CNT-11 | Verified | Every session edit snapshots a restorable revision with actor and timestamp. The history drawer restores an exact earlier version rather than applying a blanket undo.                                                                                         |
+| CNT-12 | Verified | Session content status is explicit: `ready` is presented as Approved. Public agenda selection includes only approved sessions from the latest published schedule release.                                                                                      |
+| CNT-13 | Verified | `/files` aggregates latest deliverables with filename, speaker, session, upload time, review status, and total version count. Its drawer exposes all versions and the cross-role comment thread.                                                               |
+| CNT-14 | Verified | Organizers can multi-select latest files, review or deselect them in the export dialog, and generate a ZIP grouped as `Speaker/Task/Filename`. The shared server plan rejects stale version IDs and handles path collisions.                                   |
 
 ## File lifecycle
 
@@ -49,6 +49,10 @@ Automated core coverage exercises:
 7. two distinct session edits followed by exact revision restoration;
 8. approval filtering in the public agenda selector; and
 9. ZIP construction from selected latest asset versions.
+
+Hosted verification additionally uploaded both evaluator fixtures to R2, compared their downloaded
+SHA-256 hashes with the originals, rejected a cross-speaker asset request, and inspected a valid
+workspace ZIP containing JSON, manifest, CSV collections, and review results.
 
 ## Evaluator handoff
 

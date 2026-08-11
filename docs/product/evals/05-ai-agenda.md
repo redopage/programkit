@@ -49,6 +49,11 @@ Automated core coverage exercises the evaluator sequence as one durable workflow
 Separate tests prove draft moves do not change an existing public release, a later publish advances
 the release version, older releases remain immutable, and foreign-event rooms cannot be used.
 
+The hosted reference was also exercised from a newly created event with no tracks or rooms. Its
+first accepted proposal created the selected CFP track, the organizer added a room, Auto-place
+scheduled the converted session at an open time, Publish schedule created the release, and Preview
+agenda rendered the matching title, speaker, track, room, date, and time from that release.
+
 ## Evaluator handoff
 
 The hosted evaluator flow keeps organizer and public program routes on one origin. The organizer

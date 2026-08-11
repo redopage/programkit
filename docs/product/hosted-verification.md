@@ -36,6 +36,9 @@ Verified on **10 August 2026** against `https://app.programkit.dev`. Application
 - that reviewer completed the scorecard and the organizer accepted the proposal on an event with
   no preconfigured tracks; ProgramKit created the selected CFP track and converted the proposal
   into its linked speaker participation and approved session atomically;
+- the organizer added the event's first room, Auto-place scheduled that converted session into a
+  conflict-free slot, Publish schedule created the public release, and Preview agenda rendered the
+  same title, speaker, track, room, date, and time;
 - an approved campaign reached Gmail with a `text/calendar` attachment containing the matching
   title, start, end, and room;
 - the workspace ZIP passed an integrity check and contained its complete JSON backup, manifest,

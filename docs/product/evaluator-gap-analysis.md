@@ -9,11 +9,11 @@ area lives in [`evals`](evals/README.md).
 
 | Area                | Product coverage                                                                | Remaining evidence or risk                                                 |
 | ------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Call for Papers     | All 16 browser criteria implemented                                             | Live confirmation and decision-email delivery                              |
+| Call for Papers     | All 16 browser criteria implemented                                             | Full fresh-account evaluator replay                                        |
 | Abstract Management | All applicable criteria implemented; AI evaluation intentionally not advertised | Keep AI claims absent                                                      |
-| Speaker Management  | All 16 browser criteria implemented                                             | Live invite, bulk mail, automatic reminder, and calendar-import evidence   |
-| Content Management  | All 14 browser criteria implemented                                             | Live reminder delivery and downloaded ZIP inspection                       |
-| AI Agenda           | All 8 browser criteria implemented                                              | Full fresh-workspace browser chain and publish evidence                    |
+| Speaker Management  | All 16 browser criteria implemented                                             | Bulk-mail and calendar-import evidence                                     |
+| Content Management  | All 14 browser criteria implemented                                             | Full fresh-account evaluator replay                                        |
+| AI Agenda           | All 8 browser criteria implemented                                              | Full fresh-account conflict-resolution replay                              |
 | Public Widgets      | All 16 browser criteria implemented                                             | Cross-origin iframe check and real calendar import                         |
 | Speaker CRM         | All 12 optional criteria implemented                                            | Full chained browser evidence after fresh import and second-event creation |
 
