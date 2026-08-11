@@ -6,7 +6,8 @@ collaborator's event as test data.
 
 ## Current production evidence
 
-Verified on **10 August 2026** against `https://app.programkit.dev`:
+Verified on **10 August 2026** against `https://app.programkit.dev`. Source commit `231b7cd` is
+deployed as Worker version `077826cd-9824-484e-b966-7320eaa28da1`.
 
 - email/password signup created an organizer session and first event;
 - the organizer created a second event and both events retained isolated workspace state;
@@ -25,7 +26,10 @@ Verified on **10 August 2026** against `https://app.programkit.dev`:
 - an approved campaign reached Gmail with a `text/calendar` attachment containing the matching
   title, start, end, and room;
 - the workspace ZIP passed an integrity check and contained its complete JSON backup, manifest,
-  and readable CSV collections with the expected production row counts.
+  readable CSV collections, and aggregated review-results CSV;
+- the public agenda rendered all five views and the published program in a signed-out browser;
+- its 390 px layout had no document-level horizontal overflow; and
+- public JSON, XML, and iCal feeds returned the same release with wildcard CORS.
 
 Provider acceptance is recorded as **Sent** in ProgramKit. It is not mislabeled as end-recipient
 delivery because the current email binding does not provide delivery or bounce webhooks.
