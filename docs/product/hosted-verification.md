@@ -6,8 +6,8 @@ collaborator's event as test data.
 
 ## Current production evidence
 
-Verified on **10 August 2026** against `https://app.programkit.dev`. Source commit `231b7cd` is
-deployed as Worker version `077826cd-9824-484e-b966-7320eaa28da1`.
+Verified on **10 August 2026** against `https://app.programkit.dev`. Application source commit
+`1e4e550` is deployed as Worker version `ad1006c5-8173-4f4b-afed-b582ead4e1e6`.
 
 - email/password signup created an organizer session and first event;
 - the organizer created a second event and both events retained isolated workspace state;
