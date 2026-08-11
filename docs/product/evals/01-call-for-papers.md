@@ -6,24 +6,24 @@ screenshots.
 
 ## Current coverage
 
-| Rubric | Status         | ProgramKit evidence                                                                                                                                                                                                   |
-| ------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CFP-01 | Verified       | The form builder adds text, long-text, select, file, and other question types, including required flags. The public renderer and operation boundary validate visible required fields.                                 |
-| CFP-02 | Verified       | Fields can depend on another answer through equals, not-equals, or includes rules. The same visibility selector drives the builder preview, public form, and submit validation.                                       |
-| CFP-03 | Verified       | The public route requires no login and shows event identity, location, close date, configured form fields, tracks, formats, and select options.                                                                       |
-| CFP-04 | Verified       | Organizers edit opening and closing times in the event timezone. Scheduled and closed forms remain readable publicly while create, update, and submit operations reject writes outside the window.                    |
-| CFP-05 | Verified       | A speaker capability is created on first draft, stored locally, and returned in the private dashboard URL. A completed proposal submits with an on-screen confirmation and status.                                    |
-| CFP-06 | Verified       | Organizer submission detail resolves the same stored answers, participants, track, format, and custom fields supplied through the public form. Core and HTTP tests cover the round trip.                              |
-| CFP-07 | Verified       | A title-only proposal can be saved as a private draft, resumed through its speaker link, completed, saved again, and submitted. Core, HTTP, and browser journeys exercise the lifecycle.                              |
-| CFP-08 | Verified queue | Submission creates a durable `submission_confirmation` outbox item with the submitter, event, and proposal title. Provider delivery remains a manual deployment check.                                                |
-| CFP-09 | Verified       | Speakers can edit their own submitted proposal while the call is open. Expected versions protect concurrent edits and the organizer reads the same updated record.                                                    |
-| CFP-10 | Verified       | Organizers create reviewers, group them into pools, and optionally route each proposal category to a different pool. Automatic assignments use the submitted track and reviewer links expose only the assigned queue. |
-| CFP-11 | Verified       | Assigned reviewers submit ratings and comments, completion updates immediately, and organizers see the same scorecard in submission review detail.                                                                    |
-| CFP-12 | Verified       | Organizer decisions support accepted, rejected, and waitlisted states, including explicit override reasons where review minimums are not met. Distinct statuses persist in the list.                                  |
-| CFP-13 | Verified       | The private speaker dashboard reads the same submission record, so organizer decisions appear as Accepted, Rejected, or Waitlisted without a second status store.                                                     |
-| CFP-14 | Verified queue | Decision notification is an explicit organizer action. It queues a durable personalized message and exposes pending, sent, and failed delivery states in Communications.                                              |
-| CFP-15 | Verified       | Accepting a proposal atomically creates or reuses people, participation records, requirements, and a session carrying the proposal title, speakers, track, format, duration, and description.                         |
-| CFP-16 | Verified       | The speaker dashboard removes editing outside the submission window, and the operation boundary independently rejects update and submit attempts after close.                                                         |
+| Rubric | Status   | ProgramKit evidence                                                                                                                                                                                                   |
+| ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CFP-01 | Verified | The form builder adds text, long-text, select, file, and other question types, including required flags. The public renderer and operation boundary validate visible required fields.                                 |
+| CFP-02 | Verified | Fields can depend on another answer through equals, not-equals, or includes rules. The same visibility selector drives the builder preview, public form, and submit validation.                                       |
+| CFP-03 | Verified | The public route requires no login and shows event identity, location, close date, configured form fields, tracks, formats, and select options.                                                                       |
+| CFP-04 | Verified | Organizers edit opening and closing times in the event timezone. Scheduled and closed forms remain readable publicly while create, update, and submit operations reject writes outside the window.                    |
+| CFP-05 | Verified | A speaker capability is created on first draft, stored locally, and returned in the private dashboard URL. A completed proposal submits with an on-screen confirmation and status.                                    |
+| CFP-06 | Verified | Organizer submission detail resolves the same stored answers, participants, track, format, and custom fields supplied through the public form. Core and HTTP tests cover the round trip.                              |
+| CFP-07 | Verified | A title-only proposal can be saved as a private draft, resumed through its speaker link, completed, saved again, and submitted. Core, HTTP, and browser journeys exercise the lifecycle.                              |
+| CFP-08 | Verified | Submission creates a durable `submission_confirmation` outbox item with the submitter, event, and proposal title. A production message reached a controlled Gmail inbox in one provider attempt.                      |
+| CFP-09 | Verified | Speakers can edit their own submitted proposal while the call is open. Expected versions protect concurrent edits and the organizer reads the same updated record.                                                    |
+| CFP-10 | Verified | Organizers create reviewers, group them into pools, and optionally route each proposal category to a different pool. Automatic assignments use the submitted track and reviewer links expose only the assigned queue. |
+| CFP-11 | Verified | Assigned reviewers submit ratings and comments, completion updates immediately, and organizers see the same scorecard in submission review detail.                                                                    |
+| CFP-12 | Verified | Organizer decisions support accepted, rejected, and waitlisted states, including explicit override reasons where review minimums are not met. Distinct statuses persist in the list.                                  |
+| CFP-13 | Verified | The private speaker dashboard reads the same submission record, so organizer decisions appear as Accepted, Rejected, or Waitlisted without a second status store.                                                     |
+| CFP-14 | Verified | Decision notification includes an editable merge-field template and resolved recipient preview before queueing. The production acceptance message reached Gmail in one provider attempt.                              |
+| CFP-15 | Verified | Accepting a proposal atomically creates or reuses people, participation records, requirements, and a session carrying the proposal title, speakers, track, format, duration, and description.                         |
+| CFP-16 | Verified | The speaker dashboard removes editing outside the submission window, and the operation boundary independently rejects update and submit attempts after close.                                                         |
 
 ## Draft lifecycle exercised in the browser
 
@@ -53,9 +53,11 @@ email matches that account. Each destination still uses an unguessable record ca
 Worker verifies that capability on every projected read and operation. Staff authentication and
 event membership remain completely separate.
 
-## Remaining manual evidence
+## Hosted delivery exercised
 
-Email queue creation and status are deterministic and testable in the product. Actual provider
-delivery depends on deployment secrets, sender-domain verification, and the recipient mailbox, so
-CFP-08 and the delivery portion of CFP-14 still require a live-provider check when that evidence is
-needed.
+A production title-only draft was resumed, validated, completed, submitted, accepted, and converted
+to a session without re-entering its title, speaker, track, format, or abstract. The submission
+confirmation and acceptance decision each reached a controlled Gmail inbox from the verified
+ProgramKit sender in one provider attempt. The acceptance message named the event and proposal and
+included the private speaker portal link. Private addresses, capabilities, and provider identifiers
+remain outside the repository.

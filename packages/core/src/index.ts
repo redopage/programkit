@@ -91,12 +91,15 @@ export {
   submissionAnswerByPurpose,
   submissionAnswerDisplayByPurpose,
   submissionAnswerErrors,
+  submissionDecisionMessagePreview,
+  submissionDecisionMessageTemplate,
   submissionDecisionReadiness,
   submissionPipelineSummary,
   submissionParticipants,
   submissionReviewSummary,
   visibleSubmissionFormFields,
 } from './selectors.ts'
+export type { SubmissionDecisionMessageTemplate } from './selectors.ts'
 export { createEmptyWorkspaceState, createSeedState } from './seed.ts'
 export {
   requiredSubmissionFieldPurposes,

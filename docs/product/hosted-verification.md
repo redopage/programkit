@@ -23,6 +23,13 @@ deployed as Worker version `077826cd-9824-484e-b966-7320eaa28da1`.
   hashes after portal download;
 - a second speaker capability received `404` when requesting the first speaker's slide asset;
 - a scheduled session was published with its speaker, room, start, and end time intact;
+- a title-only CFP draft resumed through its private projection, rejected an incomplete submit,
+  persisted its full answer set, and submitted successfully;
+- its confirmation reached Gmail in one provider attempt with the resolved proposal and event;
+- accepting that proposal created the speaker participation and session without re-entering its
+  title, track, format, duration, or abstract;
+- its acceptance notice reached Gmail in one provider attempt with the resolved proposal, event,
+  and private speaker portal link;
 - an approved campaign reached Gmail with a `text/calendar` attachment containing the matching
   title, start, end, and room;
 - the workspace ZIP passed an integrity check and contained its complete JSON backup, manifest,

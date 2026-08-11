@@ -22,6 +22,8 @@ import {
   submissionAnswerByPurpose,
   submissionAnswerDisplayByPurpose,
   submissionAnswerErrors,
+  submissionDecisionMessagePreview,
+  submissionDecisionMessageTemplate,
   submissionDecisionReadiness,
   submissionReviewSummary,
 } from './selectors.ts'
@@ -2231,7 +2233,7 @@ function applyHandler(
             reviewerId: reviewer.id,
             recipient: reviewer.email,
             outstandingAssignmentIds: outstanding.map((assignment) => assignment.id),
-            deliveryMode: 'demo-outbox',
+            deliveryMode: 'durable-outbox',
           },
         })
       }
@@ -2790,19 +2792,14 @@ function applyHandler(
           'Record an accepted, rejected, or waitlisted decision before notifying the submitter.',
         )
       }
-      const decisionLabel =
-        submission.status === 'accepted'
-          ? 'accepted'
-          : submission.status === 'rejected'
-            ? 'not selected'
-            : 'waitlisted'
-      const submitterFirstName = stringAnswer(state, submission, 'first_name')
-      const submitterLastName = stringAnswer(state, submission, 'last_name')
       const submissionTitle = stringAnswer(state, submission, 'proposal_title')
-      const event = findRequired(state.events, submission.eventId, 'event')
-      const participation = submission.convertedParticipationId
-        ? state.participations.find((entry) => entry.id === submission.convertedParticipationId)
-        : null
+      const defaults = submissionDecisionMessageTemplate(submission.status)
+      const preview = submissionDecisionMessagePreview(state, submission, {
+        subject:
+          input.subject === undefined ? defaults.subject : assertString(input.subject, 'subject'),
+        body: input.body === undefined ? defaults.body : assertString(input.body, 'body'),
+      })
+      if (!preview) throw new OperationError('NOT_FOUND', 'The submission event was not found.')
       const message = queueOutboundMessage(
         state,
         {
@@ -2810,10 +2807,10 @@ function applyHandler(
           submissionId: submission.id,
           kind: 'decision_notice',
           trigger: 'submission.notify-decision',
-          recipientName: `${submitterFirstName} ${submitterLastName}`.trim(),
-          recipientEmail: assertEmail(stringAnswer(state, submission, 'email')),
-          subject: `${event.name} decision for “${submissionTitle}”`,
-          body: `Hi ${submitterFirstName},\n\nYour proposal “${submissionTitle}” has been ${decisionLabel} for ${event.name}.${submission.status === 'accepted' && participation ? `\n\nYour speaker portal is ready: /portal/${participation.id}/${participation.portalAccessKey}?event=${event.id}` : ''}`,
+          recipientName: preview.recipientName,
+          recipientEmail: assertEmail(preview.recipientEmail),
+          subject: preview.subject,
+          body: preview.body,
         },
         timestamp,
       )
@@ -2825,7 +2822,7 @@ function applyHandler(
           messageId: message.id,
           recipientEmail: message.recipientEmail,
           decision: submission.status,
-          deliveryMode: 'demo-outbox',
+          deliveryMode: 'durable-outbox',
         },
       })
       return { submission, message }

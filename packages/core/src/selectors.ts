@@ -149,6 +149,84 @@ export function submissionAnswerDisplayByPurpose(
   return typeof answer === 'string' ? label(answer) : answer
 }
 
+export interface SubmissionDecisionMessageTemplate {
+  subject: string
+  body: string
+}
+
+export function submissionDecisionMessageTemplate(
+  status: Submission['status'],
+): SubmissionDecisionMessageTemplate {
+  const decision =
+    status === 'accepted'
+      ? 'accepted'
+      : status === 'rejected'
+        ? 'not selected'
+        : status === 'waitlisted'
+          ? 'waitlisted'
+          : 'updated'
+  const nextStep =
+    status === 'accepted'
+      ? '\n\nYour speaker portal is ready: {{portal_link}}'
+      : status === 'waitlisted'
+        ? '\n\nWe will contact you if a place becomes available.'
+        : ''
+  return {
+    subject: '{{event_name}} decision for “{{talk_title}}”',
+    body: `Hi {{first_name}},\n\nYour proposal “{{talk_title}}” has been ${decision} for {{event_name}}.${nextStep}`,
+  }
+}
+
+export function submissionDecisionMessagePreview(
+  state: WorkspaceState,
+  submission: Submission,
+  template: SubmissionDecisionMessageTemplate = submissionDecisionMessageTemplate(
+    submission.status,
+  ),
+) {
+  const event = state.events.find((entry) => entry.id === submission.eventId)
+  if (!event) return null
+  const firstName = String(submissionAnswerByPurpose(state, submission, 'first_name') ?? '').trim()
+  const lastName = String(submissionAnswerByPurpose(state, submission, 'last_name') ?? '').trim()
+  const recipientEmail = String(submissionAnswerByPurpose(state, submission, 'email') ?? '').trim()
+  const talkTitle = String(
+    submissionAnswerByPurpose(state, submission, 'proposal_title') ?? '',
+  ).trim()
+  const participation = submission.convertedParticipationId
+    ? state.participations.find((entry) => entry.id === submission.convertedParticipationId)
+    : null
+  const portalLink = participation
+    ? `/portal/${encodeURIComponent(participation.id)}/${encodeURIComponent(participation.portalAccessKey)}?event=${encodeURIComponent(event.id)}`
+    : ''
+  const replacements: Record<string, string> = {
+    first_name: firstName,
+    last_name: lastName,
+    full_name: `${firstName} ${lastName}`.trim(),
+    event_name: event.name,
+    talk_title: talkTitle,
+    decision:
+      submission.status === 'accepted'
+        ? 'accepted'
+        : submission.status === 'rejected'
+          ? 'not selected'
+          : submission.status === 'waitlisted'
+            ? 'waitlisted'
+            : submission.status,
+    portal_link: portalLink,
+  }
+  const render = (value: string) =>
+    Object.entries(replacements).reduce(
+      (result, [token, replacement]) => result.replaceAll(`{{${token}}}`, replacement),
+      value,
+    )
+  return {
+    recipientName: replacements.full_name,
+    recipientEmail,
+    subject: render(template.subject),
+    body: render(template.body),
+  }
+}
+
 export function submissionParticipants(state: WorkspaceState, submission: Submission) {
   const text = (purpose: SubmissionFieldPurpose) => {
     const value = submissionAnswerByPurpose(state, submission, purpose)

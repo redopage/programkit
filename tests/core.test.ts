@@ -2010,7 +2010,11 @@ describe('ProgramKit operation engine', () => {
     )
     expect(state.outboundMessages).toEqual([])
     const notified = executeOperation(state, 'submission.notify-decision', {
-      input: { submissionId: submission.id },
+      input: {
+        submissionId: submission.id,
+        subject: 'Welcome, {{first_name}}, to {{event_name}}',
+        body: '{{full_name}} will present “{{talk_title}}”. Open {{portal_link}}',
+      },
     })
     expect(notified.response.ok).toBe(true)
     state = notified.state
@@ -2019,8 +2023,10 @@ describe('ProgramKit operation engine', () => {
       kind: 'decision_notice',
       trigger: 'submission.notify-decision',
       recipientEmail: 'mina@plainspoken.systems',
-      subject: expect.stringContaining('The boring parts of trustworthy agents'),
-      body: expect.stringContaining(`/portal/${participation.id}/${participation.portalAccessKey}`),
+      subject: expect.stringContaining('Welcome, Mina, to'),
+      body: expect.stringContaining(
+        `Mina Okafor will present “The boring parts of trustworthy agents”. Open /portal/${participation.id}/${participation.portalAccessKey}?event=${submission.eventId}`,
+      ),
       status: 'queued',
     })
   })
@@ -2788,7 +2794,7 @@ describe('ProgramKit operation engine', () => {
         reviewerId: reviewer.id,
         recipient: reviewer.email,
         outstandingAssignmentIds: outstanding.map((assignment) => assignment.id),
-        deliveryMode: 'demo-outbox',
+        deliveryMode: 'durable-outbox',
       },
     })
     expect(reminded.state.outboundMessages?.[0]).toMatchObject({

@@ -12,6 +12,8 @@ import {
   evaluationRoundCriteria,
   submissionAnswerByPurpose,
   submissionAnswerDisplayByPurpose,
+  submissionDecisionMessagePreview,
+  submissionDecisionMessageTemplate,
   submissionDecisionReadiness,
   submissionParticipants,
   submissionPipelineSummary,
@@ -337,6 +339,8 @@ function SubmissionDrawer({
   const { payload, execute, mutating } = useWorkspace()
   const [decisionChange, setDecisionChange] = useState<'rejected' | 'waitlisted' | null>(null)
   const [decisionReason, setDecisionReason] = useState('')
+  const [decisionEmailOpen, setDecisionEmailOpen] = useState(false)
+  const [decisionEmail, setDecisionEmail] = useState({ subject: '', body: '' })
   const submission = payload?.state.submissions?.find((entry) => entry.id === submissionId)
   if (!payload || !submission) return null
 
@@ -373,12 +377,13 @@ function SubmissionDrawer({
     submission.status === 'accepted' ||
     submission.status === 'rejected' ||
     submission.status === 'waitlisted'
-  const decisionNotice = state.outboundMessages?.find(
-    (message) => message.submissionId === submission.id && message.kind === 'decision_notice',
-  )
+  const decisionNotice = [...(state.outboundMessages ?? [])]
+    .reverse()
+    .find((message) => message.submissionId === submission.id && message.kind === 'decision_notice')
   const trackValue = answerText(submissionAnswerByPurpose(state, submission, 'track'))
   const trackLabel = state.tracks.find((entry) => entry.id === trackValue)?.name ?? trackValue
   const participants = submissionParticipants(state, submission)
+  const decisionEmailPreview = submissionDecisionMessagePreview(state, submission, decisionEmail)
 
   async function decide(decision: 'accepted' | 'rejected' | 'waitlisted') {
     await execute(
@@ -401,12 +406,22 @@ function SubmissionDrawer({
   }
 
   async function notifyDecision() {
-    await execute(
+    const response = await execute(
       'submission.notify-decision',
-      { submissionId: submission!.id },
+      {
+        submissionId: submission!.id,
+        subject: decisionEmail.subject,
+        body: decisionEmail.body,
+      },
       undefined,
       'Decision email queued.',
     )
+    if (response.ok) setDecisionEmailOpen(false)
+  }
+
+  function reviewDecisionEmail() {
+    setDecisionEmail(submissionDecisionMessageTemplate(submission!.status))
+    setDecisionEmailOpen(true)
   }
 
   async function changeAcceptedDecision() {
@@ -483,10 +498,10 @@ function SubmissionDrawer({
               size="compact"
               variant={decisionNotice ? 'secondary' : 'primary'}
               disabled={mutating}
-              onClick={() => void notifyDecision()}
+              onClick={reviewDecisionEmail}
             >
               <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
-              {decisionNotice ? 'Queue again' : 'Queue decision email'}
+              {decisionNotice ? 'Send again' : 'Review decision email'}
             </Button>
           ) : null}
         </>
@@ -674,7 +689,75 @@ function SubmissionDrawer({
 
   return (
     <>
-      {decisionChange === null ? drawer : null}
+      {decisionChange === null && !decisionEmailOpen ? drawer : null}
+      <Dialog
+        open={decisionEmailOpen}
+        onClose={() => {
+          if (!mutating) setDecisionEmailOpen(false)
+        }}
+        title="Review decision email"
+        description="Check the resolved recipient and message before it enters the delivery queue."
+        footer={
+          <>
+            <Button size="compact" disabled={mutating} onClick={() => setDecisionEmailOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="compact"
+              variant="primary"
+              disabled={mutating || !decisionEmail.subject.trim() || !decisionEmail.body.trim()}
+              onClick={() => void notifyDecision()}
+            >
+              <EnvelopeIcon className="size-4 h-lh shrink-0 fill-current" />
+              Queue email
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <div className="rounded-xl bg-zinc-50 px-4 py-3 ring-1 ring-zinc-950/5">
+            <p className="text-sm text-zinc-500">To</p>
+            <p className="truncate pt-0.5 text-base font-medium text-zinc-950 sm:text-sm">
+              {decisionEmailPreview?.recipientName} · {decisionEmailPreview?.recipientEmail}
+            </p>
+          </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-base font-medium text-zinc-950 sm:text-sm">Subject</span>
+            <input
+              type="text"
+              required
+              value={decisionEmail.subject}
+              onChange={(event) =>
+                setDecisionEmail((current) => ({ ...current, subject: event.target.value }))
+              }
+              className="focus-ring min-h-11 rounded-xl bg-white px-3.5 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-base font-medium text-zinc-950 sm:text-sm">Message</span>
+            <textarea
+              required
+              rows={8}
+              value={decisionEmail.body}
+              onChange={(event) =>
+                setDecisionEmail((current) => ({ ...current, body: event.target.value }))
+              }
+              className="focus-ring resize-y rounded-xl bg-white px-3.5 py-2.5 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:text-sm"
+            />
+          </label>
+          <p className="text-pretty text-sm text-zinc-500">
+            Merge fields: {'{{first_name}}'}, {'{{full_name}}'}, {'{{talk_title}}'},{' '}
+            {'{{event_name}}'}, {'{{decision}}'}, and {'{{portal_link}}'}.
+          </p>
+          <div className="rounded-xl bg-zinc-950 px-4 py-4 text-white shadow-lg">
+            <p className="text-sm text-zinc-400">Resolved preview</p>
+            <p className="pt-2 text-sm font-medium">{decisionEmailPreview?.subject}</p>
+            <p className="whitespace-pre-wrap pt-3 text-pretty text-sm text-zinc-300">
+              {decisionEmailPreview?.body}
+            </p>
+          </div>
+        </div>
+      </Dialog>
       <Dialog
         open={decisionChange !== null}
         onClose={() => {
