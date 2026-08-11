@@ -19,6 +19,10 @@ export function calendarDate(value: string) {
   return new Date(value).toISOString().replaceAll(/[-:]/gu, '').replace('.000', '')
 }
 
+export function calendarUid(sessionId: string) {
+  return `${calendarEscape(sessionId)}@programkit.dev`
+}
+
 function calendarFilename(value: string) {
   const normalized = value
     .normalize('NFKD')
@@ -66,7 +70,7 @@ export function calendarAttachmentForParticipation(
     `X-WR-CALNAME:${calendarEscape(`${event.name} · ${person.firstName} ${person.lastName}`)}`,
     ...sessions.flatMap(({ placement, session, room }) => [
       'BEGIN:VEVENT',
-      `UID:${calendarEscape(`${event.id}-${session.id}`)}@programkit.dev`,
+      `UID:${calendarUid(session.id)}`,
       `DTSTAMP:${calendarDate(release.publishedAt)}`,
       `DTSTART:${calendarDate(placement.startsAt)}`,
       `DTEND:${calendarDate(placement.endsAt)}`,

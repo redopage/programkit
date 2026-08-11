@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
-import { publicAgenda } from '@programkit/core'
+import { calendarUid, publicAgenda } from '@programkit/core'
 
 import { ProgramKitMark } from '../components/brand.tsx'
 import { Button, Drawer, TrackBadge, cx, sentenceCase } from '../components/ui.tsx'
@@ -467,7 +467,7 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
       'PRODID:-//ProgramKit//Personal schedule//EN',
       ...chosen.flatMap((item) => [
         'BEGIN:VEVENT',
-        `UID:${item.session.id}@programkit.dev`,
+        `UID:${calendarUid(item.session.id)}`,
         `DTSTAMP:${icsDate(new Date().toISOString())}`,
         `DTSTART:${icsDate(item.placement.startsAt)}`,
         `DTEND:${icsDate(item.placement.endsAt)}`,

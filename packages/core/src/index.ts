@@ -1,7 +1,12 @@
 export { executeOperation } from './engine.ts'
 export { createAcceleventsExport } from './accelevents.ts'
 export type { AcceleventsExport } from './accelevents.ts'
-export { calendarAttachmentForParticipation, calendarDate, calendarEscape } from './calendar.ts'
+export {
+  calendarAttachmentForParticipation,
+  calendarDate,
+  calendarEscape,
+  calendarUid,
+} from './calendar.ts'
 export type { CalendarAttachment } from './calendar.ts'
 export {
   contactConnections,

@@ -1,5 +1,5 @@
 import { executeOperation } from './engine.ts'
-import { calendarDate, calendarEscape } from './calendar.ts'
+import { calendarDate, calendarEscape, calendarUid } from './calendar.ts'
 import { evaluationRoundIsBlind } from './reviews.ts'
 import { createWorkspaceExportArchive, workspaceExportFilename } from './export.ts'
 import { operationManifest } from './manifest.ts'
@@ -450,7 +450,7 @@ function publicProgramCalendar(feed: NonNullable<ReturnType<typeof publicProgram
     `X-WR-CALNAME:${calendarEscape(feed.event.name)}`,
     ...feed.sessions.flatMap((session) => [
       'BEGIN:VEVENT',
-      `UID:${calendarEscape(session.id)}@programkit.dev`,
+      `UID:${calendarUid(session.id)}`,
       `DTSTAMP:${calendarDate(feed.event.startsAt)}`,
       `DTSTART:${calendarDate(session.startsAt)}`,
       `DTEND:${calendarDate(session.endsAt)}`,

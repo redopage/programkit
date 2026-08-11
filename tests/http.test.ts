@@ -112,6 +112,7 @@ describe('operation HTTP surface', () => {
     expect(calendar).toContain('BEGIN:VCALENDAR\r\n')
     expect(calendar.match(/BEGIN:VEVENT/gu)).toHaveLength(10)
     expect(calendar).toContain('LOCATION:')
+    expect(calendar).toContain(`UID:${sample.id}@programkit.dev\r\n`)
 
     const optionsResponse = await handleCoreRequest(
       new Request('http://local/public/v1/program.json', { method: 'OPTIONS' }),

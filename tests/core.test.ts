@@ -1295,6 +1295,16 @@ describe('ProgramKit operation engine', () => {
     expect(attachment.content).toContain('METHOD:PUBLISH\r\n')
     expect(attachment.content.match(/BEGIN:VEVENT/gu)).toHaveLength(attachment.eventCount)
     expect(attachment.filename).toMatch(/-schedule\.ics$/u)
+    const release = state.scheduleReleases
+      .filter((entry) => entry.eventId === state.activeEventId)
+      .sort((left, right) => right.version - left.version)[0]!
+    const scheduledSession = release.placements
+      .map((placement) => state.sessions.find((entry) => entry.id === placement.sessionId))
+      .find((session) => session?.participantIds.includes(participation.id))!
+    expect(attachment.content).toContain(`UID:${scheduledSession.id}@programkit.dev\r\n`)
+    expect(attachment.content).not.toContain(
+      `UID:${state.activeEventId}-${scheduledSession.id}@programkit.dev`,
+    )
 
     const drafted = executeOperation(state, 'campaign.create-draft', {
       input: {
