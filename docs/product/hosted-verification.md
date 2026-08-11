@@ -6,8 +6,10 @@ collaborator's event as test data.
 
 ## Current production evidence
 
-Verified on **10 August 2026** against `https://app.programkit.dev`. Application source commit
-`aae940c` is deployed as Worker version `4d1f301a-26f9-44a7-85b9-f045b11520d2`.
+Verified through **11 August 2026** against `https://app.programkit.dev`. Application source commit
+`9fe4321` is deployed as Worker version `8d33d320-a7f4-45aa-8cb3-5673c1c42478`. The matching demo
+and site deployments are `5b86bab0-57d8-4740-87e0-d4e400bba1a1` and
+`1c5ba505-0720-409f-ac85-a87c3533f33f`.
 
 - email/password signup created an organizer session and first event;
 - the organizer created a second event and both events retained isolated workspace state;
@@ -46,6 +48,10 @@ Verified on **10 August 2026** against `https://app.programkit.dev`. Application
 - the workspace ZIP passed an integrity check and contained its complete JSON backup, manifest,
   readable CSV collections, and aggregated review-results CSV;
 - the public agenda rendered all five views and the published program in a signed-out browser;
+- Schedule studio saved a named public-program embed, retrieved its code, and persisted its enabled
+  state;
+- the production embed loader was served as JavaScript from all three official hosts and mounted
+  the anonymous public program from a separate localhost origin;
 - its 390 px layout had no document-level horizontal overflow; and
 - public JSON, XML, and iCal feeds returned the same release with wildcard CORS.
 

@@ -14,7 +14,7 @@ area lives in [`evals`](evals/README.md).
 | Speaker Management  | All 16 browser criteria implemented                                             | Real calendar-import evidence                                              |
 | Content Management  | All 14 browser criteria implemented                                             | Full fresh-account evaluator replay                                        |
 | AI Agenda           | All 8 browser criteria implemented                                              | Full fresh-account conflict-resolution replay                              |
-| Public Widgets      | All 16 browser criteria implemented                                             | Cross-origin iframe check and real calendar import                         |
+| Public Widgets      | All 16 browser criteria implemented                                             | Real calendar import                                                       |
 | Speaker CRM         | All 12 optional criteria implemented                                            | Full chained browser evidence after fresh import and second-event creation |
 
 “Implemented” means the product has a real user action, an authorized server transition, persisted
@@ -47,7 +47,7 @@ hosted identity or event membership.
 5. Inspect downloaded CSV, ZIP, and iCal artifacts rather than counting the click alone.
 6. Send the required messages to mailboxes we control and record subject, personalization,
    attachment, timestamp, and delivery state.
-7. Paste the generated iframe into another origin and verify interactivity and filters.
+7. Re-run the generated iframe on another origin after the final freeze and retain a screenshot.
 8. Repeat the entire chain from a second disposable organizer account and retain the stronger
    report. Never reset a collaborator's event in place.
 
