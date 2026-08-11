@@ -60,6 +60,17 @@ delivery because the current email binding does not provide delivery or bounce w
 
 ## Repeatable checks
 
+Run the deterministic hosted and evaluator preflight before the manual sequence:
+
+```bash
+PROGRAMKIT_PUBLIC_EVENT_ID=<published-event-id> pnpm competition:preflight
+```
+
+The command pins the local evaluator checkout to the documented commit, runs its browser smoke and
+full dry-run plan, checks all three production hosts and embed loaders, and validates the selected
+event's anonymous agenda plus JSON, XML, and iCal outputs. It does not send mail, import a calendar,
+or invoke the paid evaluator.
+
 ### Account and event isolation
 
 1. Create a new organizer account at `/signup`.

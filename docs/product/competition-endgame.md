@@ -35,6 +35,8 @@ GitHub remains a synchronized mirror for Cloudflare's one-click deploy flow.
 
 ### 2. Run the full evaluator chain
 
+- Run `PROGRAMKIT_PUBLIC_EVENT_ID=<published-event-id> pnpm competition:preflight` and resolve every
+  failure before spending model tokens on the evaluator.
 - Create a fresh organizer account and the fixture event through the browser.
 - Execute the 20 scenarios in file order from `killmysaas-evals/specs`.
 - Capture before and after reload evidence for every persisted transition.

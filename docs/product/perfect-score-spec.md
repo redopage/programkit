@@ -2,7 +2,7 @@
 
 Companion to [competition-endgame.md](competition-endgame.md). That document says where we are;
 this one defines, item by item, what a **full-credit** result looks like for all 98 rubric items
-(183 required points + 19 extra credit) and what has to exist for the evaluator to observe it.
+(182 required points + 19 extra credit) and what has to exist for the evaluator to observe it.
 
 > **Status note:** this file is the acceptance specification, not a current gap report. Many
 > historical “Build” notes below have since shipped. Use the area-by-area
