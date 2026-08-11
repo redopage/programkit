@@ -20,7 +20,11 @@ export function PortalResources({ resources }: { resources: PortalResourcePage[]
         {published.map((resource) => (
           <article
             key={resource.id}
-            className="flex min-w-0 flex-col overflow-hidden rounded-2xl ring-1 ring-zinc-950/10"
+            className={`min-w-0 overflow-hidden rounded-2xl ring-1 ring-zinc-950/10 ${
+              published.length === 1
+                ? 'lg:col-span-2 lg:grid lg:grid-cols-[minmax(18rem,4fr)_minmax(0,6fr)]'
+                : 'flex flex-col'
+            }`}
           >
             <div className="flex flex-1 flex-col gap-3 p-5 sm:p-6">
               <div className="flex items-start gap-3">
@@ -47,7 +51,7 @@ export function PortalResources({ resources }: { resources: PortalResourcePage[]
                     href={resource.linkUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="focus-ring inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-zinc-800 ring-1 ring-zinc-950/10 hover:bg-zinc-50"
+                    className="focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-zinc-800 ring-1 ring-zinc-950/10 hover:bg-zinc-50 sm:min-h-9"
                   >
                     Open resource
                     <ArrowTopRightOnSquareIcon className="size-4 fill-zinc-400" />
@@ -56,7 +60,13 @@ export function PortalResources({ resources }: { resources: PortalResourcePage[]
               ) : null}
             </div>
             {resource.embedUrl ? (
-              <div className="aspect-video min-h-64 border-t border-zinc-950/5 bg-zinc-50">
+              <div
+                className={`aspect-video min-h-64 bg-zinc-50 ${
+                  published.length === 1
+                    ? 'border-t border-zinc-950/5 lg:min-h-0 lg:border-t-0 lg:border-l'
+                    : 'border-t border-zinc-950/5'
+                }`}
+              >
                 <iframe
                   src={resource.embedUrl}
                   title={resource.title}

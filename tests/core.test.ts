@@ -789,6 +789,12 @@ describe('ProgramKit operation engine', () => {
 
   it('registers a speaker headshot against their own profile and completes readiness', () => {
     const state = createSeedState()
+    expect(
+      state.requirementDefinitions.find((entry) => entry.systemKey === 'profile_headshot'),
+    ).toMatchObject({
+      acceptedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      maxSizeBytes: 8_000_000,
+    })
     const participant = {
       type: 'participant' as const,
       id: 'par_003',

@@ -63,7 +63,7 @@ export function Button({
         'focus-ring inline-flex shrink-0 items-center justify-center gap-2 rounded-full font-medium shadow-xs ring-1 motion-safe:transition-[background-color,box-shadow,transform] motion-safe:enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none disabled:ring-zinc-950/5',
         size === 'regular'
           ? 'min-h-11 px-3.5 text-base [&:has(>svg:first-child)]:pl-2.5 [&:has(>svg:last-child)]:pr-2.5 sm:min-h-9 sm:text-sm'
-          : 'min-h-9 px-3 text-base [&:has(>svg:first-child)]:pl-2 [&:has(>svg:last-child)]:pr-2 sm:min-h-8 sm:text-[0.8125rem]',
+          : 'min-h-11 px-3 text-base [&:has(>svg:first-child)]:pl-2 [&:has(>svg:last-child)]:pr-2 sm:min-h-8 sm:text-[0.8125rem]',
         variant === 'primary' && 'bg-blue-600 text-white ring-blue-700/20 hover:bg-blue-700',
         variant === 'secondary' &&
           'bg-white text-zinc-800 ring-zinc-950/10 hover:bg-zinc-50 hover:ring-zinc-950/15',

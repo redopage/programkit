@@ -154,6 +154,10 @@ function initializeProgramCollections(state: WorkspaceState) {
           ]
         : []
     definition.maxSizeBytes ??= definition.kind === 'file' ? 50_000_000 : null
+    if (definition.systemKey === 'profile_headshot') {
+      definition.acceptedContentTypes = ['image/jpeg', 'image/png', 'image/webp']
+      definition.maxSizeBytes = 8_000_000
+    }
     definition.automaticReminders ??= false
   }
   for (const asset of state.assets) {

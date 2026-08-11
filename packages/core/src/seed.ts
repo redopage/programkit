@@ -235,6 +235,8 @@ const requirementDefinitions: RequirementDefinition[] = [
     kind: 'file',
     systemKey: 'profile_headshot',
     selfCompletable: false,
+    acceptedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
+    maxSizeBytes: 8_000_000,
     dueAt: '2026-09-04T21:00:00.000Z',
     required: true,
     automaticReminders: false,

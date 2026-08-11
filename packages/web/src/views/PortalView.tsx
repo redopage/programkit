@@ -182,14 +182,7 @@ function PortalWorkspace() {
     <div className="min-h-dvh bg-white">
       <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <a
-            href="#"
-            aria-label="Homepage"
-            className="focus-ring text-base font-semibold tracking-tight text-zinc-950"
-            onClick={(event) => event.preventDefault()}
-          >
-            {event.name}
-          </a>
+          <p className="text-base font-semibold tracking-tight text-zinc-950">{event.name}</p>
           <p className="text-base text-zinc-500 sm:text-sm">Speaker portal</p>
         </div>
       </header>
@@ -302,10 +295,10 @@ function PortalWorkspace() {
 
         <PortalResources resources={state.portalResourcePages ?? []} />
 
-        <div className="grid items-start gap-8 lg:grid-cols-[7fr_5fr]">
+        <div className="grid min-w-0 items-start gap-8 lg:grid-cols-[7fr_5fr]">
           <section
             aria-labelledby="tasks-heading"
-            className="rounded-2xl p-5 ring-1 ring-zinc-950/10 sm:p-6"
+            className="min-w-0 rounded-2xl p-5 ring-1 ring-zinc-950/10 sm:p-6"
           >
             <div className="border-b border-zinc-950/5 pb-3">
               <h2 id="tasks-heading" className="text-lg font-semibold text-zinc-950">
@@ -366,11 +359,20 @@ function PortalWorkspace() {
                             <StatusBadge status={instance.status} />
                           </span>
                           <span className="flex sm:w-24 sm:justify-end">
-                            {definition.kind !== 'file' &&
-                            (instance.status === 'not_started' ||
-                              instance.status === 'revision_requested') &&
-                            definition.systemKey !== 'participation_confirmation' &&
-                            definition.systemKey !== 'profile_bio' ? (
+                            {(definition.systemKey === 'profile_bio' ||
+                              definition.systemKey === 'profile_headshot') &&
+                            instance.status !== 'approved' ? (
+                              <a
+                                href="#public-profile"
+                                className="focus-ring inline-flex min-h-11 items-center rounded-full px-3 text-base font-medium text-zinc-700 ring-1 ring-zinc-950/10 hover:bg-zinc-50 sm:min-h-8 sm:text-[0.8125rem]"
+                              >
+                                Update profile
+                              </a>
+                            ) : definition.kind !== 'file' &&
+                              (instance.status === 'not_started' ||
+                                instance.status === 'revision_requested') &&
+                              definition.systemKey !== 'participation_confirmation' &&
+                              definition.systemKey !== 'profile_bio' ? (
                               <Button
                                 size="compact"
                                 disabled={mutating}
@@ -402,7 +404,7 @@ function PortalWorkspace() {
                           </span>
                         </div>
                       </div>
-                      {definition.kind === 'file' ? (
+                      {definition.kind === 'file' && definition.systemKey !== 'profile_headshot' ? (
                         <div className="pl-6">
                           <FileRequirement
                             definition={definition}
@@ -433,8 +435,9 @@ function PortalWorkspace() {
           </section>
 
           <section
+            id="public-profile"
             aria-labelledby="profile-heading"
-            className="rounded-2xl p-5 ring-1 ring-zinc-950/10 sm:p-6"
+            className="min-w-0 scroll-mt-8 rounded-2xl p-5 ring-1 ring-zinc-950/10 sm:p-6 lg:sticky lg:top-8"
           >
             <div className="border-b border-zinc-950/5 pb-3">
               <h2 id="profile-heading" className="text-lg font-semibold text-zinc-950">
@@ -492,7 +495,8 @@ function PortalWorkspace() {
                     href={`/public/v1/assets/${encodeURIComponent(headshots[0].id)}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="focus-ring rounded-full px-3 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/10 hover:bg-white"
+                    aria-label={`View ${headshots[0].filename}`}
+                    className="focus-ring inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/10 hover:bg-white sm:min-h-9"
                   >
                     View
                   </a>
@@ -531,6 +535,7 @@ function PortalWorkspace() {
                 <span className="text-base font-medium text-zinc-950 sm:text-sm">Bio</span>
                 <textarea
                   name="bio"
+                  aria-describedby="profile-bio-count"
                   rows={6}
                   maxLength={600}
                   value={form.bio}
@@ -540,7 +545,9 @@ function PortalWorkspace() {
                   className={textAreaControl}
                 />
               </label>
-              <p className="text-right text-sm tabular-nums text-zinc-500">{form.bio.length}/600</p>
+              <p id="profile-bio-count" className="text-right text-sm tabular-nums text-zinc-500">
+                {form.bio.length}/600 characters
+              </p>
               <div className="flex justify-start">
                 <Button
                   type="submit"
@@ -677,7 +684,10 @@ function FileRequirement({
               ))}
             </ul>
           ) : null}
-          <form className="flex gap-2" onSubmit={(event) => void onComment(event, latest)}>
+          <form
+            className="flex flex-col items-start gap-2 sm:flex-row sm:items-center"
+            onSubmit={(event) => void onComment(event, latest)}
+          >
             <input
               type="text"
               aria-label="Add a file comment"
