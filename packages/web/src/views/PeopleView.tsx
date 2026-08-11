@@ -19,6 +19,7 @@ import {
   Button,
   Drawer,
   EmptyState,
+  FileDropField,
   FilterTabs,
   PageHeader,
   ProgressBar,
@@ -662,16 +663,15 @@ function PersonDrawer({
                         >
                           Replace headshot
                         </label>
-                        <p className="text-sm text-zinc-500">JPEG, PNG, or WebP up to 8 MB.</p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input
+                    <div className="flex flex-col items-start gap-3">
+                      <FileDropField
                         id="headshot-file"
                         name="file"
-                        type="file"
                         accept="image/jpeg,image/png,image/webp"
-                        className="min-w-0 flex-1 text-sm text-zinc-600 file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-3 file:py-1.5 file:font-medium file:text-zinc-700 file:shadow-xs file:ring-1 file:ring-zinc-950/10"
+                        description="JPEG, PNG, or WebP up to 8 MB."
+                        className="w-full"
                       />
                       <Button type="submit" size="compact" disabled={uploadingHeadshot}>
                         <ArrowUpTrayIcon className="size-4 h-lh shrink-0 fill-current" />
@@ -976,19 +976,13 @@ function ImportSpeakersDrawer({
           Choose a CSV with name, email, title, company, and bio columns. Existing email addresses
           are skipped.
         </p>
-        <label className="focus-ring flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-950/15 bg-zinc-950/2 p-6 text-center hover:bg-zinc-950/4">
-          <ArrowUpTrayIcon className="size-5 fill-zinc-500" />
-          <span className="text-base font-medium text-zinc-950 sm:text-sm">
-            {fileName || 'Choose a CSV file'}
-          </span>
-          <span className="text-base text-zinc-500 sm:text-sm">Up to 500 speakers</span>
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            className="sr-only"
-            onChange={(event) => void chooseFile(event.target.files?.[0])}
-          />
-        </label>
+        <FileDropField
+          name="speakersCsv"
+          accept=".csv,text/csv"
+          label={fileName || 'Choose or drop a CSV file'}
+          description="Up to 500 speakers."
+          onChange={(event) => void chooseFile(event.target.files?.[0])}
+        />
         {error ? (
           <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
             {error}

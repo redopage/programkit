@@ -1,6 +1,7 @@
 import {
   CheckCircleIcon,
   ChevronRightIcon,
+  DocumentArrowUpIcon,
   ExclamationTriangleIcon,
   InformationCircleIcon,
   MagnifyingGlassIcon,
@@ -13,6 +14,7 @@ import {
   useRef,
   useState,
   type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
   type ReactNode,
   type RefObject,
 } from 'react'
@@ -74,6 +76,65 @@ export function Button({
     >
       {children}
     </button>
+  )
+}
+
+export function FileDropField({
+  label = 'Choose or drop a file',
+  description,
+  className,
+  id,
+  onChange,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'className'> & {
+  label?: string
+  description?: string
+  className?: string
+}) {
+  const generatedId = useId()
+  const inputId = id ?? `file-${generatedId}`
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [filename, setFilename] = useState('')
+
+  useEffect(() => {
+    const form = inputRef.current?.form
+    if (!form) return
+    const clearFilename = () => setFilename('')
+    form.addEventListener('reset', clearFilename)
+    return () => form.removeEventListener('reset', clearFilename)
+  }, [])
+
+  return (
+    <label
+      htmlFor={inputId}
+      className={cx(
+        'relative flex min-h-24 min-w-0 cursor-pointer items-center gap-3 rounded-xl bg-white p-4 ring-1 ring-zinc-950/10 has-disabled:cursor-not-allowed has-disabled:bg-zinc-50 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-blue-500 hover:bg-zinc-950/2',
+        className,
+      )}
+    >
+      <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-blue-600" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-base font-medium text-zinc-950 sm:text-sm">
+          {filename || label}
+        </span>
+        {description ? (
+          <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
+            {description}
+          </span>
+        ) : null}
+      </span>
+      <input
+        {...props}
+        ref={inputRef}
+        id={inputId}
+        type="file"
+        onChange={(event) => {
+          setFilename(event.target.files?.[0]?.name ?? '')
+          onChange?.(event)
+        }}
+        className="absolute inset-0 size-full cursor-pointer rounded-xl opacity-0 disabled:cursor-not-allowed"
+      />
+    </label>
   )
 }
 

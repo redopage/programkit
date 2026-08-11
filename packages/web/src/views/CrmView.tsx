@@ -28,6 +28,7 @@ import {
   Dialog,
   Drawer,
   EmptyState,
+  FileDropField,
   FilterTabs,
   PageHeader,
   SearchInput,
@@ -1006,13 +1007,12 @@ function ImportContactsDialog({
       size="wide"
     >
       <div className="grid gap-4">
-        <input
+        <FileDropField
           name="contactsCsv"
-          aria-label="Choose a contacts CSV file"
-          type="file"
           accept=".csv,text/csv"
+          label="Choose or drop a CSV file"
+          description="Name and email are required."
           onChange={(event) => void choose(event.target.files?.[0])}
-          className="text-sm file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:font-medium"
         />
         {error ? (
           <p role="alert" className="text-sm text-red-700">

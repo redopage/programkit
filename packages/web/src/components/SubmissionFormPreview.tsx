@@ -15,7 +15,7 @@ import {
 } from '@programkit/core'
 
 import { ProgramKitMark } from './brand.tsx'
-import { cx } from './ui.tsx'
+import { cx, FileDropField } from './ui.tsx'
 
 const speakerPurposes = new Set([
   'first_name',
@@ -369,12 +369,7 @@ function PreviewField({
           <span className="text-base text-zinc-700 sm:text-sm">Yes</span>
         </label>
       ) : field.kind === 'file' ? (
-        <input
-          id={fieldId}
-          type="file"
-          name={field.key}
-          className="focus-ring min-h-10 w-full rounded-xl bg-white p-2 text-base text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 sm:text-sm"
-        />
+        <FileDropField id={fieldId} name={field.key} className="w-full" />
       ) : (
         <input
           id={fieldId}

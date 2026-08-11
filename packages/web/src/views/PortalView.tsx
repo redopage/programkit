@@ -6,7 +6,6 @@ import {
   ClockIcon,
   DocumentArrowUpIcon,
   MapPinIcon,
-  PaperClipIcon,
 } from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
 
@@ -23,6 +22,7 @@ import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Avatar,
   Button,
+  FileDropField,
   ProgressBar,
   StatusBadge,
   sentenceCase,
@@ -365,48 +365,45 @@ function PortalWorkspace() {
                           <span className="flex sm:w-32">
                             <StatusBadge status={instance.status} />
                           </span>
-                          {definition.kind !== 'file' ? (
-                            <span className="flex sm:w-24 sm:justify-end">
-                              {(instance.status === 'not_started' ||
-                                instance.status === 'revision_requested') &&
-                              definition.systemKey !== 'participation_confirmation' &&
-                              definition.systemKey !== 'profile_bio' ? (
-                                <Button
-                                  size="compact"
-                                  disabled={mutating}
-                                  onClick={() =>
-                                    void execute(
-                                      'requirement.set-status',
-                                      {
-                                        requirementInstanceId: instance.id,
-                                        status: definition.selfCompletable
-                                          ? 'approved'
-                                          : 'submitted',
-                                        value: definition.selfCompletable
-                                          ? 'Completed through participant portal.'
-                                          : 'Submitted through participant portal.',
-                                      },
-                                      { expectedVersions: { [instance.id]: instance.version } },
-                                      definition.selfCompletable
-                                        ? `${definition.label} completed.`
-                                        : `${definition.label} submitted for review.`,
-                                    )
-                                  }
-                                >
-                                  {definition.selfCompletable ? (
-                                    <CheckCircleIcon className="size-4 h-lh shrink-0 fill-current" />
-                                  ) : (
-                                    <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
-                                  )}
-                                  {definition.selfCompletable ? 'Mark complete' : 'Submit'}
-                                </Button>
-                              ) : null}
-                            </span>
-                          ) : null}
+                          <span className="flex sm:w-24 sm:justify-end">
+                            {definition.kind !== 'file' &&
+                            (instance.status === 'not_started' ||
+                              instance.status === 'revision_requested') &&
+                            definition.systemKey !== 'participation_confirmation' &&
+                            definition.systemKey !== 'profile_bio' ? (
+                              <Button
+                                size="compact"
+                                disabled={mutating}
+                                onClick={() =>
+                                  void execute(
+                                    'requirement.set-status',
+                                    {
+                                      requirementInstanceId: instance.id,
+                                      status: definition.selfCompletable ? 'approved' : 'submitted',
+                                      value: definition.selfCompletable
+                                        ? 'Completed through participant portal.'
+                                        : 'Submitted through participant portal.',
+                                    },
+                                    { expectedVersions: { [instance.id]: instance.version } },
+                                    definition.selfCompletable
+                                      ? `${definition.label} completed.`
+                                      : `${definition.label} submitted for review.`,
+                                  )
+                                }
+                              >
+                                {definition.selfCompletable ? (
+                                  <CheckCircleIcon className="size-4 h-lh shrink-0 fill-current" />
+                                ) : (
+                                  <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-current" />
+                                )}
+                                {definition.selfCompletable ? 'Mark complete' : 'Submit'}
+                              </Button>
+                            ) : null}
+                          </span>
                         </div>
                       </div>
                       {definition.kind === 'file' ? (
-                        <div className="flex items-start gap-2">
+                        <div className="pl-6">
                           <FileRequirement
                             definition={definition}
                             instance={instance}
@@ -457,17 +454,13 @@ function PortalWorkspace() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="text-base font-medium text-zinc-950 sm:text-sm">Headshot</p>
-                  <p className="text-pretty text-sm text-zinc-500">
-                    JPEG, PNG, or WebP up to 8 MB.
-                  </p>
                 </div>
               </div>
-              <input
-                type="file"
+              <FileDropField
                 name="file"
                 required
                 accept="image/jpeg,image/png,image/webp"
-                className="focus-ring min-h-10 w-full rounded-xl px-3 py-2 text-sm text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-zinc-800"
+                description="JPEG, PNG, or WebP up to 8 MB."
               />
               {headshotError ? (
                 <p role="alert" className="text-sm text-red-600">
@@ -596,28 +589,17 @@ function FileRequirement({
     accepted.some((type) => type.includes('powerpoint')) ? ' or PowerPoint' : ''
   }, up to ${maximumMb} MB`
   return (
-    <div className="ml-6 flex w-full min-w-0 flex-col gap-3 rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-950/5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-800">
-          <PaperClipIcon className="size-4 fill-zinc-400" />
-          {constraints}
-        </p>
-        {deliverables.length > 0 ? (
-          <p className="text-sm tabular-nums text-zinc-500">
-            {deliverables.length} {deliverables.length === 1 ? 'version' : 'versions'}
-          </p>
-        ) : null}
-      </div>
+    <div className="flex w-full min-w-0 flex-col gap-3 rounded-2xl bg-zinc-50 p-3 ring-1 ring-zinc-950/5">
       <form
-        className="flex flex-col gap-2 sm:flex-row sm:items-center"
+        className="flex flex-col items-start gap-3"
         onSubmit={(event) => void onUpload(event, instance)}
       >
-        <input
-          type="file"
+        <FileDropField
           name="file"
           required
           accept={accepted.join(',')}
-          className="focus-ring min-h-10 min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-sm text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1 file:text-sm file:font-medium file:text-zinc-800"
+          description={constraints}
+          className="w-full"
         />
         <Button type="submit" size="compact" disabled={uploading}>
           <DocumentArrowUpIcon className="size-4 fill-current" />

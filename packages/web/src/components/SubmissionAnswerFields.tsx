@@ -6,7 +6,7 @@ import type {
   SubmissionFieldPurpose,
 } from '@programkit/core'
 
-import { cx, textAreaControl, textControl } from './ui.tsx'
+import { cx, FileDropField, textAreaControl, textControl } from './ui.tsx'
 
 export function SubmissionAnswerFields({
   fields,
@@ -162,15 +162,14 @@ function SubmissionAnswerField({
           acceptance.
         </div>
       ) : field.kind === 'file' ? (
-        <input
+        <FileDropField
           id={fieldId}
-          type="file"
           name={field.key}
           required={field.required}
           disabled={locked}
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy}
-          className="focus-ring min-h-11 w-full rounded-xl bg-white p-2 text-base text-zinc-600 ring-1 ring-zinc-950/10 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 sm:text-sm"
+          className="w-full"
         />
       ) : (
         <input
