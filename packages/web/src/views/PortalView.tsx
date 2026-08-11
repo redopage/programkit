@@ -302,7 +302,7 @@ function PortalWorkspace() {
 
         <PortalResources resources={state.portalResourcePages ?? []} />
 
-        <div className="grid gap-8 lg:grid-cols-[7fr_5fr]">
+        <div className="grid items-start gap-8 lg:grid-cols-[7fr_5fr]">
           <section
             aria-labelledby="tasks-heading"
             className="rounded-2xl p-5 ring-1 ring-zinc-950/10 sm:p-6"
@@ -541,13 +541,15 @@ function PortalWorkspace() {
                 />
               </label>
               <p className="text-right text-sm tabular-nums text-zinc-500">{form.bio.length}/600</p>
-              <Button
-                type="submit"
-                variant={participation.status === 'invited' ? 'secondary' : 'primary'}
-                disabled={mutating}
-              >
-                Save public profile
-              </Button>
+              <div className="flex justify-start">
+                <Button
+                  type="submit"
+                  variant={participation.status === 'invited' ? 'secondary' : 'primary'}
+                  disabled={mutating}
+                >
+                  Save public profile
+                </Button>
+              </div>
             </form>
           </section>
         </div>
