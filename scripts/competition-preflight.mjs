@@ -60,6 +60,56 @@ function expectedEvaluatorCommit() {
 
 console.log('ProgramKit competition preflight')
 
+try {
+  const branch = execFileSync('git', ['branch', '--show-current'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }).trim()
+  if (branch === 'main') pass('candidate branch', branch)
+  else fail('candidate branch', `expected main, got ${branch || 'detached HEAD'}`)
+
+  const status = execFileSync('git', ['status', '--porcelain'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }).trim()
+  if (status) fail('candidate working tree', 'commit or remove local changes')
+  else pass('candidate working tree', 'clean')
+
+  const trackedFiles = execFileSync('git', ['ls-files'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean)
+  const forbiddenFiles = trackedFiles.filter(
+    (path) =>
+      /(^|\/)\.DS_Store$/u.test(path) ||
+      /\.(?:zip|tar|tgz|gz|7z)$/iu.test(path) ||
+      /(^|\/)(?:runs|\.auth)(\/|$)/u.test(path) ||
+      /(^|\/)evalconfig\.json$/u.test(path) ||
+      /(^|\/)\.env$/u.test(path),
+  )
+  if (forbiddenFiles.length === 0)
+    pass('tracked repository hygiene', `${trackedFiles.length} files`)
+  else fail('tracked repository hygiene', forbiddenFiles.join(', '))
+} catch (error) {
+  fail('candidate repository', error instanceof Error ? error.message : String(error))
+}
+
+run(
+  'artifact contract tests',
+  'pnpm',
+  [
+    'exec',
+    'vitest',
+    'run',
+    'tests/export.test.ts',
+    'tests/http.test.ts',
+    'tests/reminders.test.ts',
+  ],
+  repositoryRoot,
+)
+
 if (existsSync(resolve(evaluatorRoot, 'package.json'))) {
   const expected = expectedEvaluatorCommit()
   let actual
