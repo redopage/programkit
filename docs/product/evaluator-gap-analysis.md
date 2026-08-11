@@ -61,6 +61,15 @@ authoritative store. Airtable stays optional and disconnected during evaluator r
 
 ## Buyer-brief work outside the V1 rubric
 
-The original brief also asks for one-way Accelevents transfer and speaker resources with trusted
-embeds. ProgramKit includes both: a published-program Accelevents export package and organizer-
-authored portal resource pages with sandboxed HTTPS embeds.
+The original brief also asks for a native, one-way Accelevents integration and speaker resources
+with trusted embeds. ProgramKit fully implements the resource pages with sandboxed HTTPS embeds.
+For Accelevents, it currently provides a reviewable published-program package using the official
+speaker and session CSV shapes. That removes re-entry, but it is an import handoff rather than a
+native credentialed connector, so the native integration remains the one material brief gap outside
+the V1 evaluator.
+
+Do not close that gap by guessing at undocumented Accelevents write endpoints. The supported
+Sessionboard integration is configured inside Accelevents with a source API key and event ID, while
+Accelevents' public API is an Enterprise feature. The next implementation should be based on a
+validated customer account contract: either a ProgramKit source API that Accelevents can pull from,
+or documented Accelevents write endpoints supplied by the event owner.

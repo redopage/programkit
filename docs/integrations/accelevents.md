@@ -4,6 +4,12 @@ ProgramKit can package the current event's published program for a one-way impor
 Accelevents. ProgramKit remains the planning source of truth. The export does not read from or
 write to an Accelevents account.
 
+This is the supported V1 integration. It removes manual record re-entry, but it is not yet a native
+credentialed connector. Accelevents documents its existing Sessionboard integration as a pull from
+the source system using an API key and event ID. Its general API is available only on Enterprise and
+White Label plans. ProgramKit should not ship a push consumer until an event owner can validate the
+exact supported contract and endpoints.
+
 Open **Integrations** and choose **Download Accelevents package**. The ZIP contains:
 
 | File                  | Purpose                                                              |
@@ -31,7 +37,10 @@ ProgramKit follows the current official Accelevents CSV column names, including 
 template's `Instragram Handle` spelling. See the Accelevents guides for
 [speaker CSV imports](https://support.accelevents.com/en/articles/74958-uploading-items-from-a-csv)
 and [session CSV imports](https://support.accelevents.com/en/articles/13510323-upload-sessions-via-csv)
-before importing into a production event.
+before importing into a production event. The future native boundary should be checked against the
+[Sessionboard integration](https://support.accelevents.com/en/articles/9049978-sessionboard-integration)
+and [Accelevents API availability](https://support.accelevents.com/en/articles/5990834-the-accelevents-api-and-webhooks)
+for the customer's plan.
 
 ## Boundary
 

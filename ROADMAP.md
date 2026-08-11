@@ -75,7 +75,10 @@ remaining work required for a dependable public service. The evaluator evidence 
 - Replace synchronous Airtable acknowledgement with a durable outbound mirror and observable retry
   journal before calling it a production team view.
 - Convert inbound Airtable edits into proposed named operations with explicit conflict review.
-- Add a guided Accelevents export checklist and validate a real import against a test account.
+- Validate the existing Accelevents package against a real import, then implement a native one-way
+  connector only from an account-supported contract. Prefer the documented source API-key and event
+  ID pull shape when Accelevents can register ProgramKit as a source; otherwise require documented
+  Enterprise write endpoints from the event owner.
 
 ### 6. Final product craft
 
