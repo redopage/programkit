@@ -7,7 +7,7 @@ collaborator's event as test data.
 ## Current production evidence
 
 Verified on **10 August 2026** against `https://app.programkit.dev`. Application source commit
-`1e4e550` is deployed as Worker version `ad1006c5-8173-4f4b-afed-b582ead4e1e6`.
+`13f16e5` is deployed as Worker version `87899097-d482-4d6c-96dc-e5a436c7d3e4`.
 
 - email/password signup created an organizer session and first event;
 - the organizer created a second event and both events retained isolated workspace state;
@@ -30,6 +30,9 @@ Verified on **10 August 2026** against `https://app.programkit.dev`. Application
   title, track, format, duration, or abstract;
 - its acceptance notice reached Gmail in one provider attempt with the resolved proposal, event,
   and private speaker portal link;
+- a submitted proposal was assigned to a reviewer, its editable reminder was queued from the
+  review workspace, and the message reached Gmail with the resolved outstanding count and an
+  absolute private reviewer-workspace link;
 - an approved campaign reached Gmail with a `text/calendar` attachment containing the matching
   title, start, end, and room;
 - the workspace ZIP passed an integrity check and contained its complete JSON backup, manifest,
@@ -68,6 +71,15 @@ delivery because the current email binding does not provide delivery or bounce w
 4. Confirm the inbox message has resolved speaker and event values.
 5. Open the private link in a signed-out browser and confirm it exposes only that speaker's event,
    profile, assigned sessions, tasks, files, and organizer-authored resources.
+
+### Reviewer reminder
+
+1. Submit a proposal to a review round with at least one assigned reviewer.
+2. Select the reviewer in Review, open the reminder composer, and inspect the resolved preview.
+3. Edit the subject or body, queue the reminder, and confirm its outbox status moves to Sent.
+4. Confirm the inbox message contains the correct outstanding count and event name.
+5. Open the private reviewer link signed out and confirm it exposes only that reviewer's assigned
+   proposals for the selected event.
 
 ### Files and exports
 
