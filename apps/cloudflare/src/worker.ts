@@ -429,19 +429,59 @@ function eventWorkspaceKey(eventId: string) {
   return `event_${eventId}`
 }
 
-async function currentHostedAccount(env: Env, account: AuthAccount): Promise<AuthAccount> {
-  const events = await Promise.all(
-    account.events.map(async (event) => {
-      try {
-        const state = await readWorkspace(workspaceStub(env, eventWorkspaceKey(event.id)))
-        const current = state.events.find((candidate) => candidate.id === event.id)
-        return current ? { ...event, name: current.name, slug: current.slug } : event
-      } catch {
-        return event
-      }
+async function syncHostedEventSummary(
+  env: Env,
+  principal: Pick<HostedPrincipal, 'authShard' | 'sessionToken'>,
+  event: Pick<AuthEventSummary, 'id' | 'name' | 'slug'>,
+) {
+  const response = await authStub(env, principal.authShard)?.fetch(
+    new Request('http://auth.internal/internal/events/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: principal.sessionToken,
+        eventId: event.id,
+        name: event.name,
+        slug: event.slug,
+      }),
     }),
   )
-  return { ...account, events }
+  return response?.ok === true
+}
+
+async function hostedActiveEventSummary(stub: DurableObjectStub<WorkspaceDurableObject>) {
+  const state = await readWorkspace(stub)
+  return state.events.find((candidate) => candidate.id === state.activeEventId) ?? null
+}
+
+async function syncHostedActiveEventSummary(
+  env: Env,
+  principal: Pick<HostedPrincipal, 'authShard' | 'sessionToken' | 'account'>,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+) {
+  const event = await hostedActiveEventSummary(stub)
+  if (!event) return null
+  await syncHostedEventSummary(env, principal, event)
+  return event
+}
+
+async function currentHostedAccount(env: Env, principal: HostedPrincipal): Promise<AuthAccount> {
+  const account = principal.account
+  const active = account.events.find((event) => event.id === account.activeEventId)
+  if (!active) return account
+  try {
+    const current = await hostedActiveEventSummary(workspaceStub(env, eventWorkspaceKey(active.id)))
+    if (!current || (current.name === active.name && current.slug === active.slug)) return account
+    await syncHostedEventSummary(env, principal, current)
+    return {
+      ...account,
+      events: account.events.map((event) =>
+        event.id === current.id ? { ...event, name: current.name, slug: current.slug } : event,
+      ),
+    }
+  } catch {
+    return account
+  }
 }
 
 async function hashValue(value: string) {
@@ -2952,7 +2992,7 @@ export default {
     if (profile === 'hosted-app' && hostedPrincipal) {
       if (request.method === 'GET' && url.pathname === '/api/v1/account') {
         return Response.json(
-          { ok: true, account: await currentHostedAccount(env, hostedPrincipal.account) },
+          { ok: true, account: await currentHostedAccount(env, hostedPrincipal) },
           { headers: { 'cache-control': 'no-store' } },
         )
       }
@@ -3680,6 +3720,17 @@ export default {
         url.pathname.includes('/operations/')
       ) {
         context.waitUntil(syncExternalAccessDirectory(env, stub).catch(() => undefined))
+      }
+      if (
+        profile === 'hosted-app' &&
+        hostedPrincipal &&
+        request.method === 'POST' &&
+        proxiedResponse.ok &&
+        url.pathname === '/api/v1/operations/event.update'
+      ) {
+        context.waitUntil(
+          syncHostedActiveEventSummary(env, hostedPrincipal, stub).catch(() => null),
+        )
       }
       return proxiedResponse
     }

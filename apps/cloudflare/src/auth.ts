@@ -472,6 +472,20 @@ export class AuthDurableObject extends DurableObject {
     return event
   }
 
+  async #syncEventSummary(sessionToken: string, eventId: string, name: string, slug: string) {
+    const resolved = await this.#session(sessionToken)
+    if (!resolved || !resolved.account.events.some((event) => event.id === eventId)) return null
+    const event = await this.#ctx.storage.get<AuthEventSummary>(`event:${eventId}`)
+    const cleanName = name.trim().replace(/\s+/gu, ' ').slice(0, 80)
+    const cleanSlug = slug.trim().toLocaleLowerCase('en-US').slice(0, 80)
+    if (!event || cleanName.length < 2 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(cleanSlug)) {
+      return null
+    }
+    const updated = { ...event, name: cleanName, slug: cleanSlug }
+    await this.#ctx.storage.put(`event:${eventId}`, updated)
+    return updated
+  }
+
   async #linkMembership(sessionToken: string, projection: AuthMembershipProjection) {
     const resolved = await this.#session(sessionToken)
     if (!resolved) return null
@@ -670,6 +684,17 @@ export class AuthDurableObject extends DurableObject {
           { status: 400 },
         )
       }
+    }
+
+    if (url.pathname === '/internal/events/sync') {
+      const token = typeof input.token === 'string' ? input.token : ''
+      const eventId = typeof input.eventId === 'string' ? input.eventId : ''
+      const name = typeof input.name === 'string' ? input.name : ''
+      const slug = typeof input.slug === 'string' ? input.slug : ''
+      const event = await this.#syncEventSummary(token, eventId, name, slug)
+      return event
+        ? Response.json({ ok: true, event })
+        : Response.json({ ok: false }, { status: 400 })
     }
 
     if (url.pathname === '/internal/memberships/link') {

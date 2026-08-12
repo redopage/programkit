@@ -121,6 +121,30 @@ describe('AuthDurableObject membership projections', () => {
       ]),
     )
 
+    const syncedResponse = await auth.fetch(
+      request('/internal/events/sync', {
+        token: sessionToken,
+        eventId,
+        name: 'Shared conference 2027',
+        slug: 'shared-conference-2027',
+      }),
+    )
+    expect(syncedResponse.status).toBe(200)
+    const syncedSession = await body(
+      await auth.fetch(
+        request('/internal/auth/session', { token: sessionToken, preferredEventId: eventId }),
+      ),
+    )
+    expect(syncedSession.account!.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: eventId,
+          name: 'Shared conference 2027',
+          slug: 'shared-conference-2027',
+        }),
+      ]),
+    )
+
     const unlinkedResponse = await auth.fetch(
       request('/internal/memberships/unlink', {
         userId,
