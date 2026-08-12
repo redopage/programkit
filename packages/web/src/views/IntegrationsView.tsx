@@ -43,6 +43,28 @@ interface ApiKeyRecord {
   lastUsedAt: string | null
 }
 
+interface RecoveryStatus {
+  supported: true
+  event: { id: string; name: string } | null
+  currentBookmark: string
+  databaseSizeBytes: number
+  retentionDays: number
+  scope: 'workspace-durable-object'
+}
+
+interface RecoveryPoint {
+  requestedAt: string
+  bookmark: string
+  currentBookmark: string
+  approximate: true
+}
+
+function localDateTimeInput(timestamp = Date.now() - 5 * 60 * 1_000) {
+  const date = new Date(timestamp)
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset())
+  return date.toISOString().slice(0, 16)
+}
+
 const apiScopeGroups = [
   {
     id: 'agent',
@@ -131,6 +153,11 @@ export function IntegrationsView() {
       ?.getAttribute('content') === 'hosted-app'
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[] | null>(null)
   const [apiKeysError, setApiKeysError] = useState<string | null>(null)
+  const [recovery, setRecovery] = useState<RecoveryStatus | null>(null)
+  const [recoveryTime, setRecoveryTime] = useState(localDateTimeInput)
+  const [recoveryPoint, setRecoveryPoint] = useState<RecoveryPoint | null>(null)
+  const [recoveryBusy, setRecoveryBusy] = useState(false)
+  const [recoveryError, setRecoveryError] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -174,6 +201,33 @@ export function IntegrationsView() {
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
         setApiKeysError(error instanceof Error ? error.message : 'API keys could not be loaded.')
+      })
+    return () => controller.abort()
+  }, [activeEventId, hostedApp])
+
+  useEffect(() => {
+    if (!hostedApp || !activeEventId) return
+    const controller = new AbortController()
+    void fetch('/api/v1/recovery', {
+      headers: { accept: 'application/json' },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = (await response.json()) as RecoveryStatus & { error?: string }
+        if (response.status === 403) return null
+        if (!response.ok || !body.supported) {
+          throw new Error(body.error ?? 'Recovery status could not be loaded.')
+        }
+        return body
+      })
+      .then((status) => {
+        if (status) setRecovery(status)
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return
+        setRecoveryError(
+          error instanceof Error ? error.message : 'Recovery status could not be loaded.',
+        )
       })
     return () => controller.abort()
   }, [activeEventId, hostedApp])
@@ -250,6 +304,32 @@ export function IntegrationsView() {
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : 'Airtable could not be disconnected.')
       setSetupBusy(false)
+    }
+  }
+
+  async function inspectRecoveryPoint() {
+    setRecoveryBusy(true)
+    setRecoveryError(null)
+    setRecoveryPoint(null)
+    try {
+      const timestamp = new Date(recoveryTime)
+      if (Number.isNaN(timestamp.getTime())) throw new Error('Choose a valid date and time.')
+      const response = await fetch('/api/v1/recovery/bookmark', {
+        method: 'POST',
+        headers: { accept: 'application/json', 'content-type': 'application/json' },
+        body: JSON.stringify({ timestamp: timestamp.toISOString() }),
+      })
+      const body = (await response.json()) as RecoveryPoint & { ok?: boolean; error?: string }
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error ?? 'That recovery point could not be inspected.')
+      }
+      setRecoveryPoint(body)
+    } catch (error) {
+      setRecoveryError(
+        error instanceof Error ? error.message : 'That recovery point could not be inspected.',
+      )
+    } finally {
+      setRecoveryBusy(false)
     }
   }
 
@@ -466,6 +546,95 @@ export function IntegrationsView() {
         </div>
       </section>
 
+      {recovery ? (
+        <section aria-labelledby="recovery-heading">
+          <div className="border-b border-zinc-950/5 pb-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 id="recovery-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
+                Point-in-time recovery
+              </h2>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-sm font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-700/10">
+                {recovery.retentionDays} days available
+              </span>
+            </div>
+            <p className="max-w-3xl text-pretty text-base text-zinc-500 sm:text-sm">
+              Inspect Cloudflare recovery points for this event workspace. This does not restore,
+              delete, or otherwise change event data.
+            </p>
+          </div>
+
+          <div className="grid gap-5 py-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
+            <div className="rounded-2xl bg-zinc-50 p-5 ring-1 ring-inset ring-zinc-950/5">
+              <dl className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <dt className="text-sm font-medium text-zinc-500">Recovery unit</dt>
+                  <dd className="pt-1 text-base font-medium text-zinc-950 sm:text-sm">
+                    Event workspace object
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-zinc-500">SQLite data</dt>
+                  <dd className="pt-1 text-base font-medium text-zinc-950 sm:text-sm">
+                    {new Intl.NumberFormat(undefined, {
+                      style: 'unit',
+                      unit: 'kilobyte',
+                      maximumFractionDigits: 1,
+                    }).format(recovery.databaseSizeBytes / 1_000)}
+                  </dd>
+                </div>
+              </dl>
+              <p className="pt-5 text-sm text-zinc-500">
+                Account access and R2 file bytes have separate recovery boundaries. Use a logical
+                export before any incident restore.
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 ring-1 ring-inset ring-zinc-950/10">
+              <label htmlFor="recovery-time" className="text-sm font-medium text-zinc-950">
+                Approximate recovery time
+              </label>
+              <input
+                id="recovery-time"
+                type="datetime-local"
+                value={recoveryTime}
+                max={localDateTimeInput(Date.now())}
+                onChange={(event) => setRecoveryTime(event.target.value)}
+                className="focus-ring mt-2 min-h-10 w-full rounded-lg bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:text-sm"
+              />
+              <Button
+                variant="secondary"
+                className="mt-3 w-full"
+                disabled={recoveryBusy || !recoveryTime}
+                onClick={() => void inspectRecoveryPoint()}
+              >
+                <ArrowPathIcon className="size-4 h-lh shrink-0 fill-current" />
+                {recoveryBusy ? 'Checking…' : 'Check recovery point'}
+              </Button>
+              {recoveryPoint ? (
+                <div className="mt-4 rounded-xl bg-emerald-50 p-3 ring-1 ring-inset ring-emerald-700/10">
+                  <p role="status" className="text-sm font-medium text-emerald-800">
+                    Recovery point available near{' '}
+                    {new Date(recoveryPoint.requestedAt).toLocaleString()}.
+                  </p>
+                  <button
+                    type="button"
+                    className="focus-ring mt-2 rounded-md font-mono text-sm text-emerald-800 underline decoration-emerald-700/30 underline-offset-4 hover:decoration-emerald-700"
+                    onClick={() => void navigator.clipboard.writeText(recoveryPoint.bookmark)}
+                  >
+                    Copy bookmark
+                  </button>
+                </div>
+              ) : null}
+              {recoveryError ? (
+                <p role="alert" className="pt-3 text-sm font-medium text-red-700">
+                  {recoveryError}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section aria-labelledby="accelevents-heading">
         <div className="border-b border-zinc-950/5 pb-2">
           <h2 id="accelevents-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
@@ -583,6 +752,7 @@ export function IntegrationsView() {
             ['Domain event feed', 'GET /api/v1/domain-events'],
             ['Operation manifest', 'GET /api/v1/manifest'],
             ['Logical export', 'GET /api/v1/export'],
+            ['Recovery inspection', 'GET /api/v1/recovery'],
           ].map(([term, detail], index) => (
             <div
               key={term}
