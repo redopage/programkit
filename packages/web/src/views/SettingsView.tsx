@@ -1,5 +1,5 @@
-import { ChevronUpDownIcon, PlusIcon } from '@heroicons/react/16/solid'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { ArrowUpTrayIcon, ChevronUpDownIcon, PlusIcon, TrashIcon } from '@heroicons/react/16/solid'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import { toZonedDateTimeInput, zonedDateTimeInputToIso } from '../lib/date.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -9,6 +9,7 @@ import {
   Callout,
   Dialog,
   Field,
+  FileDropField,
   PageHeader,
   SectionHeading,
   TrackBadge,
@@ -564,17 +565,31 @@ function ProgramInventory({ disabled }: { disabled: boolean }) {
 }
 
 export function SettingsView() {
-  const { payload, execute, mutating } = useWorkspace()
+  const { payload, execute, mutating, refresh } = useWorkspace()
   const event = payload?.state.events.find((entry) => entry.id === payload.state.activeEventId)
   const [draft, setDraft] = useState<EventSettingsDraft>(emptyDraft)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [teamRole, setTeamRole] = useState<TeamRole | null>(null)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPickerKey, setLogoPickerKey] = useState(0)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [logoError, setLogoError] = useState<string | null>(null)
+  const pendingLogoUrlRef = useRef<string | null>(null)
+  const previousEventIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!event) return
-    setDraft(draftFromEvent(event))
+    const eventChanged = previousEventIdRef.current !== event.id
+    previousEventIdRef.current = event.id
+    if (pendingLogoUrlRef.current !== null) {
+      const logoUrl = pendingLogoUrlRef.current
+      pendingLogoUrlRef.current = null
+      setDraft((current) => ({ ...current, logoUrl }))
+    } else {
+      setDraft(draftFromEvent(event))
+    }
     setErrors({})
-    setTeamRole(null)
+    if (eventChanged) setTeamRole(null)
   }, [event])
 
   const timeZones = useMemo(() => {
@@ -625,6 +640,59 @@ export function SettingsView() {
       'Event settings saved.',
     )
     if (!response.ok) setErrors(response.error?.fields ?? {})
+  }
+
+  async function uploadLogo() {
+    if (!logoFile) {
+      setLogoError('Choose a logo image first.')
+      return
+    }
+    setUploadingLogo(true)
+    setLogoError(null)
+    try {
+      const body = new FormData()
+      body.set('file', logoFile)
+      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/logo`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body,
+      })
+      const result = (await response.json()) as { ok?: boolean; logoUrl?: string; error?: string }
+      if (!response.ok || !result.ok || typeof result.logoUrl !== 'string') {
+        throw new Error(result.error ?? 'The logo could not be uploaded.')
+      }
+      pendingLogoUrlRef.current = result.logoUrl
+      setDraft((current) => ({ ...current, logoUrl: result.logoUrl! }))
+      setLogoFile(null)
+      setLogoPickerKey((current) => current + 1)
+      await refresh()
+    } catch (caught) {
+      setLogoError(caught instanceof Error ? caught.message : 'The logo could not be uploaded.')
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
+  async function removeLogo() {
+    setUploadingLogo(true)
+    setLogoError(null)
+    try {
+      const response = await fetch(`/api/v1/events/${encodeURIComponent(eventId)}/logo`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      })
+      const result = (await response.json()) as { ok?: boolean; error?: string }
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'The logo could not be removed.')
+      }
+      pendingLogoUrlRef.current = ''
+      setDraft((current) => ({ ...current, logoUrl: '' }))
+      await refresh()
+    } catch (caught) {
+      setLogoError(caught instanceof Error ? caught.message : 'The logo could not be removed.')
+    } finally {
+      setUploadingLogo(false)
+    }
   }
 
   return (
@@ -678,33 +746,71 @@ export function SettingsView() {
                 />
                 {errors.slug ? <p className="text-sm text-rose-700">{errors.slug}</p> : null}
               </Field>
-              <div className="sm:col-span-2">
-                <Field
-                  label="Event logo URL"
-                  htmlFor="event-logo-url"
-                  hint="Shown on proposal, review, speaker, and public program pages. Leave blank to use event initials."
-                >
-                  <input
-                    id="event-logo-url"
-                    name="logoUrl"
-                    type="text"
-                    inputMode="url"
-                    value={draft.logoUrl}
-                    aria-invalid={Boolean(errors.logoUrl)}
-                    onChange={(inputEvent) => update('logoUrl', inputEvent.target.value)}
-                    className={textControl}
-                    placeholder="https://example.com/event-logo.png"
-                  />
-                  {errors.logoUrl ? (
-                    <p className="text-sm text-rose-700">{errors.logoUrl}</p>
-                  ) : null}
-                  <div className="mt-2 flex min-h-14 items-center rounded-xl bg-zinc-50 px-4 ring-1 ring-inset ring-zinc-950/5">
+              <div className="grid gap-3 sm:col-span-2">
+                <div>
+                  <p className="text-sm font-medium text-zinc-800">Event logo</p>
+                  <p className="pt-1 text-sm text-zinc-500">
+                    Shown on proposal, review, speaker, and public program pages. PNG, JPEG, or WebP
+                    up to 4 MB.
+                  </p>
+                </div>
+                <div className="grid gap-3 rounded-2xl bg-zinc-50 p-4 ring-1 ring-inset ring-zinc-950/5 md:grid-cols-[minmax(0,1fr)_minmax(14rem,0.65fr)] md:items-center">
+                  <div className="grid gap-3">
+                    <FileDropField
+                      key={logoPickerKey}
+                      id="event-logo-file"
+                      name="eventLogo"
+                      accept="image/jpeg,image/png,image/webp"
+                      label={draft.logoUrl ? 'Choose a replacement logo' : 'Choose or drop a logo'}
+                      description="A transparent PNG or WebP works best."
+                      className="min-h-20 w-full"
+                      disabled={uploadingLogo}
+                      onChange={(inputEvent) => {
+                        setLogoFile(inputEvent.currentTarget.files?.[0] ?? null)
+                        setLogoError(null)
+                      }}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="compact"
+                        variant="secondary"
+                        disabled={!logoFile || uploadingLogo}
+                        onClick={() => void uploadLogo()}
+                      >
+                        <ArrowUpTrayIcon className="size-4 fill-current" />
+                        {uploadingLogo
+                          ? 'Uploading…'
+                          : draft.logoUrl
+                            ? 'Replace logo'
+                            : 'Upload logo'}
+                      </Button>
+                      {draft.logoUrl ? (
+                        <Button
+                          type="button"
+                          size="compact"
+                          variant="ghost"
+                          disabled={uploadingLogo}
+                          onClick={() => void removeLogo()}
+                        >
+                          <TrashIcon className="size-4 fill-current" />
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+                    {logoError ? (
+                      <p role="alert" className="text-sm text-rose-700">
+                        {logoError}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex min-h-20 items-center rounded-xl bg-white px-4 ring-1 ring-inset ring-zinc-950/5">
                     <EventIdentity
                       name={draft.name.trim() || 'Event name'}
                       logoUrl={draft.logoUrl}
                     />
                   </div>
-                </Field>
+                </div>
               </div>
               <Field label="Venue" htmlFor="event-venue">
                 <input

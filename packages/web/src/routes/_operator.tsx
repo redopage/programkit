@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, useRouterState } from '@tanstack/react-router'
 
 import { Shell } from '../components/Shell.tsx'
+import { WorkspaceBoundary } from '../components/WorkspaceBoundary.tsx'
 import { useProgramNavigate } from '../lib/navigation.ts'
 
 export const Route = createFileRoute('/_operator')({
@@ -12,7 +13,9 @@ function OperatorLayout() {
   const navigate = useProgramNavigate()
   return (
     <Shell pathname={pathname} navigate={navigate}>
-      <Outlet />
+      <WorkspaceBoundary embedded>
+        <Outlet />
+      </WorkspaceBoundary>
     </Shell>
   )
 }

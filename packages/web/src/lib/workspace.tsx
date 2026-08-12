@@ -52,6 +52,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const workspaceQuery = useQuery({
     queryKey: workspaceQueryKey,
     queryFn: ({ signal }) => client.readSurface(surface, signal),
+    placeholderData: (previousData, previousQuery) => {
+      const previousScope = previousQuery?.queryKey[1]
+      const operatorTransition =
+        (surface.kind === 'operator' || surface.kind === 'crm') &&
+        (previousScope === 'operator' || previousScope === 'crm')
+      return operatorTransition ? previousData : undefined
+    },
   })
   const {
     data: workspacePayload,

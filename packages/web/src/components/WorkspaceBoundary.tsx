@@ -4,7 +4,13 @@ import { createDemo, leaveCurrentDemo } from '../lib/demo.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 import { Button, ErrorState, LoadingScreen } from './ui.tsx'
 
-export function WorkspaceBoundary({ children }: { children: ReactNode }) {
+export function WorkspaceBoundary({
+  children,
+  embedded = false,
+}: {
+  children: ReactNode
+  embedded?: boolean
+}) {
   const { payload, loading, refreshing, error, refresh } = useWorkspace()
   const [recovering, setRecovering] = useState<'create' | 'leave' | null>(null)
   const [recoveryError, setRecoveryError] = useState<string | null>(null)
@@ -38,10 +44,16 @@ export function WorkspaceBoundary({ children }: { children: ReactNode }) {
     }
   }
 
-  if (loading) return <LoadingScreen />
+  if (loading) return <LoadingScreen embedded={embedded} />
   if (error || !payload) {
     return (
-      <div className="grid min-h-dvh place-items-center bg-white p-6">
+      <div
+        className={
+          embedded
+            ? 'grid min-h-[60vh] place-items-center p-6'
+            : 'grid min-h-dvh place-items-center bg-white p-6'
+        }
+      >
         <ErrorState
           title="The workspace could not be loaded"
           description={recoveryError ?? error ?? 'The API did not return a workspace.'}

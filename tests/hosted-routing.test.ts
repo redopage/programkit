@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   browserSecurityHeaders,
+  eventLogoStorageKeyFromUrl,
   hostedPublicEventId,
   isApiKeyAccessiblePath,
   isApiKeyCredentialPath,
@@ -51,6 +52,19 @@ describe('hosted public event routing', () => {
     const request = documentRequest('/submissions', `programkit_public_event=${eventId}`)
 
     expect(hostedPublicEventId(request, new URL(request.url))).toBeNull()
+  })
+
+  it('keeps uploaded logo objects scoped to the event in their public URL', () => {
+    const assetId = 'a'.repeat(32)
+    const logoUrl = `/public/v1/events/${eventId}/logo/${assetId}?event=${eventId}`
+
+    expect(eventLogoStorageKeyFromUrl(logoUrl, eventId)).toBe(`${eventId}/branding/logo-${assetId}`)
+    expect(
+      eventLogoStorageKeyFromUrl(
+        `/public/v1/events/${eventId}/logo/${assetId}?event=evt_ffffffffffffffffffffffff`,
+        eventId,
+      ),
+    ).toBeNull()
   })
 })
 

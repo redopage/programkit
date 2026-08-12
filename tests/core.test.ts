@@ -217,6 +217,20 @@ describe('ProgramKit operation engine', () => {
     expect(bundledLogo.response.ok).toBe(true)
     expect(bundledLogo.state.events[0]?.logoUrl).toBe('/assets/events/aie-monogram-black.svg')
 
+    const uploadedLogoState = createSeedState()
+    const hostedEventId = 'evt_1234567890abcdef12345678'
+    uploadedLogoState.events[0]!.id = hostedEventId
+    uploadedLogoState.activeEventId = hostedEventId
+    const uploadedLogo = executeOperation(uploadedLogoState, 'event.update', {
+      input: {
+        eventId: hostedEventId,
+        logoUrl: `/public/v1/events/${hostedEventId}/logo/${'a'.repeat(32)}?event=${hostedEventId}`,
+      },
+      expectedVersions: { [hostedEventId]: uploadedLogoState.events[0]!.version },
+    })
+    expect(uploadedLogo.response.ok).toBe(true)
+    expect(uploadedLogo.state.events[0]?.logoUrl).toContain('/public/v1/events/')
+
     const stale = executeOperation(updated.state, 'event.update', {
       input: { eventId: event.id, name: 'Stale name' },
       expectedVersions: { [event.id]: 1 },

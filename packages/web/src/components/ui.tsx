@@ -108,7 +108,7 @@ export function FileDropField({
     <label
       htmlFor={inputId}
       className={cx(
-        'relative flex min-h-24 min-w-0 cursor-pointer items-center gap-3 rounded-xl bg-white p-4 ring-1 ring-zinc-950/10 has-disabled:cursor-not-allowed has-disabled:bg-zinc-50 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-blue-500 hover:bg-zinc-950/2',
+        'relative flex min-h-24 min-w-0 cursor-pointer items-center gap-3 rounded-xl bg-white p-4 ring-1 ring-inset ring-zinc-950/10 has-disabled:cursor-not-allowed has-disabled:bg-zinc-50 has-focus-visible:outline-2 has-focus-visible:-outline-offset-1 has-focus-visible:outline-blue-500 hover:bg-zinc-950/2',
         className,
       )}
     >
@@ -287,13 +287,13 @@ export function TrackBadge({ name, color }: { name: string; color: string }) {
  * they live here as one definition each rather than as copied class strings.
  */
 export const textControl =
-  'focus-ring-control min-h-11 rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:min-h-9 sm:text-sm'
+  'focus-ring-control min-h-11 min-w-0 rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 placeholder:text-zinc-400 sm:min-h-9 sm:text-sm'
 
 export const textAreaControl =
-  'focus-ring-control resize-y rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:text-sm'
+  'focus-ring-control min-w-0 resize-y rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 placeholder:text-zinc-400 sm:text-sm'
 
 export const selectControl =
-  'focus-ring-control col-span-full row-start-1 min-h-11 appearance-none rounded-xl bg-white py-2 pr-8 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm'
+  'focus-ring-control col-span-full row-start-1 min-h-11 min-w-0 appearance-none rounded-xl bg-white py-2 pr-8 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 sm:min-h-9 sm:text-sm'
 
 /**
  * The row above a list: view filters on the left, search on the right. Owning
@@ -1118,17 +1118,29 @@ export function NextActionRow({
  * means the frame the user is about to read is already in place when the data
  * lands, so nothing jumps.
  */
-export function LoadingScreen() {
+export function LoadingScreen({ embedded = false }: { embedded?: boolean }) {
+  const content = (
+    <>
+      <div className="flex items-center justify-between gap-4 border-b border-zinc-950/5 pb-3">
+        <span className="h-4 w-48 animate-pulse rounded bg-zinc-950/5" />
+        <span className="h-8 w-36 animate-pulse rounded-lg bg-zinc-950/5" />
+      </div>
+      <div className="pt-6">
+        <SkeletonRows rows={6} />
+      </div>
+    </>
+  )
+  if (embedded) {
+    return (
+      <div className="min-h-[60vh] py-2" role="status" aria-label="Loading workspace">
+        {content}
+      </div>
+    )
+  }
   return (
     <div className="min-h-dvh bg-canvas p-2" role="status" aria-label="Loading workspace">
       <div className="min-h-[calc(100dvh-(--spacing(4)))] rounded-2xl bg-white p-4 shadow-xs ring-1 ring-zinc-950/5 sm:p-6">
-        <div className="flex items-center justify-between gap-4 border-b border-zinc-950/5 pb-3">
-          <span className="h-4 w-48 animate-pulse rounded bg-zinc-950/5" />
-          <span className="h-8 w-36 animate-pulse rounded-lg bg-zinc-950/5" />
-        </div>
-        <div className="pt-6">
-          <SkeletonRows rows={6} />
-        </div>
+        {content}
       </div>
     </div>
   )

@@ -429,6 +429,21 @@ function eventWorkspaceKey(eventId: string) {
   return `event_${eventId}`
 }
 
+async function currentHostedAccount(env: Env, account: AuthAccount): Promise<AuthAccount> {
+  const events = await Promise.all(
+    account.events.map(async (event) => {
+      try {
+        const state = await readWorkspace(workspaceStub(env, eventWorkspaceKey(event.id)))
+        const current = state.events.find((candidate) => candidate.id === event.id)
+        return current ? { ...event, name: current.name, slug: current.slug } : event
+      } catch {
+        return event
+      }
+    }),
+  )
+  return { ...account, events }
+}
+
 async function hashValue(value: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
   return Array.from(new Uint8Array(digest), (entry) => entry.toString(16).padStart(2, '0')).join('')
@@ -2136,6 +2151,130 @@ function safeAssetFilename(value: string) {
   return normalized.replace(/^-+|-+$/gu, '').slice(0, 120) || 'upload'
 }
 
+function eventLogoStorageKey(eventId: string, assetId: string) {
+  return `${eventId}/branding/logo-${assetId}`
+}
+
+export function eventLogoStorageKeyFromUrl(value: string | undefined, eventId: string) {
+  if (!value?.startsWith('/')) return null
+  try {
+    const url = new URL(value, 'https://programkit.local')
+    const match = url.pathname.match(
+      /^\/public\/v1\/events\/([a-z0-9][a-z0-9_-]{0,63})\/logo\/([a-f0-9]{32})$/u,
+    )
+    if (!match || match[1] !== eventId || url.searchParams.get('event') !== eventId) return null
+    return eventLogoStorageKey(eventId, match[2])
+  } catch {
+    return null
+  }
+}
+
+async function publicEventLogo(
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  eventId: string,
+  assetId: string,
+) {
+  if (!env.PROGRAMKIT_FILES) return new Response(null, { status: 404 })
+  const state = await readWorkspace(stub)
+  const event = state.events.find(
+    (candidate) => candidate.id === eventId && candidate.id === state.activeEventId,
+  )
+  const storageKey = eventLogoStorageKey(eventId, assetId)
+  if (!event || eventLogoStorageKeyFromUrl(event.logoUrl, eventId) !== storageKey) {
+    return new Response(null, { status: 404 })
+  }
+  const object = await env.PROGRAMKIT_FILES.get(storageKey)
+  if (!object) return new Response(null, { status: 404 })
+  const headers = new Headers({
+    'cache-control': 'public, max-age=31536000, immutable',
+    'content-security-policy': "default-src 'none'; sandbox",
+    'x-content-type-options': 'nosniff',
+  })
+  object.writeHttpMetadata(headers)
+  headers.set('etag', object.httpEtag)
+  return new Response(object.body, { headers })
+}
+
+async function updateEventLogo(
+  request: Request,
+  env: Env,
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  eventId: string,
+  actor: OperationRequest['actor'],
+) {
+  const state = await readWorkspace(stub)
+  const event = state.events.find(
+    (candidate) => candidate.id === eventId && candidate.id === state.activeEventId,
+  )
+  if (!event) {
+    return Response.json({ ok: false, error: 'This event was not found.' }, { status: 404 })
+  }
+  const previousStorageKey = eventLogoStorageKeyFromUrl(event.logoUrl, eventId)
+
+  if (request.method === 'DELETE') {
+    const operation = await executeWorkspaceOperation(stub, 'event.update', {
+      input: { eventId, logoUrl: '' },
+      expectedVersions: { [eventId]: event.version ?? 1 },
+      actor,
+    })
+    if (!operation.ok) return Response.json(operation, { status: 400 })
+    if (previousStorageKey && env.PROGRAMKIT_FILES) {
+      await env.PROGRAMKIT_FILES.delete(previousStorageKey)
+    }
+    return Response.json(
+      { ok: true, logoUrl: '', operation },
+      { headers: { 'cache-control': 'no-store' } },
+    )
+  }
+
+  if (!env.PROGRAMKIT_FILES) {
+    return Response.json({ ok: false, error: 'File storage is not configured.' }, { status: 503 })
+  }
+  const form = await request.formData()
+  const value = form.get('file')
+  if (!(value instanceof File) || value.size === 0) {
+    return Response.json({ ok: false, error: 'Choose a logo image to upload.' }, { status: 400 })
+  }
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  if (!allowedTypes.has(value.type)) {
+    return Response.json(
+      { ok: false, error: 'Logos must be JPEG, PNG, or WebP images.' },
+      { status: 415 },
+    )
+  }
+  if (value.size > 4_000_000) {
+    return Response.json(
+      { ok: false, error: 'Choose a logo image smaller than 4 MB.' },
+      { status: 413 },
+    )
+  }
+
+  const assetId = crypto.randomUUID().replaceAll('-', '')
+  const storageKey = eventLogoStorageKey(eventId, assetId)
+  await env.PROGRAMKIT_FILES.put(storageKey, value.stream(), {
+    httpMetadata: { contentType: value.type },
+    customMetadata: { eventId, kind: 'event-logo', filename: safeAssetFilename(value.name) },
+  })
+  const logoUrl = `/public/v1/events/${encodeURIComponent(eventId)}/logo/${assetId}?event=${encodeURIComponent(eventId)}`
+  const operation = await executeWorkspaceOperation(stub, 'event.update', {
+    input: { eventId, logoUrl },
+    expectedVersions: { [eventId]: event.version ?? 1 },
+    actor,
+  })
+  if (!operation.ok) {
+    await env.PROGRAMKIT_FILES.delete(storageKey)
+    return Response.json(operation, { status: 400 })
+  }
+  if (previousStorageKey && previousStorageKey !== storageKey) {
+    await env.PROGRAMKIT_FILES.delete(previousStorageKey)
+  }
+  return Response.json(
+    { ok: true, logoUrl, operation },
+    { status: 201, headers: { 'cache-control': 'no-store' } },
+  )
+}
+
 async function uploadSpeakerHeadshot(
   request: Request,
   env: Env,
@@ -2813,7 +2952,7 @@ export default {
     if (profile === 'hosted-app' && hostedPrincipal) {
       if (request.method === 'GET' && url.pathname === '/api/v1/account') {
         return Response.json(
-          { ok: true, account: hostedPrincipal.account },
+          { ok: true, account: await currentHostedAccount(env, hostedPrincipal.account) },
           { headers: { 'cache-control': 'no-store' } },
         )
       }
@@ -3236,6 +3375,35 @@ export default {
       return Response.json(
         { ok: false, error: 'This endpoint is not available to API keys.' },
         { status: 403, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+
+    const publicEventLogoMatch = url.pathname.match(
+      /^\/public\/v1\/events\/([a-z0-9][a-z0-9_-]{0,63})\/logo\/([a-f0-9]{32})$/u,
+    )
+    if (request.method === 'GET' && publicEventLogoMatch) {
+      return publicEventLogo(env, stub, publicEventLogoMatch[1], publicEventLogoMatch[2])
+    }
+
+    const eventLogoMatch = url.pathname.match(
+      /^\/api\/v1\/events\/([a-z0-9][a-z0-9_-]{0,63})\/logo$/u,
+    )
+    if ((request.method === 'POST' || request.method === 'DELETE') && eventLogoMatch) {
+      if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+      if (profile === 'hosted-app' && !hostedPrincipal?.scopes.includes('*')) {
+        return Response.json(
+          { ok: false, error: 'Administrator access is required.' },
+          { status: 403, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+      return updateEventLogo(
+        request,
+        env,
+        stub,
+        eventLogoMatch[1],
+        profile === 'hosted-app' && hostedPrincipal
+          ? hostedStaffActor(hostedPrincipal)
+          : demoStaffActor,
       )
     }
 

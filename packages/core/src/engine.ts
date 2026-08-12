@@ -558,8 +558,21 @@ function optionalHttpsUrl(value: unknown, field: string) {
 
 function optionalEventLogoUrl(value: unknown) {
   if (value === undefined || value === null || value === '') return ''
-  if (typeof value === 'string' && /^\/assets\/events\/[a-zA-Z0-9_.-]+$/u.test(value.trim())) {
-    return value.trim()
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (/^\/assets\/events\/[a-zA-Z0-9_.-]+$/u.test(trimmed)) return trimmed
+    try {
+      if (!trimmed.startsWith('/')) throw new Error('Not a ProgramKit asset path')
+      const url = new URL(trimmed, 'https://programkit.local')
+      const match = url.pathname.match(
+        /^\/public\/v1\/events\/([a-z0-9][a-z0-9_-]{0,63})\/logo\/[a-f0-9]{32}$/u,
+      )
+      if (match && url.searchParams.get('event') === match[1]) {
+        return `${url.pathname}${url.search}`
+      }
+    } catch {
+      // The HTTPS validator below returns the field-specific error.
+    }
   }
   return optionalHttpsUrl(value, 'logoUrl')
 }

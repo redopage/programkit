@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { routeUsesWorkspaceShell } from '../packages/web/src/lib/route-shell.ts'
+import {
+  routeUsesOperatorShell,
+  routeUsesWorkspaceShell,
+} from '../packages/web/src/lib/route-shell.ts'
 
 describe('web route shells', () => {
   it.each(['/access', '/demo', '/privacy', '/terms'])(
@@ -14,6 +17,20 @@ describe('web route shells', () => {
     'keeps %s on its data-aware surface',
     (pathname) => {
       expect(routeUsesWorkspaceShell(pathname)).toBe(true)
+    },
+  )
+
+  it.each(['/', '/forms', '/crm', '/settings', '/integrations'])(
+    'keeps %s inside the persistent operator shell',
+    (pathname) => {
+      expect(routeUsesOperatorShell(pathname)).toBe(true)
+    },
+  )
+
+  it.each(['/agenda', '/submit/cfp', '/reviewer/rev_001', '/portal/par_001/key'])(
+    'keeps %s outside the operator shell',
+    (pathname) => {
+      expect(routeUsesOperatorShell(pathname)).toBe(false)
     },
   )
 })

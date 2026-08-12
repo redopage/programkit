@@ -20,13 +20,12 @@ import {
   MagnifyingGlassIcon,
   PaperClipIcon,
   PlusIcon,
-  QuestionMarkCircleIcon,
   RectangleStackIcon,
   Squares2X2Icon,
   UserGroupIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 import { submissionPipelineSummary } from '@programkit/core'
@@ -195,21 +194,16 @@ const commandDetails: Record<
 
 function SidebarUtilities({
   navigate,
-  onOpenShortcuts,
   demoUrl,
   eventId,
   onNavigate,
 }: {
   navigate: (to: string) => void
-  onOpenShortcuts: () => void
   demoUrl?: string
   eventId?: string
   onNavigate?: () => void
 }) {
   const [copied, setCopied] = useState(false)
-  const hostedApp =
-    document.querySelector<HTMLMetaElement>('meta[name="programkit-deployment-profile"]')
-      ?.content === 'hosted-app'
   const open = (to: string) => {
     navigate(to)
     onNavigate?.()
@@ -223,19 +217,6 @@ function SidebarUtilities({
     await navigator.clipboard.writeText(demoUrl)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1_800)
-  }
-  const signOut = async () => {
-    try {
-      const response = await fetch('/api/v1/auth/logout', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json' },
-      })
-      if (!response.ok) return
-      window.location.assign('/login')
-    } catch {
-      // Keep the current session visible when sign-out cannot reach the server.
-    }
   }
   const items = [
     {
@@ -260,23 +241,6 @@ function SidebarUtilities({
         ]
       : []),
     { label: 'Settings', icon: Cog6ToothIcon, action: () => open('/settings') },
-    {
-      label: 'Keyboard shortcuts',
-      icon: QuestionMarkCircleIcon,
-      action: () => {
-        onOpenShortcuts()
-        onNavigate?.()
-      },
-    },
-    ...(hostedApp
-      ? [
-          {
-            label: 'Sign out',
-            icon: ArrowRightStartOnRectangleIcon,
-            action: () => void signOut(),
-          },
-        ]
-      : []),
   ]
   return (
     <div className="border-t border-zinc-950/6 pt-2">
@@ -368,8 +332,203 @@ interface AccountEvent {
 }
 
 interface AccountSummary {
+  user: {
+    id: string
+    name: string
+    email: string
+  }
   events: AccountEvent[]
   activeEventId: string
+}
+
+function isHostedApp() {
+  return (
+    typeof document !== 'undefined' &&
+    document.querySelector<HTMLMetaElement>('meta[name="programkit-deployment-profile"]')
+      ?.content === 'hosted-app'
+  )
+}
+
+function useHostedAccount() {
+  const [account, setAccount] = useState<AccountSummary | null>(null)
+  const loadAccount = useCallback(async () => {
+    if (!isHostedApp()) return
+    try {
+      const response = await fetch('/api/v1/account', { credentials: 'same-origin' })
+      if (!response.ok) return
+      const body = (await response.json()) as { ok?: boolean; account?: AccountSummary }
+      if (body.ok && body.account) setAccount(body.account)
+    } catch {
+      // The active workspace remains usable if account metadata is temporarily unavailable.
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadAccount()
+  }, [loadAccount])
+
+  return { account, loadAccount }
+}
+
+function AccountMenu({
+  account,
+  activeEvent,
+  navigate,
+  onNavigate,
+}: {
+  account: AccountSummary
+  activeEvent?: { id: string; name: string }
+  navigate: (to: string) => void
+  onNavigate?: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const activeAccountEvent = account.events.find((event) => event.id === account.activeEventId)
+  const role = activeAccountEvent?.role ?? 'member'
+  const roleName = role === 'member' ? 'Viewer' : role.charAt(0).toLocaleUpperCase() + role.slice(1)
+
+  useEffect(() => {
+    if (!open) return
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (popoverRef.current?.contains(target) || triggerRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown, true)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [open])
+
+  const closeAndNavigate = (to: string) => {
+    setOpen(false)
+    navigate(to)
+    onNavigate?.()
+  }
+  const preview = () => {
+    if (!activeEvent) return
+    window.open(publicProgramPath(activeEvent.id), '_blank', 'noopener,noreferrer')
+    setOpen(false)
+    onNavigate?.()
+  }
+  const signOut = async () => {
+    setOpen(false)
+    try {
+      const response = await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+      })
+      if (!response.ok) return
+      window.location.assign('/login')
+    } catch {
+      // Keep the current session visible when sign-out cannot reach the server.
+    }
+  }
+
+  const menuItems = [
+    {
+      label: 'Preview public page',
+      icon: ArrowTopRightOnSquareIcon,
+      action: preview,
+      disabled: !activeEvent,
+    },
+    {
+      label: 'Settings and team',
+      icon: Cog6ToothIcon,
+      action: () => closeAndNavigate('/settings'),
+      disabled: false,
+    },
+    {
+      label: 'Sign out',
+      icon: ArrowRightStartOnRectangleIcon,
+      action: () => void signOut(),
+      disabled: false,
+    },
+  ]
+
+  return (
+    <div className="relative border-t border-zinc-950/6 pt-2">
+      {open ? (
+        <div
+          ref={popoverRef}
+          role="menu"
+          aria-label="Account"
+          className="absolute bottom-full left-0 z-50 mb-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-(--popover-radius) bg-zinc-900/90 p-(--popover-padding) text-zinc-200 shadow-2xl ring-1 ring-white/15 backdrop-blur-xl [--popover-padding:--spacing(1.5)] [--popover-radius:var(--radius-2xl)] motion-safe:animate-rise-in"
+        >
+          <div className="min-w-0 px-2 py-1.5">
+            <p className="truncate text-sm font-medium text-white">{account.user.name}</p>
+            <p className="truncate text-xs text-zinc-400">
+              {account.user.email} · {roleName}
+            </p>
+          </div>
+          <div className="mt-1 border-t border-white/10 pt-1">
+            {menuItems.map(({ label, icon: Icon, action, disabled }) => (
+              <button
+                key={label}
+                type="button"
+                role="menuitem"
+                disabled={disabled}
+                className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 sm:text-sm"
+                onClick={action}
+              >
+                <Icon className="size-4 shrink-0 fill-zinc-500" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 text-left hover:bg-zinc-950/4 sm:min-h-10"
+      >
+        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-zinc-950 text-xs font-semibold text-white">
+          {account.user.name.slice(0, 1).toLocaleUpperCase()}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-zinc-950">
+            {account.user.name}
+          </span>
+          <span className="block truncate text-xs text-zinc-500">{roleName}</span>
+        </span>
+        <ChevronDownIcon
+          className={cx(
+            'size-4 shrink-0 fill-zinc-400 motion-safe:transition-transform',
+            open && 'rotate-180',
+          )}
+        />
+      </button>
+    </div>
+  )
+}
+
+function AccountMenuPlaceholder() {
+  return (
+    <div className="border-t border-zinc-950/6 pt-2" aria-hidden="true">
+      <div className="flex min-h-10 items-center gap-2.5 px-2">
+        <span className="size-7 shrink-0 animate-pulse rounded-lg bg-zinc-950/8" />
+        <span className="grid flex-1 gap-1.5">
+          <span className="h-3 w-24 animate-pulse rounded bg-zinc-950/8" />
+          <span className="h-2.5 w-12 animate-pulse rounded bg-zinc-950/5" />
+        </span>
+      </div>
+    </div>
+  )
 }
 
 interface NewEventDraft {
@@ -404,14 +563,21 @@ function newEventDraft(): NewEventDraft {
 }
 
 const eventCreationControl =
-  'focus-ring min-h-11 w-full rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:min-h-10 sm:text-sm'
+  'focus-ring-control min-h-11 min-w-0 w-full rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 placeholder:text-zinc-400 sm:min-h-10 sm:text-sm'
 
-function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
+function WorkspaceIdentity({
+  commandOpen,
+  account,
+  onRequestAccount,
+}: {
+  commandOpen: boolean
+  account: AccountSummary | null
+  onRequestAccount: () => void
+}) {
   const { payload } = useWorkspace()
   const state = payload?.state
   const event = state?.events.find((entry) => entry.id === state.activeEventId)
   const [open, setOpen] = useState(false)
-  const [account, setAccount] = useState<AccountSummary | null>(null)
   const [creating, setCreating] = useState(false)
   const [eventDraft, setEventDraft] = useState<NewEventDraft>(newEventDraft)
   const [saving, setSaving] = useState(false)
@@ -461,21 +627,6 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
   useEffect(() => {
     if (commandOpen) setOpen(false)
   }, [commandOpen])
-
-  useEffect(() => {
-    if (!open || account) return
-    const controller = new AbortController()
-    void fetch('/api/v1/account', { credentials: 'same-origin', signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) return
-        const body = (await response.json()) as { ok?: boolean; account?: AccountSummary }
-        if (body.ok && body.account) setAccount(body.account)
-      })
-      .catch((caught: unknown) => {
-        if (caught instanceof DOMException && caught.name === 'AbortError') return
-      })
-    return () => controller.abort()
-  }, [account, open])
 
   const selectEvent = async (eventId: string) => {
     if (!account || eventId === account.activeEventId) return
@@ -529,9 +680,14 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
     }
   }
 
-  const events =
+  const events = (
     account?.events ??
     (event ? [{ id: event.id, name: event.name, slug: event.slug, role: 'owner' as const }] : [])
+  ).map((candidate) =>
+    event && candidate.id === event.id
+      ? { ...candidate, name: event.name, slug: event.slug }
+      : candidate,
+  )
   const activeEventId = account?.activeEventId ?? event?.id
   return (
     <>
@@ -542,7 +698,10 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={open ? popoverId : undefined}
-          onClick={() => setOpen((current) => !current)}
+          onClick={() => {
+            setOpen((current) => !current)
+            if (!account) onRequestAccount()
+          }}
           className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
         >
           <EventIdentity
@@ -737,6 +896,8 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
   const mobilePanelRef = useRef<HTMLDivElement>(null)
   const mobileTitleId = useId()
   const { payload } = useWorkspace()
+  const { account, loadAccount } = useHostedAccount()
+  const hostedApp = isHostedApp()
   const activeEvent = payload?.state.events.find(
     (event) => event.id === payload.state.activeEventId,
   )
@@ -939,7 +1100,11 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
         >
           <div className="flex flex-col gap-1.5">
             <div className="min-w-0">
-              <WorkspaceIdentity commandOpen={commandMode !== null} />
+              <WorkspaceIdentity
+                commandOpen={commandMode !== null}
+                account={account}
+                onRequestAccount={() => void loadAccount()}
+              />
             </div>
             <div>
               <button
@@ -957,12 +1122,13 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
           <div className="min-h-0 flex-1 overflow-y-auto pt-4 pb-2">
             <NavigationItems pathname={pathname} navigate={navigate} />
           </div>
-          <SidebarUtilities
-            navigate={navigate}
-            onOpenShortcuts={() => setCommandMode('shortcuts')}
-            demoUrl={demoUrl}
-            eventId={activeEvent?.id}
-          />
+          {account ? (
+            <AccountMenu account={account} activeEvent={activeEvent} navigate={navigate} />
+          ) : hostedApp ? (
+            <AccountMenuPlaceholder />
+          ) : (
+            <SidebarUtilities navigate={navigate} demoUrl={demoUrl} eventId={activeEvent?.id} />
+          )}
         </aside>
 
         <header
@@ -1012,7 +1178,11 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                 >
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
-                      <WorkspaceIdentity commandOpen={commandMode !== null} />
+                      <WorkspaceIdentity
+                        commandOpen={commandMode !== null}
+                        account={account}
+                        onRequestAccount={() => void loadAccount()}
+                      />
                     </div>
                     <IconButton label="Close navigation" onClick={() => setMobileOpen(false)}>
                       <XMarkIcon className="size-4 shrink-0 fill-current" />
@@ -1028,13 +1198,23 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                       onNavigate={() => setMobileOpen(false)}
                     />
                   </div>
-                  <SidebarUtilities
-                    navigate={navigate}
-                    onOpenShortcuts={() => setCommandMode('shortcuts')}
-                    demoUrl={demoUrl}
-                    eventId={activeEvent?.id}
-                    onNavigate={() => setMobileOpen(false)}
-                  />
+                  {account ? (
+                    <AccountMenu
+                      account={account}
+                      activeEvent={activeEvent}
+                      navigate={navigate}
+                      onNavigate={() => setMobileOpen(false)}
+                    />
+                  ) : hostedApp ? (
+                    <AccountMenuPlaceholder />
+                  ) : (
+                    <SidebarUtilities
+                      navigate={navigate}
+                      demoUrl={demoUrl}
+                      eventId={activeEvent?.id}
+                      onNavigate={() => setMobileOpen(false)}
+                    />
+                  )}
                 </div>
               </div>,
               document.body,
