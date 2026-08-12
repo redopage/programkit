@@ -79,7 +79,7 @@ function initializeEventState(metadata: EventMetadata) {
 class DurableObjectRepository implements WorkspaceRepository {
   constructor(private readonly storage: DurableObjectStorage) {}
 
-  static readonly normalizationVersion = 1
+  static readonly normalizationVersion = 2
 
   async #readFrom(storage: DurableObjectStorage | DurableObjectTransaction) {
     const metadata = await storage.get<{ chunks: number }>('workspace-state:meta')

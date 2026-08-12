@@ -29,7 +29,7 @@ import {
   submissionDecisionReadiness,
   submissionReviewSummary,
 } from './selectors.ts'
-import { createSeedState } from './seed.ts'
+import { AIE_EVENT_LOGO_URL, createSeedState } from './seed.ts'
 import type {
   Actor,
   Asset,
@@ -101,8 +101,18 @@ interface ApplyContext {
 }
 
 export function initializeProgramCollections(state: WorkspaceState) {
+  const previousSchemaVersion = state.schemaVersion
   for (const event of state.events) {
-    event.logoUrl ??= ''
+    if (
+      previousSchemaVersion < 15 &&
+      state.workspace.id === 'wrk_aie' &&
+      event.id === 'evt_nyc_2026' &&
+      !(event.logoUrl ?? '').trim()
+    ) {
+      event.logoUrl = AIE_EVENT_LOGO_URL
+    } else {
+      event.logoUrl ??= ''
+    }
     event.version ??= 1
   }
   state.contactNotes ??= []
@@ -176,7 +186,7 @@ export function initializeProgramCollections(state: WorkspaceState) {
   for (const plan of state.evaluationPlans) {
     for (const round of plan.rounds) round.categoryRoutes ??= []
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 14)
+  state.schemaVersion = Math.max(state.schemaVersion, 15)
 }
 
 function queueOutboundMessage(
@@ -544,6 +554,14 @@ function optionalHttpsUrl(value: unknown, field: string) {
       [field]: 'Enter a full URL beginning with https://.',
     })
   }
+}
+
+function optionalEventLogoUrl(value: unknown) {
+  if (value === undefined || value === null || value === '') return ''
+  if (typeof value === 'string' && /^\/assets\/events\/[a-zA-Z0-9_.-]+$/u.test(value.trim())) {
+    return value.trim()
+  }
+  return optionalHttpsUrl(value, 'logoUrl')
 }
 
 function assertTimeZone(value: unknown, field = 'timezone') {
@@ -948,9 +966,7 @@ function applyHandler(
         })
       }
       const nextLogoUrl =
-        input.logoUrl === undefined
-          ? (event.logoUrl ?? '')
-          : optionalHttpsUrl(input.logoUrl, 'logoUrl')
+        input.logoUrl === undefined ? (event.logoUrl ?? '') : optionalEventLogoUrl(input.logoUrl)
       const nextVenue =
         typeof input.venue === 'string' ? assertString(input.venue, 'venue') : event.venue
       const nextCity =

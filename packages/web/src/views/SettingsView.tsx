@@ -687,7 +687,7 @@ export function SettingsView() {
                   <input
                     id="event-logo-url"
                     name="logoUrl"
-                    type="url"
+                    type="text"
                     inputMode="url"
                     value={draft.logoUrl}
                     aria-invalid={Boolean(errors.logoUrl)}

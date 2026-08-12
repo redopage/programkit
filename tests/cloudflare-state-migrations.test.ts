@@ -12,8 +12,10 @@ describe('Durable Object workspace migrations', () => {
     const legacy = createSeedState() as Partial<WorkspaceState>
     delete legacy.crmSegments
     delete legacy.speakerPipeline
+    legacy.events![0]!.logoUrl = ''
     legacy.schemaVersion = 13
     storage.values.set('workspace-state', legacy)
+    storage.values.set('workspace-state:normalized-version', 1)
 
     const workspace = new WorkspaceDurableObject(
       { storage } as unknown as DurableObjectState,
@@ -32,10 +34,11 @@ describe('Durable Object workspace migrations', () => {
 
     expect(response.status).toBe(200)
     const payload = (await response.json()) as { state: WorkspaceState }
-    expect(payload.state.schemaVersion).toBe(14)
+    expect(payload.state.schemaVersion).toBe(15)
     expect(payload.state.crmSegments).toEqual([])
     expect(payload.state.speakerPipeline).toEqual([])
-    expect(storage.values.get('workspace-state:normalized-version')).toBe(1)
+    expect(payload.state.events[0]?.logoUrl).toBe('/assets/events/aie-monogram-black.svg')
+    expect(storage.values.get('workspace-state:normalized-version')).toBe(2)
     expect(storage.values.has('workspace-state')).toBe(false)
   })
 })

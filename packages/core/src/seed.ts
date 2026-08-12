@@ -1356,9 +1356,11 @@ const integrations: Integration[] = [
   },
 ]
 
+export const AIE_EVENT_LOGO_URL = '/assets/events/aie-monogram-black.svg'
+
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 14,
+    schemaVersion: 15,
     revision: 1,
     workspace: {
       id: 'wrk_aie',
@@ -1372,7 +1374,7 @@ export function createSeedState(): WorkspaceState {
         id: eventId,
         name: 'AIE NYC 2026',
         slug: 'aie-nyc-2026',
-        logoUrl: '',
+        logoUrl: AIE_EVENT_LOGO_URL,
         venue: 'Brooklyn Navy Yard',
         city: 'Brooklyn, New York',
         startsAt: '2026-10-04T13:00:00.000Z',

@@ -210,6 +210,13 @@ describe('ProgramKit operation engine', () => {
     })
     expect(updated.state.domainEvents.at(-1)?.type).toBe('event.updated')
 
+    const bundledLogo = executeOperation(updated.state, 'event.update', {
+      input: { eventId: event.id, logoUrl: '/assets/events/aie-monogram-black.svg' },
+      expectedVersions: { [event.id]: 2 },
+    })
+    expect(bundledLogo.response.ok).toBe(true)
+    expect(bundledLogo.state.events[0]?.logoUrl).toBe('/assets/events/aie-monogram-black.svg')
+
     const stale = executeOperation(updated.state, 'event.update', {
       input: { eventId: event.id, name: 'Stale name' },
       expectedVersions: { [event.id]: 1 },
