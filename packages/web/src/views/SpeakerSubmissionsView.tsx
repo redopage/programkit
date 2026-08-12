@@ -11,7 +11,7 @@ import {
   type SubmissionContributor,
 } from '@programkit/core'
 
-import { ProgramKitMark } from '../components/brand.tsx'
+import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
 import { SubmissionAnswerFields } from '../components/SubmissionAnswerFields.tsx'
 import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
 import { Button, StatusBadge, sentenceCase } from '../components/ui.tsx'
@@ -136,19 +136,11 @@ export function SpeakerSubmissionsView({
   }
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="flex min-h-dvh flex-col bg-white">
       <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <a
-            href="/"
-            aria-label="ProgramKit homepage"
-            className="focus-ring flex items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-zinc-950"
-          >
-            <ProgramKitMark className="size-6" />
-            ProgramKit
-          </a>
+          <EventIdentity name={event.name} logoUrl={event.logoUrl} />
           <div className="flex min-w-0 items-center gap-3">
-            <p className="truncate text-base text-zinc-500 sm:text-sm">{event.name}</p>
             {accessHref ? (
               <a
                 href={accessHref}
@@ -161,7 +153,7 @@ export function SpeakerSubmissionsView({
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-10 sm:px-6 sm:py-14">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
@@ -415,6 +407,7 @@ export function SpeakerSubmissionsView({
           </a>
         </div>
       </main>
+      <EventPageFooter />
     </div>
   )
 }

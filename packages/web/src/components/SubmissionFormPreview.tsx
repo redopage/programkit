@@ -14,7 +14,7 @@ import {
   type SubmissionKind,
 } from '@programkit/core'
 
-import { ProgramKitMark } from './brand.tsx'
+import { EventIdentity, EventPageFooter } from './event-brand.tsx'
 import { cx, FileDropField } from './ui.tsx'
 
 const speakerPurposes = new Set([
@@ -103,12 +103,8 @@ export function SubmissionFormPreview({
             viewport === 'mobile' ? 'max-w-[24.375rem]' : 'w-full max-w-[60rem]',
           )}
         >
-          <div className="flex h-14 items-center justify-between gap-4 border-b border-zinc-950/5 px-4 sm:px-5">
-            <p className="flex items-center gap-2 text-base font-semibold tracking-tight text-zinc-950 sm:text-sm">
-              <ProgramKitMark className="size-5" />
-              ProgramKit
-            </p>
-            <p className="truncate text-base text-zinc-500 sm:text-sm">{event.name}</p>
+          <div className="flex h-14 items-center border-b border-zinc-950/5 px-4 sm:px-5">
+            <EventIdentity name={event.name} logoUrl={event.logoUrl} compact />
           </div>
 
           <div
@@ -227,6 +223,7 @@ export function SubmissionFormPreview({
               </div>
             </div>
           </div>
+          <EventPageFooter linked={false} />
         </div>
       </div>
     </div>

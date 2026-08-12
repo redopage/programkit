@@ -6,6 +6,7 @@ import {
   isApiKeyAccessiblePath,
   isApiKeyCredentialPath,
   isHostedDemoReset,
+  isHostedRecoveryPath,
   isWorkspaceCrmPath,
   normalizeHostedEventCreateInput,
   parseApiKeyToken,
@@ -132,6 +133,14 @@ describe('hosted event safety', () => {
     expect(isHostedDemoReset('hosted-app', 'POST', path)).toBe(true)
     expect(isHostedDemoReset('hosted-demo', 'POST', path)).toBe(false)
     expect(isHostedDemoReset('hosted-app', 'GET', path)).toBe(false)
+  })
+
+  it('recognizes only the read-only recovery inspection surface', () => {
+    expect(isHostedRecoveryPath('GET', '/api/v1/recovery')).toBe(true)
+    expect(isHostedRecoveryPath('POST', '/api/v1/recovery/bookmark')).toBe(true)
+    expect(isHostedRecoveryPath('POST', '/api/v1/recovery')).toBe(false)
+    expect(isHostedRecoveryPath('POST', '/api/v1/recovery/restore')).toBe(false)
+    expect(isApiKeyAccessiblePath('/api/v1/recovery')).toBe(false)
   })
 })
 

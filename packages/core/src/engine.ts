@@ -101,7 +101,10 @@ interface ApplyContext {
 }
 
 export function initializeProgramCollections(state: WorkspaceState) {
-  for (const event of state.events) event.version ??= 1
+  for (const event of state.events) {
+    event.logoUrl ??= ''
+    event.version ??= 1
+  }
   state.contactNotes ??= []
   state.crmSegments ??= []
   state.speakerPipeline ??= []
@@ -922,6 +925,7 @@ function applyHandler(
       const previous = {
         name: event.name,
         slug: event.slug,
+        logoUrl: event.logoUrl,
         venue: event.venue,
         city: event.city,
         startsAt: event.startsAt,
@@ -943,6 +947,10 @@ function applyHandler(
           slug: 'Choose another event slug.',
         })
       }
+      const nextLogoUrl =
+        input.logoUrl === undefined
+          ? (event.logoUrl ?? '')
+          : optionalHttpsUrl(input.logoUrl, 'logoUrl')
       const nextVenue =
         typeof input.venue === 'string' ? assertString(input.venue, 'venue') : event.venue
       const nextCity =
@@ -965,6 +973,7 @@ function applyHandler(
 
       event.name = nextName
       event.slug = nextSlug
+      event.logoUrl = nextLogoUrl
       event.venue = nextVenue
       event.city = nextCity
       event.startsAt = nextStartsAt

@@ -1,5 +1,5 @@
 import { CheckCircleIcon, ClockIcon } from '@heroicons/react/16/solid'
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 
 import {
   submissionFormAvailability,
@@ -14,7 +14,7 @@ import {
   type SubmissionKind,
 } from '@programkit/core'
 
-import { ProgramKitMark } from '../components/brand.tsx'
+import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
 import { ExternalAccessForm } from '../components/ExternalAccessForm.tsx'
 import { SubmissionAnswerFields } from '../components/SubmissionAnswerFields.tsx'
 import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
@@ -225,8 +225,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
 
   if (confirmationId) {
     return (
-      <div className="min-h-dvh bg-white">
-        <PublicHeader eventName={event.name} />
+      <PublicSubmissionPage event={event}>
         <main className="mx-auto flex max-w-3xl flex-col items-center px-4 py-20 text-center sm:px-6 sm:py-28">
           <CheckCircleIcon className="size-12 shrink-0 fill-emerald-600" />
           <h1 className="max-w-[22ch] pt-6 text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
@@ -264,7 +263,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
             </Button>
           </div>
         </main>
-      </div>
+      </PublicSubmissionPage>
     )
   }
 
@@ -272,8 +271,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
   if (availability !== 'open') {
     const scheduled = availability === 'scheduled'
     return (
-      <div className="min-h-dvh bg-white">
-        <PublicHeader eventName={event.name} />
+      <PublicSubmissionPage event={event}>
         <main className="mx-auto flex max-w-3xl flex-col items-start px-4 py-16 sm:px-6 sm:py-24">
           <ClockIcon className="size-10 shrink-0 fill-amber-500" />
           <h1 className="max-w-[22ch] pt-6 text-balance text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
@@ -303,18 +301,17 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
             </div>
           </dl>
         </main>
-      </div>
+      </PublicSubmissionPage>
     )
   }
 
   if (externalAccess.enabled && externalAccess.loading) {
     return (
-      <div className="min-h-dvh bg-white">
-        <PublicHeader eventName={event.name} />
+      <PublicSubmissionPage event={event}>
         <main className="grid min-h-[calc(100dvh-4rem)] place-items-center px-6 py-16">
           <p className="text-base text-zinc-500 sm:text-sm">Loading proposal access…</p>
         </main>
-      </div>
+      </PublicSubmissionPage>
     )
   }
 
@@ -322,8 +319,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
     const formatOptions = configuredOptions(visibleFields, 'session_format')
     const trackOptions = configuredOptions(visibleFields, 'track')
     return (
-      <div className="min-h-dvh bg-white">
-        <PublicHeader eventName={event.name} />
+      <PublicSubmissionPage event={event}>
         <main className="mx-auto grid min-h-[calc(100dvh-4rem)] max-w-6xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[4fr_7fr] lg:gap-16">
           <SubmissionIntroduction
             form={form}
@@ -344,7 +340,7 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
             }}
           />
         </main>
-      </div>
+      </PublicSubmissionPage>
     )
   }
 
@@ -354,19 +350,18 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
   const trackOptions = configuredOptions(visibleFields, 'track')
 
   return (
-    <div className="min-h-dvh bg-white">
-      <PublicHeader
-        eventName={event.name}
-        accountEmail={externalAccess.session.identity?.email}
-        onSignOut={
-          externalAccess.enabled
-            ? async () => {
-                await externalAccess.logout()
-                window.location.reload()
-              }
-            : undefined
-        }
-      />
+    <PublicSubmissionPage
+      event={event}
+      accountEmail={externalAccess.session.identity?.email}
+      onSignOut={
+        externalAccess.enabled
+          ? async () => {
+              await externalAccess.logout()
+              window.location.reload()
+            }
+          : undefined
+      }
+    >
       <main className="mx-auto grid max-w-6xl gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[4fr_7fr] lg:gap-16">
         <SubmissionIntroduction
           form={form}
@@ -464,6 +459,26 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
           </div>
         </form>
       </main>
+    </PublicSubmissionPage>
+  )
+}
+
+function PublicSubmissionPage({
+  event,
+  accountEmail,
+  onSignOut,
+  children,
+}: {
+  event: ProgramEvent
+  accountEmail?: string
+  onSignOut?: () => Promise<void>
+  children: ReactNode
+}) {
+  return (
+    <div className="flex min-h-dvh flex-col bg-white">
+      <PublicHeader event={event} accountEmail={accountEmail} onSignOut={onSignOut} />
+      {children}
+      <EventPageFooter />
     </div>
   )
 }
@@ -545,27 +560,22 @@ function SubmissionOptionSummary({
 }
 
 function PublicHeader({
-  eventName,
+  event,
   accountEmail,
   onSignOut,
 }: {
-  eventName: string
+  event: ProgramEvent
   accountEmail?: string
   onSignOut?: () => Promise<void>
 }) {
   return (
     <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <a
-          href="/"
-          aria-label="ProgramKit homepage"
-          className="focus-ring flex items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-zinc-950"
-        >
-          <ProgramKitMark className="size-6" />
-          ProgramKit
-        </a>
+        <EventIdentity name={event.name} logoUrl={event.logoUrl} />
         <div className="flex min-w-0 items-center gap-3">
-          <p className="truncate text-base text-zinc-500 sm:text-sm">{accountEmail ?? eventName}</p>
+          {accountEmail ? (
+            <p className="truncate text-base text-zinc-500 sm:text-sm">{accountEmail}</p>
+          ) : null}
           {onSignOut ? (
             <button
               type="button"

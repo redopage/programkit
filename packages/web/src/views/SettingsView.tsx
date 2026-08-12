@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 
 import { toZonedDateTimeInput, zonedDateTimeInputToIso } from '../lib/date.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
+import { EventIdentity } from '../components/event-brand.tsx'
 import {
   Button,
   Callout,
@@ -18,6 +19,7 @@ import {
 interface EventSettingsDraft {
   name: string
   slug: string
+  logoUrl: string
   venue: string
   city: string
   timezone: string
@@ -54,6 +56,7 @@ interface TeamState {
 const emptyDraft: EventSettingsDraft = {
   name: '',
   slug: '',
+  logoUrl: '',
   venue: '',
   city: '',
   timezone: 'UTC',
@@ -65,6 +68,7 @@ const emptyDraft: EventSettingsDraft = {
 function draftFromEvent(event: {
   name: string
   slug: string
+  logoUrl?: string
   venue: string
   city: string
   timezone: string
@@ -75,6 +79,7 @@ function draftFromEvent(event: {
   return {
     name: event.name,
     slug: event.slug,
+    logoUrl: event.logoUrl ?? '',
     venue: event.venue,
     city: event.city,
     timezone: event.timezone,
@@ -673,6 +678,34 @@ export function SettingsView() {
                 />
                 {errors.slug ? <p className="text-sm text-rose-700">{errors.slug}</p> : null}
               </Field>
+              <div className="sm:col-span-2">
+                <Field
+                  label="Event logo URL"
+                  htmlFor="event-logo-url"
+                  hint="Shown on proposal, review, speaker, and public program pages. Leave blank to use event initials."
+                >
+                  <input
+                    id="event-logo-url"
+                    name="logoUrl"
+                    type="url"
+                    inputMode="url"
+                    value={draft.logoUrl}
+                    aria-invalid={Boolean(errors.logoUrl)}
+                    onChange={(inputEvent) => update('logoUrl', inputEvent.target.value)}
+                    className={textControl}
+                    placeholder="https://example.com/event-logo.png"
+                  />
+                  {errors.logoUrl ? (
+                    <p className="text-sm text-rose-700">{errors.logoUrl}</p>
+                  ) : null}
+                  <div className="mt-2 flex min-h-14 items-center rounded-xl bg-zinc-50 px-4 ring-1 ring-inset ring-zinc-950/5">
+                    <EventIdentity
+                      name={draft.name.trim() || 'Event name'}
+                      logoUrl={draft.logoUrl}
+                    />
+                  </div>
+                </Field>
+              </div>
               <Field label="Venue" htmlFor="event-venue">
                 <input
                   id="event-venue"

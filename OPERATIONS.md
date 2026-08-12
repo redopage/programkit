@@ -79,6 +79,8 @@ The detailed scopes, tables, request budget, failure modes, and webhook boundary
 - `POST /api/v1/portal/{participationId}/operations/{operationName}`
 - `GET /api/v1/domain-events?limit=50`
 - `GET /api/v1/export`
+- `GET /api/v1/recovery` — hosted event owners only; inspect the workspace object's current PITR bookmark
+- `POST /api/v1/recovery/bookmark` — hosted event owners only; resolve an approximate bookmark for a time in the previous 30 days
 - `GET /public/agenda.json`
 - `POST /mcp`
 
@@ -246,3 +248,30 @@ version, and test restoration into a separate environment.
 
 File objects are not part of this demo. The R2 implementation must export and restore them alongside
 their logical record IDs. D1 and Airtable projections are rebuildable and are not backup sources.
+
+### SQLite Durable Object recovery
+
+The official hosted app uses Cloudflare's 30-day point-in-time recovery history for each SQLite
+Durable Object. A signed-in event owner can inspect the active event workspace without changing it:
+
+```bash
+curl https://app.programkit.dev/api/v1/recovery \
+  --cookie 'programkit_session=...'
+
+curl https://app.programkit.dev/api/v1/recovery/bookmark \
+  --request POST \
+  --header 'content-type: application/json' \
+  --header 'origin: https://app.programkit.dev' \
+  --cookie 'programkit_session=...' \
+  --data '{"timestamp":"2026-08-12T12:00:00.000Z"}'
+```
+
+The second endpoint calls `getBookmarkForTime` and returns Cloudflare's approximate bookmark. Both
+endpoints are owner-only, reject API keys, and use `Cache-Control: no-store`. ProgramKit does not
+expose a restore endpoint: a restore is an incident operation and needs an export, an explicit
+target bookmark, confirmation, an operator audit record, and post-restore validation first.
+
+PITR is not a full-event reset. One restore affects only the event workspace Durable Object. Staff
+identity, event-access records, R2 file bytes, and external systems have separate owners and must be
+reconciled independently. PITR is unavailable in local development. For evaluator reruns, create a
+fresh event or hosted demo rather than restoring or deleting a live event.

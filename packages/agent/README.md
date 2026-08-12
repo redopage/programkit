@@ -1,8 +1,9 @@
 # `@programkit/agent`
 
 The agent package exposes ProgramKit through a stateless HTTP MCP server and includes a portable
-[Agent Plugins 1.0](https://agent-plugins.org/) package with an optional Codex extension. The server can read operational records, create campaign drafts, and propose
-schedule moves. Core permissions still make approval, commit, send, publish, secret management, and
+[Agent Plugins 1.0](https://agent-plugins.org/) package with an optional Codex extension. The server
+can read operational records, create campaign drafts, and propose initial placements or schedule
+moves. Core permissions still make approval, commit, send, publish, secret management, and
 destructive operations human-only.
 
 ## Protocol compatibility
@@ -76,22 +77,25 @@ Every successful result includes server identity metadata:
 
 ## Tool inventory
 
-| Tool                        | Effect                                                            | Boundary                                |
-| --------------------------- | ----------------------------------------------------------------- | --------------------------------------- |
-| `get_event_context`         | Read the active event, summary, and agent policy                  | Read-only                               |
-| `search_people`             | Search people with participation and readiness context            | Read-only                               |
-| `get_readiness_report`      | Read requirement definitions, deadlines, rows, and blocker totals | Read-only                               |
-| `get_schedule`              | Read current draft placements and the latest published release    | Read-only                               |
-| `validate_schedule`         | Detect hard conflicts and warnings                                | Read-only                               |
-| `get_change_set`            | Read one proposal and its review state                            | Read-only                               |
-| `list_change_sets`          | List and optionally filter proposals by status                    | Read-only                               |
-| `preflight_program_publish` | Check publication blockers and warnings without publishing        | Read-only                               |
-| `draft_campaign`            | Create a draft for one supported live audience                    | Draft only; cannot approve or send      |
-| `propose_schedule_move`     | Create one change set containing one placement move               | Proposal only; cannot commit or publish |
+| Tool                         | Effect                                                            | Boundary                                |
+| ---------------------------- | ----------------------------------------------------------------- | --------------------------------------- |
+| `get_event_context`          | Read the active event, summary, and agent policy                  | Read-only                               |
+| `get_submission_pipeline`    | Read proposal statuses and aggregate review progress              | Read-only; omits bodies and contacts    |
+| `get_program_sessions`       | Read scheduled and unscheduled sessions with versions             | Read-only                               |
+| `search_people`              | Search people with participation and readiness context            | Read-only                               |
+| `get_readiness_report`       | Read requirement definitions, deadlines, rows, and blocker totals | Read-only                               |
+| `get_schedule`               | Read current draft placements and the latest published release    | Read-only                               |
+| `validate_schedule`          | Detect hard conflicts and warnings                                | Read-only                               |
+| `get_change_set`             | Read one proposal and its review state                            | Read-only                               |
+| `list_change_sets`           | List and optionally filter proposals by status                    | Read-only                               |
+| `preflight_program_publish`  | Check publication blockers and warnings without publishing        | Read-only                               |
+| `draft_campaign`             | Create a draft for one supported live audience                    | Draft only; cannot approve or send      |
+| `propose_schedule_placement` | Propose one initial placement for an unscheduled session          | Proposal only; cannot commit or publish |
+| `propose_schedule_move`      | Create one change set containing one placement move               | Proposal only; cannot commit or publish |
 
 `draft_campaign` supports `all_active`, `unconfirmed`, and `missing_requirements`. It does not accept
-an arbitrary recipient list. Each `propose_schedule_move` call is independent and creates a
-separate human-reviewable change set; there is no grouped schedule-proposal or agent commit tool.
+an arbitrary recipient list. Each schedule proposal call is independent and creates a separate
+human-reviewable change set; there is no grouped schedule-proposal or agent commit tool.
 
 The plugin's program-import skill produces a row-level reconciliation preview only. The MCP server does
 not expose import create, update, change-set, or commit tools.

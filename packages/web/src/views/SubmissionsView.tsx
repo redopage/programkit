@@ -337,7 +337,9 @@ function SubmissionDrawer({
   onClose: () => void
 }) {
   const { payload, execute, mutating } = useWorkspace()
-  const [decisionChange, setDecisionChange] = useState<'rejected' | 'waitlisted' | null>(null)
+  const [decisionChange, setDecisionChange] = useState<
+    'accepted' | 'rejected' | 'waitlisted' | null
+  >(null)
   const [decisionReason, setDecisionReason] = useState('')
   const [decisionEmailOpen, setDecisionEmailOpen] = useState(false)
   const [decisionEmail, setDecisionEmail] = useState({ subject: '', body: '' })
@@ -367,12 +369,14 @@ function SubmissionDrawer({
   ]
   const decisionReadiness = submissionDecisionReadiness(state, submission)
   const decisionReady = decisionReadiness.ready
-  const canDecide =
-    decisionReady &&
-    (submission.status === 'submitted' ||
-      submission.status === 'in_review' ||
-      submission.status === 'rejected' ||
-      submission.status === 'waitlisted')
+  const isDecisionable =
+    submission.status === 'submitted' ||
+    submission.status === 'in_review' ||
+    submission.status === 'rejected' ||
+    submission.status === 'waitlisted'
+  const canDecide = decisionReady && isDecisionable
+  const canOverrideReviewRequirements =
+    !decisionReady && (submission.status === 'submitted' || submission.status === 'in_review')
   const hasDecision =
     submission.status === 'accepted' ||
     submission.status === 'rejected' ||
@@ -424,7 +428,7 @@ function SubmissionDrawer({
     setDecisionEmailOpen(true)
   }
 
-  async function changeAcceptedDecision() {
+  async function overrideDecision() {
     if (!decisionChange || !decisionReason.trim()) return
     const response = await execute(
       'review.decide',
@@ -435,9 +439,15 @@ function SubmissionDrawer({
         reason: decisionReason.trim(),
       },
       { expectedVersions: { [submission!.id]: submission!.version } },
-      decisionChange === 'rejected'
-        ? 'Acceptance withdrawn and session cancelled.'
-        : 'Submission moved to the waitlist and session cancelled.',
+      submission!.status === 'accepted'
+        ? decisionChange === 'rejected'
+          ? 'Acceptance withdrawn and session cancelled.'
+          : 'Submission moved to the waitlist and session cancelled.'
+        : decisionChange === 'accepted'
+          ? 'Submission accepted early and added to the program.'
+          : decisionChange === 'rejected'
+            ? 'Submission declined before review requirements were complete.'
+            : 'Submission waitlisted before review requirements were complete.',
     )
     if (!response?.ok) return
     setDecisionChange(null)
@@ -482,6 +492,16 @@ function SubmissionDrawer({
                 Accept proposal
               </Button>
             </>
+          ) : null}
+          {canOverrideReviewRequirements ? (
+            <Button
+              size="compact"
+              variant="secondary"
+              disabled={mutating}
+              onClick={() => setDecisionChange('rejected')}
+            >
+              Record decision early
+            </Button>
           ) : null}
           {submission.status === 'accepted' ? (
             <Button
@@ -655,7 +675,7 @@ function SubmissionDrawer({
               <p className="text-pretty text-base sm:text-sm">No review plan is assigned yet.</p>
             </div>
           )}
-          {!decisionReady && decisionReadiness.incompleteRounds[0] ? (
+          {!hasDecision && !decisionReady && decisionReadiness.incompleteRounds[0] ? (
             <div className="mt-5 rounded-lg bg-amber-50 p-3 text-amber-800 ring-1 ring-amber-800/10">
               <p className="text-pretty text-base sm:text-sm">
                 Complete {decisionReadiness.incompleteRounds[0].remaining} more review
@@ -765,8 +785,16 @@ function SubmissionDrawer({
           setDecisionChange(null)
           setDecisionReason('')
         }}
-        title="Change accepted decision?"
-        description="The generated session will be cancelled and removed from the draft schedule. The proposal, people, and decision history stay available."
+        title={
+          submission.status === 'accepted'
+            ? 'Change accepted decision?'
+            : 'Decide before reviews are complete?'
+        }
+        description={
+          submission.status === 'accepted'
+            ? 'The generated session will be cancelled and removed from the draft schedule. The proposal, people, and decision history stay available.'
+            : 'Program chairs can override the remaining review requirement. Add a reason so the exception stays clear in the decision history.'
+        }
         footer={
           <>
             <Button
@@ -777,15 +805,19 @@ function SubmissionDrawer({
               }}
               disabled={mutating}
             >
-              Keep accepted
+              {submission.status === 'accepted' ? 'Keep accepted' : 'Cancel'}
             </Button>
             <Button
               size="compact"
               variant={decisionChange === 'rejected' ? 'danger' : 'primary'}
               disabled={mutating || !decisionReason.trim()}
-              onClick={() => void changeAcceptedDecision()}
+              onClick={() => void overrideDecision()}
             >
-              {decisionChange === 'rejected' ? 'Decline proposal' : 'Move to waitlist'}
+              {decisionChange === 'accepted'
+                ? 'Accept proposal early'
+                : decisionChange === 'rejected'
+                  ? 'Decline proposal'
+                  : 'Move to waitlist'}
             </Button>
           </>
         }
@@ -793,8 +825,16 @@ function SubmissionDrawer({
         <div className="flex flex-col gap-4">
           <fieldset>
             <legend className="text-base font-medium text-zinc-950 sm:text-sm">New decision</legend>
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              {(['waitlisted', 'rejected'] as const).map((decision) => (
+            <div
+              className={cx(
+                'grid gap-2 pt-2',
+                submission.status === 'accepted' ? 'grid-cols-2' : 'grid-cols-3',
+              )}
+            >
+              {(submission.status === 'accepted'
+                ? (['waitlisted', 'rejected'] as const)
+                : (['accepted', 'waitlisted', 'rejected'] as const)
+              ).map((decision) => (
                 <button
                   key={decision}
                   type="button"
@@ -807,7 +847,11 @@ function SubmissionDrawer({
                       : 'bg-white text-zinc-700 ring-zinc-950/10 hover:bg-zinc-50',
                   )}
                 >
-                  {decision === 'waitlisted' ? 'Waitlist' : 'Decline'}
+                  {decision === 'accepted'
+                    ? 'Accept'
+                    : decision === 'waitlisted'
+                      ? 'Waitlist'
+                      : 'Decline'}
                 </button>
               ))}
             </div>
@@ -818,7 +862,11 @@ function SubmissionDrawer({
               rows={3}
               value={decisionReason}
               onChange={(event) => setDecisionReason(event.target.value)}
-              placeholder="Explain why this decision is changing"
+              placeholder={
+                submission.status === 'accepted'
+                  ? 'Explain why this decision is changing'
+                  : 'Explain why the review requirement is being overridden'
+              }
               className="focus-ring resize-none rounded-xl bg-white px-3 py-2 text-base font-normal text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 placeholder:text-zinc-400 sm:text-sm"
             />
           </label>

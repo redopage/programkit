@@ -47,6 +47,7 @@ const fallbackColumns: Record<CsvCollectionKey, readonly string[]> = {
     'id',
     'name',
     'slug',
+    'logoUrl',
     'venue',
     'city',
     'startsAt',

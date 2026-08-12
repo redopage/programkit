@@ -6,6 +6,7 @@ configuration without tying those shared components to one agent client.
 
 ```text
 programkit/
+├── assets/                     shared ProgramKit mark
 ├── plugin.json                 portable Agent Plugins manifest
 ├── mcp.json                    portable Streamable HTTP MCP configuration
 ├── skills/                     shared Agent Skills
@@ -92,7 +93,9 @@ impersonate the other.
 
 ## Safety boundary
 
-The agent can inspect operational state, draft communications, and propose schedule changes. It
-cannot approve change sets, send communications, publish an agenda, manage secrets, or perform
-destructive actions. Those boundaries are enforced by the core operation manifest, not only by
-skill instructions.
+The agent can inspect operational state—including submission pipeline summaries and unscheduled
+sessions—draft communications, and propose initial placements or schedule moves. Submission reads
+omit full proposal bodies, reviewer comments, and contact details by default. The agent cannot make
+submission decisions, approve or commit change sets, send communications, publish an agenda,
+manage secrets, or perform destructive actions. Those boundaries are enforced by scoped API keys
+and the core operation manifest, not only by skill instructions.

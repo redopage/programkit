@@ -2,6 +2,8 @@ export const apiKeyScopes = [
   'workspace:read',
   'workspace:export',
   'events:read',
+  'submissions:read',
+  'sessions:read',
   'people:read',
   'participations:read',
   'requirements:read',
@@ -39,6 +41,8 @@ export type ApiKeyScope = (typeof apiKeyScopes)[number]
  */
 export const agentApiKeyScopes = [
   'workspace:read',
+  'submissions:read',
+  'sessions:read',
   'people:read',
   'participations:read',
   'requirements:read',

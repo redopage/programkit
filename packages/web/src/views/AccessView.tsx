@@ -6,6 +6,7 @@ import {
 } from '@heroicons/react/16/solid'
 
 import { ProgramKitMark } from '../components/brand.tsx'
+import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
 import { ExternalAccessForm } from '../components/ExternalAccessForm.tsx'
 import { Button } from '../components/ui.tsx'
 import { useExternalAccess, type ExternalAccessDestination } from '../lib/external-access.ts'
@@ -23,16 +24,20 @@ export function AccessView() {
   const access = useExternalAccess(eventId, formSlug)
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="flex min-h-dvh flex-col bg-white">
       <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex min-h-16 max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <a
-            href="https://programkit.dev"
-            className="focus-ring flex items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-zinc-950"
-          >
-            <ProgramKitMark className="size-6" />
-            ProgramKit
-          </a>
+          {access.session.eventName ? (
+            <EventIdentity name={access.session.eventName} logoUrl={access.session.eventLogoUrl} />
+          ) : (
+            <a
+              href="https://programkit.dev"
+              className="focus-ring flex items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-zinc-950"
+            >
+              <ProgramKitMark className="size-6" />
+              ProgramKit
+            </a>
+          )}
           {access.session.authenticated ? (
             <button
               type="button"
@@ -45,7 +50,7 @@ export function AccessView() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-14 sm:px-6 sm:py-20">
         {access.loading ? (
           <p className="text-base text-zinc-500 sm:text-sm">Loading access…</p>
         ) : access.session.authenticated ? (
@@ -119,6 +124,7 @@ export function AccessView() {
           />
         )}
       </main>
+      <EventPageFooter />
     </div>
   )
 }

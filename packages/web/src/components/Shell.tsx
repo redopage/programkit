@@ -37,6 +37,7 @@ import { publicProgramPath, publicSubmissionPath } from '../lib/public-links.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 import { CommandCenter, type CommandMode, type ProgramCommand } from './CommandCenter.tsx'
 import { DemoBanner } from './DemoBanner.tsx'
+import { EventIdentity } from './event-brand.tsx'
 import { Button, cx, Dialog, IconButton } from './ui.tsx'
 
 interface ShellProps {
@@ -532,14 +533,6 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
     account?.events ??
     (event ? [{ id: event.id, name: event.name, slug: event.slug, role: 'owner' as const }] : [])
   const activeEventId = account?.activeEventId ?? event?.id
-  const initials = (event?.name ?? 'Event')
-    .split(/\s+/u)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toLocaleUpperCase()
-
   return (
     <>
       <div className="relative">
@@ -552,12 +545,12 @@ function WorkspaceIdentity({ commandOpen }: { commandOpen: boolean }) {
           onClick={() => setOpen((current) => !current)}
           className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
         >
-          <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
-            {initials}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-base font-medium text-zinc-950 sm:text-sm">
-            {event?.name ?? 'Choose an event'}
-          </span>
+          <EventIdentity
+            name={event?.name ?? 'Choose an event'}
+            logoUrl={event?.logoUrl}
+            compact
+            className="flex-1"
+          />
           <ChevronDownIcon
             className={cx(
               'size-4 shrink-0 fill-zinc-400 motion-safe:transition-transform',
@@ -983,16 +976,17 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
           <a
             href="/"
             aria-label="Event overview"
-            className="focus-ring flex min-w-0 items-center gap-2 rounded-md text-base font-medium text-zinc-950"
+            className="focus-ring min-w-0 rounded-md"
             onClick={(event) => {
               event.preventDefault()
               navigate('/')
             }}
           >
-            <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-semibold text-white">
-              AI
-            </span>
-            <span className="min-w-0 truncate">{activeEvent?.name ?? 'Program workspace'}</span>
+            <EventIdentity
+              name={activeEvent?.name ?? 'Program workspace'}
+              logoUrl={activeEvent?.logoUrl}
+              compact
+            />
           </a>
           <IconButton label="Search ProgramKit" onClick={() => setCommandMode('commands')}>
             <MagnifyingGlassIcon className="size-4 shrink-0 fill-current" />

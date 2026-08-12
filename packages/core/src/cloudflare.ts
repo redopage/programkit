@@ -747,6 +747,80 @@ export class WorkspaceDurableObject extends DurableObject {
         ? Response.json({ ok: true, event })
         : Response.json({ ok: false }, { status: 404 })
     }
+    if (request.method === 'GET' && url.pathname === '/internal/recovery/status') {
+      try {
+        const [bookmark, event] = await Promise.all([
+          this.#ctx.storage.getCurrentBookmark(),
+          this.#ctx.storage.get<EventMetadata>(eventMetadataKey),
+        ])
+        return Response.json(
+          {
+            ok: true,
+            supported: true,
+            event: event ? { id: event.id, name: event.name } : null,
+            currentBookmark: bookmark,
+            databaseSizeBytes: this.#ctx.storage.sql.databaseSize,
+            retentionDays: 30,
+            scope: 'workspace-durable-object',
+          },
+          { headers: { 'cache-control': 'no-store' } },
+        )
+      } catch {
+        return Response.json(
+          {
+            ok: false,
+            supported: false,
+            error: 'Point-in-time recovery is unavailable in this runtime.',
+          },
+          { status: 501, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+    }
+    if (request.method === 'POST' && url.pathname === '/internal/recovery/bookmark') {
+      const input = (await request.json()) as { timestamp?: unknown }
+      const timestamp =
+        typeof input.timestamp === 'number'
+          ? input.timestamp
+          : typeof input.timestamp === 'string'
+            ? Date.parse(input.timestamp)
+            : Number.NaN
+      const now = Date.now()
+      const oldest = now - 30 * 24 * 60 * 60 * 1_000
+      if (!Number.isFinite(timestamp) || timestamp < oldest || timestamp > now) {
+        return Response.json(
+          { ok: false, error: 'timestamp must be within the previous 30 days.' },
+          { status: 400, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+      try {
+        const [bookmark, currentBookmark] = await Promise.all([
+          this.#ctx.storage.getBookmarkForTime(new Date(timestamp)),
+          this.#ctx.storage.getCurrentBookmark(),
+        ])
+        return Response.json(
+          {
+            ok: true,
+            supported: true,
+            requestedAt: new Date(timestamp).toISOString(),
+            bookmark,
+            currentBookmark,
+            approximate: true,
+            retentionDays: 30,
+            scope: 'workspace-durable-object',
+          },
+          { headers: { 'cache-control': 'no-store' } },
+        )
+      } catch {
+        return Response.json(
+          {
+            ok: false,
+            supported: false,
+            error: 'Point-in-time recovery is unavailable in this runtime.',
+          },
+          { status: 501, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+    }
     if (request.method === 'POST' && url.pathname === '/internal/demo/initialize') {
       const input = (await request.json()) as DemoMetadata
       if (

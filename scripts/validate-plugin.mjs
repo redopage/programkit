@@ -1,5 +1,5 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 
 const pluginRoot = resolve('packages/agent/plugin/programkit')
 const errors = []
@@ -31,6 +31,21 @@ function requireString(value, label) {
   if (typeof value !== 'string' || value.trim() === '') errors.push(`${label} must be a string.`)
 }
 
+async function requirePluginAsset(value, label) {
+  requireString(value, label)
+  if (typeof value !== 'string' || value.trim() === '') return
+  const path = resolve(pluginRoot, value)
+  if (relative(pluginRoot, path).startsWith('..')) {
+    errors.push(`${label} must stay inside the plugin directory.`)
+    return
+  }
+  try {
+    if (!(await stat(path)).isFile()) errors.push(`${label} must reference a file.`)
+  } catch {
+    errors.push(`${label} references a missing file.`)
+  }
+}
+
 const manifest = await readJson(resolve(pluginRoot, '.codex-plugin/plugin.json'))
 if (manifest) {
   requireString(manifest.name, 'plugin.name')
@@ -41,6 +56,9 @@ if (manifest) {
   requireString(manifest.mcpServers, 'plugin.mcpServers')
   requireString(manifest.interface?.displayName, 'plugin.interface.displayName')
   requireString(manifest.interface?.shortDescription, 'plugin.interface.shortDescription')
+  await requirePluginAsset(manifest.interface?.composerIcon, 'plugin.interface.composerIcon')
+  await requirePluginAsset(manifest.interface?.logo, 'plugin.interface.logo')
+  await requirePluginAsset(manifest.interface?.logoDark, 'plugin.interface.logoDark')
 }
 
 const portableManifest = await readJson(resolve(pluginRoot, 'plugin.json'))

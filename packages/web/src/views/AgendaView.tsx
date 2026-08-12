@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
 import { calendarUid, publicAgenda } from '@programkit/core'
 
-import { ProgramKitMark } from '../components/brand.tsx'
+import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
 import { Button, Drawer, TrackBadge, cx, sentenceCase } from '../components/ui.tsx'
 import { eventDateTime, eventTimeZoneLabel } from '../lib/date.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -493,10 +493,7 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
     >
       <header className="sticky top-0 z-30 border-b border-zinc-950/5 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <ProgramKitMark className="size-7" />
-            <span className="truncate text-base font-semibold tracking-tight">{event.name}</span>
-          </div>
+          <EventIdentity name={event.name} logoUrl={event.logoUrl} />
           <button
             type="button"
             aria-label="Manage event"
@@ -860,6 +857,7 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
           </div>
         </section>
       </main>
+      <EventPageFooter />
 
       <Drawer
         open={selectedSession != null}

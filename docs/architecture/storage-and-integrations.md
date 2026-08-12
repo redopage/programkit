@@ -30,6 +30,26 @@ fast, requires no database provisioning, and gives each event an isolated transa
 R2, mail, Airtable, and MCP are integrations around the event store. They do not change the core
 operation contract.
 
+## Recovery boundary
+
+Cloudflare retains point-in-time recovery history for each SQLite Durable Object for 30 days. The
+hosted app exposes owner-only inspection of the active event workspace's current bookmark and an
+approximate bookmark for a requested time. It intentionally does not expose restoration as a
+normal product or agent action.
+
+The recovery unit is one Durable Object, not one logical event across every service:
+
+- the event workspace object contains program business state;
+- account objects contain staff identity and event links;
+- event-access objects contain roles, invitations, and API keys;
+- R2 contains file bytes.
+
+Restoring the workspace object alone can therefore create cross-service inconsistencies. A future
+operator restore runbook must capture a pre-restore export, record Cloudflare's undo bookmark,
+restore only after explicit owner confirmation, restart the object session, reconcile access and
+files, and verify the event before reopening writes. Logical exports remain the portability and
+departure mechanism; PITR is an incident-recovery layer.
+
 ## Airtable decision
 
 The repository includes a real OAuth flow, versioned schema, native operational tables, delta

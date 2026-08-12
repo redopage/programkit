@@ -123,6 +123,13 @@ export function isApiKeyAccessiblePath(pathname: string) {
   )
 }
 
+export function isHostedRecoveryPath(method: string, pathname: string) {
+  return (
+    (method === 'GET' && pathname === '/api/v1/recovery') ||
+    (method === 'POST' && pathname === '/api/v1/recovery/bookmark')
+  )
+}
+
 export function isApiKeyCredentialPath(pathname: string) {
   return pathname.startsWith('/api/') || pathname === '/mcp'
 }
@@ -704,11 +711,9 @@ async function externalAccessPayload(
   eventId: string,
   formSlug?: string | null,
 ) {
-  const destinations = externalAccessDestinations(
-    await readWorkspace(stub),
-    identity.email,
-    eventId,
-  )
+  const state = await readWorkspace(stub)
+  const event = state.events.find((entry) => entry.id === eventId)
+  const destinations = externalAccessDestinations(state, identity.email, eventId)
   const submissionDestination = formSlug
     ? destinations.find((destination) => {
         if (destination.kind !== 'submissions') return false
@@ -723,7 +728,22 @@ async function externalAccessPayload(
           .at(-1) ?? '',
       )
     : null
-  return { identity, destinations, submissionAccessKey: accessKey || null }
+  return {
+    eventName: event?.name ?? 'Event',
+    eventLogoUrl: event?.logoUrl ?? '',
+    identity,
+    destinations,
+    submissionAccessKey: accessKey || null,
+  }
+}
+
+async function externalEventBranding(
+  stub: DurableObjectStub<WorkspaceDurableObject>,
+  eventId: string,
+) {
+  const state = await readWorkspace(stub)
+  const event = state.events.find((entry) => entry.id === eventId)
+  return { eventName: event?.name ?? 'Event', eventLogoUrl: event?.logoUrl ?? '' }
 }
 
 function workspaceExternalEmails(state: WorkspaceState) {
@@ -805,11 +825,8 @@ async function externalSessionPayload(
   const body = (await response.json()) as ExternalAccessResponse
   if (!response.ok || !body.identity) return null
   const workspace = workspaceStub(env, eventWorkspaceKey(eventId))
-  const state = await readWorkspace(workspace)
-  const event = state.events.find((entry) => entry.id === eventId)
   return {
     eventId,
-    eventName: event?.name ?? 'Event',
     ...(await externalAccessPayload(workspace, body.identity, eventId, formSlug)),
   }
 }
@@ -951,9 +968,10 @@ async function handleExternalAccessRequest(request: Request, env: Env, url: URL,
   const sessionToken = parseExternalSession(cookie(request, externalSessionCookieName), eventId)
 
   if (request.method === 'GET' && url.pathname === '/public/v1/access/session') {
+    const branding = await externalEventBranding(workspace, eventId)
     if (!sessionToken) {
       return Response.json(
-        { ok: true, authenticated: false },
+        { ok: true, authenticated: false, eventId, ...branding },
         { headers: { 'cache-control': 'no-store' } },
       )
     }
@@ -967,7 +985,7 @@ async function handleExternalAccessRequest(request: Request, env: Env, url: URL,
     const body = (await response.json()) as ExternalAccessResponse
     if (!response.ok || !body.identity) {
       return Response.json(
-        { ok: true, authenticated: false },
+        { ok: true, authenticated: false, eventId, ...branding },
         {
           headers: {
             'cache-control': 'no-store',
@@ -980,6 +998,7 @@ async function handleExternalAccessRequest(request: Request, env: Env, url: URL,
       {
         ok: true,
         authenticated: true,
+        eventId,
         ...(await externalAccessPayload(workspace, body.identity, eventId, formSlug)),
       },
       { headers: { 'cache-control': 'no-store' } },
@@ -1041,7 +1060,7 @@ async function handleExternalAccessRequest(request: Request, env: Env, url: URL,
       formSlug,
     )
     return Response.json(
-      { ok: true, authenticated: true, ...payload },
+      { ok: true, authenticated: true, eventId, ...payload },
       {
         status: intent === 'signup' ? 201 : 200,
         headers: {
@@ -3217,6 +3236,27 @@ export default {
       return Response.json(
         { ok: false, error: 'This endpoint is not available to API keys.' },
         { status: 403, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+
+    if (profile === 'hosted-app' && isHostedRecoveryPath(request.method, url.pathname)) {
+      if (!hostedPrincipal?.membership || hostedPrincipal.membership.role !== 'owner') {
+        return Response.json(
+          { ok: false, error: 'Event owner access is required.' },
+          { status: 403, headers: { 'cache-control': 'no-store' } },
+        )
+      }
+      if (request.method === 'POST' && !sameOrigin(request, url)) {
+        return new Response(null, { status: 403, headers: { 'cache-control': 'no-store' } })
+      }
+      const internalPath =
+        request.method === 'GET' ? '/internal/recovery/status' : '/internal/recovery/bookmark'
+      return stub.fetch(
+        new Request(`http://workspace.internal${internalPath}`, {
+          method: request.method,
+          headers: { 'content-type': 'application/json' },
+          ...(request.method === 'POST' ? { body: await request.arrayBuffer() } : {}),
+        }),
       )
     }
 

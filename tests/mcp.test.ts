@@ -131,8 +131,94 @@ describe('MCP server', () => {
     }
     expect(listedBody.result.resultType).toBe('complete')
     expect(listedBody.result.tools.map((tool) => tool.name)).toContain('get_readiness_report')
+    expect(listedBody.result.tools.map((tool) => tool.name)).toContain('get_submission_pipeline')
+    expect(listedBody.result.tools.map((tool) => tool.name)).toContain('get_program_sessions')
+    expect(listedBody.result.tools.map((tool) => tool.name)).toContain('propose_schedule_placement')
     expect(listedBody.result.tools.map((tool) => tool.name)).not.toContain('send_campaign')
     expect(listedBody.result.tools.map((tool) => tool.name)).not.toContain('publish_schedule')
+  })
+
+  it('returns submission progress without proposal bodies or contact details', async () => {
+    const test = harness()
+    const response = await handleMcpRequest(
+      modernRequest('tools/call', {
+        name: 'get_submission_pipeline',
+        arguments: { status: 'accepted', limit: 5 },
+      }),
+      test.context,
+    )
+    const body = (await response.json()) as {
+      result: {
+        isError: boolean
+        structuredContent: {
+          summary: { total: number; accepted: number }
+          submissions: Array<Record<string, unknown>>
+        }
+      }
+    }
+    expect(body.result.isError).toBe(false)
+    expect(body.result.structuredContent.summary.total).toBeGreaterThan(0)
+    expect(body.result.structuredContent.submissions).not.toHaveLength(0)
+    expect(
+      body.result.structuredContent.submissions.every((entry) => entry.status === 'accepted'),
+    ).toBe(true)
+    expect(body.result.structuredContent.submissions[0]).not.toHaveProperty('answers')
+    expect(body.result.structuredContent.submissions[0]).not.toHaveProperty('email')
+  })
+
+  it('finds unscheduled sessions and proposes an initial placement without mutating the schedule', async () => {
+    const test = harness()
+    const source = test.state.sessions[0]
+    test.state.sessions.push({
+      ...structuredClone(source),
+      id: 'ses_unscheduled_test',
+      title: 'Unscheduled test session',
+      participantIds: [],
+      version: 3,
+    })
+
+    const listed = await handleMcpRequest(
+      modernRequest('tools/call', {
+        name: 'get_program_sessions',
+        arguments: { placement: 'unscheduled' },
+      }),
+      test.context,
+    )
+    const listedBody = (await listed.json()) as {
+      result: {
+        structuredContent: {
+          sessions: Array<{ id: string; placement: unknown; version: number }>
+          rooms: Array<{ id: string }>
+        }
+      }
+    }
+    expect(listedBody.result.structuredContent.sessions).toContainEqual(
+      expect.objectContaining({ id: 'ses_unscheduled_test', placement: null, version: 3 }),
+    )
+
+    const beforePlacements = test.state.placements.length
+    const beforeChangeSets = test.state.changeSets.length
+    const proposed = await handleMcpRequest(
+      modernRequest('tools/call', {
+        name: 'propose_schedule_placement',
+        arguments: {
+          sessionId: 'ses_unscheduled_test',
+          roomId: listedBody.result.structuredContent.rooms[0].id,
+          startsAt: '2026-10-05T19:00:00.000Z',
+          reason: 'Fill an open program slot.',
+          expectedVersion: 3,
+        },
+      }),
+      test.context,
+    )
+    const proposedBody = (await proposed.json()) as {
+      result: { isError: boolean; structuredContent: { status: string } }
+    }
+    expect(proposedBody.result.isError).toBe(false)
+    expect(proposedBody.result.structuredContent.status).toBe('awaiting_approval')
+    expect(test.state.placements).toHaveLength(beforePlacements)
+    expect(test.state.changeSets).toHaveLength(beforeChangeSets + 1)
+    expect(test.state.changeSets[0].operations[0].operation).toBe('schedule.place-session')
   })
 
   it('returns structured readiness evidence', async () => {

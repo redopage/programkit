@@ -12,6 +12,7 @@ export interface ExternalAccessSession {
   authenticated: boolean
   eventId?: string
   eventName?: string
+  eventLogoUrl?: string
   identity?: { id: string; email: string }
   destinations?: ExternalAccessDestination[]
   submissionAccessKey?: string | null

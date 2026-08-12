@@ -441,8 +441,12 @@ function PlanEditor({
 
             <div className="grid gap-4 pt-4 sm:grid-cols-2 lg:grid-cols-4">
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-zinc-700">Opens</span>
+                <span className="flex items-center justify-between gap-2 text-sm font-medium text-zinc-700">
+                  Opens
+                  <span className="text-xs font-normal text-zinc-500">Required</span>
+                </span>
                 <input
+                  aria-label="Opens"
                   type="date"
                   required
                   value={round.opensOn}
@@ -451,8 +455,12 @@ function PlanEditor({
                 />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-zinc-700">Closes</span>
+                <span className="flex items-center justify-between gap-2 text-sm font-medium text-zinc-700">
+                  Closes
+                  <span className="text-xs font-normal text-zinc-500">Required</span>
+                </span>
                 <input
+                  aria-label="Closes"
                   type="date"
                   required
                   value={round.closesOn}

@@ -5,6 +5,9 @@ import {
   readinessRows,
   readinessSummary,
   scheduleConflicts,
+  submissionAnswerByPurpose,
+  submissionPipelineSummary,
+  submissionReviewSummary,
   type OperationRequest,
   type OperationResponse,
   type WorkspaceState,
@@ -28,6 +31,8 @@ interface JsonRpcRequest {
 
 const toolScopes: Record<string, string[]> = {
   get_event_context: ['workspace:read'],
+  get_submission_pipeline: ['submissions:read'],
+  get_program_sessions: ['sessions:read', 'schedule:read'],
   search_people: ['people:read', 'participations:read'],
   get_readiness_report: ['people:read', 'participations:read', 'requirements:read'],
   get_schedule: ['schedule:read'],
@@ -41,6 +46,7 @@ const toolScopes: Record<string, string[]> = {
     'changes:read',
   ],
   draft_campaign: ['communications:draft'],
+  propose_schedule_placement: ['sessions:read', 'schedule:draft', 'changes:propose'],
   propose_schedule_move: ['schedule:draft', 'changes:propose'],
 }
 
@@ -86,6 +92,60 @@ export const mcpTools = [
     description:
       'Read the active event, workspace, current operational summary, and relevant policy boundaries.',
     inputSchema: emptySchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'get_submission_pipeline',
+    title: 'Get submission pipeline',
+    description:
+      'List event submissions with pipeline totals, review progress, and decision status without exposing full proposal text.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: [
+            'draft',
+            'submitted',
+            'in_review',
+            'waitlisted',
+            'accepted',
+            'rejected',
+            'withdrawn',
+          ],
+        },
+        query: { type: 'string', description: 'Proposal title or speaker name fragment.' },
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'get_program_sessions',
+    title: 'Get program sessions',
+    description:
+      'List scheduled and unscheduled sessions with track, speaker, placement, and version context.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['draft', 'ready', 'cancelled'] },
+        placement: { type: 'string', enum: ['all', 'scheduled', 'unscheduled'] },
+        query: { type: 'string', description: 'Session title fragment.' },
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+      },
+      additionalProperties: false,
+    },
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -227,6 +287,30 @@ export const mcpTools = [
         },
       },
       required: ['name', 'subject', 'body', 'audience'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'propose_schedule_placement',
+    title: 'Propose schedule placement',
+    description:
+      'Create a human-reviewable change set that places one unscheduled session. This does not change or publish the schedule.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: { type: 'string' },
+        roomId: { type: 'string' },
+        startsAt: { type: 'string', format: 'date-time' },
+        reason: { type: 'string' },
+        expectedVersion: { type: 'integer', minimum: 1 },
+      },
+      required: ['sessionId', 'roomId', 'startsAt', 'reason', 'expectedVersion'],
       additionalProperties: false,
     },
     annotations: {
@@ -519,6 +603,119 @@ async function callTool(name: string, args: Record<string, unknown>, context: Mc
       },
     })
   }
+  if (name === 'get_submission_pipeline') {
+    const event = activeEvent(state)
+    const status = typeof args.status === 'string' ? args.status : null
+    const query = typeof args.query === 'string' ? args.query.trim().toLowerCase() : ''
+    const limit =
+      typeof args.limit === 'number' ? Math.min(Math.max(Math.floor(args.limit), 1), 50) : 20
+    const submissions = (state.submissions ?? [])
+      .filter((submission) => submission.eventId === state.activeEventId)
+      .filter((submission) => !status || submission.status === status)
+      .filter((submission) => {
+        if (!query) return true
+        const title = String(submissionAnswerByPurpose(state, submission, 'proposal_title') ?? '')
+        const firstName = String(submissionAnswerByPurpose(state, submission, 'first_name') ?? '')
+        const lastName = String(submissionAnswerByPurpose(state, submission, 'last_name') ?? '')
+        return `${title} ${firstName} ${lastName}`.toLowerCase().includes(query)
+      })
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .slice(0, limit)
+      .map((submission) => {
+        const firstName = String(submissionAnswerByPurpose(state, submission, 'first_name') ?? '')
+        const lastName = String(submissionAnswerByPurpose(state, submission, 'last_name') ?? '')
+        return {
+          id: submission.id,
+          title: String(
+            submissionAnswerByPurpose(state, submission, 'proposal_title') ?? 'Untitled proposal',
+          ),
+          speakerName: `${firstName} ${lastName}`.trim() || 'Unknown speaker',
+          form: (state.submissionForms ?? []).find((form) => form.id === submission.formId)?.name,
+          kind: submission.kind,
+          status: submission.status,
+          submittedAt: submission.submittedAt,
+          decidedAt: submission.decidedAt,
+          updatedAt: submission.updatedAt,
+          version: submission.version,
+          review: submissionReviewSummary(state, submission.id),
+          convertedSessionId: submission.convertedSessionId,
+        }
+      })
+    return toolResult({
+      event: event ? { id: event.id, name: event.name } : null,
+      summary: submissionPipelineSummary(state),
+      submissions,
+      count: submissions.length,
+      limit,
+      privacy:
+        'Full proposal answers, reviewer comments, and contact details are intentionally omitted.',
+    })
+  }
+  if (name === 'get_program_sessions') {
+    const event = activeEvent(state)
+    const status = typeof args.status === 'string' ? args.status : null
+    const placementFilter = typeof args.placement === 'string' ? args.placement : 'all'
+    const query = typeof args.query === 'string' ? args.query.trim().toLowerCase() : ''
+    const limit =
+      typeof args.limit === 'number' ? Math.min(Math.max(Math.floor(args.limit), 1), 50) : 20
+    const sessions = state.sessions
+      .filter((session) => session.eventId === state.activeEventId)
+      .filter((session) => !status || session.status === status)
+      .filter((session) => !query || session.title.toLowerCase().includes(query))
+      .map((session) => {
+        const placement = state.placements.find(
+          (entry) => entry.eventId === state.activeEventId && entry.sessionId === session.id,
+        )
+        return { session, placement }
+      })
+      .filter(({ placement }) => {
+        if (placementFilter === 'scheduled') return Boolean(placement)
+        if (placementFilter === 'unscheduled') return !placement
+        return true
+      })
+      .sort((left, right) => {
+        if (Boolean(left.placement) !== Boolean(right.placement)) return left.placement ? -1 : 1
+        return left.session.title.localeCompare(right.session.title)
+      })
+      .slice(0, limit)
+      .map(({ session, placement }) => ({
+        id: session.id,
+        title: session.title,
+        format: session.format,
+        status: session.status,
+        durationMinutes: session.durationMinutes,
+        expectedAttendance: session.expectedAttendance,
+        track: state.tracks.find((entry) => entry.id === session.trackId) ?? null,
+        speakers: session.participantIds.map((participationId) => {
+          const participation = state.participations.find((entry) => entry.id === participationId)
+          const person = participation
+            ? state.people.find((entry) => entry.id === participation.personId)
+            : null
+          return {
+            participationId,
+            name: person ? `${person.firstName} ${person.lastName}` : 'Unknown participant',
+            status: participation?.status ?? 'missing',
+          }
+        }),
+        placement: placement
+          ? {
+              ...placement,
+              room: state.rooms.find((entry) => entry.id === placement.roomId) ?? null,
+            }
+          : null,
+        version: session.version,
+        updatedAt: session.updatedAt,
+      }))
+    return toolResult({
+      event,
+      rooms: state.rooms.filter((room) => room.eventId === state.activeEventId),
+      tracks: state.tracks.filter((track) => track.eventId === state.activeEventId),
+      sessions,
+      count: sessions.length,
+      limit,
+      placementFilter,
+    })
+  }
   if (name === 'search_people') {
     const query = asString(args.query, 'query').toLowerCase()
     const limit =
@@ -680,6 +877,32 @@ async function callTool(name: string, args: Record<string, unknown>, context: Mc
         ? {
             status: 'draft',
             approvalRequiredBeforeSend: true,
+            result: response.data,
+            traceId: response.traceId,
+          }
+        : { error: response.error, traceId: response.traceId },
+      !response.ok,
+    )
+  }
+  if (name === 'propose_schedule_placement') {
+    const sessionId = asString(args.sessionId, 'sessionId')
+    const response = await context.execute('schedule.place-session', {
+      input: {
+        sessionId,
+        roomId: asString(args.roomId, 'roomId'),
+        startsAt: asString(args.startsAt, 'startsAt'),
+      },
+      mode: 'propose',
+      reason: asString(args.reason, 'reason'),
+      expectedVersions: { [sessionId]: Number(args.expectedVersion) },
+      actor: contextActor(context),
+      idempotencyKey: crypto.randomUUID(),
+    })
+    return toolResult(
+      response.ok
+        ? {
+            status: 'awaiting_approval',
+            approvalRequired: true,
             result: response.data,
             traceId: response.traceId,
           }

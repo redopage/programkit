@@ -57,6 +57,8 @@ const apiScopeGroups = [
     scopes: [
       'workspace:read',
       'events:read',
+      'submissions:read',
+      'sessions:read',
       'people:read',
       'participations:read',
       'requirements:read',

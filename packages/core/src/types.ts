@@ -27,6 +27,7 @@ export interface Event {
   id: Id
   name: string
   slug: string
+  logoUrl?: string
   venue: string
   city: string
   startsAt: ISODateTime

@@ -190,6 +190,7 @@ describe('ProgramKit operation engine', () => {
         eventId: event.id,
         name: 'AIE Brooklyn 2026',
         slug: 'aie-brooklyn-2026',
+        logoUrl: 'https://assets.example.com/aie-brooklyn.svg',
         venue: 'Building 77',
         city: 'Brooklyn, New York',
         startsAt: event.startsAt,
@@ -203,6 +204,7 @@ describe('ProgramKit operation engine', () => {
     expect(updated.state.events[0]).toMatchObject({
       name: 'AIE Brooklyn 2026',
       slug: 'aie-brooklyn-2026',
+      logoUrl: 'https://assets.example.com/aie-brooklyn.svg',
       venue: 'Building 77',
       version: 2,
     })
@@ -220,6 +222,13 @@ describe('ProgramKit operation engine', () => {
     })
     expect(invalid.response.error?.code).toBe('INVALID_INPUT')
     expect(invalid.response.error?.fields?.timezone).toBeTruthy()
+
+    const insecureLogo = executeOperation(updated.state, 'event.update', {
+      input: { eventId: event.id, logoUrl: 'http://assets.example.com/event.svg' },
+      expectedVersions: { [event.id]: 2 },
+    })
+    expect(insecureLogo.response.error?.code).toBe('INVALID_INPUT')
+    expect(insecureLogo.response.error?.fields?.logoUrl).toBeTruthy()
   })
 
   it('creates and publishes speaker portal resources with safe embed URLs', () => {

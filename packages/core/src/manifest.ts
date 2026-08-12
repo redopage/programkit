@@ -4,7 +4,8 @@ export const operationManifest = [
   {
     name: 'event.update',
     title: 'Update event settings',
-    description: 'Update the active event identity, venue, dates, timezone, or lifecycle status.',
+    description:
+      'Update the active event identity, logo, venue, dates, timezone, or lifecycle status.',
     kind: 'command',
     scopes: ['events:write'],
     risk: 'administrative',

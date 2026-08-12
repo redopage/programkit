@@ -18,6 +18,7 @@ import {
 } from '@programkit/core'
 
 import { PortalResources } from '../components/PortalResources.tsx'
+import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Avatar,
@@ -179,15 +180,15 @@ function PortalWorkspace() {
   }
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="flex min-h-dvh flex-col bg-white">
       <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <p className="text-base font-semibold tracking-tight text-zinc-950">{event.name}</p>
+          <EventIdentity name={event.name} logoUrl={event.logoUrl} />
           <p className="text-base text-zinc-500 sm:text-sm">Speaker portal</p>
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:py-12">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:py-12">
         <section className="flex flex-col gap-6 border-b border-zinc-950/5 pb-6 lg:flex-row lg:items-center">
           <div className="flex min-w-0 flex-1 items-center gap-4">
             <Avatar
@@ -561,6 +562,7 @@ function PortalWorkspace() {
           </section>
         </div>
       </main>
+      <EventPageFooter />
     </div>
   )
 }

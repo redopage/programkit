@@ -18,7 +18,7 @@ import {
   type SubmissionAnswerValue,
 } from '@programkit/core'
 
-import { ProgramKitMark } from '../components/brand.tsx'
+import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
 import {
   Button,
   Dialog,
@@ -187,23 +187,20 @@ function ReviewerWorkspace({
   const assigned = queue.filter((entry) => entry.assignment.status !== 'recused').length
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div className="flex min-h-dvh flex-col bg-white">
       <header className="border-b border-zinc-950/5 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-6">
-          <div className="flex items-center gap-2 text-base font-semibold tracking-tight text-zinc-950">
-            <ProgramKitMark className="size-6" />
-            ProgramKit
-          </div>
+          <EventIdentity name={event.name} logoUrl={event.logoUrl} />
           <div className="min-w-0 text-right">
             <p className="truncate text-base font-medium text-zinc-950 sm:text-sm">
               {reviewer.name}
             </p>
-            <p className="truncate text-sm text-zinc-500">{event.name} review committee</p>
+            <p className="truncate text-sm text-zinc-500">Review committee</p>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-[90rem] flex-col gap-7 px-4 py-8 sm:px-6 lg:py-10">
+      <main className="mx-auto flex w-full max-w-[90rem] flex-1 flex-col gap-7 px-4 py-8 sm:px-6 lg:py-10">
         <div className="border-b border-zinc-950/5 pb-5">
           <div>
             <p className="text-base text-zinc-500 sm:text-sm">
@@ -540,6 +537,7 @@ function ReviewerWorkspace({
           </div>
         )}
       </main>
+      <EventPageFooter />
       <Dialog
         open={recusalOpen}
         onClose={() => setRecusalOpen(false)}

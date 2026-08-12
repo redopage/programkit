@@ -21,6 +21,28 @@ area lives in [`evals`](evals/README.md).
 state, and focused automated coverage. It does not replace the evaluator's own screenshots or the
 manual mailbox, calendar, download, and cross-origin checks.
 
+## Manual browser audit — 11 August 2026
+
+A browser-only evaluator rehearsal at the runner's `1280 × 800` viewport completed the connected
+CFP path through organizer setup, public form rendering, speaker draft/resume, two submitted
+proposals, exact reviewer assignment, reviewer scoring, organizer review visibility, and acceptance
+handoff. No model API or evaluator API was used.
+
+The rehearsal found and fixed two real operator blockers:
+
+- review-round dates are required, but the setup form did not say so; the fields now expose visible
+  `Required` labels and stable accessible names;
+- a review plan correctly blocks ordinary decisions until its minimum is met, but the operator UI
+  did not expose the server's reasoned override for an intentionally unreviewed proposal; the
+  submission drawer now offers `Record decision early`, requires a reason, and supports accept,
+  waitlist, or decline without weakening the normal review gate.
+
+One deployment-state blocker remains outside the product UI: the default fixture organizer address
+already exists on production while its fixture password is no longer valid. A fresh plus-addressed
+organizer completed the rehearsal, proving open signup works, but the official evaluator must be
+given unused `personaEmails` (preferred) or the stale fixture identities must be cleaned up before
+the final run. The two UI fixes also require deployment before they can be scored on production.
+
 ## How the evaluator reaches the product
 
 The V1 runner is browser-only, permits the target origin and sibling subdomains of the same site,
@@ -50,6 +72,8 @@ hosted identity or event membership.
 7. Re-run the generated iframe on another origin after the final freeze and retain a screenshot.
 8. Repeat the entire chain from a second disposable organizer account and retain the stronger
    report. Never reset a collaborator's event in place.
+9. Set unused `personaEmails` in the evaluator configuration before either run; do not rely on the
+   shared placeholder identities in `fixtures/sample-data.json`.
 
 ## Product risks outside the score
 
