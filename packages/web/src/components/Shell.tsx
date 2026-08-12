@@ -193,11 +193,13 @@ const commandDetails: Record<
 }
 
 function SidebarUtilities({
+  pathname,
   navigate,
   demoUrl,
   eventId,
   onNavigate,
 }: {
+  pathname: string
   navigate: (to: string) => void
   demoUrl?: string
   eventId?: string
@@ -240,10 +242,10 @@ function SidebarUtilities({
           },
         ]
       : []),
-    { label: 'Settings', icon: Cog6ToothIcon, action: () => open('/settings') },
   ]
   return (
     <div className="border-t border-zinc-950/6 pt-2">
+      <SidebarSettingsItem pathname={pathname} navigate={navigate} onNavigate={onNavigate} />
       {items.map(({ label, icon: Icon, action }) => (
         <button
           key={label}
@@ -261,6 +263,37 @@ function SidebarUtilities({
         </button>
       ))}
     </div>
+  )
+}
+
+function SidebarSettingsItem({
+  pathname,
+  navigate,
+  onNavigate,
+}: {
+  pathname: string
+  navigate: (to: string) => void
+  onNavigate?: () => void
+}) {
+  const active = pathname === '/settings' || pathname.startsWith('/settings/')
+  return (
+    <a
+      href="/settings"
+      aria-current={active ? 'page' : undefined}
+      className={cx(
+        'focus-ring flex min-h-11 items-center gap-2.5 rounded-lg px-2 text-[0.9375rem] font-medium text-zinc-700 sm:min-h-8 sm:text-sm',
+        active && 'bg-zinc-950/6 text-zinc-950',
+        !active && 'hover:bg-zinc-950/4 hover:text-zinc-950',
+      )}
+      onClick={(event) => {
+        event.preventDefault()
+        navigate('/settings')
+        onNavigate?.()
+      }}
+    >
+      <Cog6ToothIcon className="size-4 h-lh shrink-0 fill-zinc-500" />
+      <span className="min-w-0 truncate">Settings</span>
+    </a>
   )
 }
 
@@ -373,20 +406,15 @@ function useHostedAccount() {
 function AccountMenu({
   account,
   activeEvent,
-  navigate,
   onNavigate,
 }: {
   account: AccountSummary
   activeEvent?: { id: string; name: string }
-  navigate: (to: string) => void
   onNavigate?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
-  const activeAccountEvent = account.events.find((event) => event.id === account.activeEventId)
-  const role = activeAccountEvent?.role ?? 'member'
-  const roleName = role === 'member' ? 'Viewer' : role.charAt(0).toLocaleUpperCase() + role.slice(1)
 
   useEffect(() => {
     if (!open) return
@@ -410,11 +438,6 @@ function AccountMenu({
     }
   }, [open])
 
-  const closeAndNavigate = (to: string) => {
-    setOpen(false)
-    navigate(to)
-    onNavigate?.()
-  }
   const preview = () => {
     if (!activeEvent) return
     window.open(publicProgramPath(activeEvent.id), '_blank', 'noopener,noreferrer')
@@ -444,12 +467,6 @@ function AccountMenu({
       disabled: !activeEvent,
     },
     {
-      label: 'Settings and team',
-      icon: Cog6ToothIcon,
-      action: () => closeAndNavigate('/settings'),
-      disabled: false,
-    },
-    {
       label: 'Sign out',
       icon: ArrowRightStartOnRectangleIcon,
       action: () => void signOut(),
@@ -458,35 +475,27 @@ function AccountMenu({
   ]
 
   return (
-    <div className="relative border-t border-zinc-950/6 pt-2">
+    <div className="relative">
       {open ? (
         <div
           ref={popoverRef}
           role="menu"
           aria-label="Account"
-          className="absolute bottom-full left-0 z-50 mb-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-(--popover-radius) bg-zinc-900/90 p-(--popover-padding) text-zinc-200 shadow-2xl ring-1 ring-white/15 backdrop-blur-xl [--popover-padding:--spacing(1.5)] [--popover-radius:var(--radius-2xl)] motion-safe:animate-rise-in"
+          className="absolute bottom-full left-0 z-50 mb-1.5 w-56 max-w-[calc(100vw-2rem)] overflow-hidden rounded-(--popover-radius) bg-zinc-900/90 p-(--popover-padding) text-zinc-200 shadow-2xl ring-1 ring-white/15 backdrop-blur-xl [--popover-padding:--spacing(1.5)] [--popover-radius:var(--radius-2xl)] motion-safe:animate-rise-in"
         >
-          <div className="min-w-0 px-2 py-1.5">
-            <p className="truncate text-sm font-medium text-white">{account.user.name}</p>
-            <p className="truncate text-xs text-zinc-400">
-              {account.user.email} · {roleName}
-            </p>
-          </div>
-          <div className="mt-1 border-t border-white/10 pt-1">
-            {menuItems.map(({ label, icon: Icon, action, disabled }) => (
-              <button
-                key={label}
-                type="button"
-                role="menuitem"
-                disabled={disabled}
-                className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 sm:text-sm"
-                onClick={action}
-              >
-                <Icon className="size-4 shrink-0 fill-zinc-500" />
-                {label}
-              </button>
-            ))}
-          </div>
+          {menuItems.map(({ label, icon: Icon, action, disabled }) => (
+            <button
+              key={label}
+              type="button"
+              role="menuitem"
+              disabled={disabled}
+              className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-[calc(var(--popover-radius)-var(--popover-padding))] px-2 text-left text-base text-zinc-300 hover:bg-white/8 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 sm:text-sm"
+              onClick={action}
+            >
+              <Icon className="size-4 shrink-0 fill-zinc-500" />
+              {label}
+            </button>
+          ))}
         </div>
       ) : null}
       <button
@@ -504,7 +513,6 @@ function AccountMenu({
           <span className="block truncate text-sm font-medium text-zinc-950">
             {account.user.name}
           </span>
-          <span className="block truncate text-xs text-zinc-500">{roleName}</span>
         </span>
         <ChevronDownIcon
           className={cx(
@@ -519,13 +527,10 @@ function AccountMenu({
 
 function AccountMenuPlaceholder() {
   return (
-    <div className="border-t border-zinc-950/6 pt-2" aria-hidden="true">
+    <div aria-hidden="true">
       <div className="flex min-h-10 items-center gap-2.5 px-2">
         <span className="size-7 shrink-0 animate-pulse rounded-lg bg-zinc-950/8" />
-        <span className="grid flex-1 gap-1.5">
-          <span className="h-3 w-24 animate-pulse rounded bg-zinc-950/8" />
-          <span className="h-2.5 w-12 animate-pulse rounded bg-zinc-950/5" />
-        </span>
+        <span className="h-3 w-24 animate-pulse rounded bg-zinc-950/8" />
       </div>
     </div>
   )
@@ -1122,12 +1127,22 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
           <div className="min-h-0 flex-1 overflow-y-auto pt-4 pb-2">
             <NavigationItems pathname={pathname} navigate={navigate} />
           </div>
-          {account ? (
-            <AccountMenu account={account} activeEvent={activeEvent} navigate={navigate} />
-          ) : hostedApp ? (
-            <AccountMenuPlaceholder />
+          {hostedApp ? (
+            <div className="border-t border-zinc-950/6 pt-2">
+              <SidebarSettingsItem pathname={pathname} navigate={navigate} />
+              {account ? (
+                <AccountMenu account={account} activeEvent={activeEvent} />
+              ) : (
+                <AccountMenuPlaceholder />
+              )}
+            </div>
           ) : (
-            <SidebarUtilities navigate={navigate} demoUrl={demoUrl} eventId={activeEvent?.id} />
+            <SidebarUtilities
+              pathname={pathname}
+              navigate={navigate}
+              demoUrl={demoUrl}
+              eventId={activeEvent?.id}
+            />
           )}
         </aside>
 
@@ -1198,17 +1213,26 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                       onNavigate={() => setMobileOpen(false)}
                     />
                   </div>
-                  {account ? (
-                    <AccountMenu
-                      account={account}
-                      activeEvent={activeEvent}
-                      navigate={navigate}
-                      onNavigate={() => setMobileOpen(false)}
-                    />
-                  ) : hostedApp ? (
-                    <AccountMenuPlaceholder />
+                  {hostedApp ? (
+                    <div className="border-t border-zinc-950/6 pt-2">
+                      <SidebarSettingsItem
+                        pathname={pathname}
+                        navigate={navigate}
+                        onNavigate={() => setMobileOpen(false)}
+                      />
+                      {account ? (
+                        <AccountMenu
+                          account={account}
+                          activeEvent={activeEvent}
+                          onNavigate={() => setMobileOpen(false)}
+                        />
+                      ) : (
+                        <AccountMenuPlaceholder />
+                      )}
+                    </div>
                   ) : (
                     <SidebarUtilities
+                      pathname={pathname}
                       navigate={navigate}
                       demoUrl={demoUrl}
                       eventId={activeEvent?.id}

@@ -750,32 +750,37 @@ export function SettingsView() {
                 <div>
                   <p className="text-sm font-medium text-zinc-800">Event logo</p>
                   <p className="pt-1 text-sm text-zinc-500">
-                    Shown on proposal, review, speaker, and public program pages. PNG, JPEG, or WebP
-                    up to 4 MB.
+                    Used across proposal, review, speaker, and public pages. PNG, JPEG, or WebP · 4
+                    MB max.
                   </p>
                 </div>
-                <div className="grid gap-3 rounded-2xl bg-zinc-50 p-4 ring-1 ring-inset ring-zinc-950/5 md:grid-cols-[minmax(0,1fr)_minmax(14rem,0.65fr)] md:items-center">
-                  <div className="grid gap-3">
+                <div className="grid gap-3 rounded-xl bg-zinc-50 p-3 ring-1 ring-inset ring-zinc-950/5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                  <div className="min-w-0 px-1">
+                    <EventIdentity
+                      name={draft.name.trim() || 'Event name'}
+                      logoUrl={draft.logoUrl}
+                    />
+                  </div>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <FileDropField
                       key={logoPickerKey}
                       id="event-logo-file"
                       name="eventLogo"
                       accept="image/jpeg,image/png,image/webp"
-                      label={draft.logoUrl ? 'Choose a replacement logo' : 'Choose or drop a logo'}
-                      description="A transparent PNG or WebP works best."
-                      className="min-h-20 w-full"
+                      label={draft.logoUrl ? 'Change image' : 'Choose image'}
+                      variant="compact"
                       disabled={uploadingLogo}
                       onChange={(inputEvent) => {
                         setLogoFile(inputEvent.currentTarget.files?.[0] ?? null)
                         setLogoError(null)
                       }}
                     />
-                    <div className="flex flex-wrap gap-2">
+                    {logoFile ? (
                       <Button
                         type="button"
                         size="compact"
-                        variant="secondary"
-                        disabled={!logoFile || uploadingLogo}
+                        variant="primary"
+                        disabled={uploadingLogo}
                         onClick={() => void uploadLogo()}
                       >
                         <ArrowUpTrayIcon className="size-4 fill-current" />
@@ -785,31 +790,25 @@ export function SettingsView() {
                             ? 'Replace logo'
                             : 'Upload logo'}
                       </Button>
-                      {draft.logoUrl ? (
-                        <Button
-                          type="button"
-                          size="compact"
-                          variant="ghost"
-                          disabled={uploadingLogo}
-                          onClick={() => void removeLogo()}
-                        >
-                          <TrashIcon className="size-4 fill-current" />
-                          Remove
-                        </Button>
-                      ) : null}
-                    </div>
-                    {logoError ? (
-                      <p role="alert" className="text-sm text-rose-700">
-                        {logoError}
-                      </p>
+                    ) : null}
+                    {draft.logoUrl ? (
+                      <Button
+                        type="button"
+                        size="compact"
+                        variant="ghost"
+                        disabled={uploadingLogo}
+                        onClick={() => void removeLogo()}
+                      >
+                        <TrashIcon className="size-4 fill-current" />
+                        Remove
+                      </Button>
                     ) : null}
                   </div>
-                  <div className="flex min-h-20 items-center rounded-xl bg-white px-4 ring-1 ring-inset ring-zinc-950/5">
-                    <EventIdentity
-                      name={draft.name.trim() || 'Event name'}
-                      logoUrl={draft.logoUrl}
-                    />
-                  </div>
+                  {logoError ? (
+                    <p role="alert" className="text-sm text-rose-700 sm:col-span-2">
+                      {logoError}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <Field label="Venue" htmlFor="event-venue">

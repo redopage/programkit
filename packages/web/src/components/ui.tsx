@@ -82,6 +82,7 @@ export function Button({
 export function FileDropField({
   label = 'Choose or drop a file',
   description,
+  variant = 'dropzone',
   className,
   id,
   onChange,
@@ -89,6 +90,7 @@ export function FileDropField({
 }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'className'> & {
   label?: string
   description?: string
+  variant?: 'dropzone' | 'compact'
   className?: string
 }) {
   const generatedId = useId()
@@ -108,16 +110,23 @@ export function FileDropField({
     <label
       htmlFor={inputId}
       className={cx(
-        'relative flex min-h-24 min-w-0 cursor-pointer items-center gap-3 rounded-xl bg-white p-4 ring-1 ring-inset ring-zinc-950/10 has-disabled:cursor-not-allowed has-disabled:bg-zinc-50 has-focus-visible:outline-2 has-focus-visible:-outline-offset-1 has-focus-visible:outline-blue-500 hover:bg-zinc-950/2',
+        'relative flex min-w-0 cursor-pointer items-center bg-white ring-1 ring-inset ring-zinc-950/10 has-disabled:cursor-not-allowed has-disabled:bg-zinc-50 has-focus-visible:outline-2 has-focus-visible:-outline-offset-1 has-focus-visible:outline-blue-500 hover:bg-zinc-950/2',
+        variant === 'dropzone' && 'min-h-24 gap-3 rounded-xl p-4',
+        variant === 'compact' && 'min-h-9 max-w-48 gap-2 rounded-full px-3 py-2',
         className,
       )}
     >
       <DocumentArrowUpIcon className="size-4 h-lh shrink-0 fill-blue-600" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-base font-medium text-zinc-950 sm:text-sm">
+        <span
+          className={cx(
+            'block truncate font-medium text-zinc-950',
+            variant === 'dropzone' ? 'text-base sm:text-sm' : 'text-[0.8125rem]',
+          )}
+        >
           {filename || label}
         </span>
-        {description ? (
+        {description && variant === 'dropzone' ? (
           <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
             {description}
           </span>
@@ -132,7 +141,10 @@ export function FileDropField({
           setFilename(event.target.files?.[0]?.name ?? '')
           onChange?.(event)
         }}
-        className="absolute inset-0 size-full cursor-pointer rounded-xl opacity-0 disabled:cursor-not-allowed"
+        className={cx(
+          'absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed',
+          variant === 'dropzone' ? 'rounded-xl' : 'rounded-full',
+        )}
       />
     </label>
   )
