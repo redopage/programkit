@@ -29,7 +29,7 @@ place.
 ### Public event
 
 Complete every required item below and the deployment-specific controls in
-[Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md). ProgramKit is active alpha; the operator must explicitly accept or
+[Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md). ProgramKit is active alpha; the operator must explicitly accept or
 close the remaining gaps before real data.
 
 ## Infrastructure

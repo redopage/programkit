@@ -9,7 +9,7 @@ ProgramKit can be used as hosted software, deployed as one Cloudflare applicatio
 - [Documentation home](https://programkit.dev/docs.md): ProgramKit is an open-source conference-program starter that can be used as hosted software, self-hosted as one Cloudflare application, or adapted from source. The same repository contains the organizer interface,…
 - [Getting started](https://programkit.dev/docs/getting-started.md): ProgramKit can be explored without an account, deployed as one Cloudflare application, or cloned as an open-source starter. All three paths run the same product packages.
 - [Set up your first event](https://programkit.dev/docs/getting-started/first-event.md): This walkthrough intentionally crosses every role. The organizer interface can look complete while a public form, invitation, portal, or feed is still misconfigured; testing the handoffs is part of setting up the event.
-- [Choose a deployment](https://programkit.dev/docs/getting-started/choose-a-deployment.md): ProgramKit uses one codebase for managed and customer-owned installations. Choose based on who should own deployment and operations, not on a difference in core product capability.
+- [Hosted, demo, or self-host](https://programkit.dev/docs/getting-started/choose-a-deployment.md): Choose the path that matches what you need to do today. The hosted app, disposable demo, local sample, and self-hosted installation share the same product code, but they do not have the same data lifetime or operational…
 - [Build and publish a CFP](https://programkit.dev/docs/guides/build-and-publish-a-cfp.md): This guide is for an organizer using the reference application and for an agent helping that organizer understand the same workflow. The reference host is seeded demo software; use sample data until the production…
 
 ## Use ProgramKit
@@ -62,8 +62,8 @@ ProgramKit can be used as hosted software, deployed as one Cloudflare applicatio
 - [Identity and tenancy](https://programkit.dev/docs/architecture/identity-and-tenancy.md): ProgramKit has one recommended hosted shape. Identity is account-scoped, business work is event-scoped, and file bytes are kept out of both.
 - [Storage and integrations](https://programkit.dev/docs/architecture/storage-and-integrations.md): ProgramKit has one recommended V1 data path:
 - [Live updates](https://programkit.dev/docs/architecture/live-updates.md): ProgramKit can add live dashboards and notifications without changing its primary database. The same Durable Object that serializes one event workspace can own WebSocket connections for that workspace. The recommended…
-- [Product roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md)
-- [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md)
+- [Product roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md)
+- [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md)
 
 ## Optional
 

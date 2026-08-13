@@ -13,20 +13,20 @@ to shared reference material only when you need the extra depth.
 
 ## Start here
 
-| I want to…                                       | Start with                                                           |
-| ------------------------------------------------ | -------------------------------------------------------------------- |
-| Understand what ProgramKit does                  | [Product and user guide](/docs/users.md)                            |
-| Try the complete workflow locally                | [Getting started](/docs/getting-started.md)                         |
-| Rehearse my first event end to end               | [Set up your first event](/docs/getting-started/first-event.md)            |
-| Deploy my own copy to Cloudflare                 | [Self-hosting overview](/docs/self-hosting.md)                      |
-| Use a managed ProgramKit installation            | [Hosted or self-hosted?](/docs/getting-started/choose-a-deployment.md)     |
-| Administer accounts, access, files, and recovery | [Self-hosting administration](/docs/self-hosting/administration.md)        |
-| Integrate through HTTP                           | [HTTP API quickstart](/docs/api/quickstart.md)                             |
-| Connect Codex or another agent client            | [Connect an agent](/docs/agents/connect.md)                                |
-| Make documentation readable by an agent          | [Agent-readable docs](/docs/developers/agent-readable-documentation.md)    |
-| Extend or rebrand the source                     | [Customize the starter](/docs/developers/customizing.md)                   |
-| Contribute a complete workflow                   | [Contributing](https://forge.smol.ai/andheller/programkit/src/branch/main/CONTRIBUTING.md)                                   |
-| Help as a coding agent                           | [Agent navigation](/docs/agents.md) and [`AGENTS.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/AGENTS.md) |
+| I want to…                                       | Start with                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| Understand what ProgramKit does                  | [Product and user guide](/docs/users.md)                              |
+| Try the complete workflow locally                | [Getting started](/docs/getting-started.md)                           |
+| Rehearse my first event end to end               | [Set up your first event](/docs/getting-started/first-event.md)              |
+| Deploy my own copy to Cloudflare                 | [Self-hosting overview](/docs/self-hosting.md)                        |
+| Choose the hosted app, demo, or self-hosting     | [Choose how to run ProgramKit](/docs/getting-started/choose-a-deployment.md) |
+| Administer accounts, access, files, and recovery | [Self-hosting administration](/docs/self-hosting/administration.md)          |
+| Integrate through HTTP                           | [HTTP API quickstart](/docs/api/quickstart.md)                               |
+| Connect Codex or another agent client            | [Connect an agent](/docs/agents/connect.md)                                  |
+| Make documentation readable by an agent          | [Agent-readable docs](/docs/developers/agent-readable-documentation.md)      |
+| Extend or rebrand the source                     | [Customize the starter](/docs/developers/customizing.md)                     |
+| Contribute a complete workflow                   | [Contributing](https://forge.smol.ai/andheller/programkit/blob/main/CONTRIBUTING.md)                                     |
+| Help as a coding agent                           | [Agent navigation](/docs/agents.md) and [`AGENTS.md`](https://forge.smol.ai/andheller/programkit/blob/main/AGENTS.md)   |
 
 ## Product and user guides
 
@@ -58,8 +58,8 @@ to shared reference material only when you need the extra depth.
   problems.
 - [Launch checklist](/docs/self-hosting/launch-checklist.md): decide whether an evaluation, private pilot,
   or public event is ready for real data.
-- [Deployment architecture](https://forge.smol.ai/andheller/programkit/src/branch/main/DEPLOYMENT.md), [operations](https://forge.smol.ai/andheller/programkit/src/branch/main/OPERATIONS.md), and
-  [security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md): canonical production detail.
+- [Deployment architecture](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md), [operations](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md), and
+  [security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md): canonical production detail.
 
 ## Developer and extension guides
 
@@ -69,7 +69,7 @@ to shared reference material only when you need the extra depth.
 - [Repository tour](/docs/developers/repository-tour.md): package ownership and request flow.
 - [Extending ProgramKit](/docs/developers/extending-programkit.md): add a workflow, projection, route,
   integration, agent capability, or deployment profile without bypassing invariants.
-- [Architecture](https://forge.smol.ai/andheller/programkit/src/branch/main/ARCHITECTURE.md): domain engine, persistence, projections, and platform
+- [Architecture](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md): domain engine, persistence, projections, and platform
   boundaries.
 - [Contribution playbook](/docs/agents/contribution-playbook.md): trace one vertical change from core to
   docs.
@@ -88,7 +88,7 @@ to shared reference material only when you need the extra depth.
   and distribution.
 - [Agent-readable documentation](/docs/developers/agent-readable-documentation.md): `llms.txt`, Markdown
   pages, content negotiation, server logs, and the JavaScript boundary.
-- [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md): protocol, tool, and resource reference.
+- [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md): protocol, tool, and resource reference.
 - [Airtable](/docs/integrations/airtable.md): optional experimental integration.
 - [Email](/docs/integrations/email.md): optional delivery and magic-link configuration.
 - [Accelevents handoff](/docs/integrations/accelevents.md): portable published-program package.
@@ -100,7 +100,7 @@ to shared reference material only when you need the extra depth.
 - [Glossary](/docs/reference/glossary.md): ProgramKit product and architecture terms.
 - [Capability status vocabulary](/docs/reference/capability-status.md): included, optional, experimental,
   operator-supplied, planned, and out-of-scope claims.
-- [Product status and roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md): what works, what is deliberately absent, and what
+- [Product status and roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md): what works, what is deliberately absent, and what
   still needs production hardening.
 - [Identity and tenancy](/docs/architecture/identity-and-tenancy.md): account, membership, event, and file
   ownership.
@@ -114,19 +114,19 @@ developer guide, and agent guide silently describing different products.
 
 | Question                                           | Canonical document or code                                                                 |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| What is in scope and what is complete?             | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md)                                                              |
+| What is in scope and what is complete?             | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md)                                                              |
 | What is the end-to-end product journey?            | [`program-lifecycle.md`](/docs/product/program-lifecycle.md)                                     |
-| Why are packages and hosts separated?              | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ARCHITECTURE.md)                                                    |
-| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/DEPLOYMENT.md)                                                        |
+| Why are packages and hosts separated?              | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md)                                                    |
+| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)                                                        |
 | Which service owns each kind of data?              | [`storage-and-integrations.md`](/docs/architecture/storage-and-integrations.md)                  |
 | Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](/docs/architecture/identity-and-tenancy.md)                          |
-| How is an installation operated?                   | [`OPERATIONS.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/OPERATIONS.md)                                                        |
-| What must be hardened before sensitive data?       | [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md)                                                            |
+| How is an installation operated?                   | [`OPERATIONS.md`](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md)                                                        |
+| What must be hardened before sensitive data?       | [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md)                                                            |
 | Which named operations exist?                      | `packages/core/src/manifest.ts`                                                            |
 | Which HTTP resources exist?                        | [`docs/api/README.md`](/docs/api.md) and [`openapi.json`](/docs/api/openapi.json)               |
 | What does the domain store?                        | `packages/core/src/types.ts`                                                               |
 | Which browser routes exist?                        | `packages/web/src/routes` and [`routes-and-surfaces.md`](/docs/reference/routes-and-surfaces.md) |
-| Which MCP tools and resources exist?               | [`packages/agent/README.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md)                                  |
+| Which MCP tools and resources exist?               | [`packages/agent/README.md`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md)                                  |
 
 When code, tests, and prose disagree, verify the executable behavior, update the canonical source,
 and fix the incoming links in the same change. Do not resolve drift by adding another summary.

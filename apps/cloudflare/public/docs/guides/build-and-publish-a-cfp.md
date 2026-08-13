@@ -5,7 +5,7 @@
 
 This guide is for an organizer using the reference application and for an agent helping that
 organizer understand the same workflow. The reference host is seeded demo software; use sample data
-until the production requirements in [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md) are complete.
+until the production requirements in [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) are complete.
 
 ## Start locally
 
@@ -85,4 +85,4 @@ clients must call those operations rather than recreating transitions.
 - tests for every conditional branch and required-field combination.
 
 Track current progress in the CFP row and convergence milestones of
-[`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md).
+[`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md).

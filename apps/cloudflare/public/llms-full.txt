@@ -21,20 +21,20 @@ to shared reference material only when you need the extra depth.
 
 ## Start here
 
-| I want to…                                       | Start with                                                           |
-| ------------------------------------------------ | -------------------------------------------------------------------- |
-| Understand what ProgramKit does                  | [Product and user guide](/docs/users.md)                            |
-| Try the complete workflow locally                | [Getting started](/docs/getting-started.md)                         |
-| Rehearse my first event end to end               | [Set up your first event](/docs/getting-started/first-event.md)            |
-| Deploy my own copy to Cloudflare                 | [Self-hosting overview](/docs/self-hosting.md)                      |
-| Use a managed ProgramKit installation            | [Hosted or self-hosted?](/docs/getting-started/choose-a-deployment.md)     |
-| Administer accounts, access, files, and recovery | [Self-hosting administration](/docs/self-hosting/administration.md)        |
-| Integrate through HTTP                           | [HTTP API quickstart](/docs/api/quickstart.md)                             |
-| Connect Codex or another agent client            | [Connect an agent](/docs/agents/connect.md)                                |
-| Make documentation readable by an agent          | [Agent-readable docs](/docs/developers/agent-readable-documentation.md)    |
-| Extend or rebrand the source                     | [Customize the starter](/docs/developers/customizing.md)                   |
-| Contribute a complete workflow                   | [Contributing](https://forge.smol.ai/andheller/programkit/src/branch/main/CONTRIBUTING.md)                                   |
-| Help as a coding agent                           | [Agent navigation](/docs/agents.md) and [`AGENTS.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/AGENTS.md) |
+| I want to…                                       | Start with                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| Understand what ProgramKit does                  | [Product and user guide](/docs/users.md)                              |
+| Try the complete workflow locally                | [Getting started](/docs/getting-started.md)                           |
+| Rehearse my first event end to end               | [Set up your first event](/docs/getting-started/first-event.md)              |
+| Deploy my own copy to Cloudflare                 | [Self-hosting overview](/docs/self-hosting.md)                        |
+| Choose the hosted app, demo, or self-hosting     | [Choose how to run ProgramKit](/docs/getting-started/choose-a-deployment.md) |
+| Administer accounts, access, files, and recovery | [Self-hosting administration](/docs/self-hosting/administration.md)          |
+| Integrate through HTTP                           | [HTTP API quickstart](/docs/api/quickstart.md)                               |
+| Connect Codex or another agent client            | [Connect an agent](/docs/agents/connect.md)                                  |
+| Make documentation readable by an agent          | [Agent-readable docs](/docs/developers/agent-readable-documentation.md)      |
+| Extend or rebrand the source                     | [Customize the starter](/docs/developers/customizing.md)                     |
+| Contribute a complete workflow                   | [Contributing](https://forge.smol.ai/andheller/programkit/blob/main/CONTRIBUTING.md)                                     |
+| Help as a coding agent                           | [Agent navigation](/docs/agents.md) and [`AGENTS.md`](https://forge.smol.ai/andheller/programkit/blob/main/AGENTS.md)   |
 
 ## Product and user guides
 
@@ -66,8 +66,8 @@ to shared reference material only when you need the extra depth.
   problems.
 - [Launch checklist](/docs/self-hosting/launch-checklist.md): decide whether an evaluation, private pilot,
   or public event is ready for real data.
-- [Deployment architecture](https://forge.smol.ai/andheller/programkit/src/branch/main/DEPLOYMENT.md), [operations](https://forge.smol.ai/andheller/programkit/src/branch/main/OPERATIONS.md), and
-  [security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md): canonical production detail.
+- [Deployment architecture](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md), [operations](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md), and
+  [security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md): canonical production detail.
 
 ## Developer and extension guides
 
@@ -77,7 +77,7 @@ to shared reference material only when you need the extra depth.
 - [Repository tour](/docs/developers/repository-tour.md): package ownership and request flow.
 - [Extending ProgramKit](/docs/developers/extending-programkit.md): add a workflow, projection, route,
   integration, agent capability, or deployment profile without bypassing invariants.
-- [Architecture](https://forge.smol.ai/andheller/programkit/src/branch/main/ARCHITECTURE.md): domain engine, persistence, projections, and platform
+- [Architecture](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md): domain engine, persistence, projections, and platform
   boundaries.
 - [Contribution playbook](/docs/agents/contribution-playbook.md): trace one vertical change from core to
   docs.
@@ -96,7 +96,7 @@ to shared reference material only when you need the extra depth.
   and distribution.
 - [Agent-readable documentation](/docs/developers/agent-readable-documentation.md): `llms.txt`, Markdown
   pages, content negotiation, server logs, and the JavaScript boundary.
-- [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md): protocol, tool, and resource reference.
+- [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md): protocol, tool, and resource reference.
 - [Airtable](/docs/integrations/airtable.md): optional experimental integration.
 - [Email](/docs/integrations/email.md): optional delivery and magic-link configuration.
 - [Accelevents handoff](/docs/integrations/accelevents.md): portable published-program package.
@@ -108,7 +108,7 @@ to shared reference material only when you need the extra depth.
 - [Glossary](/docs/reference/glossary.md): ProgramKit product and architecture terms.
 - [Capability status vocabulary](/docs/reference/capability-status.md): included, optional, experimental,
   operator-supplied, planned, and out-of-scope claims.
-- [Product status and roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md): what works, what is deliberately absent, and what
+- [Product status and roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md): what works, what is deliberately absent, and what
   still needs production hardening.
 - [Identity and tenancy](/docs/architecture/identity-and-tenancy.md): account, membership, event, and file
   ownership.
@@ -122,19 +122,19 @@ developer guide, and agent guide silently describing different products.
 
 | Question                                           | Canonical document or code                                                                 |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| What is in scope and what is complete?             | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md)                                                              |
+| What is in scope and what is complete?             | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md)                                                              |
 | What is the end-to-end product journey?            | [`program-lifecycle.md`](/docs/product/program-lifecycle.md)                                     |
-| Why are packages and hosts separated?              | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ARCHITECTURE.md)                                                    |
-| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/DEPLOYMENT.md)                                                        |
+| Why are packages and hosts separated?              | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md)                                                    |
+| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)                                                        |
 | Which service owns each kind of data?              | [`storage-and-integrations.md`](/docs/architecture/storage-and-integrations.md)                  |
 | Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](/docs/architecture/identity-and-tenancy.md)                          |
-| How is an installation operated?                   | [`OPERATIONS.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/OPERATIONS.md)                                                        |
-| What must be hardened before sensitive data?       | [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md)                                                            |
+| How is an installation operated?                   | [`OPERATIONS.md`](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md)                                                        |
+| What must be hardened before sensitive data?       | [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md)                                                            |
 | Which named operations exist?                      | `packages/core/src/manifest.ts`                                                            |
 | Which HTTP resources exist?                        | [`docs/api/README.md`](/docs/api.md) and [`openapi.json`](/docs/api/openapi.json)               |
 | What does the domain store?                        | `packages/core/src/types.ts`                                                               |
 | Which browser routes exist?                        | `packages/web/src/routes` and [`routes-and-surfaces.md`](/docs/reference/routes-and-surfaces.md) |
-| Which MCP tools and resources exist?               | [`packages/agent/README.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md)                                  |
+| Which MCP tools and resources exist?               | [`packages/agent/README.md`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md)                                  |
 
 When code, tests, and prose disagree, verify the executable behavior, update the canonical source,
 and fix the incoming links in the same change. Do not resolve drift by adding another summary.
@@ -165,24 +165,24 @@ not another service.
 For protocol and tool details, use:
 
 - [Agent Plugins and MCP](/docs/integrations/agent-plugins.md);
-- [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md); and
+- [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md); and
 - the generated plugin's own `INSTALL.md` after downloading it.
 
 ## Help change ProgramKit
 
-Coding agents must read the root [`AGENTS.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/AGENTS.md) first. Then route the request:
+Coding agents must read the root [`AGENTS.md`](https://forge.smol.ai/andheller/programkit/blob/main/AGENTS.md) first. Then route the request:
 
 | Request                              | Canonical source                                                        |
 | ------------------------------------ | ----------------------------------------------------------------------- |
-| Product scope or capability claim    | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md)                                        |
+| Product scope or capability claim    | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md)                                        |
 | End-to-end user journey              | [Program lifecycle](/docs/product/program-lifecycle.md)                    |
-| Package or persistence design        | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ARCHITECTURE.md)                              |
+| Package or persistence design        | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md)                              |
 | UI work                              | [Interface craft](/docs/product/interface-craft.md)                        |
-| Cloudflare assembly or profile       | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/DEPLOYMENT.md)                                  |
+| Cloudflare assembly or profile       | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)                                  |
 | Identity, tenancy, or files          | [Identity and tenancy](/docs/architecture/identity-and-tenancy.md)         |
 | Airtable, R2, D1, or background work | [Storage and integrations](/docs/architecture/storage-and-integrations.md) |
 | API contract                         | [HTTP API](/docs/api.md)                                            |
-| Agent tools, resources, or skills    | [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md)                   |
+| Agent tools, resources, or skills    | [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md)                   |
 | Complete vertical change             | [Contribution playbook](/docs/agents/contribution-playbook.md)                       |
 
 ## Collaboration contract
@@ -330,7 +330,7 @@ The output is `packages/agent/build/programkit`; source manifests remain unchang
 
 Use [Self-host troubleshooting](/docs/self-hosting/troubleshooting.md#mcp-client-cannot-connect) for
 credentials, origin changes, and ZIP installation. Use the
-[`@programkit/agent` protocol reference](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md#troubleshooting) for header,
+[`@programkit/agent` protocol reference](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md#troubleshooting) for header,
 version, and JSON-RPC errors.
 
 The packaging and authentication design is documented in
@@ -355,7 +355,7 @@ not affect, but they should not relocate responsibilities to avoid the proper la
 
 Name the person, surface, record, and transition. Decide whether the request is operator-only,
 public, reviewer-scoped, speaker-scoped, or agent-accessible. Check the
-[roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md) before creating a new module or platform abstraction.
+[roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md) before creating a new module or platform abstraction.
 
 ## 2. Model records and transitions in core
 
@@ -527,7 +527,7 @@ changes. It cannot:
 If a client claims one of those actions succeeded, verify the ProgramKit audit trail before trusting
 the claim. Tool output—not the conversational wording—is the source of truth.
 
-Next: [connect an agent](/docs/agents/connect.md), inspect the [tool and resource inventory](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md),
+Next: [connect an agent](/docs/agents/connect.md), inspect the [tool and resource inventory](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md),
 or review [Agent Plugins and MCP](/docs/integrations/agent-plugins.md).
 
 ---
@@ -546,7 +546,7 @@ and audit path.
 
 The hosted app resolves its browser actor and event from a verified staff session and account
 membership. The local sample and hosted demo still use demo actors. The hosted app also accepts
-event-scoped API keys on the documented integration routes. Review [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md)
+event-scoped API keys on the documented integration routes. Review [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md)
 before using real participant data.
 
 For a first authenticated request, start with the [HTTP API quickstart](/docs/api/quickstart.md).
@@ -1036,7 +1036,7 @@ Do not enter personal information, private files, provider credentials, or produ
 
 The hosted app has verified staff and participant sessions, but the demo deliberately keeps its
 capability and fixed actors. Never enter real data in a disposable demo. A production deployment
-still needs edge abuse protection and the controls in [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md).
+still needs edge abuse protection and the controls in [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md).
 
 ## Later hardening
 
@@ -1449,7 +1449,7 @@ does. A second runtime needs an equivalent implementation for transactions, iden
 background jobs, mail, live updates, tests, and operations. ProgramKit will not advertise a host
 until that complete path is maintained.
 
-Use [Deployment](https://forge.smol.ai/andheller/programkit/src/branch/main/DEPLOYMENT.md) for the runnable Cloudflare assembly and the
+Use [Deployment](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md) for the runnable Cloudflare assembly and the
 [Airtable guide](/docs/integrations/airtable.md) for the exact experimental behavior.
 
 ---
@@ -1657,12 +1657,12 @@ production Worker build, OpenAPI validation, and plugin validation.
 
 ## Before a large extension
 
-Read [Roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md), [Architecture](https://forge.smol.ai/andheller/programkit/src/branch/main/ARCHITECTURE.md),
+Read [Roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md), [Architecture](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md),
 [Storage and integrations](/docs/architecture/storage-and-integrations.md), and
 [Interface craft](/docs/product/interface-craft.md). Then describe the user outcome, trust boundary,
 new invariant, and smallest complete vertical slice before adding code.
 
-See [Contributing](https://forge.smol.ai/andheller/programkit/src/branch/main/CONTRIBUTING.md) for repository policy, the
+See [Contributing](https://forge.smol.ai/andheller/programkit/blob/main/CONTRIBUTING.md) for repository policy, the
 [contribution playbook](/docs/agents/contribution-playbook.md) for the implementation sequence, and
 [Contributing documentation](/docs/contributing-documentation.md) for audience routing and page
 standards.
@@ -2191,16 +2191,17 @@ as an open-source starter. All three paths run the same product packages.
 
 ## Choose the shortest useful path
 
-| Goal                                 | Time to first screen | External account | Use this path                                         |
-| ------------------------------------ | -------------------- | ---------------- | ----------------------------------------------------- |
-| Inspect a realistic sample           | A few minutes        | None             | [Run locally](/docs/guides/local-development.md)         |
-| Own a hosted installation            | About 10–20 minutes  | Cloudflare       | [Deploy to Cloudflare](/docs/self-hosting/cloudflare.md) |
-| Use an installation operated for you | Immediate            | ProgramKit       | [Hosted or self-hosted?](/docs/getting-started/choose-a-deployment.md)      |
-| Rebrand or add product behavior      | After local setup    | None             | [Developer guide](/docs/developers.md)            |
-| Connect an AI client to an event     | A few minutes        | Running install  | [Connect an agent](/docs/agents/connect.md)              |
+| Goal                             | Time to first screen | External account | Use this path                                          |
+| -------------------------------- | -------------------- | ---------------- | ------------------------------------------------------ |
+| Evaluate the hosted application  | Immediate            | ProgramKit       | [Choose how to run ProgramKit](/docs/getting-started/choose-a-deployment.md) |
+| Try a disposable hosted sample   | Immediate            | None             | [Open the demo](https://demo.programkit.dev)           |
+| Inspect a deterministic sample   | A few minutes        | None             | [Run locally](/docs/guides/local-development.md)          |
+| Own the runtime and stored data  | About 10–20 minutes  | Cloudflare       | [Deploy to Cloudflare](/docs/self-hosting/cloudflare.md)  |
+| Rebrand or add product behavior  | After local setup    | None             | [Developer guide](/docs/developers.md)             |
+| Connect an AI client to an event | A few minutes        | Running install  | [Connect an agent](/docs/agents/connect.md)               |
 
 The local sample is deterministic and uses sample data. A self-host includes real account and
-event isolation, but production operators should still review [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md) before
+event isolation, but production operators should still review [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) before
 accepting sensitive participant data.
 
 ## Run the complete sample locally
@@ -2277,52 +2278,75 @@ Source page: https://programkit.dev/docs/getting-started/choose-a-deployment
 <!-- Canonical: https://programkit.dev/docs/getting-started/choose-a-deployment -->
 <!-- Markdown: https://programkit.dev/docs/getting-started/choose-a-deployment.md -->
 
-# Hosted or self-hosted?
+# Choose how to run ProgramKit
 
-ProgramKit uses one codebase for managed and customer-owned installations. Choose based on who
-should own deployment and operations, not on a difference in core product capability.
+Choose the path that matches what you need to do today. The hosted app, disposable demo, local
+sample, and self-hosted installation share the same product code, but they do not have the same
+data lifetime or operational owner.
 
-## Use a managed installation when
+## Quick answer
 
-- your team wants to start organizing events without operating Cloudflare resources;
-- ProgramKit should handle deployment updates and service configuration; or
-- you are evaluating the workflow before committing infrastructure ownership.
+| Need                                      | Start here                                                           | Data and operations                               |
+| ----------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------- |
+| Evaluate the complete account-based app   | [Create a hosted account](https://app.programkit.dev/signup)         | ProgramKit operates the evaluation deployment     |
+| Explore without creating an account       | [Open the disposable demo](https://demo.programkit.dev)              | Private demo link; automatically expires          |
+| Run ProgramKit in your Cloudflare account | [Deploy your own installation](/docs/self-hosting/cloudflare.md)        | Your team owns the runtime, data, and operations  |
+| Change workflows, branding, or behavior   | [Customize the source](/docs/developers/customizing.md), then self-host | Your fork; your team owns upgrades and operations |
 
-The official application uses the same `hosted-app` assembly as a self-host. Availability, support,
-service terms, and production hardening are properties of that operated service, not of the
-open-source license.
+## Use the hosted app for a complete evaluation
 
-## Self-host when
+Open [app.programkit.dev/signup](https://app.programkit.dev/signup) when you need to test the real
+account and event model. A new organizer can create an isolated event, invite collaborators,
+exercise participant links, and publish public program surfaces. This is the correct entry point
+for competition evaluators and product review.
 
-- your organization must own the Cloudflare account and runtime data;
-- you want a custom domain and deployment schedule;
-- you need to modify workflows, branding, integrations, or policies from source; or
-- an internal platform team will own backups, monitoring, upgrades, and incident response.
+The hosted app is an evaluation deployment, not a promise of general-availability production
+hosting or a service-level agreement. Confirm support, retention, privacy, and operating terms
+before relying on it for a live event.
 
-A self-host is not a collection of microservices. One Worker serves the application, HTTP API,
-MCP endpoint, and static assets. Durable Objects and R2 are bindings behind that Worker.
+## Use the demo for a quick product tour
 
-## Clone the starter when
+Open [demo.programkit.dev](https://demo.programkit.dev) when you want to explore seeded conference
+data without an account. The demo creates a private capability link and expires automatically after
+seven days.
 
-- ProgramKit is the starting point for a more specialized conference product;
-- you expect to add domain operations, projections, routes, or agent skills; or
-- you want all changes reviewed and deployed from your own fork.
+The demo is useful for learning the workflow. It is not evidence of account provisioning,
+long-term retention, backups, or production operations.
 
-Keep the package boundaries and named-operation contract even when the interface changes. The
-[developer guide](/docs/developers.md) explains where an extension belongs.
+## Self-host when your team must own the runtime
 
-## What does not change
+The supported self-host installs one Cloudflare Worker with the web application, HTTP API, MCP
+endpoint, and static assets. Durable Objects hold transactional event state, and R2 stores uploaded
+files. Start with the [Cloudflare deployment guide](/docs/self-hosting/cloudflare.md).
 
-In every mode:
+Self-hosting transfers operational responsibility to your organization. Your team must own:
 
-- each event is an isolated transactional workspace;
-- staff access is derived from live event membership;
-- participant and public surfaces receive narrower projections;
-- every write runs through a named core operation;
-- the public agenda reads a published release, not the draft schedule; and
-- agents can draft and propose but cannot approve, send, commit, publish, or manage secrets.
+- the Cloudflare account, domain, access policy, and email configuration;
+- monitoring, backups, restores, retention, and incident response;
+- dependency updates, source upgrades, and deployment rollbacks; and
+- the security and privacy controls required for the participant data you collect.
 
-See the [product roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md) for current capability and production-hardening status.
+The repository provides a repeatable deployment path and operational documentation. It does not
+turn a new installation into a production service automatically. Read the
+[security requirements](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md), [operations guide](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md), and
+[launch checklist](/docs/self-hosting/launch-checklist.md) before accepting real participant data.
+
+## Fork only when configuration is not enough
+
+Branding, event settings, forms, tracks, rooms, and optional integrations are configuration. Fork
+the source when you need different domain operations, projections, routes, or agent skills.
+
+A fork gives you product control and also makes your team responsible for reviewing upstream
+changes and resolving upgrade conflicts. Use the
+[customization guide](/docs/developers/customizing.md) to find the intended extension points and
+preserve the named-operation and authorization boundaries.
+
+## Still deciding?
+
+- Reviewing the submission: use the [hosted signup](https://app.programkit.dev/signup).
+- Taking a five-minute tour: use the [disposable demo](https://demo.programkit.dev).
+- Rehearsing the whole workflow offline: [run the local sample](/docs/guides/local-development.md).
+- Preparing a customer-owned installation: read the [self-hosting overview](/docs/self-hosting.md).
 
 ---
 
@@ -2473,7 +2497,7 @@ Source page: https://programkit.dev/docs/guides/build-and-publish-a-cfp
 
 This guide is for an organizer using the reference application and for an agent helping that
 organizer understand the same workflow. The reference host is seeded demo software; use sample data
-until the production requirements in [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md) are complete.
+until the production requirements in [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) are complete.
 
 ## Start locally
 
@@ -2553,7 +2577,7 @@ clients must call those operations rather than recreating transitions.
 - tests for every conditional branch and required-field combination.
 
 Track current progress in the CFP row and convergence milestones of
-[`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md).
+[`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md).
 
 ---
 
@@ -2636,7 +2660,7 @@ testing:
 
 - Airtable OAuth or a scoped personal token: [Airtable integration](/docs/integrations/airtable.md)
 - Cloudflare mail bindings: [Email integration](/docs/integrations/email.md)
-- Remote Workers deployment: [Deployment](https://forge.smol.ai/andheller/programkit/src/branch/main/DEPLOYMENT.md)
+- Remote Workers deployment: [Deployment](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)
 
 Copy `apps/cloudflare/.dev.vars.example` to the ignored root `.dev.vars` only when an integration
 needs secrets. Never commit `.dev.vars`.
@@ -3991,7 +4015,7 @@ hosted identity or event membership.
 
 The evaluator does not score backup policy, account recovery, MFA, abuse controls, malware
 scanning, observability, API lifecycle, or Airtable safety. Those still matter for a real product
-and remain on the [roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md).
+and remain on the [roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md).
 
 Airtable, Cloudflare, API breadth, Forge hosting, and speed are bonus or product-quality signals,
 not replacements for a complete browser workflow. Durable Object SQLite remains the recommended
@@ -4732,7 +4756,7 @@ quietly rewrite what attendees already saw; another explicit publication is requ
   secrets, and destructive changes remain human responsibilities.
 
 For an honest capability-by-capability assessment, use the canonical
-[product status and roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md).
+[product status and roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md).
 
 ---
 
@@ -4776,7 +4800,7 @@ facts rather than downgrading the implemented workflow to planned.
 
 ## Canonical product status
 
-[`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md) is the canonical inventory of current capabilities, deliberate
+[`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md) is the canonical inventory of current capabilities, deliberate
 limits, and remaining hardening work. Audience guides can summarize a status for a decision, but
 they should link back instead of maintaining a competing checklist.
 
@@ -4950,7 +4974,7 @@ API keys may call only the explicit REST and MCP allowlist. They cannot administ
 memberships, keys, Airtable, or raw R2 objects.
 
 See [HTTP API](/docs/api.md) for endpoints and
-[`@programkit/agent`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md) for MCP methods.
+[`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md) for MCP methods.
 
 ---
 
@@ -5059,7 +5083,7 @@ the remaining deployment-specific controls: account recovery and ownership trans
 where required, edge abuse protection, malware scanning and retention, complete backups, restore
 drills, monitoring, alerting, and incident response.
 
-Read [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md) and [Administration](/docs/self-hosting/administration.md) before opening a public
+Read [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) and [Administration](/docs/self-hosting/administration.md) before opening a public
 event. Record the decision with the [self-host launch checklist](/docs/self-hosting/launch-checklist.md).
 
 ---
@@ -5154,7 +5178,7 @@ does not expose restore as a normal UI or agent action.
 
 A safe restore procedure must capture an export first, record an undo point, restore only with
 explicit authority, restart the object session, reconcile access and files, and verify the event
-before reopening writes. See [Operations](https://forge.smol.ai/andheller/programkit/src/branch/main/OPERATIONS.md) for the canonical runbook boundary.
+before reopening writes. See [Operations](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md) for the canonical runbook boundary.
 
 ## Departure and portability
 
@@ -5185,7 +5209,7 @@ procedures for your environment.
 
 ## Before a public launch
 
-Complete the production requirements in [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md), then perform a fresh-account
+Complete the production requirements in [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md), then perform a fresh-account
 rehearsal across organizer, submitter, reviewer, speaker, attendee, API, MCP, email, and file flows.
 
 ---
@@ -5633,7 +5657,7 @@ place.
 ### Public event
 
 Complete every required item below and the deployment-specific controls in
-[Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md). ProgramKit is active alpha; the operator must explicitly accept or
+[Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md). ProgramKit is active alpha; the operator must explicitly accept or
 close the remaining gaps before real data.
 
 ## Infrastructure
@@ -5834,7 +5858,7 @@ codex mcp add programkit \
 
 If a downloaded plugin still points to an old domain, download it again from the current
 installation. See [Connect an agent](/docs/agents/connect.md) and the protocol troubleshooting in
-[`@programkit/agent`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md).
+[`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md).
 
 ## Plugin ZIP downloads but will not install
 
@@ -6208,7 +6232,7 @@ schedule validation, publication preflight, and proposed change sets. The agent 
 operational data and cannot publish, send, approve, commit, or perform destructive actions.
 
 Use [Connect an agent](/docs/agents/connect.md) for setup and the
-[`@programkit/agent` reference](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md) for the exact tool inventory.
+[`@programkit/agent` reference](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md) for the exact tool inventory.
 
 ## What is not included yet
 
@@ -6220,7 +6244,7 @@ Use [Connect an agent](/docs/agents/connect.md) for setup and the
 
 A future cross-event analytics store should be a rebuildable D1 projection fed by domain events,
 not another source of truth. Current status and remaining work live in the
-[roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md).
+[roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md).
 
 ---
 
@@ -6265,7 +6289,7 @@ and transactional delivery. Password changes happen from Settings and revoke eve
 session plus pending sign-in links while keeping the current browser signed in.
 
 Account recovery, ownership transfer, and deployment-specific MFA or external OIDC remain
-production-hardening work. Review [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md) before relying on the installation
+production-hardening work. Review [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) before relying on the installation
 for sensitive data.
 
 ## Participant accounts

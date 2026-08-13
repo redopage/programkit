@@ -92,12 +92,12 @@ production Worker build, OpenAPI validation, and plugin validation.
 
 ## Before a large extension
 
-Read [Roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md), [Architecture](https://forge.smol.ai/andheller/programkit/src/branch/main/ARCHITECTURE.md),
+Read [Roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md), [Architecture](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md),
 [Storage and integrations](/docs/architecture/storage-and-integrations.md), and
 [Interface craft](/docs/product/interface-craft.md). Then describe the user outcome, trust boundary,
 new invariant, and smallest complete vertical slice before adding code.
 
-See [Contributing](https://forge.smol.ai/andheller/programkit/src/branch/main/CONTRIBUTING.md) for repository policy, the
+See [Contributing](https://forge.smol.ai/andheller/programkit/blob/main/CONTRIBUTING.md) for repository policy, the
 [contribution playbook](/docs/agents/contribution-playbook.md) for the implementation sequence, and
 [Contributing documentation](/docs/contributing-documentation.md) for audience routing and page
 standards.

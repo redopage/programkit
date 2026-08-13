@@ -86,7 +86,7 @@ does not expose restore as a normal UI or agent action.
 
 A safe restore procedure must capture an export first, record an undo point, restore only with
 explicit authority, restart the object session, reconcile access and files, and verify the event
-before reopening writes. See [Operations](https://forge.smol.ai/andheller/programkit/src/branch/main/OPERATIONS.md) for the canonical runbook boundary.
+before reopening writes. See [Operations](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md) for the canonical runbook boundary.
 
 ## Departure and portability
 
@@ -117,5 +117,5 @@ procedures for your environment.
 
 ## Before a public launch
 
-Complete the production requirements in [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md), then perform a fresh-account
+Complete the production requirements in [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md), then perform a fresh-account
 rehearsal across organizer, submitter, reviewer, speaker, attendee, API, MCP, email, and file flows.

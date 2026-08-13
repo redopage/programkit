@@ -10,7 +10,7 @@ not affect, but they should not relocate responsibilities to avoid the proper la
 
 Name the person, surface, record, and transition. Decide whether the request is operator-only,
 public, reviewer-scoped, speaker-scoped, or agent-accessible. Check the
-[roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md) before creating a new module or platform abstraction.
+[roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md) before creating a new module or platform abstraction.
 
 ## 2. Model records and transitions in core
 

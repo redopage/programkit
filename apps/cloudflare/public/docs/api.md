@@ -10,7 +10,7 @@ and audit path.
 
 The hosted app resolves its browser actor and event from a verified staff session and account
 membership. The local sample and hosted demo still use demo actors. The hosted app also accepts
-event-scoped API keys on the documented integration routes. Review [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md)
+event-scoped API keys on the documented integration routes. Review [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md)
 before using real participant data.
 
 For a first authenticated request, start with the [HTTP API quickstart](/docs/api/quickstart.md).

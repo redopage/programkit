@@ -75,7 +75,7 @@ testing:
 
 - Airtable OAuth or a scoped personal token: [Airtable integration](/docs/integrations/airtable.md)
 - Cloudflare mail bindings: [Email integration](/docs/integrations/email.md)
-- Remote Workers deployment: [Deployment](https://forge.smol.ai/andheller/programkit/src/branch/main/DEPLOYMENT.md)
+- Remote Workers deployment: [Deployment](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)
 
 Copy `apps/cloudflare/.dev.vars.example` to the ignored root `.dev.vars` only when an integration
 needs secrets. Never commit `.dev.vars`.

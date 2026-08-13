@@ -120,7 +120,7 @@ The output is `packages/agent/build/programkit`; source manifests remain unchang
 
 Use [Self-host troubleshooting](/docs/self-hosting/troubleshooting.md#mcp-client-cannot-connect) for
 credentials, origin changes, and ZIP installation. Use the
-[`@programkit/agent` protocol reference](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md#troubleshooting) for header,
+[`@programkit/agent` protocol reference](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md#troubleshooting) for header,
 version, and JSON-RPC errors.
 
 The packaging and authentication design is documented in

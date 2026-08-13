@@ -60,7 +60,7 @@ Do not enter personal information, private files, provider credentials, or produ
 
 The hosted app has verified staff and participant sessions, but the demo deliberately keeps its
 capability and fixed actors. Never enter real data in a disposable demo. A production deployment
-still needs edge abuse protection and the controls in [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md).
+still needs edge abuse protection and the controls in [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md).
 
 ## Later hardening
 

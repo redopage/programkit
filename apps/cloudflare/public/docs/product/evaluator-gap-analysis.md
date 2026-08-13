@@ -82,7 +82,7 @@ hosted identity or event membership.
 
 The evaluator does not score backup policy, account recovery, MFA, abuse controls, malware
 scanning, observability, API lifecycle, or Airtable safety. Those still matter for a real product
-and remain on the [roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md).
+and remain on the [roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md).
 
 Airtable, Cloudflare, API breadth, Forge hosting, and speed are bonus or product-quality signals,
 not replacements for a complete browser workflow. Durable Object SQLite remains the recommended

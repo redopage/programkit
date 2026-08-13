@@ -36,6 +36,6 @@ facts rather than downgrading the implemented workflow to planned.
 
 ## Canonical product status
 
-[`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md) is the canonical inventory of current capabilities, deliberate
+[`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md) is the canonical inventory of current capabilities, deliberate
 limits, and remaining hardening work. Audience guides can summarize a status for a decision, but
 they should link back instead of maintaining a competing checklist.

@@ -10,20 +10,20 @@ to shared reference material only when you need the extra depth.
 
 ## Start here
 
-| I want to…                                       | Start with                                                           |
-| ------------------------------------------------ | -------------------------------------------------------------------- |
-| Understand what ProgramKit does                  | [Product and user guide](users/README.md)                            |
-| Try the complete workflow locally                | [Getting started](getting-started/README.md)                         |
-| Rehearse my first event end to end               | [Set up your first event](getting-started/first-event.md)            |
-| Deploy my own copy to Cloudflare                 | [Self-hosting overview](self-hosting/README.md)                      |
-| Use a managed ProgramKit installation            | [Hosted or self-hosted?](getting-started/choose-a-deployment.md)     |
-| Administer accounts, access, files, and recovery | [Self-hosting administration](self-hosting/administration.md)        |
-| Integrate through HTTP                           | [HTTP API quickstart](api/quickstart.md)                             |
-| Connect Codex or another agent client            | [Connect an agent](agents/connect.md)                                |
-| Make documentation readable by an agent          | [Agent-readable docs](developers/agent-readable-documentation.md)    |
-| Extend or rebrand the source                     | [Customize the starter](developers/customizing.md)                   |
-| Contribute a complete workflow                   | [Contributing](../CONTRIBUTING.md)                                   |
-| Help as a coding agent                           | [Agent navigation](agents/README.md) and [`AGENTS.md`](../AGENTS.md) |
+| I want to…                                       | Start with                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| Understand what ProgramKit does                  | [Product and user guide](users/README.md)                              |
+| Try the complete workflow locally                | [Getting started](getting-started/README.md)                           |
+| Rehearse my first event end to end               | [Set up your first event](getting-started/first-event.md)              |
+| Deploy my own copy to Cloudflare                 | [Self-hosting overview](self-hosting/README.md)                        |
+| Choose the hosted app, demo, or self-hosting     | [Choose how to run ProgramKit](getting-started/choose-a-deployment.md) |
+| Administer accounts, access, files, and recovery | [Self-hosting administration](self-hosting/administration.md)          |
+| Integrate through HTTP                           | [HTTP API quickstart](api/quickstart.md)                               |
+| Connect Codex or another agent client            | [Connect an agent](agents/connect.md)                                  |
+| Make documentation readable by an agent          | [Agent-readable docs](developers/agent-readable-documentation.md)      |
+| Extend or rebrand the source                     | [Customize the starter](developers/customizing.md)                     |
+| Contribute a complete workflow                   | [Contributing](../CONTRIBUTING.md)                                     |
+| Help as a coding agent                           | [Agent navigation](agents/README.md) and [`AGENTS.md`](../AGENTS.md)   |
 
 ## Product and user guides
 

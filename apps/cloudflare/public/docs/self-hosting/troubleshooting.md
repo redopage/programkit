@@ -100,7 +100,7 @@ codex mcp add programkit \
 
 If a downloaded plugin still points to an old domain, download it again from the current
 installation. See [Connect an agent](/docs/agents/connect.md) and the protocol troubleshooting in
-[`@programkit/agent`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md).
+[`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md).
 
 ## Plugin ZIP downloads but will not install
 

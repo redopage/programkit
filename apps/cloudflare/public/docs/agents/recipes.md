@@ -110,5 +110,5 @@ changes. It cannot:
 If a client claims one of those actions succeeded, verify the ProgramKit audit trail before trusting
 the claim. Tool output—not the conversational wording—is the source of truth.
 
-Next: [connect an agent](/docs/agents/connect.md), inspect the [tool and resource inventory](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md),
+Next: [connect an agent](/docs/agents/connect.md), inspect the [tool and resource inventory](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md),
 or review [Agent Plugins and MCP](/docs/integrations/agent-plugins.md).

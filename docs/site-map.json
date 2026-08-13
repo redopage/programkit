@@ -8,7 +8,7 @@
         { "source": "docs/getting-started/first-event.md", "label": "Set up your first event" },
         {
           "source": "docs/getting-started/choose-a-deployment.md",
-          "label": "Choose a deployment"
+          "label": "Hosted, demo, or self-host"
         },
         {
           "source": "docs/guides/build-and-publish-a-cfp.md",
@@ -109,11 +109,11 @@
         },
         { "source": "docs/architecture/live-updates.md", "label": "Live updates" },
         {
-          "href": "https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md",
+          "href": "https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md",
           "label": "Product roadmap"
         },
         {
-          "href": "https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md",
+          "href": "https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md",
           "label": "Security"
         }
       ]

@@ -1,46 +1,69 @@
-# Hosted or self-hosted?
+# Choose how to run ProgramKit
 
-ProgramKit uses one codebase for managed and customer-owned installations. Choose based on who
-should own deployment and operations, not on a difference in core product capability.
+Choose the path that matches what you need to do today. The hosted app, disposable demo, local
+sample, and self-hosted installation share the same product code, but they do not have the same
+data lifetime or operational owner.
 
-## Use a managed installation when
+## Quick answer
 
-- your team wants to start organizing events without operating Cloudflare resources;
-- ProgramKit should handle deployment updates and service configuration; or
-- you are evaluating the workflow before committing infrastructure ownership.
+| Need                                      | Start here                                                           | Data and operations                               |
+| ----------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------- |
+| Evaluate the complete account-based app   | [Create a hosted account](https://app.programkit.dev/signup)         | ProgramKit operates the evaluation deployment     |
+| Explore without creating an account       | [Open the disposable demo](https://demo.programkit.dev)              | Private demo link; automatically expires          |
+| Run ProgramKit in your Cloudflare account | [Deploy your own installation](../self-hosting/cloudflare.md)        | Your team owns the runtime, data, and operations  |
+| Change workflows, branding, or behavior   | [Customize the source](../developers/customizing.md), then self-host | Your fork; your team owns upgrades and operations |
 
-The official application uses the same `hosted-app` assembly as a self-host. Availability, support,
-service terms, and production hardening are properties of that operated service, not of the
-open-source license.
+## Use the hosted app for a complete evaluation
 
-## Self-host when
+Open [app.programkit.dev/signup](https://app.programkit.dev/signup) when you need to test the real
+account and event model. A new organizer can create an isolated event, invite collaborators,
+exercise participant links, and publish public program surfaces. This is the correct entry point
+for competition evaluators and product review.
 
-- your organization must own the Cloudflare account and runtime data;
-- you want a custom domain and deployment schedule;
-- you need to modify workflows, branding, integrations, or policies from source; or
-- an internal platform team will own backups, monitoring, upgrades, and incident response.
+The hosted app is an evaluation deployment, not a promise of general-availability production
+hosting or a service-level agreement. Confirm support, retention, privacy, and operating terms
+before relying on it for a live event.
 
-A self-host is not a collection of microservices. One Worker serves the application, HTTP API,
-MCP endpoint, and static assets. Durable Objects and R2 are bindings behind that Worker.
+## Use the demo for a quick product tour
 
-## Clone the starter when
+Open [demo.programkit.dev](https://demo.programkit.dev) when you want to explore seeded conference
+data without an account. The demo creates a private capability link and expires automatically after
+seven days.
 
-- ProgramKit is the starting point for a more specialized conference product;
-- you expect to add domain operations, projections, routes, or agent skills; or
-- you want all changes reviewed and deployed from your own fork.
+The demo is useful for learning the workflow. It is not evidence of account provisioning,
+long-term retention, backups, or production operations.
 
-Keep the package boundaries and named-operation contract even when the interface changes. The
-[developer guide](../developers/README.md) explains where an extension belongs.
+## Self-host when your team must own the runtime
 
-## What does not change
+The supported self-host installs one Cloudflare Worker with the web application, HTTP API, MCP
+endpoint, and static assets. Durable Objects hold transactional event state, and R2 stores uploaded
+files. Start with the [Cloudflare deployment guide](../self-hosting/cloudflare.md).
 
-In every mode:
+Self-hosting transfers operational responsibility to your organization. Your team must own:
 
-- each event is an isolated transactional workspace;
-- staff access is derived from live event membership;
-- participant and public surfaces receive narrower projections;
-- every write runs through a named core operation;
-- the public agenda reads a published release, not the draft schedule; and
-- agents can draft and propose but cannot approve, send, commit, publish, or manage secrets.
+- the Cloudflare account, domain, access policy, and email configuration;
+- monitoring, backups, restores, retention, and incident response;
+- dependency updates, source upgrades, and deployment rollbacks; and
+- the security and privacy controls required for the participant data you collect.
 
-See the [product roadmap](../../ROADMAP.md) for current capability and production-hardening status.
+The repository provides a repeatable deployment path and operational documentation. It does not
+turn a new installation into a production service automatically. Read the
+[security requirements](../../SECURITY.md), [operations guide](../../OPERATIONS.md), and
+[launch checklist](../self-hosting/launch-checklist.md) before accepting real participant data.
+
+## Fork only when configuration is not enough
+
+Branding, event settings, forms, tracks, rooms, and optional integrations are configuration. Fork
+the source when you need different domain operations, projections, routes, or agent skills.
+
+A fork gives you product control and also makes your team responsible for reviewing upstream
+changes and resolving upgrade conflicts. Use the
+[customization guide](../developers/customizing.md) to find the intended extension points and
+preserve the named-operation and authorization boundaries.
+
+## Still deciding?
+
+- Reviewing the submission: use the [hosted signup](https://app.programkit.dev/signup).
+- Taking a five-minute tour: use the [disposable demo](https://demo.programkit.dev).
+- Rehearsing the whole workflow offline: [run the local sample](../guides/local-development.md).
+- Preparing a customer-owned installation: read the [self-hosting overview](../self-hosting/README.md).

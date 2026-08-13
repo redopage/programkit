@@ -99,4 +99,4 @@ quietly rewrite what attendees already saw; another explicit publication is requ
   secrets, and destructive changes remain human responsibilities.
 
 For an honest capability-by-capability assessment, use the canonical
-[product status and roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md).
+[product status and roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md).

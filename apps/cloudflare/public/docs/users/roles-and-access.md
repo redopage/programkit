@@ -37,7 +37,7 @@ and transactional delivery. Password changes happen from Settings and revoke eve
 session plus pending sign-in links while keeping the current browser signed in.
 
 Account recovery, ownership transfer, and deployment-specific MFA or external OIDC remain
-production-hardening work. Review [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md) before relying on the installation
+production-hardening work. Review [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) before relying on the installation
 for sensitive data.
 
 ## Participant accounts

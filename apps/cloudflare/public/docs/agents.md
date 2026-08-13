@@ -20,24 +20,24 @@ not another service.
 For protocol and tool details, use:
 
 - [Agent Plugins and MCP](/docs/integrations/agent-plugins.md);
-- [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md); and
+- [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md); and
 - the generated plugin's own `INSTALL.md` after downloading it.
 
 ## Help change ProgramKit
 
-Coding agents must read the root [`AGENTS.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/AGENTS.md) first. Then route the request:
+Coding agents must read the root [`AGENTS.md`](https://forge.smol.ai/andheller/programkit/blob/main/AGENTS.md) first. Then route the request:
 
 | Request                              | Canonical source                                                        |
 | ------------------------------------ | ----------------------------------------------------------------------- |
-| Product scope or capability claim    | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md)                                        |
+| Product scope or capability claim    | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md)                                        |
 | End-to-end user journey              | [Program lifecycle](/docs/product/program-lifecycle.md)                    |
-| Package or persistence design        | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/ARCHITECTURE.md)                              |
+| Package or persistence design        | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md)                              |
 | UI work                              | [Interface craft](/docs/product/interface-craft.md)                        |
-| Cloudflare assembly or profile       | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/src/branch/main/DEPLOYMENT.md)                                  |
+| Cloudflare assembly or profile       | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)                                  |
 | Identity, tenancy, or files          | [Identity and tenancy](/docs/architecture/identity-and-tenancy.md)         |
 | Airtable, R2, D1, or background work | [Storage and integrations](/docs/architecture/storage-and-integrations.md) |
 | API contract                         | [HTTP API](/docs/api.md)                                            |
-| Agent tools, resources, or skills    | [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md)                   |
+| Agent tools, resources, or skills    | [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md)                   |
 | Complete vertical change             | [Contribution playbook](/docs/agents/contribution-playbook.md)                       |
 
 ## Collaboration contract

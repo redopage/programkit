@@ -48,7 +48,7 @@ schedule validation, publication preflight, and proposed change sets. The agent 
 operational data and cannot publish, send, approve, commit, or perform destructive actions.
 
 Use [Connect an agent](/docs/agents/connect.md) for setup and the
-[`@programkit/agent` reference](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md) for the exact tool inventory.
+[`@programkit/agent` reference](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md) for the exact tool inventory.
 
 ## What is not included yet
 
@@ -60,4 +60,4 @@ Use [Connect an agent](/docs/agents/connect.md) for setup and the
 
 A future cross-event analytics store should be a rebuildable D1 projection fed by domain events,
 not another source of truth. Current status and remaining work live in the
-[roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md).
+[roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md).

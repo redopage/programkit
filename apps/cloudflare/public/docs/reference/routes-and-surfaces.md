@@ -64,4 +64,4 @@ API keys may call only the explicit REST and MCP allowlist. They cannot administ
 memberships, keys, Airtable, or raw R2 objects.
 
 See [HTTP API](/docs/api.md) for endpoints and
-[`@programkit/agent`](https://forge.smol.ai/andheller/programkit/src/branch/main/packages/agent/README.md) for MCP methods.
+[`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md) for MCP methods.

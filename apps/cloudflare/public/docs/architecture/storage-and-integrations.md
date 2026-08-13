@@ -127,5 +127,5 @@ does. A second runtime needs an equivalent implementation for transactions, iden
 background jobs, mail, live updates, tests, and operations. ProgramKit will not advertise a host
 until that complete path is maintained.
 
-Use [Deployment](https://forge.smol.ai/andheller/programkit/src/branch/main/DEPLOYMENT.md) for the runnable Cloudflare assembly and the
+Use [Deployment](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md) for the runnable Cloudflare assembly and the
 [Airtable guide](/docs/integrations/airtable.md) for the exact experimental behavior.

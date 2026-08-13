@@ -10,7 +10,7 @@ const siteMapPath = resolve(docsRoot, 'site-map.json')
 const outputPath = resolve(repositoryRoot, 'packages/web/src/generated/docs-content.generated.ts')
 const publicRoot = resolve(repositoryRoot, 'apps/cloudflare/public')
 const canonicalOrigin = 'https://programkit.dev'
-const repositorySourceUrl = 'https://forge.smol.ai/andheller/programkit/src/branch/main/'
+const repositorySourceUrl = 'https://forge.smol.ai/andheller/programkit/blob/main/'
 const checkOnly = process.argv.includes('--check')
 
 async function markdownFiles(directory) {

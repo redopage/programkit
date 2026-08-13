@@ -101,5 +101,5 @@ the remaining deployment-specific controls: account recovery and ownership trans
 where required, edge abuse protection, malware scanning and retention, complete backups, restore
 drills, monitoring, alerting, and incident response.
 
-Read [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md) and [Administration](/docs/self-hosting/administration.md) before opening a public
+Read [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) and [Administration](/docs/self-hosting/administration.md) before opening a public
 event. Record the decision with the [self-host launch checklist](/docs/self-hosting/launch-checklist.md).

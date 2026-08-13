@@ -5,13 +5,14 @@ as an open-source starter. All three paths run the same product packages.
 
 ## Choose the shortest useful path
 
-| Goal                                 | Time to first screen | External account | Use this path                                         |
-| ------------------------------------ | -------------------- | ---------------- | ----------------------------------------------------- |
-| Inspect a realistic sample           | A few minutes        | None             | [Run locally](../guides/local-development.md)         |
-| Own a hosted installation            | About 10–20 minutes  | Cloudflare       | [Deploy to Cloudflare](../self-hosting/cloudflare.md) |
-| Use an installation operated for you | Immediate            | ProgramKit       | [Hosted or self-hosted?](choose-a-deployment.md)      |
-| Rebrand or add product behavior      | After local setup    | None             | [Developer guide](../developers/README.md)            |
-| Connect an AI client to an event     | A few minutes        | Running install  | [Connect an agent](../agents/connect.md)              |
+| Goal                             | Time to first screen | External account | Use this path                                          |
+| -------------------------------- | -------------------- | ---------------- | ------------------------------------------------------ |
+| Evaluate the hosted application  | Immediate            | ProgramKit       | [Choose how to run ProgramKit](choose-a-deployment.md) |
+| Try a disposable hosted sample   | Immediate            | None             | [Open the demo](https://demo.programkit.dev)           |
+| Inspect a deterministic sample   | A few minutes        | None             | [Run locally](../guides/local-development.md)          |
+| Own the runtime and stored data  | About 10–20 minutes  | Cloudflare       | [Deploy to Cloudflare](../self-hosting/cloudflare.md)  |
+| Rebrand or add product behavior  | After local setup    | None             | [Developer guide](../developers/README.md)             |
+| Connect an AI client to an event | A few minutes        | Running install  | [Connect an agent](../agents/connect.md)               |
 
 The local sample is deterministic and uses sample data. A self-host includes real account and
 event isolation, but production operators should still review [Security](../../SECURITY.md) before

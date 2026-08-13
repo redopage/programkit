@@ -24,7 +24,7 @@ import { docsNavigation, docsPages, type DocsPage } from '../generated/docs-cont
 import { shouldHandleProgramNavigation, useProgramNavigate } from '../lib/navigation.ts'
 
 const repositoryUrl = 'https://forge.smol.ai/andheller/programkit'
-const repositorySourceUrl = `${repositoryUrl}/src/branch/main/`
+const repositorySourceUrl = `${repositoryUrl}/blob/main/`
 
 const topSections = [
   { label: 'Overview', href: '/docs' },
