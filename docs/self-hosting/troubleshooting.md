@@ -115,9 +115,8 @@ Plugin after an origin change because `mcp.json` contains a literal absolute URL
 Use the recorded package manager and Node requirement:
 
 ```bash
-corepack enable
-pnpm install --frozen-lockfile
-pnpm check
+npm run setup
+npm run verify
 ```
 
 Do not hand-edit generated `routeTree.gen.ts`, `docs/api/openapi.json`, or the embedded plugin source.

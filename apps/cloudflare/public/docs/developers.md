@@ -9,14 +9,13 @@ and agent behavior belong.
 
 ## Set up the repository
 
-Prerequisites: Git, Node.js 24 or newer, and Corepack.
+Prerequisites: Git and Node.js 24 or newer. No global pnpm or Corepack installation is required.
 
 ```bash
 git clone https://forge.smol.ai/andheller/programkit.git
 cd programkit
-corepack enable
-pnpm install --frozen-lockfile
-pnpm dev
+npm run setup
+npm start
 ```
 
 Local development starts the React client, Worker, and local SQLite-backed Durable Objects at

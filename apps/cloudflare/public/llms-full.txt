@@ -1574,14 +1574,13 @@ and agent behavior belong.
 
 ## Set up the repository
 
-Prerequisites: Git, Node.js 24 or newer, and Corepack.
+Prerequisites: Git and Node.js 24 or newer. No global pnpm or Corepack installation is required.
 
 ```bash
 git clone https://forge.smol.ai/andheller/programkit.git
 cd programkit
-corepack enable
-pnpm install --frozen-lockfile
-pnpm dev
+npm run setup
+npm start
 ```
 
 Local development starts the React client, Worker, and local SQLite-backed Durable Objects at
@@ -2196,7 +2195,7 @@ as an open-source starter. All three paths run the same product packages.
 | Evaluate the hosted application  | Immediate            | ProgramKit       | [Choose how to run ProgramKit](/docs/getting-started/choose-a-deployment.md) |
 | Try a disposable hosted sample   | Immediate            | None             | [Open the demo](https://demo.programkit.dev)           |
 | Inspect a deterministic sample   | A few minutes        | None             | [Run locally](/docs/guides/local-development.md)          |
-| Own the runtime and stored data  | About 10–20 minutes  | Cloudflare       | [Deploy to Cloudflare](/docs/self-hosting/cloudflare.md)  |
+| Own the runtime and stored data  | About 5–10 minutes   | Cloudflare       | [Deploy to Cloudflare](/docs/self-hosting/cloudflare.md)  |
 | Rebrand or add product behavior  | After local setup    | None             | [Developer guide](/docs/developers.md)             |
 | Connect an AI client to an event | A few minutes        | Running install  | [Connect an agent](/docs/agents/connect.md)               |
 
@@ -2206,14 +2205,13 @@ accepting sensitive participant data.
 
 ## Run the complete sample locally
 
-Prerequisites: Git, Node.js 24 or newer, and Corepack.
+Prerequisites: Git and Node.js 24 or newer. No global pnpm or Corepack installation is required.
 
 ```bash
 git clone https://forge.smol.ai/andheller/programkit.git
 cd programkit
-corepack enable
-pnpm install --frozen-lockfile
-pnpm dev
+npm run setup
+npm start
 ```
 
 Open `http://localhost:4173`. One process starts the React application, Cloudflare Worker, and
@@ -2265,7 +2263,7 @@ for the surfaces and [program lifecycle](/docs/product/program-lifecycle.md) for
 Run the same complete gate used by CI:
 
 ```bash
-pnpm check
+npm run verify
 ```
 
 It runs tests, linting, formatting checks, generated plugin drift checks, TypeScript and production
@@ -2588,22 +2586,24 @@ Source page: https://programkit.dev/docs/guides/local-development
 
 # Local development
 
-This guide gets a fresh checkout to the working sample without external accounts or secrets.
+This guide gets a fresh checkout to the working sample without external accounts or secrets. If
+you only want your own hosted copy, skip local setup and use the
+[Deploy to Cloudflare button](/docs/self-hosting/cloudflare.md#path-a-deploy-to-cloudflare-button).
 
 ## Prerequisites
 
 - Node.js 24 or newer
-- Corepack
 - Git
 
-The repository records its pnpm version in `package.json`.
+The repository pins Node 24 in `.node-version` for version managers and Cloudflare builds. The npm
+commands below fetch the exact pnpm version recorded in `package.json`; no global pnpm or Corepack
+installation is required.
 
 ## Start the application
 
 ```bash
-corepack enable
-pnpm install --frozen-lockfile
-pnpm dev
+npm run setup
+npm start
 ```
 
 Open `http://localhost:4173`. The development command starts Vite, the React application, the
@@ -2635,23 +2635,25 @@ Stop the development server, then remove only the local Wrangler state directori
 rm -rf .wrangler apps/cloudflare/.wrangler
 ```
 
-The next `pnpm dev` starts from the deterministic seed again. Never use this command against a
+The next `npm start` starts from the deterministic seed again. Never use this command against a
 directory other than a ProgramKit checkout.
 
 ## Run the complete gate
 
 ```bash
-pnpm check
+npm run verify
 ```
 
 Use the narrower commands while iterating:
 
 ```bash
-pnpm test
-pnpm lint
-pnpm format:check
-pnpm build
+npm test
+npm run lint
+npm run format:check
 ```
+
+Contributors who already use pnpm can continue to run `pnpm dev`, `pnpm check`, and the other
+scripts directly.
 
 ## Optional services
 
@@ -5013,9 +5015,11 @@ your `/mcp` endpoint. It is not another server.
 
 Use the repository's
 [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
-flow when you want the fewest local steps. Cloudflare clones the public repository, lets you choose
-resource names, provisions supported bindings, builds the application, and creates a repository you
-can continue changing.
+flow when you want the fewest steps. It needs no local checkout, Node.js, pnpm, Corepack, or terminal.
+Cloudflare clones the public repository, lets you choose resource names, provisions supported
+bindings, builds the application, and creates a repository you can continue changing. The initial
+result uses a `workers.dev` address; attaching a domain already active in the same Cloudflare
+account is a short follow-up step.
 
 ### Clone and guided CLI
 
@@ -5040,7 +5044,7 @@ boundaries.
 
 - a Cloudflare account;
 - an active R2 subscription on that account;
-- Git, Node.js 24 or newer, and Corepack for the CLI path; and
+- Git and Node.js 24 or newer for the CLI path; and
 - authority to create Workers, Durable Objects, R2 buckets, routes, and secrets.
 
 Cloudflare may require completing its R2 checkout even when expected usage fits the included free
@@ -5228,6 +5232,10 @@ one-origin architecture.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
 
+This path needs a Cloudflare account with R2 enabled, but no local checkout, Node.js, pnpm,
+Corepack, or terminal. It creates a working `workers.dev` installation first; you can attach your
+own domain immediately afterward.
+
 Cloudflare's flow clones the public GitHub mirror, detects the root build and deploy scripts, reads
 `wrangler.jsonc`, and provisions the Worker resources it supports. During setup:
 
@@ -5245,6 +5253,20 @@ its GitHub mirror for this flow even though Forge is the primary collaboration h
 owners must confirm the mirror is public and the candidate commit is synchronized before treating
 the button as available.
 
+### Put the installation on your domain
+
+The domain must already be an active zone in the same Cloudflare account. After the button finishes:
+
+1. open the new Worker in the Cloudflare dashboard;
+2. open **Settings → Domains & Routes → Add → Custom Domain**;
+3. enter a hostname such as `program.example.com`; and
+4. set `PROGRAMKIT_APP_ORIGIN` to the same HTTPS origin under **Settings → Variables and Secrets**.
+
+Cloudflare creates the DNS record and certificate. Re-download `/agent-plugin.zip` after changing
+the origin so its MCP URL uses the new hostname. If the domain is not yet on Cloudflare, add the
+zone first. The deploy button cannot safely choose an arbitrary domain before Cloudflare knows
+which zone and account own it.
+
 ## Path B: clone and use the verified CLI
 
 ### 1. Clone and install
@@ -5252,14 +5274,13 @@ the button as available.
 ```bash
 git clone https://forge.smol.ai/andheller/programkit.git
 cd programkit
-corepack enable
-pnpm install --frozen-lockfile
+npm run setup
 ```
 
 ### 2. Authenticate Wrangler
 
 ```bash
-pnpm --filter @programkit/app-cloudflare exec wrangler login --use-keyring
+npx --yes pnpm@11.20.0 --filter @programkit/app-cloudflare exec wrangler login --use-keyring
 ```
 
 The keyring flag asks Wrangler to protect its OAuth credential through the operating system's
@@ -5269,7 +5290,7 @@ secret store.
 ### 3. Provision, deploy, and verify the installation
 
 ```bash
-pnpm selfhost
+npx --yes pnpm@11.20.0 selfhost
 ```
 
 The walkthrough asks for:
@@ -5287,7 +5308,7 @@ for public health, verifies the plugin download, and writes ignored local instal
 For a repeatable non-interactive setup:
 
 ```bash
-pnpm selfhost -- \
+npx --yes pnpm@11.20.0 selfhost -- \
   --account "YOUR CLOUDFLARE ACCOUNT" \
   --name my-programkit \
   --bucket my-programkit-assets \
@@ -5303,9 +5324,9 @@ To review the generated names and configuration before changing Worker traffic, 
 path:
 
 ```bash
-pnpm selfhost:setup
+npx --yes pnpm@11.20.0 selfhost:setup
 # Review .programkit/wrangler.json and .programkit/self-host.json.
-pnpm selfhost:deploy
+npx --yes pnpm@11.20.0 selfhost:deploy
 ```
 
 `selfhost:deploy` sends the bootstrap secret alongside the code in one Worker deployment. It then
@@ -5323,7 +5344,7 @@ After installation and Wrangler login, a named installation can be provisioned, 
 checked in one command:
 
 ```bash
-pnpm selfhost -- \
+npx --yes pnpm@11.20.0 selfhost -- \
   --name my-programkit \
   --bucket my-programkit-assets
 ```
@@ -5876,9 +5897,8 @@ Plugin after an origin change because `mcp.json` contains a literal absolute URL
 Use the recorded package manager and Node requirement:
 
 ```bash
-corepack enable
-pnpm install --frozen-lockfile
-pnpm check
+npm run setup
+npm run verify
 ```
 
 Do not hand-edit generated `routeTree.gen.ts`, `docs/api/openapi.json`, or the embedded plugin source.

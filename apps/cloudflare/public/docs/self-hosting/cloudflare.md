@@ -10,6 +10,10 @@ one-origin architecture.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
 
+This path needs a Cloudflare account with R2 enabled, but no local checkout, Node.js, pnpm,
+Corepack, or terminal. It creates a working `workers.dev` installation first; you can attach your
+own domain immediately afterward.
+
 Cloudflare's flow clones the public GitHub mirror, detects the root build and deploy scripts, reads
 `wrangler.jsonc`, and provisions the Worker resources it supports. During setup:
 
@@ -27,6 +31,20 @@ its GitHub mirror for this flow even though Forge is the primary collaboration h
 owners must confirm the mirror is public and the candidate commit is synchronized before treating
 the button as available.
 
+### Put the installation on your domain
+
+The domain must already be an active zone in the same Cloudflare account. After the button finishes:
+
+1. open the new Worker in the Cloudflare dashboard;
+2. open **Settings → Domains & Routes → Add → Custom Domain**;
+3. enter a hostname such as `program.example.com`; and
+4. set `PROGRAMKIT_APP_ORIGIN` to the same HTTPS origin under **Settings → Variables and Secrets**.
+
+Cloudflare creates the DNS record and certificate. Re-download `/agent-plugin.zip` after changing
+the origin so its MCP URL uses the new hostname. If the domain is not yet on Cloudflare, add the
+zone first. The deploy button cannot safely choose an arbitrary domain before Cloudflare knows
+which zone and account own it.
+
 ## Path B: clone and use the verified CLI
 
 ### 1. Clone and install
@@ -34,14 +52,13 @@ the button as available.
 ```bash
 git clone https://forge.smol.ai/andheller/programkit.git
 cd programkit
-corepack enable
-pnpm install --frozen-lockfile
+npm run setup
 ```
 
 ### 2. Authenticate Wrangler
 
 ```bash
-pnpm --filter @programkit/app-cloudflare exec wrangler login --use-keyring
+npx --yes pnpm@11.20.0 --filter @programkit/app-cloudflare exec wrangler login --use-keyring
 ```
 
 The keyring flag asks Wrangler to protect its OAuth credential through the operating system's
@@ -51,7 +68,7 @@ secret store.
 ### 3. Provision, deploy, and verify the installation
 
 ```bash
-pnpm selfhost
+npx --yes pnpm@11.20.0 selfhost
 ```
 
 The walkthrough asks for:
@@ -69,7 +86,7 @@ for public health, verifies the plugin download, and writes ignored local instal
 For a repeatable non-interactive setup:
 
 ```bash
-pnpm selfhost -- \
+npx --yes pnpm@11.20.0 selfhost -- \
   --account "YOUR CLOUDFLARE ACCOUNT" \
   --name my-programkit \
   --bucket my-programkit-assets \
@@ -85,9 +102,9 @@ To review the generated names and configuration before changing Worker traffic, 
 path:
 
 ```bash
-pnpm selfhost:setup
+npx --yes pnpm@11.20.0 selfhost:setup
 # Review .programkit/wrangler.json and .programkit/self-host.json.
-pnpm selfhost:deploy
+npx --yes pnpm@11.20.0 selfhost:deploy
 ```
 
 `selfhost:deploy` sends the bootstrap secret alongside the code in one Worker deployment. It then
@@ -105,7 +122,7 @@ After installation and Wrangler login, a named installation can be provisioned, 
 checked in one command:
 
 ```bash
-pnpm selfhost -- \
+npx --yes pnpm@11.20.0 selfhost -- \
   --name my-programkit \
   --bucket my-programkit-assets
 ```

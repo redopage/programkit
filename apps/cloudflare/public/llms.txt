@@ -35,7 +35,7 @@ ProgramKit can be used as hosted software, deployed as one Cloudflare applicatio
 ## Developers
 
 - [Developer guide](https://programkit.dev/docs/developers.md): ProgramKit is both an application and an open-source starter. The repository is designed to be changed, but it is opinionated about where business rules, authorization, projections, hosting, and agent behavior belong.
-- [Local development](https://programkit.dev/docs/guides/local-development.md): This guide gets a fresh checkout to the working sample without external accounts or secrets.
+- [Local development](https://programkit.dev/docs/guides/local-development.md): This guide gets a fresh checkout to the working sample without external accounts or secrets. If you only want your own hosted copy, skip local setup and use the Deploy to Cloudflare button.
 - [Repository tour](https://programkit.dev/docs/developers/repository-tour.md): ProgramKit separates reusable product behavior from the supported Cloudflare host. The separation is an ownership model, not a promise that every package is a standalone product.
 - [Customize the starter](https://programkit.dev/docs/developers/customizing.md): ProgramKit is intended to be changed. Start with the smallest layer that owns the behavior instead of searching and replacing the entire repository.
 - [Extend ProgramKit](https://programkit.dev/docs/developers/extending-programkit.md): ProgramKit is meant to be adapted. A safe extension preserves the product's operation and projection boundaries even when the workflow, interface, brand, or provider changes.

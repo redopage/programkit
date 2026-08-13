@@ -38,12 +38,12 @@ the conference-program job fast, understandable, and easy to own.
 
 ## Run it locally
 
-You need Node.js 24 or newer and Corepack. The exact pnpm version is recorded in `package.json`.
+You need Node.js 24 or newer and Git. The npm scripts use the exact pnpm version recorded in
+`package.json`, so no global pnpm or Corepack installation is required.
 
 ```bash
-corepack enable
-pnpm install --frozen-lockfile
-pnpm dev
+npm run setup
+npm start
 ```
 
 Open `http://localhost:4173`. Vite starts the React app, Cloudflare Worker, API, and a local

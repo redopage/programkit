@@ -25,6 +25,12 @@ jobs:
         with:
           run_install: false
 
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
       - name: Show runtime versions
         run: node --version && pnpm --version
 

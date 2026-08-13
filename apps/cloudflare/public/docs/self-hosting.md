@@ -31,9 +31,11 @@ your `/mcp` endpoint. It is not another server.
 
 Use the repository's
 [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
-flow when you want the fewest local steps. Cloudflare clones the public repository, lets you choose
-resource names, provisions supported bindings, builds the application, and creates a repository you
-can continue changing.
+flow when you want the fewest steps. It needs no local checkout, Node.js, pnpm, Corepack, or terminal.
+Cloudflare clones the public repository, lets you choose resource names, provisions supported
+bindings, builds the application, and creates a repository you can continue changing. The initial
+result uses a `workers.dev` address; attaching a domain already active in the same Cloudflare
+account is a short follow-up step.
 
 ### Clone and guided CLI
 
@@ -58,7 +60,7 @@ boundaries.
 
 - a Cloudflare account;
 - an active R2 subscription on that account;
-- Git, Node.js 24 or newer, and Corepack for the CLI path; and
+- Git and Node.js 24 or newer for the CLI path; and
 - authority to create Workers, Durable Objects, R2 buckets, routes, and secrets.
 
 Cloudflare may require completing its R2 checkout even when expected usage fits the included free

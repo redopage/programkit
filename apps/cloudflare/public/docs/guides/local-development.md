@@ -3,22 +3,24 @@
 
 # Local development
 
-This guide gets a fresh checkout to the working sample without external accounts or secrets.
+This guide gets a fresh checkout to the working sample without external accounts or secrets. If
+you only want your own hosted copy, skip local setup and use the
+[Deploy to Cloudflare button](/docs/self-hosting/cloudflare.md#path-a-deploy-to-cloudflare-button).
 
 ## Prerequisites
 
 - Node.js 24 or newer
-- Corepack
 - Git
 
-The repository records its pnpm version in `package.json`.
+The repository pins Node 24 in `.node-version` for version managers and Cloudflare builds. The npm
+commands below fetch the exact pnpm version recorded in `package.json`; no global pnpm or Corepack
+installation is required.
 
 ## Start the application
 
 ```bash
-corepack enable
-pnpm install --frozen-lockfile
-pnpm dev
+npm run setup
+npm start
 ```
 
 Open `http://localhost:4173`. The development command starts Vite, the React application, the
@@ -50,23 +52,25 @@ Stop the development server, then remove only the local Wrangler state directori
 rm -rf .wrangler apps/cloudflare/.wrangler
 ```
 
-The next `pnpm dev` starts from the deterministic seed again. Never use this command against a
+The next `npm start` starts from the deterministic seed again. Never use this command against a
 directory other than a ProgramKit checkout.
 
 ## Run the complete gate
 
 ```bash
-pnpm check
+npm run verify
 ```
 
 Use the narrower commands while iterating:
 
 ```bash
-pnpm test
-pnpm lint
-pnpm format:check
-pnpm build
+npm test
+npm run lint
+npm run format:check
 ```
+
+Contributors who already use pnpm can continue to run `pnpm dev`, `pnpm check`, and the other
+scripts directly.
 
 ## Optional services
 

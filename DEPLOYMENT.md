@@ -194,12 +194,13 @@ account membership, and a new event starts empty. The complete boundary is docum
 
 ## Local development
 
-Prerequisites are Node.js, Corepack, and pnpm. Wrangler authentication is only needed for remote
-development or deployment.
+Prerequisites are Node.js 24 or newer and Git. The npm scripts fetch the recorded pnpm version, so
+Corepack and a global pnpm installation are not required. Wrangler authentication is only needed
+for remote development or deployment.
 
 ```bash
-pnpm install
-pnpm dev
+npm run setup
+npm start
 ```
 
 Open `http://localhost:4173`. The Cloudflare Vite plugin runs the React app, Worker, and local
@@ -228,9 +229,12 @@ After the first deployment:
 5. Add email only when confirmations, invitations, and campaigns must be delivered. Password
    sign-in works without it.
 
-Cloudflare's setup screen can change the default Worker and resource names. Add a custom domain in
-Cloudflare after deployment, or use the controlled walkthrough below to generate that route in the
-initial configuration.
+Cloudflare's setup screen can change the default Worker and resource names. The button needs no
+local development tools and initially produces a `workers.dev` URL. To use a domain already active
+in the same Cloudflare account, open the Worker, choose **Settings → Domains & Routes → Add → Custom
+Domain**, and set `PROGRAMKIT_APP_ORIGIN` to that same HTTPS origin. Cloudflare creates the DNS
+record and certificate. Use the controlled walkthrough below when the custom-domain route should be
+part of the initial generated configuration.
 
 ### Controlled self-host walkthrough
 

@@ -10,7 +10,7 @@ as an open-source starter. All three paths run the same product packages.
 | Evaluate the hosted application  | Immediate            | ProgramKit       | [Choose how to run ProgramKit](choose-a-deployment.md) |
 | Try a disposable hosted sample   | Immediate            | None             | [Open the demo](https://demo.programkit.dev)           |
 | Inspect a deterministic sample   | A few minutes        | None             | [Run locally](../guides/local-development.md)          |
-| Own the runtime and stored data  | About 10–20 minutes  | Cloudflare       | [Deploy to Cloudflare](../self-hosting/cloudflare.md)  |
+| Own the runtime and stored data  | About 5–10 minutes   | Cloudflare       | [Deploy to Cloudflare](../self-hosting/cloudflare.md)  |
 | Rebrand or add product behavior  | After local setup    | None             | [Developer guide](../developers/README.md)             |
 | Connect an AI client to an event | A few minutes        | Running install  | [Connect an agent](../agents/connect.md)               |
 
@@ -20,14 +20,13 @@ accepting sensitive participant data.
 
 ## Run the complete sample locally
 
-Prerequisites: Git, Node.js 24 or newer, and Corepack.
+Prerequisites: Git and Node.js 24 or newer. No global pnpm or Corepack installation is required.
 
 ```bash
 git clone https://forge.smol.ai/andheller/programkit.git
 cd programkit
-corepack enable
-pnpm install --frozen-lockfile
-pnpm dev
+npm run setup
+npm start
 ```
 
 Open `http://localhost:4173`. One process starts the React application, Cloudflare Worker, and
@@ -79,7 +78,7 @@ for the surfaces and [program lifecycle](../product/program-lifecycle.md) for th
 Run the same complete gate used by CI:
 
 ```bash
-pnpm check
+npm run verify
 ```
 
 It runs tests, linting, formatting checks, generated plugin drift checks, TypeScript and production
