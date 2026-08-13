@@ -812,8 +812,12 @@ function hostedStaffActor(principal: HostedPrincipal) {
   }
 }
 
+export function isHostedAuthPage(pathname: string) {
+  return pathname === '/login' || pathname === '/signup'
+}
+
 function isHostedAlwaysPublicPage(pathname: string) {
-  return pathname === '/login' || pathname === '/privacy' || pathname === '/terms'
+  return isHostedAuthPage(pathname) || pathname === '/privacy' || pathname === '/terms'
 }
 
 function isHostedPublicDocument(pathname: string) {
@@ -3424,7 +3428,7 @@ export default {
         )
       }
 
-      if (request.method === 'GET' && url.pathname === '/login' && hostedPrincipal) {
+      if (request.method === 'GET' && isHostedAuthPage(url.pathname) && hostedPrincipal) {
         return redirect(url, '/')
       }
       if (
@@ -4454,7 +4458,7 @@ export default {
         ? 'hosted-site-entry'
         : profile === 'hosted-demo' && !isDemoId(cookie(request, demoCookieName))
           ? 'hosted-demo-entry'
-          : profile === 'hosted-app' && !hostedPrincipal && !hostedPublicDocument
+          : profile === 'hosted-app' && !hostedPrincipal && isHostedAuthPage(url.pathname)
             ? 'hosted-app-entry'
             : profile
     const headers = browserSecurityHeaders(assetResponse.headers, url, {

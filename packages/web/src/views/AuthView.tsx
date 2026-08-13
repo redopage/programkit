@@ -11,7 +11,9 @@ export function AuthView() {
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [bootstrapToken, setBootstrapToken] = useState(() => search.get('setup') ?? '')
-  const [intent, setIntent] = useState<'signin' | 'signup'>('signin')
+  const [intent, setIntent] = useState<'signin' | 'signup'>(() =>
+    window.location.pathname === '/signup' ? 'signup' : 'signin',
+  )
   const [authConfig, setAuthConfig] = useState<{
     invited: boolean
     initialized: boolean

@@ -7,6 +7,7 @@ import {
   docsMarkdownPathname,
   eventLogoStorageKeyFromUrl,
   hostedPublicEventId,
+  isHostedAuthPage,
   isApiKeyAccessiblePath,
   isApiKeyCredentialPath,
   isHostedDemoReset,
@@ -128,6 +129,15 @@ describe('hosted canonical origins', () => {
     expect(
       configuredAppOrigin({}, new URL('https://my-programkit.example.workers.dev/login')),
     ).toBe('https://my-programkit.example.workers.dev')
+  })
+})
+
+describe('hosted account entry routing', () => {
+  it('keeps sign-in and sign-up as explicit account entry pages', () => {
+    expect(isHostedAuthPage('/login')).toBe(true)
+    expect(isHostedAuthPage('/signup')).toBe(true)
+    expect(isHostedAuthPage('/privacy')).toBe(false)
+    expect(isHostedAuthPage('/')).toBe(false)
   })
 })
 
