@@ -105,8 +105,10 @@ normalized email, usable once, and expired after seven days. Accepting an invita
 account switcher projection. Revocation removes that projection after the authoritative event
 membership is disabled.
 
-Account recovery, ownership transfer, and deployment-specific MFA or external OIDC policy remain
-future hardening.
+Staff password recovery uses a distinct email-link intent. Consuming the 15-minute, single-use link
+creates a session with a short reset grant; changing the password consumes the grant, revokes other
+sessions, and invalidates pending links. Ownership transfer remains operator-assisted. MFA or
+external OIDC is a deployment-specific extension rather than a baseline event requirement.
 
 ## One workspace object per event
 

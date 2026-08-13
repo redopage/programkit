@@ -43,7 +43,7 @@ import {
   type EventInvitation,
   type EventMembership,
 } from './event-access.ts'
-import { actionEmail } from './email.ts'
+import { actionEmail, actionLinksEmail } from './email.ts'
 import { createAgentPluginBundle } from './agent-plugin.ts'
 
 export { AuthDurableObject, EventAccessDurableObject, WorkspaceDurableObject }
@@ -875,6 +875,11 @@ interface ExternalAccessResponse {
   identity?: ExternalAccessIdentity
   sessionToken?: string
   sessionExpiresAt?: string
+  deliver?: boolean
+  token?: string
+  expiresAt?: string
+  email?: string
+  event?: EventAccessEvent
 }
 
 interface ExternalDirectoryEvent {
@@ -1099,31 +1104,156 @@ async function externalSessionPayload(
   }
 }
 
-async function handleExternalAccessDiscovery(request: Request, env: Env, url: URL) {
+async function issueExternalMagicLink(env: Env, eventId: string, email: string, ipHash: string) {
+  const access = eventAccessStub(env, eventId)
+  if (!access) return null
+  const response = await access.fetch(
+    new Request('http://event-access.internal/internal/event-access/external/magic-link/request', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ eventId, email, ipHash }),
+    }),
+  )
+  const body = (await response.json()) as ExternalAccessResponse
+  return response.ok ? body : null
+}
+
+function externalMagicLinkCallback(env: Env, url: URL, eventId: string, token: string) {
+  const callback = new URL('/access/verify', configuredAppOrigin(env, url))
+  callback.searchParams.set('event', eventId)
+  callback.searchParams.set('token', token)
+  return callback.toString()
+}
+
+export async function consumeExternalMagicLink(env: Env, url: URL) {
+  const eventId = url.searchParams.get('event') ?? ''
+  const token = url.searchParams.get('token') ?? ''
+  if (!hostedEventIdPattern.test(eventId) || !authSecretPattern.test(token)) {
+    return redirect(url, '/access?error=expired')
+  }
+  const access = eventAccessStub(env, eventId)
+  if (!access) return redirect(url, '/access?error=expired')
+  const response = await access.fetch(
+    new Request('http://event-access.internal/internal/event-access/external/magic-link/consume', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ eventId, token }),
+    }),
+  )
+  const consumed = (await response.json()) as ExternalAccessResponse
+  if (!response.ok || !consumed.sessionToken || !consumed.sessionExpiresAt || !consumed.identity) {
+    return redirect(url, `/access?event=${encodeURIComponent(eventId)}&error=expired`)
+  }
+  return redirect(url, `/access?event=${encodeURIComponent(eventId)}`, {
+    'cache-control': 'no-store',
+    'set-cookie': externalSessionCookie(
+      eventId,
+      consumed.sessionToken,
+      url,
+      consumed.sessionExpiresAt,
+    ),
+  })
+}
+
+export async function handleExternalAccessDiscovery(request: Request, env: Env, url: URL) {
   const savedSession = parseAnyExternalSession(cookie(request, externalSessionCookieName))
 
   if (request.method === 'GET' && url.pathname === '/public/v1/access/discover/session') {
     if (!savedSession) {
       return Response.json(
-        { ok: true, authenticated: false },
+        {
+          ok: true,
+          authenticated: false,
+          emailConfigured: Boolean(env.EMAIL && env.PROGRAMKIT_EMAIL_FROM),
+        },
         { headers: { 'cache-control': 'no-store' } },
       )
     }
     const payload = await externalSessionPayload(env, savedSession.eventId, savedSession.token)
     if (payload) {
       return Response.json(
-        { ok: true, authenticated: true, ...payload },
+        {
+          ok: true,
+          authenticated: true,
+          emailConfigured: Boolean(env.EMAIL && env.PROGRAMKIT_EMAIL_FROM),
+          ...payload,
+        },
         { headers: { 'cache-control': 'no-store' } },
       )
     }
     return Response.json(
-      { ok: true, authenticated: false },
+      {
+        ok: true,
+        authenticated: false,
+        emailConfigured: Boolean(env.EMAIL && env.PROGRAMKIT_EMAIL_FROM),
+      },
       {
         headers: {
           'cache-control': 'no-store',
           'set-cookie': clearAuthCookie(externalSessionCookieName, url),
         },
       },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/public/v1/access/discover/magic-link') {
+    if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+    if (!env.EMAIL || !env.PROGRAMKIT_EMAIL_FROM) {
+      return Response.json(
+        { ok: false, error: 'Email sign-in is not configured on this deployment.' },
+        { status: 503, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const input = (await request.json()) as Record<string, unknown>
+    const email = normalizeEmail(input.email)
+    if (email) {
+      const events = await externalDirectoryEvents(env, email)
+      const ipHash = await hashValue(request.headers.get('cf-connecting-ip') ?? 'local')
+      const issued = (
+        await Promise.all(
+          events.map((event) => issueExternalMagicLink(env, event.id, email, ipHash)),
+        )
+      ).filter(
+        (
+          result,
+        ): result is ExternalAccessResponse & {
+          deliver: true
+          token: string
+          event: EventAccessEvent
+        } => Boolean(result?.deliver && result.token && result.event),
+      )
+      if (issued.length > 0) {
+        const emailContent = actionLinksEmail({
+          title: issued.length === 1 ? `Sign in to ${issued[0].event.name}` : 'Access your events',
+          intro:
+            issued.length === 1
+              ? 'Use this link to continue to your event access.'
+              : 'Choose the event you want to access.',
+          actions: issued.map((result) => ({
+            label: result.event.name,
+            url: externalMagicLinkCallback(env, url, result.event.id, result.token),
+          })),
+          footnote: 'These links expire in 15 minutes and each can be used once.',
+        })
+        try {
+          await env.EMAIL.send({
+            to: email,
+            from: env.PROGRAMKIT_EMAIL_FROM,
+            replyTo: env.PROGRAMKIT_SUPPORT_EMAIL,
+            subject: issued.length === 1 ? 'Your event sign-in link' : 'Your event sign-in links',
+            ...emailContent,
+          })
+        } catch {
+          return Response.json(
+            { ok: false, error: 'The sign-in email could not be sent. Try again.' },
+            { status: 503, headers: { 'cache-control': 'no-store' } },
+          )
+        }
+      }
+    }
+    return Response.json(
+      { ok: true, message: 'If the address can receive mail, a sign-in link is on its way.' },
+      { status: 202, headers: { 'cache-control': 'no-store' } },
     )
   }
 
@@ -1225,7 +1355,12 @@ async function handleExternalAccessDiscovery(request: Request, env: Env, url: UR
   return null
 }
 
-async function handleExternalAccessRequest(request: Request, env: Env, url: URL, eventId: string) {
+export async function handleExternalAccessRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  eventId: string,
+) {
   const access = eventAccessStub(env, eventId)
   if (!access) {
     return Response.json(
@@ -1241,7 +1376,13 @@ async function handleExternalAccessRequest(request: Request, env: Env, url: URL,
     const branding = await externalEventBranding(workspace, eventId)
     if (!sessionToken) {
       return Response.json(
-        { ok: true, authenticated: false, eventId, ...branding },
+        {
+          ok: true,
+          authenticated: false,
+          eventId,
+          emailConfigured: Boolean(env.EMAIL && env.PROGRAMKIT_EMAIL_FROM),
+          ...branding,
+        },
         { headers: { 'cache-control': 'no-store' } },
       )
     }
@@ -1255,7 +1396,13 @@ async function handleExternalAccessRequest(request: Request, env: Env, url: URL,
     const body = (await response.json()) as ExternalAccessResponse
     if (!response.ok || !body.identity) {
       return Response.json(
-        { ok: true, authenticated: false, eventId, ...branding },
+        {
+          ok: true,
+          authenticated: false,
+          eventId,
+          emailConfigured: Boolean(env.EMAIL && env.PROGRAMKIT_EMAIL_FROM),
+          ...branding,
+        },
         {
           headers: {
             'cache-control': 'no-store',
@@ -1269,9 +1416,53 @@ async function handleExternalAccessRequest(request: Request, env: Env, url: URL,
         ok: true,
         authenticated: true,
         eventId,
+        emailConfigured: Boolean(env.EMAIL && env.PROGRAMKIT_EMAIL_FROM),
         ...(await externalAccessPayload(workspace, body.identity, eventId, formSlug)),
       },
       { headers: { 'cache-control': 'no-store' } },
+    )
+  }
+
+  if (request.method === 'POST' && url.pathname === '/public/v1/access/magic-link') {
+    if (!sameOrigin(request, url)) return new Response(null, { status: 403 })
+    if (!env.EMAIL || !env.PROGRAMKIT_EMAIL_FROM) {
+      return Response.json(
+        { ok: false, error: 'Email sign-in is not configured on this deployment.' },
+        { status: 503, headers: { 'cache-control': 'no-store' } },
+      )
+    }
+    const input = (await request.json()) as Record<string, unknown>
+    const email = normalizeEmail(input.email)
+    if (email) {
+      const ipHash = await hashValue(request.headers.get('cf-connecting-ip') ?? 'local')
+      const issued = await issueExternalMagicLink(env, eventId, email, ipHash)
+      if (issued?.deliver && issued.token && issued.event) {
+        const emailContent = actionEmail({
+          title: `Sign in to ${issued.event.name}`,
+          intro: 'Use this link to continue to your event access.',
+          actionLabel: 'Sign in',
+          actionUrl: externalMagicLinkCallback(env, url, eventId, issued.token),
+          footnote: 'This link expires in 15 minutes and can be used once.',
+        })
+        try {
+          await env.EMAIL.send({
+            to: issued.email ?? email,
+            from: env.PROGRAMKIT_EMAIL_FROM,
+            replyTo: env.PROGRAMKIT_SUPPORT_EMAIL,
+            subject: `Your ${issued.event.name} sign-in link`,
+            ...emailContent,
+          })
+        } catch {
+          return Response.json(
+            { ok: false, error: 'The sign-in email could not be sent. Try again.' },
+            { status: 503, headers: { 'cache-control': 'no-store' } },
+          )
+        }
+      }
+    }
+    return Response.json(
+      { ok: true, message: 'If the address can receive mail, a sign-in link is on its way.' },
+      { status: 202, headers: { 'cache-control': 'no-store' } },
     )
   }
 
@@ -1613,12 +1804,14 @@ interface HostedAuthenticationResult {
   sessionExpiresAt?: string
   account?: AuthAccount
   claimInstanceOwner?: boolean
+  passwordRecoveryAvailable?: boolean
 }
 
 interface HostedAccountSecurityResult {
   ok: boolean
   email?: string
   passwordConfigured?: boolean
+  passwordRecoveryAvailable?: boolean
   sessions?: AuthSessionSummary[]
   revokedSessions?: number
   code?:
@@ -1834,6 +2027,7 @@ export async function handleHostedAuthRequest(request: Request, env: Env, url: U
       intent?: unknown
       name?: unknown
       bootstrapToken?: unknown
+      recoverPassword?: unknown
     }
     const email = normalizeEmail(input.email)
     if (!email) {
@@ -1867,6 +2061,7 @@ export async function handleHostedAuthRequest(request: Request, env: Env, url: U
           name: input.name,
           allowSignup: signupAccess?.ok === true,
           claimInstanceOwner: signupAccess?.claimInstanceOwner === true,
+          recoverPassword: input.recoverPassword === true && intent === 'signin',
         }),
       }),
     )
@@ -1886,10 +2081,13 @@ export async function handleHostedAuthRequest(request: Request, env: Env, url: U
       }
       const callback = new URL('/auth/verify', configuredAppOrigin(env, url))
       callback.searchParams.set('token', scopedAuthToken(shard, issued.token))
+      const recoveringPassword = input.recoverPassword === true && intent === 'signin'
       const emailContent = actionEmail({
-        title: 'Sign in',
-        intro: 'Use this link to continue.',
-        actionLabel: 'Sign in',
+        title: recoveringPassword ? 'Reset your password' : 'Sign in',
+        intro: recoveringPassword
+          ? 'Use this link to choose a new password.'
+          : 'Use this link to continue.',
+        actionLabel: recoveringPassword ? 'Choose a new password' : 'Sign in',
         actionUrl: callback.toString(),
         footnote: 'This link expires in 15 minutes and can be used once.',
       })
@@ -1898,7 +2096,7 @@ export async function handleHostedAuthRequest(request: Request, env: Env, url: U
           to: issued.email ?? email,
           from: env.PROGRAMKIT_EMAIL_FROM,
           replyTo: env.PROGRAMKIT_SUPPORT_EMAIL,
-          subject: 'Your sign-in link',
+          subject: recoveringPassword ? 'Reset your password' : 'Your sign-in link',
           ...emailContent,
         })
       } catch {
@@ -2034,7 +2232,7 @@ export async function handleHostedAuthRequest(request: Request, env: Env, url: U
       if (!completed.ok) return redirect(url, '/login?error=account')
     }
     const sessionResponse = await establishHostedSession(env, url, token.shard, consumed, {
-      destination: '/',
+      destination: consumed.passwordRecoveryAvailable ? '/settings#account-security' : '/',
     })
     return sessionResponse ?? redirect(url, '/login?error=expired')
   }
@@ -3357,6 +3555,10 @@ export default {
     if (profile === 'hosted-app' && url.pathname.startsWith('/public/v1/access/discover/')) {
       const discoveryResponse = await handleExternalAccessDiscovery(request, env, url)
       if (discoveryResponse) return discoveryResponse
+    }
+
+    if (profile === 'hosted-app' && request.method === 'GET' && url.pathname === '/access/verify') {
+      return consumeExternalMagicLink(env, url)
     }
 
     if (

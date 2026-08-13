@@ -6,23 +6,23 @@ ProgramKit is one focused conference-program system:
 Publish CFP → receive proposal → review → decide → onboard speaker → schedule → publish program
 ```
 
-The current alpha implements that complete spine. This roadmap separates working product from the
-remaining work required for a dependable public service. The evaluator evidence is maintained in
-[`docs/product/evals`](docs/product/evals/README.md).
+The current release candidate implements that complete spine. It is ready for evaluation, local
+use, and controlled team pilots. Production approval depends on the deployment and data involved;
+it is not a second product backlog.
 
 ## Working product
 
-| Workflow                    | Current capability                                                                                                                                                                                                                                                                                                              |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Accounts and events         | Email/password and magic-link staff accounts, authenticated password changes, active-session review and revocation, owner/admin/viewer membership, email-bound invitations, revocation, event creation, isolated event switching, and participant accounts that recover only matching submissions, reviews, and speaker portals |
-| CFP                         | Multiple forms, mapped speaker and session fields, required and conditional questions, category routing, open/close windows, public draft save/resume/edit/submit, co-speakers, attachments, and decision status                                                                                                                |
-| Review                      | Independent rounds, reviewer teams, routed and exact assignments, weighted numeric/select/text scorecards, blind projection, reviewer caps, progress, reminders, recusal, two-way sorting, CSV export, and reversible decisions                                                                                                 |
-| Speakers and tasks          | Searchable roster, CSV import and deduplication, lifecycle status, reusable profiles, multi-assignee tasks, due dates, readiness filters, logistics, invitations, private speaker portal, resources, and linked sessions                                                                                                        |
-| Files and content           | Private R2 headshots and deliverables, type and size rules, version history, comments, authorized downloads, owner-only version deletion with durable tombstones and retriable R2 cleanup, organizer replacement, files library, selected ZIP export, session editing/history/restore, and approval gating                      |
-| Communications              | Templates, merge preview, audience selection, review and approval, frozen recipients, durable outbox records, Cloudflare Email delivery, retry state, history, task reminders, and iCal attachments                                                                                                                             |
-| Schedule and public program | Multi-day room grid, session list, unscheduled tray, room/track inventory, conflict naming, accessible move form, drag and drop, auto-place, clear/undo, publish preflight, immutable releases, and five public views with embeds and JSON/XML/iCal feeds                                                                       |
-| Speaker CRM                 | Cross-event directory, search and multi-criteria filters, tags, notes, event history, CSV import, duplicate merge, saved dynamic/static segments, six-stage sourcing, event reuse, personalized outreach, and organization analytics                                                                                            |
-| API and agents              | Event-scoped copy-once API keys, generated OpenAPI 3.1 contract, documented read endpoints and named writes, logical ZIP/CSV export, optional MCP server, plugin, and operational skills                                                                                                                                        |
+| Workflow                    | Current capability                                                                                                                                                                                                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Accounts and events         | Email/password and magic-link staff accounts, email-based password recovery, active-session review and revocation, owner/admin/viewer membership, email-bound invitations, revocation, event creation, isolated event switching, and participant accounts that recover only matching submissions, reviews, and speaker portals |
+| CFP                         | Multiple forms, mapped speaker and session fields, required and conditional questions, category routing, open/close windows, public draft save/resume/edit/submit, co-speakers, attachments, and decision status                                                                                                               |
+| Review                      | Independent rounds, reviewer teams, routed and exact assignments, weighted numeric/select/text scorecards, blind projection, reviewer caps, progress, reminders, recusal, two-way sorting, CSV export, and reversible decisions                                                                                                |
+| Speakers and tasks          | Searchable roster, CSV import and deduplication, lifecycle status, reusable profiles, multi-assignee tasks, due dates, readiness filters, logistics, invitations, private speaker portal, resources, and linked sessions                                                                                                       |
+| Files and content           | Private R2 headshots and deliverables, type and size rules, version history, comments, authorized downloads, owner-only version deletion with durable tombstones and retriable R2 cleanup, organizer replacement, files library, selected ZIP export, session editing/history/restore, and approval gating                     |
+| Communications              | Templates, merge preview, audience selection, review and approval, frozen recipients, durable outbox records, Cloudflare Email delivery, retry state, history, task reminders, and iCal attachments                                                                                                                            |
+| Schedule and public program | Multi-day room grid, session list, unscheduled tray, room/track inventory, conflict naming, accessible move form, drag and drop, auto-place, clear/undo, publish preflight, immutable releases, and five public views with embeds and JSON/XML/iCal feeds                                                                      |
+| Speaker CRM                 | Cross-event directory, search and multi-criteria filters, tags, notes, event history, CSV import, duplicate merge, saved dynamic/static segments, six-stage sourcing, event reuse, personalized outreach, and organization analytics                                                                                           |
+| API and agents              | Event-scoped copy-once API keys, generated OpenAPI 3.1 contract, documented read endpoints and named writes, logical ZIP/CSV export, optional MCP server, plugin, and operational skills                                                                                                                                       |
 
 ## Architecture that is settled
 
@@ -37,61 +37,47 @@ remaining work required for a dependable public service. The evaluator evidence 
 - Airtable is optional and experimental. It is not on the recommended request path.
 - D1 is reserved for a future rebuildable cross-event projection, not another primary database.
 
-## Remaining release work
+## Release status
 
-### 1. Prove the hosted journeys
+| Use                                                | Status            | Go-live requirement                                                                   |
+| -------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| Disposable demo or local evaluation                | Ready             | Sample data only                                                                      |
+| Hosted product evaluation                          | Ready             | Fresh account and controlled email addresses                                          |
+| Private conference-team pilot                      | Ready with review | Verified email, named owner, external export, and an operator watching the deployment |
+| Public event with real participant data            | Operator approval | Complete the deployment-specific launch checklist below                               |
+| Regulated, enterprise, or public multi-tenant SaaS | Not claimed       | Separate security, compliance, identity, support, and service-level program           |
 
-- Run the complete evaluator chain twice against a fresh `app.programkit.dev` account.
-- Verify organizer, submitter, reviewer, speaker, and attendee handoffs without leaving the origin.
-- Capture live-provider evidence for confirmations, reviewer reminders, speaker invitations, bulk
-  mail, scheduled task reminders, and iCal import.
-- Add repeatable disposable-account fixture provisioning and a run checklist. Never expose the
-  seeded demo reset inside a hosted event.
+## Production acceptance gates
 
-### 2. Harden identity and operations
+These are deployment controls, not missing conference workflows:
 
-- Add account recovery, ownership transfer, and an optional MFA or external OIDC policy.
-- Add OAuth for delegated multi-account API and MCP installations; retain scoped API keys for
-  owner-managed clients.
-- Add edge abuse controls and an operator-visible security event log.
-- Document backup, restore, retention, and disaster-recovery drills for event and identity objects.
-- Add structured production metrics, tracing, alerting, and a small status/runbook surface.
+1. **Release acceptance:** run organizer, submitter, reviewer, speaker, file, schedule, and public
+   agenda handoffs against the exact deployed revision. Verify the real sender, calendar file, and
+   exports the event will use.
+2. **Recovery and operations:** store logical event exports and R2 objects outside the runtime,
+   rehearse an isolated restore, name the event and technical owners, and configure monitoring,
+   alerts, rollback, and incident contacts. Email-based password recovery is included; ownership
+   transfer remains an operator-assisted procedure.
+3. **Public-input protection:** apply Cloudflare edge abuse controls and retention appropriate to
+   the CFP. Use malware scanning or quarantine when accepting untrusted files, and monitor R2
+   usage and pending cleanup.
+4. **Delivery policy:** verify the sender domain and controlled inbox delivery. Events using bulk
+   campaigns must also own unsubscribe, bounce, and complaint handling; installations using only
+   transactional mail can keep campaigns disabled.
 
-### 3. Harden files and delivery
+The executable checklist is [Self-host launch checklist](docs/self-hosting/launch-checklist.md),
+with exact recovery boundaries in [Operations](OPERATIONS.md) and security controls in
+[Security](SECURITY.md).
 
-- Add malware scanning, orphan cleanup, age-based retention and workspace-offboarding policy,
-  legal holds, and R2 usage observability. Explicit owner deletion is implemented.
-- Verify sender-domain reputation and bounce handling for the official Cloudflare Email path.
-- Add scheduled campaign controls, recipient self-service unsubscribe, and provider
-  bounce/complaint ingestion. Manual suppression and safe cancellation before provider delivery are
-  implemented.
+## Possible later extensions
 
-### 4. Finish the public API contract
+These are intentionally outside the release definition until a customer or supported provider
+requires them:
 
-- Keep the published generated OpenAPI document synchronized with the canonical operation manifest;
-  drift and request examples are validated in CI.
-- Add signed webhook subscriptions with retry, replay protection, and delivery history.
-- Add cursor-based bulk endpoints only where the browser and integration use cases require them.
-- Document API-key rotation and least-privilege recipes for common integrations.
-
-### 5. Make the optional integrations honest
-
-- Keep Airtable disconnected by default.
-- Replace synchronous Airtable acknowledgement with a durable outbound mirror and observable retry
-  journal before calling it a production team view.
-- Convert inbound Airtable edits into proposed named operations with explicit conflict review.
-- Validate the existing Accelevents package against a real import, then implement a native one-way
-  connector only from an account-supported contract. Prefer the documented source API-key and event
-  ID pull shape when Accelevents can register ProgramKit as a source; otherwise require documented
-  Enterprise write endpoints from the event owner.
-
-### 6. Final product craft
-
-- Complete keyboard, screen-reader, 320 px, and reduced-motion acceptance passes on every role.
-- Add first-run guidance and intentional empty states without turning the product into a tour.
-- Keep page copy short, remove redundant labels, and preserve the fast, dense operating surfaces.
-- Retake the website screenshots from the final build and keep the capture recipe outside the public
-  repository.
+- MFA, enterprise SSO, and delegated OAuth for third-party multi-account installations;
+- signed outbound webhooks and new bulk endpoints for a demonstrated integration;
+- a durable two-way Airtable team view; and
+- a native Accelevents connector based on documented, account-supported endpoints.
 
 ## Deliberate non-goals
 
@@ -103,11 +89,11 @@ remaining work required for a dependable public service. The evaluator evidence 
 - Querying Airtable on page load or last-write-wins two-way sync
 - Pixel-for-pixel Sessionboard compatibility
 
-## Definition of done
+## Product standard
 
-A workflow is complete only when it has a scoped read projection, an authorized idempotent write,
-visible validation and retry state, a stable deep link, keyboard and mobile operation, durable audit
-evidence, focused ownership tests, and documented production dependencies.
+Released workflows use scoped read projections, authorized idempotent writes, visible validation
+and retry state, stable deep links, durable audit evidence, focused ownership tests, and documented
+production dependencies. Changes are expected to preserve keyboard and mobile operation.
 
-That standard is intentionally stricter than “the screen exists.” ProgramKit should stay small
-enough to understand and complete enough to trust.
+This is the maintenance bar, not a list of features waiting to be built. ProgramKit should stay
+small enough to understand and complete enough to trust.

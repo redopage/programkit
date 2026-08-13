@@ -17,6 +17,7 @@ interface AccountSession {
 interface AccountSecurityState {
   email: string
   passwordConfigured: boolean
+  passwordRecoveryAvailable: boolean
   sessions: AccountSession[]
 }
 
@@ -69,6 +70,7 @@ export function AccountSecuritySettings() {
       !body.ok ||
       typeof body.email !== 'string' ||
       typeof body.passwordConfigured !== 'boolean' ||
+      typeof body.passwordRecoveryAvailable !== 'boolean' ||
       !Array.isArray(body.sessions)
     ) {
       throw new Error(body.error ?? 'Account security could not be loaded.')
@@ -76,6 +78,7 @@ export function AccountSecuritySettings() {
     setSecurity({
       email: body.email,
       passwordConfigured: body.passwordConfigured,
+      passwordRecoveryAvailable: body.passwordRecoveryAvailable,
       sessions: body.sessions,
     })
     setLoadError(null)
@@ -266,7 +269,7 @@ export function AccountSecuritySettings() {
               </div>
             ) : null}
             <form className="grid max-w-xl gap-4" onSubmit={(event) => void updatePassword(event)}>
-              {security.passwordConfigured ? (
+              {security.passwordConfigured && !security.passwordRecoveryAvailable ? (
                 <Field label="Current password" htmlFor="account-current-password">
                   <input
                     id="account-current-password"
@@ -279,6 +282,12 @@ export function AccountSecuritySettings() {
                     className={textControl}
                   />
                 </Field>
+              ) : null}
+              {security.passwordRecoveryAvailable ? (
+                <Callout
+                  tone="info"
+                  title="Email verified. Choose a new password; no old password is required."
+                />
               ) : null}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field

@@ -67,6 +67,51 @@ describe('hosted account security boundary', () => {
     })
   })
 
+  it('forwards password-recovery intent and sends reset-specific email copy', async () => {
+    const { env, stub } = authEnv(async (request) => {
+      expect(new URL(request.url).pathname).toBe('/internal/auth/request')
+      return Response.json({
+        ok: true,
+        deliver: true,
+        token: secret,
+        email: 'owner@example.com',
+      })
+    })
+    const send = vi.fn(async () => ({ messageId: 'message_1' }))
+    env.PROGRAMKIT_EMAIL_FROM = 'notifications@example.com'
+    env.EMAIL = { send }
+
+    const incoming = request('/api/v1/auth/magic-link', {
+      method: 'POST',
+      headers: {
+        origin: 'https://app.programkit.dev',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: 'owner@example.com',
+        intent: 'signin',
+        recoverPassword: true,
+      }),
+    })
+    const response = await handleHostedAuthRequest(incoming, env, new URL(incoming.url))
+
+    expect(response?.status).toBe(202)
+    const forwarded = stub.fetch.mock.calls[0]?.[0]
+    await expect(forwarded!.json()).resolves.toMatchObject({
+      email: 'owner@example.com',
+      intent: 'signin',
+      recoverPassword: true,
+    })
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'owner@example.com',
+        subject: 'Reset your password',
+        text: expect.stringContaining('Choose a new password'),
+        html: expect.stringContaining('Choose a new password'),
+      }),
+    )
+  })
+
   it('validates the first-owner setup code before forwarding a signup', async () => {
     const forwarded: Array<Record<string, unknown>> = []
     const { env } = authEnv(async (request) => {

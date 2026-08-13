@@ -59,8 +59,8 @@ Open **Review** and create an evaluation plan with criteria, weights, blind-revi
 and assignments. Open a reviewer invitation in a signed-out browser and submit a complete
 scorecard.
 
-If the review is blind, confirm identity-revealing fields are absent from the reviewer projection,
-not merely hidden by CSS.
+If the review is blind, confirm identity-revealing fields are absent from the data the reviewer
+receives, not merely hidden by CSS.
 
 **Ready when:** reviewer progress and the submitted scorecard appear in the committee view.
 

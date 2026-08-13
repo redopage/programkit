@@ -24,6 +24,7 @@ export function AuthView() {
   } | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [sentForRecovery, setSentForRecovery] = useState(false)
   const [error, setError] = useState<string | null>(() => {
     const reason = search.get('error')
     if (reason === 'invitation') {
@@ -74,7 +75,7 @@ export function AuthView() {
   const signupAvailable = authConfig?.signupAvailable ?? invited
   const firstOwnerSignup = intent === 'signup' && authConfig?.initialized === false && !invited
 
-  const sendMagicLink = async () => {
+  const sendMagicLink = async (recoverPassword = false) => {
     if (!email || !email.includes('@')) {
       setError('Enter your email address first.')
       return
@@ -86,13 +87,14 @@ export function AuthView() {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, intent, name, bootstrapToken }),
+        body: JSON.stringify({ email, intent, name, bootstrapToken, recoverPassword }),
       })
       const body = (await response.json()) as { ok?: boolean; error?: string }
       if (!response.ok || !body.ok) {
         setError(body.error ?? 'The sign-in email could not be sent. Try again.')
         return
       }
+      setSentForRecovery(recoverPassword)
       setSent(true)
     } catch {
       setError('The sign-in email could not be sent. Try again.')
@@ -162,7 +164,8 @@ export function AuthView() {
               Check your email
             </h1>
             <p className="pt-3 text-pretty text-base/7 text-zinc-600 sm:text-sm/6">
-              We sent a sign-in link to <span className="font-medium text-zinc-950">{email}</span>.
+              We sent a {sentForRecovery ? 'password reset' : 'sign-in'} link to{' '}
+              <span className="font-medium text-zinc-950">{email}</span>.
             </p>
             <Button
               variant="secondary"
@@ -232,9 +235,18 @@ export function AuthView() {
               />
               <label
                 htmlFor="auth-password"
-                className="mt-4 block text-sm font-medium text-zinc-800"
+                className="mt-4 flex items-center justify-between gap-3 text-sm font-medium text-zinc-800"
               >
-                Password
+                <span>Password</span>
+                {intent === 'signin' && authConfig?.emailConfigured ? (
+                  <button
+                    type="button"
+                    className="focus-ring rounded-md font-medium text-zinc-600 underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950 hover:decoration-zinc-950"
+                    onClick={() => void sendMagicLink(true)}
+                  >
+                    Forgot password?
+                  </button>
+                ) : null}
               </label>
               <input
                 id="auth-password"
@@ -326,7 +338,7 @@ export function AuthView() {
                   variant="secondary"
                   className="w-full"
                   disabled={sending}
-                  onClick={() => void sendMagicLink()}
+                  onClick={() => void sendMagicLink(false)}
                 >
                   <EnvelopeIcon className="size-4" />
                   Email me a sign-in link

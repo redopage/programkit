@@ -26,8 +26,9 @@ place.
 ### Public event
 
 Complete every required item below and the deployment-specific controls in
-[Security](../../SECURITY.md). ProgramKit is active alpha; the operator must explicitly accept or
-close the remaining gaps before real data.
+[Security](../../SECURITY.md). ProgramKit is a release candidate; the operator approves the
+specific runtime, data, and support policy for the event rather than inheriting a blanket
+production claim from the repository.
 
 ## Infrastructure
 
@@ -45,7 +46,7 @@ close the remaining gaps before real data.
 - [ ] Organizer signup is invite-only unless public SaaS signup is intentional.
 - [ ] Every team member uses an individual owner, administrator, or viewer account.
 - [ ] Active browser sessions and event membership have been reviewed.
-- [ ] Account recovery and ownership transfer have a documented operator procedure.
+- [ ] Email password recovery was tested, and ownership transfer has a named operator procedure.
 - [ ] MFA or external OIDC requirements have been decided for this deployment.
 - [ ] Public, participant, reviewer, speaker, staff, API, and MCP boundaries were tested separately.
 

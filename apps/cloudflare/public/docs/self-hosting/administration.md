@@ -47,7 +47,7 @@ Treat the repository as the application source of truth:
 
 1. read the incoming diff and migration notes;
 2. export important events and R2 objects;
-3. run `pnpm install --frozen-lockfile` and `pnpm check`;
+3. run `npm run setup` and `npm run verify`;
 4. deploy a staging Worker or isolated installation;
 5. exercise owner login, event switching, uploads, API, MCP, and public pages;
 6. deploy the production installation; and

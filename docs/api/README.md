@@ -56,6 +56,8 @@ These browser endpoints are available only on the hosted app. Mutations require 
 | `GET`    | `/api/v1/crm/state`             | Read the signed-in organization's contact projection |
 | `POST`   | `/api/v1/crm/operations/{name}` | Run an organization CRM operation                    |
 | `POST`   | `/public/v1/access/password`    | Create or restore an event participant account       |
+| `POST`   | `/public/v1/access/magic-link`  | Request a one-time participant sign-in link          |
+| `GET`    | `/access/verify?event=...`      | Exchange the link for a participant session          |
 | `GET`    | `/public/v1/access/session`     | Resolve that account's event-scoped destinations     |
 | `POST`   | `/public/v1/access/logout`      | Revoke the participant session                       |
 
@@ -66,11 +68,19 @@ required `newPassword`. Setting a password on a passwordless account needs only 
 session. Success revokes other sessions and pending magic links. Session reads expose only an opaque
 ID and creation/expiry times; the current session can be ended only through logout.
 
+Choosing **Forgot password?** requests the same enumeration-resistant email delivery with a
+recovery intent. Its single-use callback grants that session 15 minutes to set a new password
+without the old one. A successful reset consumes the grant, revokes other sessions, and invalidates
+pending links. An ordinary magic-link sign-in does not bypass the current-password check.
+
 Participant credentials use the same password policy but a separate per-event session. They never
 create a staff membership. After authentication, the Worker matches the normalized account email
 to submissions, reviewer records, and accepted-speaker participation records in that event. It
 returns only the corresponding record-scoped destinations. The underlying capability remains the
-authorization boundary for each projected surface.
+authorization boundary for each projected surface. When email is configured, an existing
+participant account can request a hashed, 15-minute, single-use sign-in link. The general discovery
+route sends one email containing an event-scoped link for every matching participant account while
+returning the same browser response when no account matches.
 
 Event team access uses these same-origin browser endpoints:
 
@@ -288,9 +298,10 @@ time, and then revoking the old key. Use one key per client so rotation and inci
 not interrupt unrelated integrations. Prefer a finite expiry and the **Agent operations** preset
 for MCP clients.
 
-## Production API milestones
+## Optional API extensions
 
-The next API work is intentionally practical:
+The released browser, API-key, and MCP workflows do not require these extensions. Add one only
+when a demonstrated integration needs it:
 
 1. Signed webhooks with endpoint subscriptions, retry history, replay, and secret rotation.
 2. Bulk import operations capped at a documented batch size with per-item results.

@@ -1,3 +1,4 @@
+import { ArrowLeftIcon, EnvelopeIcon } from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
 
 import { Button } from './ui.tsx'
@@ -7,25 +8,32 @@ export function ExternalAccessForm({
   signUpTitle = 'Create your account',
   description,
   defaultIntent = 'signup',
+  emailSignInAvailable = false,
+  initialError = '',
   onSubmit,
+  onSendMagicLink,
 }: {
   signInTitle: string
   signUpTitle?: string
   description?: string
   defaultIntent?: 'signin' | 'signup'
+  emailSignInAvailable?: boolean
+  initialError?: string
   onSubmit: (input: {
     email: string
     name: string
     password: string
     intent: 'signin' | 'signup'
   }) => Promise<void>
+  onSendMagicLink?: (email: string) => Promise<void>
 }) {
   const [intent, setIntent] = useState<'signin' | 'signup'>(defaultIntent)
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(initialError)
   const [submitting, setSubmitting] = useState(false)
+  const [sent, setSent] = useState(false)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -38,6 +46,56 @@ export function ExternalAccessForm({
     } finally {
       setSubmitting(false)
     }
+  }
+
+  async function sendMagicLink() {
+    if (!email || !email.includes('@')) {
+      setError('Enter your email address first.')
+      return
+    }
+    if (!onSendMagicLink) return
+    setSubmitting(true)
+    setError('')
+    try {
+      await onSendMagicLink(email)
+      setSent(true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The sign-in email could not be sent.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="w-full max-w-xs text-center">
+        <span className="mx-auto grid size-11 place-items-center rounded-full bg-blue-50 text-blue-600 ring-1 ring-blue-600/10">
+          <EnvelopeIcon className="size-5" />
+        </span>
+        <h1 className="pt-5 text-balance text-3xl font-semibold tracking-tight text-zinc-950">
+          Check your email
+        </h1>
+        <p className="pt-3 text-pretty text-base/7 text-zinc-600 sm:text-sm/6">
+          If an account is connected to <span className="font-medium text-zinc-950">{email}</span>,
+          its sign-in link is on the way.
+        </p>
+        <Button
+          type="button"
+          variant="secondary"
+          className="mt-7 w-full"
+          onClick={() => {
+            setSent(false)
+            setError('')
+          }}
+        >
+          <ArrowLeftIcon className="size-4" />
+          Use a different email
+        </Button>
+        <p className="pt-5 text-pretty text-base/7 text-zinc-500 sm:text-sm/6">
+          Links expire in 15 minutes and work once.
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -111,6 +169,24 @@ export function ExternalAccessForm({
               ? 'Create account'
               : 'Sign in'}
         </Button>
+        {intent === 'signin' && emailSignInAvailable && onSendMagicLink ? (
+          <>
+            <div className="flex items-center gap-3 text-xs text-zinc-400" aria-hidden="true">
+              <span className="h-px flex-1 bg-zinc-200" />
+              or
+              <span className="h-px flex-1 bg-zinc-200" />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={submitting}
+              onClick={() => void sendMagicLink()}
+            >
+              <EnvelopeIcon className="size-4" />
+              Email me a sign-in link
+            </Button>
+          </>
+        ) : null}
       </form>
       <p className="pt-5 text-base text-zinc-600 sm:text-sm">
         {intent === 'signup' ? 'Already have an account?' : 'New to this event?'}{' '}

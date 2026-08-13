@@ -10,6 +10,7 @@ export interface ExternalAccessDestination {
 
 export interface ExternalAccessSession {
   authenticated: boolean
+  emailConfigured?: boolean
   eventId?: string
   eventName?: string
   eventLogoUrl?: string
@@ -116,6 +117,27 @@ export function useExternalAccess(eventId: string, formSlug?: string) {
     [eventId, formSlug],
   )
 
+  const sendMagicLink = useCallback(
+    async (email: string) => {
+      setError('')
+      return responseBody(
+        await fetch(
+          endpoint(
+            eventId ? '/public/v1/access/magic-link' : '/public/v1/access/discover/magic-link',
+            eventId,
+            formSlug,
+          ),
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ email }),
+          },
+        ),
+      )
+    },
+    [eventId, formSlug],
+  )
+
   const logout = useCallback(async () => {
     const resolvedEventId = eventId || session.eventId
     await responseBody(
@@ -133,5 +155,15 @@ export function useExternalAccess(eventId: string, formSlug?: string) {
     setSession({ authenticated: false })
   }, [eventId, session.eventId])
 
-  return { enabled, loading, session, error, setError, refresh, authenticate, logout }
+  return {
+    enabled,
+    loading,
+    session,
+    error,
+    setError,
+    refresh,
+    authenticate,
+    sendMagicLink,
+    logout,
+  }
 }

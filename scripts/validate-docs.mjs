@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { dirname, extname, relative, resolve } from 'node:path'
 
 const repositoryRoot = resolve(import.meta.dirname, '..')
+const publicRoot = resolve(repositoryRoot, 'apps/cloudflare/public')
 const generatedMarkdownDirectory = resolve(repositoryRoot, 'apps/cloudflare/public/docs')
 const ignoredMarkdownFiles = new Set([resolve(repositoryRoot, 'apps/cloudflare/public/docs.md')])
 const ignoredDirectories = new Set([
@@ -111,7 +112,9 @@ for (const [file, source] of sources) {
     if (/^(?:https?:|mailto:|tel:)/iu.test(target)) continue
 
     const [pathPart, fragment] = target.split('#', 2)
-    const targetPath = resolve(dirname(file), pathPart || relative(dirname(file), file))
+    const targetPath = pathPart.startsWith('/')
+      ? resolve(publicRoot, pathPart.slice(1))
+      : resolve(dirname(file), pathPart || relative(dirname(file), file))
     linksChecked += 1
 
     let targetStats

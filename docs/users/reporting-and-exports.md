@@ -30,8 +30,9 @@ Other exports include:
 
 - reviewer and evaluation CSV data;
 - selected latest speaker files as a structured ZIP;
-- speaker and session handoff CSVs for Accelevents;
-- public agenda JSON/XML projections;
+- speaker and session handoff CSVs for the
+  [Accelevents handoff](../integrations/accelevents.md);
+- public agenda JSON and XML feeds;
 - public iCal feeds and attendee calendar downloads; and
 - the generated OpenAPI contract for integration clients.
 
@@ -47,7 +48,7 @@ operational data and cannot publish, send, approve, commit, or perform destructi
 Use [Connect an agent](../agents/connect.md) for setup and the
 [`@programkit/agent` reference](../../packages/agent/README.md) for the exact tool inventory.
 
-## What is not included yet
+## Intentional reporting boundary
 
 - a drag-and-drop report builder;
 - scheduled report delivery;
@@ -56,5 +57,5 @@ Use [Connect an agent](../agents/connect.md) for setup and the
 - a guaranteed restore that coordinates event state, identity, access, and R2 automatically.
 
 A future cross-event analytics store should be a rebuildable D1 projection fed by domain events,
-not another source of truth. Current status and remaining work live in the
-[roadmap](../../ROADMAP.md).
+not another source of truth. The [roadmap](../../ROADMAP.md) keeps these possible extensions
+separate from the current release definition.

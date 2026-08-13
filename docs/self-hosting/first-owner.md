@@ -28,7 +28,7 @@ openssl rand -base64 24
 
 ## CLI setup code
 
-`pnpm selfhost` creates a 32-character random code in the ignored
+`npm run selfhost` creates a 32-character random code in the ignored
 `.programkit/bootstrap-token` file, sends it with the first Worker deployment, and prints it after
 the public smoke checks pass. The two-step `selfhost:setup` and `selfhost:deploy` path provides the
 same behavior when an operator wants to inspect the generated configuration first.
@@ -73,10 +73,11 @@ acceptance flow.
 - Leave organizer signup invite-only unless public SaaS signup is intentional.
 - Add separate administrator and viewer accounts instead of sharing credentials.
 - Review active account sessions in Settings.
+- Test **Forgot password?** against the owner's real mailbox.
 - Revoke departed members and unused API keys promptly.
 - Store deployment secrets in Cloudflare or a secrets manager, never event records.
-- Document an ownership-transfer and account-recovery procedure before the installation becomes
-  business-critical; automated flows are not yet complete.
+- Name the operator who can assist with ownership transfer before the installation becomes
+  business-critical.
 
 The full account and membership model is in
 [Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).

@@ -7,8 +7,8 @@ until the production requirements in [Security](../../SECURITY.md) are complete.
 ## Start locally
 
 ```bash
-pnpm install
-pnpm dev
+npm run setup
+npm start
 ```
 
 Open `http://localhost:4173/forms`. The seed includes an open general CFP and a separate invited

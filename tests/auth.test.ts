@@ -469,6 +469,167 @@ describe('AuthDurableObject membership projections', () => {
     ).toBe(200)
   })
 
+  it('lets a short-lived email recovery session replace a forgotten password', async () => {
+    const email = 'recovery-owner@example.com'
+    const originalPassword = 'correct horse battery staple'
+    const signup = (await (
+      await auth.fetch(
+        request('/internal/auth/password', {
+          email,
+          password: originalPassword,
+          intent: 'signup',
+          ipHash: 'recovery-signup',
+        }),
+      )
+    ).json()) as { sessionToken: string }
+    const issued = await body(
+      await auth.fetch(
+        request('/internal/auth/request', {
+          email,
+          intent: 'signin',
+          recoverPassword: true,
+          ipHash: 'recovery-link',
+        }),
+      ),
+    )
+    const consumed = (await (
+      await auth.fetch(request('/internal/auth/consume', { token: issued.token }))
+    ).json()) as { sessionToken: string; passwordRecoveryAvailable: boolean }
+    expect(consumed.passwordRecoveryAvailable).toBe(true)
+
+    await expect(
+      auth
+        .fetch(request('/internal/auth/security', { token: consumed.sessionToken }))
+        .then((response) => response.json()),
+    ).resolves.toMatchObject({
+      ok: true,
+      passwordConfigured: true,
+      passwordRecoveryAvailable: true,
+    })
+
+    const changed = await auth.fetch(
+      request('/internal/auth/password/change', {
+        token: consumed.sessionToken,
+        newPassword: 'a recovered and secure password',
+        ipHash: 'recovery-change',
+      }),
+    )
+    expect(changed.status).toBe(200)
+    expect(
+      (await auth.fetch(request('/internal/auth/session', { token: signup.sessionToken }))).status,
+    ).toBe(401)
+    await expect(
+      auth
+        .fetch(request('/internal/auth/security', { token: consumed.sessionToken }))
+        .then((response) => response.json()),
+    ).resolves.toMatchObject({ passwordRecoveryAvailable: false })
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', {
+            email,
+            password: originalPassword,
+            intent: 'signin',
+            ipHash: 'recovery-old-password',
+          }),
+        )
+      ).status,
+    ).toBe(401)
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', {
+            email,
+            password: 'a recovered and secure password',
+            intent: 'signin',
+            ipHash: 'recovery-new-password',
+          }),
+        )
+      ).status,
+    ).toBe(200)
+  })
+
+  it('does not let an ordinary magic-link session bypass the current password', async () => {
+    const email = 'ordinary-link-owner@example.com'
+    await auth.fetch(
+      request('/internal/auth/password', {
+        email,
+        password: 'correct horse battery staple',
+        intent: 'signup',
+        ipHash: 'ordinary-signup',
+      }),
+    )
+    const issued = await body(
+      await auth.fetch(
+        request('/internal/auth/request', {
+          email,
+          intent: 'signin',
+          ipHash: 'ordinary-link',
+        }),
+      ),
+    )
+    const consumed = await body(
+      await auth.fetch(request('/internal/auth/consume', { token: issued.token })),
+    )
+    const changed = await auth.fetch(
+      request('/internal/auth/password/change', {
+        token: consumed.sessionToken,
+        newPassword: 'an unauthorized replacement password',
+        ipHash: 'ordinary-change',
+      }),
+    )
+    expect(changed.status).toBe(401)
+    await expect(changed.json()).resolves.toMatchObject({
+      ok: false,
+      code: 'CURRENT_PASSWORD_INVALID',
+    })
+  })
+
+  it('expires the password-recovery permission after 15 minutes', async () => {
+    const email = 'expired-recovery-owner@example.com'
+    await auth.fetch(
+      request('/internal/auth/password', {
+        email,
+        password: 'correct horse battery staple',
+        intent: 'signup',
+        ipHash: 'expired-recovery-signup',
+      }),
+    )
+    const issued = await body(
+      await auth.fetch(
+        request('/internal/auth/request', {
+          email,
+          intent: 'signin',
+          recoverPassword: true,
+          ipHash: 'expired-recovery-link',
+        }),
+      ),
+    )
+    const consumed = await body(
+      await auth.fetch(request('/internal/auth/consume', { token: issued.token })),
+    )
+
+    vi.advanceTimersByTime(15 * 60 * 1_000 + 1)
+
+    await expect(
+      auth
+        .fetch(request('/internal/auth/security', { token: consumed.sessionToken }))
+        .then((response) => response.json()),
+    ).resolves.toMatchObject({ passwordRecoveryAvailable: false })
+    const changed = await auth.fetch(
+      request('/internal/auth/password/change', {
+        token: consumed.sessionToken,
+        newPassword: 'an expired replacement password',
+        ipHash: 'expired-recovery-change',
+      }),
+    )
+    expect(changed.status).toBe(401)
+    await expect(changed.json()).resolves.toMatchObject({
+      ok: false,
+      code: 'CURRENT_PASSWORD_INVALID',
+    })
+  })
+
   it('rejects an incorrect current password without changing credentials or sessions', async () => {
     const email = 'protected-change@example.com'
     const password = 'correct horse battery staple'

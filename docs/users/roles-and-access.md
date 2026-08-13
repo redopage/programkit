@@ -17,11 +17,11 @@ Open organizer signup does not make event data public. Every event still has sep
 
 ## Event team roles
 
-| Role          | Typical capability                                                         |
+| Role          | What they can do                                                           |
 | ------------- | -------------------------------------------------------------------------- |
 | Owner         | Full event control, team policy, API keys, and owner-only destructive work |
 | Administrator | Operate the event and manage viewers within server-enforced policy         |
-| Viewer        | Read the organizer workspace without mutation capability                   |
+| Viewer        | Read the organizer workspace but change nothing                            |
 
 Invitation tokens are bound to one email, expire, work once, and create membership only for the
 target event. Removing a member takes effect against the authoritative event access object even if
@@ -33,9 +33,11 @@ Organizer accounts can use passwords. A configured email binding also enables ma
 and transactional delivery. Password changes happen from Settings and revoke every other account
 session plus pending sign-in links while keeping the current browser signed in.
 
-Account recovery, ownership transfer, and deployment-specific MFA or external OIDC remain
-production-hardening work. Review [Security](../../SECURITY.md) before relying on the installation
-for sensitive data.
+**Forgot password?** sends a 15-minute, single-use recovery link. The verified session can choose a
+new password without the old one; saving it revokes other sessions and consumes the recovery grant.
+Ownership transfer remains operator-assisted. MFA or external OIDC is deployment-specific rather
+than required for every conference. Review [Security](../../SECURITY.md) before relying on the
+installation for sensitive data.
 
 ## Participant accounts
 
@@ -44,9 +46,9 @@ can recover matching submissions, reviews, and speaker portals but never receive
 
 ## Scoped links and public routes
 
-- CFP and agenda links expose only public event projections.
+- CFP and agenda links expose only public event data.
 - Reviewer and speaker links are record-scoped.
-- A public event routing cookie selects the event for public projections; it is not staff
+- A public event routing cookie selects which event the public pages show; it is not staff
   authentication.
 - API keys are event-scoped server-to-server credentials with explicit scopes, expiry, last-used
   state, and revocation.
@@ -61,5 +63,5 @@ can recover matching submissions, reviews, and speaker portals but never receive
 5. Review account sessions and event membership regularly.
 6. Revoke access immediately when a person or integration leaves the event.
 
-The canonical implementation boundary is documented in
+The exact implementation is documented in
 [Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).

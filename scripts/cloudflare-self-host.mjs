@@ -25,15 +25,16 @@ const bootstrapTokenPath = resolve(generatedRoot, 'bootstrap-token')
 const deploymentReceiptPath = resolve(generatedRoot, 'deployment-receipt.json')
 const deploySecretsPath = resolve(generatedRoot, '.deploy-secrets.json')
 const wranglerOutputPath = resolve(generatedRoot, '.wrangler-output.ndjson')
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+const pinnedPackageManager = 'pnpm@11.20.0'
 
 const help = `ProgramKit Cloudflare self-host setup
 
 Usage:
-  pnpm selfhost
-  pnpm selfhost:setup
-  pnpm selfhost:setup -- --name NAME --bucket BUCKET [--domain HOSTNAME]
-  pnpm selfhost:deploy
+  npm run selfhost
+  npm run selfhost:setup
+  npm run selfhost:setup -- --name NAME --bucket BUCKET [--domain HOSTNAME]
+  npm run selfhost:deploy
 
 Options:
   --name NAME       Cloudflare Worker name
@@ -70,8 +71,12 @@ function run(command, args, options = {}) {
   return result
 }
 
+function runPnpm(args, options) {
+  return run(npx, ['--yes', pinnedPackageManager, ...args], options)
+}
+
 function wrangler(args, options) {
-  return run(pnpm, ['--filter', '@programkit/app-cloudflare', 'exec', 'wrangler', ...args], options)
+  return runPnpm(['--filter', '@programkit/app-cloudflare', 'exec', 'wrangler', ...args], options)
 }
 
 function accountEnvironment(accountId) {
@@ -96,7 +101,7 @@ function parseCloudflareAccounts(value) {
 }
 
 async function chooseCloudflareAccount(existing) {
-  const identity = run(pnpm, [
+  const identity = runPnpm([
     '--filter',
     '@programkit/app-cloudflare',
     'exec',
@@ -262,7 +267,7 @@ async function setup() {
   console.log('Password sign-in, multi-event workspaces, R2 files, API keys, and MCP are enabled.')
   console.log('Email and Airtable remain optional.')
   console.log('A private first-owner setup code was generated and will be installed on deploy.')
-  console.log('\nNext: pnpm selfhost:deploy')
+  console.log('\nNext: npm run selfhost:deploy')
 }
 
 function delay(milliseconds) {
@@ -315,18 +320,18 @@ async function deploy() {
   try {
     await readFile(configPath, 'utf8')
   } catch {
-    throw new Error('Run pnpm selfhost:setup before deploying.')
+    throw new Error('Run npm run selfhost:setup before deploying.')
   }
   const existing = await readExistingSetup()
   if (existing?.cloudflareVerified !== true) {
     throw new Error(
-      'This configuration has not passed the Cloudflare resource checks. Run pnpm selfhost:setup without --no-provision before deploying.',
+      'This configuration has not passed the Cloudflare resource checks. Run npm run selfhost:setup without --no-provision before deploying.',
     )
   }
-  run(pnpm, ['build'], { inherit: true })
+  runPnpm(['build'], { inherit: true })
   const setupCode = (await readFile(bootstrapTokenPath, 'utf8')).trim()
   if (setupCode.length < 16) {
-    throw new Error('The first-owner setup code is missing. Run pnpm selfhost:setup again.')
+    throw new Error('The first-owner setup code is missing. Run npm run selfhost:setup again.')
   }
   const cloudflareEnvironment = existing.accountId
     ? accountEnvironment(existing.accountId)
@@ -382,7 +387,7 @@ async function deploy() {
 
   if (!verification.ok) {
     throw new Error(
-      `ProgramKit deployed, but its public smoke checks did not pass: ${verification.error} Rerun pnpm selfhost:deploy after checking the Worker route.`,
+      `ProgramKit deployed, but its public smoke checks did not pass: ${verification.error} Rerun npm run selfhost:deploy after checking the Worker route.`,
     )
   }
 

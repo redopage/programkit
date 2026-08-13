@@ -8,13 +8,13 @@ the trust boundary.
 Run:
 
 ```bash
-pnpm --filter @programkit/app-cloudflare exec wrangler whoami
+npx --yes pnpm@11.20.0 --filter @programkit/app-cloudflare exec wrangler whoami
 ```
 
 If needed:
 
 ```bash
-pnpm --filter @programkit/app-cloudflare exec wrangler login --use-keyring
+npm run cloudflare:login
 ```
 
 When the login reaches multiple accounts, pass `--account` to `selfhost:setup` using the exact
@@ -23,14 +23,15 @@ account name or ID.
 ## R2 is not enabled
 
 Open the selected Cloudflare account's **Storage & databases → R2 → Overview**, activate its R2
-subscription, and rerun `pnpm selfhost:setup`. R2 activation belongs to the account, not the Worker.
+subscription, and rerun `npm run selfhost:setup`. R2 activation belongs to the account, not the
+Worker.
 
 ## Worker or bucket already exists
 
 The setup script stops before overwriting an unrelated resource. Choose a new name:
 
 ```bash
-pnpm selfhost:setup -- --name my-programkit-2 --bucket my-programkit-2-assets
+npm run selfhost:setup -- --name my-programkit-2 --bucket my-programkit-2-assets
 ```
 
 Use `--reuse-worker` or `--reuse-bucket` only after confirming that the existing resource belongs to

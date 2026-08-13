@@ -93,7 +93,7 @@ production Worker build, OpenAPI validation, and plugin validation.
 
 Read [Roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md), [Architecture](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md),
 [Storage and integrations](/docs/architecture/storage-and-integrations.md), and
-[Interface craft](/docs/product/interface-craft.md). Then describe the user outcome, trust boundary,
+[Interface craft](/docs/developers/interface-craft.md). Then describe the user outcome, trust boundary,
 new invariant, and smallest complete vertical slice before adding code.
 
 See [Contributing](https://forge.smol.ai/andheller/programkit/blob/main/CONTRIBUTING.md) for repository policy, the

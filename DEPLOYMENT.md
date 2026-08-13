@@ -146,24 +146,16 @@ Durable Object serializer and current cache
 direct Airtable edit ── verified webhook ── cache refresh
 ```
 
-The version 1 schema has one `ProgramKit State` record and ten native tables for events, people,
-participations, submissions, tasks, reviews, sessions, placements, tracks, and rooms. Stable IDs,
-deterministic sort values, native columns, and lossless JSON make the full workspace reconstructable
-without relying on Durable Object storage.
+The mode acknowledges Airtable writes before advancing the object cache, which is why it is not
+the recommended V1 store: partial-write retry and inbound conflict review are incomplete. The
+preferred future design is an asynchronous outbound mirror with reviewable inbound changes, and it
+is not implemented yet.
 
-The checked-in adapter creates and validates that schema, batch-upserts by stable ID, removes stale
-managed rows, writes record-level deltas, restores the complete state, and verifies Airtable webhook
-HMACs. The current seed uses 171 records. Measured steady-state costs are zero Airtable requests per
-page load, two requests for a simple one-record mutation, and eleven requests for an explicit full
-restore.
-
-The OAuth flow registers an HMAC-signed webhook and renews it with a Durable Object alarm. Inbound
-edits currently perform a debounced full refresh. Production work still needs payload cursors,
-narrow record fetches, durable partial-write retries, and conversion of direct edits through named
-operations or reviewable change sets. See the
-[Airtable integration guide](docs/integrations/airtable.md) for setup, failure modes, and the exact
-current boundary. The preferred future team-view design is an asynchronous outbound mirror with
-reviewable inbound changes. That design is not implemented yet.
+The schema inventory, measured request budget, webhook behavior, setup, and the exact current
+boundary are documented once in the
+[Airtable integration guide](docs/integrations/airtable.md). The reasoning behind choosing the
+event Durable Object over Airtable or D1 is in
+[Storage and integrations](docs/architecture/storage-and-integrations.md#airtable-decision).
 
 ## Hosted demo lifecycle
 
@@ -192,157 +184,32 @@ Each event is a separate workspace object. Creating and switching events goes th
 account membership, and a new event starts empty. The complete boundary is documented in
 [Identity, events, and storage ownership](docs/architecture/identity-and-tenancy.md).
 
-## Local development
+## Installation and operation guides
 
-Prerequisites are Node.js 24 or newer and Git. The npm scripts fetch the recorded pnpm version, so
-Corepack and a global pnpm installation are not required. Wrangler authentication is only needed
-for remote development or deployment.
+This document is the deployment architecture and production-boundary reference. The
+step-by-step installation paths live with the other task guides so there is one canonical copy of
+each procedure:
 
-```bash
-npm run setup
-npm start
-```
+| Task                                          | Guide                                                         |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| Run the sample locally                        | [Local development](docs/guides/local-development.md)         |
+| Deploy with the button or the CLI walkthrough | [Cloudflare deployment](docs/self-hosting/cloudflare.md)      |
+| Bindings, variables, secrets, custom domains  | [Configuration reference](docs/self-hosting/configuration.md) |
+| Connect Airtable                              | [Airtable integration](docs/integrations/airtable.md)         |
+| Configure outbound mail                       | [Email](docs/integrations/email.md)                           |
+| Decide whether an install is ready for data   | [Launch checklist](docs/self-hosting/launch-checklist.md)     |
 
-Open `http://localhost:4173`. The Cloudflare Vite plugin runs the React app, Worker, and local
-SQLite-backed Durable Object together in `workerd`.
+## Production acceptance boundary
 
-## Deploy
+The application assembly is complete for evaluation and controlled pilots. A production operator
+still owns the environment around it: external backups and restore rehearsal, monitoring and
+incident contacts, edge abuse controls, file scanning/retention appropriate to public uploads, and
+sender-domain operations appropriate to transactional or bulk mail. Use the
+[launch checklist](docs/self-hosting/launch-checklist.md) for the go/no-go decision.
 
-### One-click self-host
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
-
-Cloudflare clones the public mirror, runs the root build and deploy commands, and provisions the R2
-and Durable Object resources declared in `wrangler.jsonc`. The result is the authenticated
-`hosted-app` profile with password sign-up, multiple events, private files, event-scoped API keys,
-the HTTP API, and `/mcp` on one origin.
-
-After the first deployment:
-
-1. Open the Worker URL and create the owner account using the private
-   `PROGRAMKIT_BOOTSTRAP_TOKEN` entered during Cloudflare setup.
-2. Create the first event and configure its tracks before publishing a submission form.
-3. Confirm **Settings → Installation access** is invite-only, or explicitly enable open organizer
-   signup for a public SaaS installation.
-4. Open **Data & connections** to create scoped integration keys or download the deployment's
-   Agent Plugin bundle.
-5. Add email only when confirmations, invitations, and campaigns must be delivered. Password
-   sign-in works without it.
-
-Cloudflare's setup screen can change the default Worker and resource names. The button needs no
-local development tools and initially produces a `workers.dev` URL. To use a domain already active
-in the same Cloudflare account, open the Worker, choose **Settings → Domains & Routes → Add → Custom
-Domain**, and set `PROGRAMKIT_APP_ORIGIN` to that same HTTPS origin. Cloudflare creates the DNS
-record and certificate. Use the controlled walkthrough below when the custom-domain route should be
-part of the initial generated configuration.
-
-### Controlled self-host walkthrough
-
-For a production-style installation from a local checkout, authenticate Wrangler and run:
-
-```bash
-pnpm selfhost
-```
-
-The setup command asks for a Worker name, an R2 bucket name, and an optional custom domain. It:
-
-- verifies the active Cloudflare account;
-- refuses to overwrite an existing Worker or reuse an unrelated R2 bucket without an explicit
-  override;
-- creates the R2 bucket when needed;
-- generates an ignored `.programkit/wrangler.json` with all three Durable Object bindings,
-  migrations, static assets, R2, and the authenticated `hosted-app` profile; and
-- generates a private first-owner setup code that `selfhost:deploy` installs as a Worker secret.
-
-The first account must provide the setup code printed by `selfhost:deploy`. After that owner claim,
-the installation defaults to invite-only organizer signup; the owner can enable open signup from
-Settings. Password sign-in does not require an email provider. Add a Cloudflare Email binding later
-if you want magic links and transactional mail. Each event gets its own Durable Object, while the
-account object provides a fast event switcher without cross-event scans.
-
-For a repeatable non-interactive setup:
-
-```bash
-pnpm selfhost -- \
-  --name my-programkit \
-  --bucket my-programkit-assets \
-  --domain events.example.com
-```
-
-Rerunning the command reuses the names recorded in `.programkit/self-host.json`. If you deliberately
-want to adopt existing resources, pass `--reuse-worker` and/or `--reuse-bucket`. Use
-`--no-provision` only to generate and inspect the configuration without contacting Cloudflare.
-
-ProgramKit serves the web app, HTTP API, public forms and agenda, and `/mcp` from this one Worker.
-An operator can create an **Agent operations** API key under **Data & connections** and connect an
-AI client to `https://YOUR_HOST/mcp`; no second service or plugin deployment is required. The
-portable plugin bundle is available at `https://YOUR_HOST/agent-plugin.zip` and is generated for
-that same domain. See
-[Agent Plugins and MCP](docs/integrations/agent-plugins.md).
-
-For a direct deployment from the checked-in hosted profile, review `wrangler.jsonc`, then run:
-
-```bash
-pnpm deploy
-```
-
-The command builds the three public packages, type-checks the workspace, builds the Vite client and
-Worker, and deploys the same authenticated application used by the one-click flow. Airtable remains
-an optional follow-up because every self-hosted callback domain needs its own Airtable OAuth
-registration.
-
-### Enable Airtable on a deployment
-
-Register an OAuth integration with the exact callback
-`https://YOUR_HOST/api/v1/integrations/airtable/oauth/callback`, then add the client ID and optional
-client secret as Worker secrets. Open **Integrations** and choose **Connect Airtable**. The full
-consent and base-selection flow is documented in the
-[Airtable integration guide](docs/integrations/airtable.md#connect-airtable).
-
-After deploying, verify:
-
-```bash
-curl --fail https://YOUR_HOST/api/health
-curl https://YOUR_HOST/api/v1/events
-curl https://YOUR_HOST/public/agenda.json
-```
-
-Then open the operator app, public CFP, reviewer workspace, speaker portal, and public program.
-
-### Email on the official application host
-
-Inbound `support@programkit.dev` mail is forwarded through Cloudflare Email Routing. Outbound mail
-uses the dedicated `mail.programkit.dev` sending domain so application reputation is separate from
-normal human mail. Only the `app` profile receives the `EMAIL` binding, and Wrangler restricts it
-to `notifications@mail.programkit.dev`.
-
-Magic-link sign-in and product notifications use this binding. Product operations persist one
-resolved outbox record per recipient with the domain transaction. The event Durable Object alarm
-delivers outside the transaction, stores the provider message ID and attempt history, and retries
-failures up to five times. Anonymous demos have no outbound binding. See the
-[email guide](docs/integrations/email.md).
-
-## Production bindings, in order
-
-The golden-path production work should land in this sequence:
-
-1. Add participant and reviewer magic-link sessions, then complete account recovery and ownership
-   transfer for hosted staff.
-2. Add OAuth for delegated multi-account MCP and API installations; retain the current event-scoped
-   API keys for owner-managed clients.
-3. Add provider-backed scanning/quarantine, orphan discovery, automatic retention and offboarding,
-   legal holds, and storage observability around the existing private R2 upload, mediated download,
-   and explicit owner-deletion path.
-4. Add suppression, unsubscribe, dead-letter recovery, and calendar attachment support to the
-   transactional email outbox.
-5. Add webhook delivery from a durable outbox, with signed payloads, retries, and delivery history.
-6. Move Airtable toward a non-blocking mirror, then add webhook payload cursors, durable retry,
-   inbound change sets, and actual last-success, quota, lag, conflict, and error state.
-7. Add scheduled encrypted logical exports and test restore into a separate workspace key.
-
-Do not call email, delivery webhooks, or optional mirrors while a domain transaction is open. The
-current experimental Airtable-backed repository still performs acknowledged writes in the request
-path. That limitation is one reason it is not the recommended V1 store.
+MFA or SSO, delegated third-party OAuth, outbound webhooks, a durable Airtable mirror, and a native
+Accelevents connector are optional extensions, not missing bindings in the supported Cloudflare
+assembly. Do not add them until the target deployment or provider contract requires them.
 
 ## Repository hosting and Forge
 

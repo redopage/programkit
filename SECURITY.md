@@ -4,15 +4,15 @@
 
 ProgramKit contains production-shaped domain controls and working password and passwordless staff
 sessions for the hosted app. It has event-scoped participant password accounts, team invitations,
-live role enforcement, event-scoped API keys, and record-scoped reviewer and speaker capabilities.
-It does not yet have account recovery, ownership transfer, optional MFA or OIDC, delegated MCP
-OAuth, short-lived invitation exchange for every reviewer and speaker link, or a
-production-complete file security and retention program. Private R2 uploads, authorized downloads,
-and owner-initiated deletion are implemented; malware scanning, automatic retention and
-offboarding, orphan cleanup, and storage observability are not.
+live role enforcement, event-scoped API keys, record-scoped reviewer and speaker capabilities, and
+email-based password recovery. It does not claim automated ownership transfer, optional MFA or
+OIDC, delegated MCP OAuth, or a production-complete file security and retention program. Private R2
+uploads, authorized downloads, and owner-initiated deletion are implemented; malware scanning,
+automatic retention and offboarding, orphan cleanup, and storage observability are
+deployment-supplied.
 
-Do not place real participant data, provider credentials, private documents, or production email
-access in the reference deployment.
+Use sample data in the anonymous demo. Before a hosted or self-hosted public event accepts real
+participant data, complete the deployment-specific [launch checklist](docs/self-hosting/launch-checklist.md).
 
 ## Deployment security boundaries
 
@@ -32,9 +32,11 @@ access in the reference deployment.
   The account event list is a repairable switcher projection, not an authorization boundary.
 - Caller-supplied actor headers and body actors never become the trusted staff actor.
 - Logout revokes the stored session and clears its cookies.
-- Authenticated password changes require the current password when one exists, rotate the salted
-  derivation, revoke other sessions, and invalidate pending magic links. Passwordless accounts can
-  set their first password only from an authenticated session.
+- Authenticated password changes require the current password when one exists. A separate
+  enumeration-resistant email recovery link grants one session a 15-minute reset window. A reset
+  rotates the salted derivation, revokes other sessions, invalidates pending links, and consumes
+  that recovery grant. Passwordless accounts can set their first password from an authenticated
+  session.
 - Account security returns opaque session IDs plus creation and expiry times. It never returns a
   token or token hash, does not allow the session-management endpoint to revoke the current browser,
   and requires same-origin requests for every revocation.
@@ -138,40 +140,26 @@ Likewise, derive the Durable Object workspace key from authenticated membership.
 does this for staff events. Do not trust the reference `x-programkit-workspace-key` header as an
 authorization decision in another deployment.
 
-## Required before real data
+## Production acceptance by exposure
 
-1. Add account recovery, ownership transfer, and an MFA or external OIDC policy where deployment
-   risk requires it. Add a complete leave-event flow before users can remove their own access.
-2. Complete the reviewer and speaker invitation lifecycle with short-lived, one-time exchange,
-   rotation, and revocation appropriate to the deployment. Event-scoped participant accounts are
-   implemented, but the recovered destination still uses a record-scoped capability.
-3. Add OAuth before offering delegated third-party MCP installation across many customer accounts.
-   The current event-scoped API keys are suitable only for owner-managed clients: use one
-   short-lived key per client, least-privilege scopes, HTTPS, rotation, and immediate revocation
-   when exposed.
-4. Define the assurance required for submitters, reviewers, and speakers and test the existing
-   event-scoped participant session against it. Add explicit CSRF tokens if cookie or cross-site
-   requirements change.
-5. Complete the existing transactional email outbox with provider-level idempotency across crash
-   windows, bounce and complaint ingestion, recipient self-service unsubscribe, and dead-letter
-   operations. Add signed webhook subscriptions with retry and replay protection; product webhooks
-   are not delivered yet.
-6. Store provider secrets in a managed secret service, never in workspace state, source control,
-   browser bundles, or logs.
-7. Put uploaded files through a provider-backed malware scan or quarantine-before-availability
-   path. Add orphan cleanup, storage usage alerts, automatic retention and workspace-offboarding
-   cleanup, and any deployment-specific short-lived download URL policy. The current private R2
-   path already enforces event ownership, content-type and size limits, mediated downloads, and
-   explicit owner deletion; those checks are not malware scanning.
-8. Define data classification, consent, retention, anonymization, deletion, legal-hold, export, and
-   workspace offboarding policies.
-9. Add encrypted backups or logical exports outside the primary runtime and regularly test restore
-   into an isolated workspace.
-10. Add request and command rate limits, abuse protection, structured security logging, alerts, and
-    incident-response procedures.
-11. Review cross-event and cross-account isolation, portal authorization, privilege escalation, duplicate
-    delivery, stale writes, and export access with automated and adversarial tests.
-12. Run dependency, secret, accessibility, privacy, and threat-model reviews before launch.
+Not every installation needs an enterprise identity platform or a bulk-mail program. Apply the
+controls that match the launch:
+
+- **Every real event:** keep provider secrets in Cloudflare, name an owner and recovery contact,
+  store logical exports and R2 bytes outside the runtime, rehearse restore, configure alerts, and
+  review cross-event authorization and dependency risk.
+- **Public CFP or uploads:** add edge abuse controls and a scanning or quarantine path appropriate
+  to accepted files; set retention, deletion, offboarding, privacy, and consent policy.
+- **Bulk email:** add unsubscribe, bounce and complaint ingestion, provider incident ownership, and
+  dead-letter handling around the existing durable outbox. Transactional-only installations may
+  disable campaigns instead.
+- **Third-party or enterprise access:** use one short-lived least-privilege key per owner-managed
+  client. Add delegated OAuth only before offering installation across customer accounts, and add
+  MFA or external OIDC when the deployment's assurance policy requires it.
+
+Reviewer and speaker recovery still resolves to record-scoped capabilities after event-scoped
+participant authentication. A higher-assurance event should replace those links with the
+short-lived invitation exchange its policy requires.
 
 ## Untrusted content
 

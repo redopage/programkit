@@ -32,7 +32,7 @@ Coding agents must read the root [`AGENTS.md`](https://forge.smol.ai/andheller/p
 | Product scope or capability claim    | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md)                                        |
 | End-to-end user journey              | [Program lifecycle](/docs/product/program-lifecycle.md)                    |
 | Package or persistence design        | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md)                              |
-| UI work                              | [Interface craft](/docs/product/interface-craft.md)                        |
+| UI work                              | [Interface craft](/docs/developers/interface-craft.md)                     |
 | Cloudflare assembly or profile       | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)                                  |
 | Identity, tenancy, or files          | [Identity and tenancy](/docs/architecture/identity-and-tenancy.md)         |
 | Airtable, R2, D1, or background work | [Storage and integrations](/docs/architecture/storage-and-integrations.md) |

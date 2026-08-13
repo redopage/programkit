@@ -58,7 +58,7 @@ npm run setup
 ### 2. Authenticate Wrangler
 
 ```bash
-npx --yes pnpm@11.20.0 --filter @programkit/app-cloudflare exec wrangler login --use-keyring
+npm run cloudflare:login
 ```
 
 The keyring flag asks Wrangler to protect its OAuth credential through the operating system's
@@ -68,7 +68,7 @@ secret store.
 ### 3. Provision, deploy, and verify the installation
 
 ```bash
-npx --yes pnpm@11.20.0 selfhost
+npm run selfhost
 ```
 
 The walkthrough asks for:
@@ -86,7 +86,7 @@ for public health, verifies the plugin download, and writes ignored local instal
 For a repeatable non-interactive setup:
 
 ```bash
-npx --yes pnpm@11.20.0 selfhost -- \
+npm run selfhost -- \
   --account "YOUR CLOUDFLARE ACCOUNT" \
   --name my-programkit \
   --bucket my-programkit-assets \
@@ -102,9 +102,9 @@ To review the generated names and configuration before changing Worker traffic, 
 path:
 
 ```bash
-npx --yes pnpm@11.20.0 selfhost:setup
+npm run selfhost:setup
 # Review .programkit/wrangler.json and .programkit/self-host.json.
-npx --yes pnpm@11.20.0 selfhost:deploy
+npm run selfhost:deploy
 ```
 
 `selfhost:deploy` sends the bootstrap secret alongside the code in one Worker deployment. It then
@@ -122,7 +122,7 @@ After installation and Wrangler login, a named installation can be provisioned, 
 checked in one command:
 
 ```bash
-npx --yes pnpm@11.20.0 selfhost -- \
+npm run selfhost -- \
   --name my-programkit \
   --bucket my-programkit-assets
 ```
@@ -144,8 +144,8 @@ deploying.
 To keep two test installations in one checkout, set a safe generated-directory name:
 
 ```bash
-PROGRAMKIT_SELFHOST_DIRECTORY=.programkit-staging pnpm selfhost:setup
-PROGRAMKIT_SELFHOST_DIRECTORY=.programkit-staging pnpm selfhost:deploy
+PROGRAMKIT_SELFHOST_DIRECTORY=.programkit-staging npm run selfhost:setup
+PROGRAMKIT_SELFHOST_DIRECTORY=.programkit-staging npm run selfhost:deploy
 ```
 
 The value must be `.programkit` or start with `.programkit-` and contain lowercase letters,

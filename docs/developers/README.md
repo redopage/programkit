@@ -90,7 +90,7 @@ production Worker build, OpenAPI validation, and plugin validation.
 
 Read [Roadmap](../../ROADMAP.md), [Architecture](../../ARCHITECTURE.md),
 [Storage and integrations](../architecture/storage-and-integrations.md), and
-[Interface craft](../product/interface-craft.md). Then describe the user outcome, trust boundary,
+[Interface craft](interface-craft.md). Then describe the user outcome, trust boundary,
 new invariant, and smallest complete vertical slice before adding code.
 
 See [Contributing](../../CONTRIBUTING.md) for repository policy, the

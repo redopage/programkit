@@ -3,27 +3,12 @@
 
 # Getting started
 
-ProgramKit can be explored without an account, deployed as one Cloudflare application, or cloned
-as an open-source starter. All three paths run the same product packages.
+The fastest way to understand ProgramKit is to run the sample and walk one proposal all the way to
+a published agenda. Allow about ten minutes.
 
-## Choose the shortest useful path
+## Run the sample
 
-| Goal                             | Time to first screen | External account | Use this path                                          |
-| -------------------------------- | -------------------- | ---------------- | ------------------------------------------------------ |
-| Evaluate the hosted application  | Immediate            | ProgramKit       | [Choose how to run ProgramKit](/docs/getting-started/choose-a-deployment.md) |
-| Try a disposable hosted sample   | Immediate            | None             | [Open the demo](https://demo.programkit.dev)           |
-| Inspect a deterministic sample   | A few minutes        | None             | [Run locally](/docs/guides/local-development.md)          |
-| Own the runtime and stored data  | About 5–10 minutes   | Cloudflare       | [Deploy to Cloudflare](/docs/self-hosting/cloudflare.md)  |
-| Rebrand or add product behavior  | After local setup    | None             | [Developer guide](/docs/developers.md)             |
-| Connect an AI client to an event | A few minutes        | Running install  | [Connect an agent](/docs/agents/connect.md)               |
-
-The local sample is deterministic and uses sample data. A self-host includes real account and
-event isolation, but production operators should still review [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) before
-accepting sensitive participant data.
-
-## Run the complete sample locally
-
-Prerequisites: Git and Node.js 24 or newer. No global pnpm or Corepack installation is required.
+You need Git and Node.js 24 or newer.
 
 ```bash
 git clone https://forge.smol.ai/andheller/programkit.git
@@ -32,57 +17,38 @@ npm run setup
 npm start
 ```
 
-Open `http://localhost:4173`. One process starts the React application, Cloudflare Worker, and
-local SQLite-backed Durable Objects. It does not need a Cloudflare login, R2, email, Airtable, or an
-API key.
+Open `http://localhost:4173`. One process runs the React application, the Cloudflare Worker, and
+local SQLite-backed Durable Objects. There is no Cloudflare login, R2 bucket, email provider, or API
+key involved, and the seeded data is the same every time you reset it.
 
-Try the lifecycle in this order:
+## Walk the lifecycle
 
-1. Build or inspect a call for proposals in **Forms**.
-2. Submit a proposal through the public form.
-3. Assign and complete a review.
-4. Accept the proposal and inspect the resulting speaker, task, and session.
-5. Complete work in the speaker portal.
-6. Place the session, run schedule preflight, and publish.
-7. Open the public agenda and confirm it reads the immutable release.
-
-Use [Set up your first event](/docs/getting-started/first-event.md) for the role-crossing rehearsal and the detailed
-[local development walkthrough](/docs/guides/local-development.md) for sample routes, reset
-instructions, and verification commands.
-
-## Deploy your own installation
-
-The quickest path is the repository's **Deploy to Cloudflare** button. The most repeatable path is
-the guided CLI:
-
-```bash
-pnpm selfhost
-```
-
-Both produce one origin containing the web app, accounts, events, public pages, HTTP API, MCP
-server, and plugin download. Continue with the [self-hosting overview](/docs/self-hosting.md),
-then use the [launch checklist](/docs/self-hosting/launch-checklist.md) before real participant data.
-
-## Understand the product before configuring it
-
-ProgramKit follows one spine:
+Every ProgramKit event follows one spine:
 
 ```text
 configure event → publish CFP → receive proposals → review → decide
                 → onboard speakers → schedule sessions → publish program
 ```
 
-The organizer, submitter, reviewer, speaker, and attendee do not see one unrestricted database.
-They receive separate projections and operation allowlists. Read the [user guide](/docs/users.md)
-for the surfaces and [program lifecycle](/docs/product/program-lifecycle.md) for the underlying model.
+Try it in that order:
 
-## Verify a source change
+1. Inspect the call for proposals in **Forms**.
+2. Submit a proposal through the public form.
+3. Assign and complete a review.
+4. Accept the proposal, then look at the speaker, task, and session it created.
+5. Complete the assigned work in the speaker portal.
+6. Place the session, run schedule preflight, and publish.
+7. Open the public agenda.
 
-Run the same complete gate used by CI:
+Organizers, submitters, reviewers, speakers, and attendees never share one view of the data. Each
+role receives only the data and actions it needs, which is why step 7 looks nothing like step 1.
 
-```bash
-npm run verify
-```
+## Next
 
-It runs tests, linting, formatting checks, generated plugin drift checks, TypeScript and production
-builds, OpenAPI drift checks, and plugin validation.
+- [Set up your first event](/docs/getting-started/first-event.md) — the same journey run as a rehearsal, with a
+  checkpoint after every handoff.
+- [Local development](/docs/guides/local-development.md) — sample routes, resetting the seed, and the
+  verification commands.
+- [Deploy your own installation](/docs/self-hosting.md) — one Cloudflare Worker in your own
+  account.
+- [Choose how to run ProgramKit](/docs/getting-started/choose-a-deployment.md) — hosted app, demo, self-host, or fork.

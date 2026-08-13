@@ -154,8 +154,8 @@ separate account object.
 
 When an operator explicitly enables the experimental Airtable-backed mode, Airtable becomes the
 acknowledged persistence backend and the same workspace document becomes the serialized hot cache.
-This behavior is optional, does not run on official evaluator paths, and is not the recommended V1
-production configuration.
+This behavior is optional, does not run on the recommended evaluation path, and is not the
+recommended V1 production configuration.
 
 The Airtable version 1 schema stores one non-native workspace snapshot plus native events, people,
 participations, submissions, tasks, reviews, sessions, placements, tracks, and rooms. Native

@@ -31,10 +31,10 @@ ProgramKit gives organizers one focused workspace to:
 It is intentionally smaller than a general CRM or an enterprise event suite. The goal is to make
 the conference-program job fast, understandable, and easy to own.
 
-> **Project status:** active alpha. Staff and event participants have separate scoped accounts, and
-> private files use R2. Production operators still need account recovery, verified mail delivery,
-> edge abuse controls, and a documented backup policy before using sensitive participant data. See
-> [Security](SECURITY.md) and the [roadmap](ROADMAP.md).
+> **Project status:** release candidate. The complete conference-program workflow, scoped staff and
+> participant accounts, email-based password recovery, and private R2 files are implemented. A
+> public event still needs deployment-specific mail, backup, abuse, file, monitoring, and response
+> controls. See [Security](SECURITY.md) and the [roadmap](ROADMAP.md).
 
 ## Run it locally
 
@@ -113,7 +113,8 @@ Use the local walkthrough when you want collision checks, repeatable resource na
 domain from the start:
 
 ```bash
-pnpm selfhost
+npm run cloudflare:login
+npm run selfhost
 ```
 
 The walkthrough checks Cloudflare access, protects existing Worker and R2 names, creates the upload
@@ -125,7 +126,7 @@ Under **Data & connections**, a self-hoster can create an Agent operations key a
 plugin bundle already configured for that deployment. The plugin is installed in the agent client;
 it is not another hosted service.
 
-Use `pnpm dev` when you only want the deterministic local sample without accounts or Cloudflare
+Use `npm start` when you only want the deterministic local sample without accounts or Cloudflare
 resources. See [Deployment](DEPLOYMENT.md) for non-interactive flags, custom domains, and the exact
 self-hosted boundary.
 
@@ -154,7 +155,7 @@ participant data.
 ## Verify a change
 
 ```bash
-pnpm check
+npm run verify
 ```
 
 This runs tests, linting, formatting and documentation-link verification, TypeScript, package
@@ -172,7 +173,6 @@ builds, the production Worker build, generated-contract checks, and plugin valid
 - [Customize the starter](docs/developers/customizing.md)
 - [Program lifecycle](docs/product/program-lifecycle.md)
 - [Product status and roadmap](ROADMAP.md)
-- [Competition evaluator readiness](docs/product/evaluator-gap-analysis.md)
 - [Architecture](ARCHITECTURE.md)
 - [Deployment](DEPLOYMENT.md)
 - [HTTP API quickstart](docs/api/quickstart.md) and [reference](docs/api/README.md)

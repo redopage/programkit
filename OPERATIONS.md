@@ -6,15 +6,14 @@ canonical command and recovery-boundary reference.
 
 ## Prerequisites
 
-- Node.js with Corepack available
-- pnpm `11.20.0` (declared in `package.json`)
+- Node.js 24 or newer; `npm run setup` fetches the pinned pnpm `11.20.0` for you
 - A Cloudflare account and Wrangler login only when deploying
 
 ## Local development
 
 ```bash
-pnpm install
-pnpm dev
+npm run setup
+npm start
 ```
 
 Open `http://localhost:4173`. The Cloudflare Vite plugin runs the React application, Worker, and a
@@ -50,7 +49,7 @@ localhost callback, copy the example, add its client ID, and start ProgramKit:
 ```bash
 cp apps/cloudflare/.dev.vars.example .dev.vars
 # Add AIRTABLE_OAUTH_CLIENT_ID and the optional client secret.
-pnpm dev
+npm start
 ```
 
 Open `/integrations`, connect Airtable, grant a base, and let ProgramKit initialize or import it.
@@ -163,7 +162,13 @@ pnpm build:packages
 This emits ESM JavaScript and TypeScript declarations into each `packages/*/dist` directory, plus
 `packages/web/dist/styles.css`.
 
-Run individual or complete checks:
+Run the complete gate:
+
+```bash
+npm run verify
+```
+
+The individual steps, if you have pnpm on your `PATH`:
 
 ```bash
 pnpm test
@@ -171,11 +176,10 @@ pnpm lint
 pnpm format:check
 pnpm build
 pnpm plugin:validate
-pnpm check
 ```
 
 `pnpm build` builds the packages, runs the root TypeScript check, and creates the production
-Vite/Worker bundle. `pnpm check` runs the full sequence: domain and MCP tests, lint, formatting,
+Vite/Worker bundle. `npm run verify` runs the full sequence: domain and MCP tests, lint, formatting,
 production build, and plugin validation.
 
 ## Cloudflare deployment
@@ -199,9 +203,9 @@ pnpm deploy:app
 site exposes no workspace API. The demo has its own event-object namespace and no outbound email.
 The app has account and event-object namespaces plus a sender-restricted Cloudflare Email Service
 binding. It verifies staff and participant sessions, live event membership, record-scoped
-reviewer/speaker capabilities, event-scoped API keys, and private file access. Review the remaining
-account recovery, invitation lifecycle, file scanning/retention, backup, and monitoring requirements
-in `SECURITY.md` before using sensitive participant data.
+reviewer/speaker capabilities, event-scoped API keys, email-based password recovery, and private
+file access. Review the deployment's invitation assurance, file scanning/retention, backup, and
+monitoring requirements in `SECURITY.md` before using sensitive participant data.
 
 The configuration declares:
 
@@ -229,23 +233,23 @@ Then use an authenticated browser or event-scoped API key to check `/api/v1/heal
 operator, public agenda, and scoped portal routes. Confirm a draft schedule change does not affect
 the agenda until publication creates a new release.
 
-## Production enablement
+## Deployment acceptance
 
-The hosted app verifies staff sessions, participant sessions, event membership, record capabilities,
-and event-scoped API keys. Before pointing sensitive real data at it:
+The hosted app verifies staff sessions, participant sessions, event membership, record
+capabilities, and event-scoped API keys. Production approval belongs to a specific deployment:
 
-- add account recovery, ownership transfer, and deployment-appropriate MFA or external OIDC;
-- complete short-lived reviewer and speaker invitation exchange, rotation, and revocation;
-- add delegated OAuth before offering third-party MCP installation across many customer accounts;
-- add signed outbound webhooks with durable retry, replay protection, and delivery history;
-- complete email provider idempotency, bounce/complaint ingestion, recipient unsubscribe, and
-  dead-letter operations around the existing transactional outbox;
-- add malware scanning/quarantine, orphan cleanup, automatic retention and offboarding, storage
-  observability, and any deployment-specific signed-download policy around the existing private R2
-  upload, mediated download, and explicit owner-deletion path;
-- configure rate limits, alerts, structured logs, and incident procedures;
-- establish retention, deletion, legal-hold, backup, and restore policies;
-- complete every item in `SECURITY.md`.
+- every real event tests password recovery and the role handoffs against the deployed revision,
+  names an ownership-transfer contact, stores event and R2 exports outside the runtime, rehearses
+  restore, and configures monitoring and incident response;
+- a public CFP adds edge abuse controls, file scanning or quarantine, retention, deletion, and
+  storage observability appropriate to the data it accepts;
+- a deployment that enables bulk campaigns owns unsubscribe, bounce/complaint ingestion, and
+  provider failures; transactional-only installations may leave campaigns disabled; and
+- a third-party or enterprise installation adds delegated OAuth, MFA or external OIDC, or signed
+  outbound webhooks only when that deployment actually needs them.
+
+The [launch checklist](docs/self-hosting/launch-checklist.md) is the go/no-go procedure. These are
+operator controls around the released conference workflow, not a second application backlog.
 
 The anonymous demo still records inspectable delivery state without an outbound binding. The
 official app and a configured self-host use the durable outbox and provider binding. The Airtable
@@ -261,8 +265,8 @@ Email Routing address and is not the automated sender.
 One direct delivery smoke test should be run after changing the domain, binding, or DNS. Do not
 send from the public demo Worker. ProgramKit already stores durable outbox records, retry attempts,
 provider IDs, suppression, and operator-visible failures; the deployment operator must verify that
-path and complete the remaining provider controls listed above. Full setup and self-hosting guidance is in
-[Cloudflare email](docs/integrations/email.md).
+path and apply the delivery policy for transactional or bulk mail described above. Full setup and
+self-hosting guidance is in [Cloudflare email](docs/integrations/email.md).
 
 ## Backup, restore, and departure
 
@@ -301,5 +305,5 @@ target bookmark, confirmation, an operator audit record, and post-restore valida
 
 PITR is not a full-event reset. One restore affects only the event workspace Durable Object. Staff
 identity, event-access records, R2 file bytes, and external systems have separate owners and must be
-reconciled independently. PITR is unavailable in local development. For evaluator reruns, create a
-fresh event or hosted demo rather than restoring or deleting a live event.
+reconciled independently. PITR is unavailable in local development. For repeated acceptance
+checks, create a fresh event or hosted demo rather than restoring or deleting a live event.

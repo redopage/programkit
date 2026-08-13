@@ -42,6 +42,8 @@ async function body(response: Response) {
     identity?: { id: string; email: string }
     sessionToken?: string
     sessionExpiresAt?: string
+    deliver?: boolean
+    expiresAt?: string
     apiKey?: {
       id: string
       name: string
@@ -301,6 +303,72 @@ describe('EventAccessDurableObject', () => {
 
     expect(signup.status).toBe(400)
     expect(await body(signup)).toMatchObject({ code: 'INVALID_INPUT' })
+  })
+
+  it('issues hashed, expiring, single-use participant sign-in links', async () => {
+    await initialize()
+    await access.fetch(
+      request('/internal/event-access/external/password', {
+        eventId: event.id,
+        name: 'Magic Link Speaker',
+        email: 'speaker@example.com',
+        password: 'a-long-test-password',
+        intent: 'signup',
+        ipHash: 'signup-ip',
+      }),
+    )
+
+    const issuedResponse = await access.fetch(
+      request('/internal/event-access/external/magic-link/request', {
+        eventId: event.id,
+        email: 'Speaker@example.com',
+        ipHash: 'magic-link-ip',
+      }),
+    )
+    const issued = await body(issuedResponse)
+    expect(issuedResponse.status).toBe(200)
+    expect(issued).toMatchObject({
+      ok: true,
+      deliver: true,
+      email: 'speaker@example.com',
+      event,
+    })
+    expect(issued.token).toMatch(/^[a-f0-9]{64}$/u)
+    expect([...storage.values.keys()].some((key) => key.includes(issued.token!))).toBe(false)
+
+    const consumedResponse = await access.fetch(
+      request('/internal/event-access/external/magic-link/consume', {
+        eventId: event.id,
+        token: issued.token,
+      }),
+    )
+    const consumed = await body(consumedResponse)
+    expect(consumedResponse.status).toBe(200)
+    expect(consumed.identity).toMatchObject({ email: 'speaker@example.com' })
+    expect(consumed.sessionToken).toMatch(/^[a-f0-9]{64}$/u)
+
+    const replayed = await access.fetch(
+      request('/internal/event-access/external/magic-link/consume', {
+        eventId: event.id,
+        token: issued.token,
+      }),
+    )
+    expect(replayed.status).toBe(401)
+    expect(await body(replayed)).toMatchObject({ code: 'MAGIC_LINK_INVALID' })
+  })
+
+  it('does not reveal whether a participant account exists when requesting an email link', async () => {
+    await initialize()
+    const response = await access.fetch(
+      request('/internal/event-access/external/magic-link/request', {
+        eventId: event.id,
+        email: 'unknown@example.com',
+        ipHash: 'unknown-ip',
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await body(response)).toMatchObject({ ok: true, deliver: false, event })
   })
 
   it('counts participant password failures without throttling successful sign-ins', async () => {

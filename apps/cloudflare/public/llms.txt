@@ -6,8 +6,8 @@ ProgramKit can be used as hosted software, deployed as one Cloudflare applicatio
 
 ## Start here
 
-- [Documentation home](https://programkit.dev/docs.md): ProgramKit is an open-source conference-program starter that can be used as hosted software, self-hosted as one Cloudflare application, or adapted from source. The same repository contains the organizer interface,…
-- [Getting started](https://programkit.dev/docs/getting-started.md): ProgramKit can be explored without an account, deployed as one Cloudflare application, or cloned as an open-source starter. All three paths run the same product packages.
+- [Documentation home](https://programkit.dev/docs.md): ProgramKit runs a conference program from the call for proposals to the published agenda: intake, review, decisions, speaker onboarding, scheduling, and the public program. One repository holds the organizer app, the…
+- [Getting started](https://programkit.dev/docs/getting-started.md): The fastest way to understand ProgramKit is to run the sample and walk one proposal all the way to a published agenda. Allow about ten minutes.
 - [Set up your first event](https://programkit.dev/docs/getting-started/first-event.md): This walkthrough intentionally crosses every role. The organizer interface can look complete while a public form, invitation, portal, or feed is still misconfigured; testing the handoffs is part of setting up the event.
 - [Hosted, demo, or self-host](https://programkit.dev/docs/getting-started/choose-a-deployment.md): Choose the path that matches what you need to do today. The hosted app, disposable demo, local sample, and self-hosted installation share the same product code, but they do not have the same data lifetime or operational…
 - [Build and publish a CFP](https://programkit.dev/docs/guides/build-and-publish-a-cfp.md): This guide is for an organizer using the reference application and for an agent helping that organizer understand the same workflow. The reference host is seeded demo software; use sample data until the production…
@@ -15,8 +15,8 @@ ProgramKit can be used as hosted software, deployed as one Cloudflare applicatio
 ## Use ProgramKit
 
 - [Product and user guide](https://programkit.dev/docs/users.md): ProgramKit manages the program side of a conference: proposals, review, accepted speakers, sessions, requirements, files, communications, scheduling, and the public agenda. It deliberately does not try to become a…
-- [Organizer workflows](https://programkit.dev/docs/users/organizer-workflows.md): This guide follows the navigation an event team sees after signing in. Availability depends on the event role: owners and administrators can make changes; viewers receive read-only access.
-- [Participant experiences](https://programkit.dev/docs/users/participant-experiences.md): ProgramKit gives submitters, reviewers, accepted speakers, and attendees focused views instead of the organizer workspace. Each view has a smaller data projection and operation allowlist.
+- [Organizer workflows](https://programkit.dev/docs/users/organizer-workflows.md): What each area of the organizer workspace is for. Owners and administrators can make changes; viewers get read-only access.
+- [Participant experiences](https://programkit.dev/docs/users/participant-experiences.md): ProgramKit gives submitters, reviewers, accepted speakers, and attendees focused views instead of the organizer workspace. Each one receives less data and can take fewer actions.
 - [Roles and access](https://programkit.dev/docs/users/roles-and-access.md): ProgramKit separates installation policy, event-team membership, participant identity, and public event routing. These are different controls and should not be treated as one global role list.
 - [Reporting and exports](https://programkit.dev/docs/users/reporting-and-exports.md): ProgramKit reports around operational decisions instead of presenting a separate analytics product. The current product has useful live reports and portable exports, but it does not yet include a free-form report builder…
 - [Program lifecycle](https://programkit.dev/docs/product/program-lifecycle.md): ProgramKit is built around one conference-program job:

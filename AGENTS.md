@@ -7,7 +7,7 @@
 - Read [`ROADMAP.md`](ROADMAP.md) before expanding product scope.
 - Read [`docs/architecture/storage-and-integrations.md`](docs/architecture/storage-and-integrations.md)
   before changing Durable Object persistence, Airtable, D1, R2, mail, or background jobs.
-- Read [`docs/product/interface-craft.md`](docs/product/interface-craft.md) before changing UI; it
+- Read [`docs/developers/interface-craft.md`](docs/developers/interface-craft.md) before changing UI; it
   carries the four quality standards, the shared state primitives, and the review checklist.
 - Use [`docs/agents/contribution-playbook.md`](docs/agents/contribution-playbook.md) for a vertical
   change across core, projections, web, hosts, tests, and docs.
@@ -42,18 +42,25 @@
 ## Commands
 
 ```bash
-pnpm dev
+npm run setup    # first run only; installs the pinned pnpm and dependencies
+npm start        # reference assembly on http://localhost:4173
+npm run verify   # complete gate; required before handoff
+```
+
+These three need only Node.js 24 or newer. With pnpm on your `PATH` they are `pnpm install
+--frozen-lockfile`, `pnpm dev`, and `pnpm check`, and you can also run the individual steps:
+
+```bash
 pnpm test
 pnpm lint
 pnpm format:check
 pnpm docs:check
 pnpm build
-pnpm check
 ```
 
-`pnpm dev` runs the Cloudflare reference assembly on `http://localhost:4173`. `pnpm check` is the
-required full verification before handoff. `pnpm docs:check` verifies documentation H1s, local
-targets, and heading fragments during focused documentation work.
+`pnpm docs:check` verifies documentation H1s, local targets, and heading fragments during focused
+documentation work. `npm run verify` runs all of the above plus generated-artifact, OpenAPI, and
+plugin drift checks.
 
 ## Change placement
 

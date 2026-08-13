@@ -43,7 +43,8 @@ Use the guided CLI when you want collision checks, repeatable names, a selected 
 or a custom domain in the generated configuration:
 
 ```bash
-pnpm selfhost
+npm run cloudflare:login
+npm run selfhost
 ```
 
 This is the path the project verifies end to end. Follow [Cloudflare deployment](/docs/self-hosting/cloudflare.md).
@@ -94,14 +95,17 @@ Configure email before adding event teammates. Airtable is optional and experime
 7. Configure email only if the installation needs real delivery.
 8. Exercise the public, reviewer, speaker, file, API, and MCP handoffs before importing real data.
 
-See [First owner and access policy](/docs/self-hosting/first-owner.md) for the security model.
+See [First owner and access policy](/docs/self-hosting/first-owner.md) for the security model,
+[Configuration](/docs/self-hosting/configuration.md) for bindings, variables, secrets, and custom domains, and
+[Troubleshooting](/docs/self-hosting/troubleshooting.md) when a step does not behave as described.
 
 ## Before real participant data
 
-The repository is production-shaped but still marked active alpha. A production operator must own
-the remaining deployment-specific controls: account recovery and ownership transfer, MFA or OIDC
-where required, edge abuse protection, malware scanning and retention, complete backups, restore
-drills, monitoring, alerting, and incident response.
+The application is a release candidate; production approval is deployment-specific. A public event
+operator must test email recovery, name an ownership-transfer contact, and own edge abuse
+protection, file scanning and retention, complete backups, restore drills, monitoring, alerting, and
+incident response. MFA or external OIDC is required only when the deployment's assurance policy
+calls for it.
 
 Read [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) and [Administration](/docs/self-hosting/administration.md) before opening a public
 event. Record the decision with the [self-host launch checklist](/docs/self-hosting/launch-checklist.md).

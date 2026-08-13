@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -267,6 +267,30 @@ async function artifactMatches(path, expected) {
   }
 }
 
+// A page removed from `docs` must stop being served. The generator only writes files, so any
+// Markdown mirror left behind from an earlier run stays publicly fetchable until it is pruned.
+async function publishedMarkdownMirrors(directory) {
+  const found = []
+  let entries = []
+  try {
+    entries = await readdir(directory, { withFileTypes: true })
+  } catch {
+    return found
+  }
+  for (const entry of entries) {
+    const path = resolve(directory, entry.name)
+    if (entry.isDirectory()) found.push(...(await publishedMarkdownMirrors(path)))
+    else if (entry.isFile() && entry.name.endsWith('.md')) found.push(path)
+  }
+  return found
+}
+
+const expectedArtifacts = new Set(publicArtifacts.keys())
+const orphanedMirrors = [
+  ...(await publishedMarkdownMirrors(resolve(publicRoot, 'docs'))),
+  resolve(publicRoot, 'docs.md'),
+].filter((path) => !expectedArtifacts.has(path))
+
 if (checkOnly) {
   let current = ''
   try {
@@ -279,9 +303,16 @@ if (checkOnly) {
     if (!(await artifactMatches(path, content)))
       stalePublicArtifacts.push(relative(repositoryRoot, path))
   }
-  if (current !== generated || stalePublicArtifacts.length > 0) {
+  if (current !== generated || stalePublicArtifacts.length > 0 || orphanedMirrors.length > 0) {
     if (stalePublicArtifacts.length > 0) {
       console.error(`Stale machine-readable docs:\n${stalePublicArtifacts.join('\n')}`)
+    }
+    if (orphanedMirrors.length > 0) {
+      console.error(
+        `Published Markdown without a source page:\n${orphanedMirrors
+          .map((path) => relative(repositoryRoot, path))
+          .join('\n')}`,
+      )
     }
     console.error('Docs site content is stale. Run `pnpm docs-site:generate`.')
     process.exitCode = 1
@@ -295,5 +326,6 @@ if (checkOnly) {
     await mkdir(dirname(path), { recursive: true })
     await writeFile(path, content)
   }
+  for (const path of orphanedMirrors) await rm(path)
   console.log(`Generated docs site content (${pages.length} pages plus agent-readable formats).`)
 }

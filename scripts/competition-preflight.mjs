@@ -53,7 +53,7 @@ async function checkResponse(label, url, validate) {
 }
 
 function expectedEvaluatorCommit() {
-  const evidencePath = resolve(repositoryRoot, 'docs/product/evals/README.md')
+  const evidencePath = resolve(repositoryRoot, 'internal/evals/README.md')
   const evidence = readFileSync(evidencePath, 'utf8')
   return evidence.match(/`([a-f0-9]{40})`/u)?.[1]
 }

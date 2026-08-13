@@ -9,6 +9,7 @@ import {
 } from './password-rate-limit.ts'
 
 const invitationLifetimeMs = 7 * 24 * 60 * 60 * 1_000
+const externalMagicLinkLifetimeMs = 15 * 60 * 1_000
 const externalSessionLifetimeMs = 30 * 24 * 60 * 60 * 1_000
 const externalRateWindowMs = 60 * 60 * 1_000
 const minimumPasswordLength = 10
@@ -81,6 +82,12 @@ interface ExternalIdentity {
 }
 
 interface ExternalSession {
+  identityId: string
+  createdAt: string
+  expiresAt: string
+}
+
+interface ExternalMagicLink {
   identityId: string
   createdAt: string
   expiresAt: string
@@ -396,6 +403,95 @@ export class EventAccessDurableObject extends DurableObject {
 
   async #resetExternalPasswordFailures(emailHash: string) {
     await this.#ctx.storage.delete(`external-rate:password-failure:email:${emailHash}`)
+  }
+
+  async #externalMagicLinkRateAllows(key: string, limit: number) {
+    const now = Date.now()
+    const storageKey = `external-rate:magic-link:${key}`
+    const stored = (await this.#ctx.storage.get<ExternalRateRecord>(storageKey)) ?? {
+      attempts: [],
+    }
+    const attempts = stored.attempts.filter((attempt) => attempt > now - externalRateWindowMs)
+    if (attempts.length >= limit) return false
+    attempts.push(now)
+    await this.#ctx.storage.put(storageKey, { attempts })
+    return true
+  }
+
+  async #requestExternalMagicLink(input: Record<string, unknown>) {
+    const event = await this.#event(input.eventId)
+    const email = normalizeEmail(input.email)
+    if (!email) return { event, deliver: false as const }
+    const emailHash = await sha256(email)
+    const ipHash = typeof input.ipHash === 'string' ? input.ipHash : 'unknown'
+    const emailAllowed = await this.#externalMagicLinkRateAllows(`email:${emailHash}`, 5)
+    const ipAllowed = await this.#externalMagicLinkRateAllows(`ip:${ipHash}`, 20)
+    if (!emailAllowed || !ipAllowed) return { event, deliver: false as const }
+
+    const identityId = await this.#ctx.storage.get<string>(`external-email:${emailHash}`)
+    const identity = identityId
+      ? await this.#ctx.storage.get<ExternalIdentity>(`external-identity:${identityId}`)
+      : null
+    if (!identity || identity.eventId !== event.id) return { event, deliver: false as const }
+
+    const previousLinks = await this.#ctx.storage.list<ExternalMagicLink>({
+      prefix: 'external-magic:',
+    })
+    const previousKeys = [...previousLinks.entries()]
+      .filter(([, record]) => record.identityId === identity.id)
+      .map(([key]) => key)
+    if (previousKeys.length > 0) await this.#ctx.storage.delete(previousKeys)
+
+    const token = randomHex(32)
+    const tokenHash = await sha256(token)
+    const createdAt = new Date().toISOString()
+    const expiresAt = new Date(Date.now() + externalMagicLinkLifetimeMs).toISOString()
+    await this.#ctx.storage.put(`external-magic:${tokenHash}`, {
+      identityId: identity.id,
+      createdAt,
+      expiresAt,
+    } satisfies ExternalMagicLink)
+    await this.#scheduleCleanup(Date.parse(expiresAt))
+    return { event, deliver: true as const, token, expiresAt, email: identity.email }
+  }
+
+  async #consumeExternalMagicLink(input: Record<string, unknown>) {
+    const event = await this.#event(input.eventId)
+    const token = typeof input.token === 'string' ? input.token : ''
+    if (!/^[a-f0-9]{64}$/u.test(token)) {
+      throw new EventAccessError('MAGIC_LINK_INVALID', 'Sign-in link is invalid.', 401)
+    }
+    const tokenHash = await sha256(token)
+    const record = await this.#ctx.storage.get<ExternalMagicLink>(`external-magic:${tokenHash}`)
+    if (!record || Date.parse(record.expiresAt) <= Date.now()) {
+      if (record) await this.#ctx.storage.delete(`external-magic:${tokenHash}`)
+      throw new EventAccessError('MAGIC_LINK_INVALID', 'Sign-in link is invalid.', 401)
+    }
+    await this.#ctx.storage.delete(`external-magic:${tokenHash}`)
+    const identity = await this.#ctx.storage.get<ExternalIdentity>(
+      `external-identity:${record.identityId}`,
+    )
+    if (!identity || identity.eventId !== event.id) {
+      throw new EventAccessError('MAGIC_LINK_INVALID', 'Sign-in link is invalid.', 401)
+    }
+    const updatedIdentity = { ...identity, lastSignedInAt: new Date().toISOString() }
+    await this.#ctx.storage.put(`external-identity:${identity.id}`, updatedIdentity)
+
+    const sessionToken = randomHex(32)
+    const sessionHash = await sha256(sessionToken)
+    const session: ExternalSession = {
+      identityId: identity.id,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + externalSessionLifetimeMs).toISOString(),
+    }
+    await this.#ctx.storage.put(`external-session:${sessionHash}`, session)
+    await this.#scheduleCleanup(Date.parse(session.expiresAt))
+    return {
+      event,
+      identity: externalIdentityProjection(updatedIdentity),
+      sessionToken,
+      sessionExpiresAt: session.expiresAt,
+    }
   }
 
   async #authenticateExternal(input: Record<string, unknown>) {
@@ -1031,6 +1127,14 @@ export class EventAccessDurableObject extends DurableObject {
       if (expiresAt <= now) await this.#ctx.storage.delete(key)
       else next = next == null ? expiresAt : Math.min(next, expiresAt)
     }
+    const magicLinks = await this.#ctx.storage.list<ExternalMagicLink>({
+      prefix: 'external-magic:',
+    })
+    for (const [key, record] of magicLinks) {
+      const expiresAt = Date.parse(record.expiresAt)
+      if (expiresAt <= now) await this.#ctx.storage.delete(key)
+      else next = next == null ? expiresAt : Math.min(next, expiresAt)
+    }
     for (const [key, record] of await this.#ctx.storage.list<ExternalRateRecord>({
       prefix: 'external-rate:',
     })) {
@@ -1077,6 +1181,12 @@ export class EventAccessDurableObject extends DurableObject {
           { ok: true, ...(await this.#authenticateExternal(input)) },
           { status: input.intent === 'signup' ? 201 : 200 },
         )
+      }
+      if (path === '/internal/event-access/external/magic-link/request') {
+        return json({ ok: true, ...(await this.#requestExternalMagicLink(input)) })
+      }
+      if (path === '/internal/event-access/external/magic-link/consume') {
+        return json({ ok: true, ...(await this.#consumeExternalMagicLink(input)) })
       }
       if (path === '/internal/event-access/external/session') {
         return json({ ok: true, ...(await this.#externalSession(input)) })

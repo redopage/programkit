@@ -11,133 +11,54 @@ Source page: https://programkit.dev/docs
 
 # ProgramKit documentation
 
-ProgramKit is an open-source conference-program starter that can be used as hosted software,
-self-hosted as one Cloudflare application, or adapted from source. The same repository contains the
-organizer interface, participant surfaces, HTTP API, MCP server, portable Agent Plugin, and the
-domain rules that keep them consistent.
+ProgramKit runs a conference program from the call for proposals to the published agenda: intake,
+review, decisions, speaker onboarding, scheduling, and the public program. One repository holds the
+organizer app, the participant pages, the HTTP API, and the MCP server.
 
-The documentation is organized by what you are trying to do. Start with one path; follow the links
-to shared reference material only when you need the extra depth.
+## Run it
 
-## Start here
+```bash
+git clone https://forge.smol.ai/andheller/programkit.git
+cd programkit
+npm run setup
+npm start
+```
 
-| I want to…                                       | Start with                                                             |
-| ------------------------------------------------ | ---------------------------------------------------------------------- |
-| Understand what ProgramKit does                  | [Product and user guide](/docs/users.md)                              |
-| Try the complete workflow locally                | [Getting started](/docs/getting-started.md)                           |
-| Rehearse my first event end to end               | [Set up your first event](/docs/getting-started/first-event.md)              |
-| Deploy my own copy to Cloudflare                 | [Self-hosting overview](/docs/self-hosting.md)                        |
-| Choose the hosted app, demo, or self-hosting     | [Choose how to run ProgramKit](/docs/getting-started/choose-a-deployment.md) |
-| Administer accounts, access, files, and recovery | [Self-hosting administration](/docs/self-hosting/administration.md)          |
-| Integrate through HTTP                           | [HTTP API quickstart](/docs/api/quickstart.md)                               |
-| Connect Codex or another agent client            | [Connect an agent](/docs/agents/connect.md)                                  |
-| Make documentation readable by an agent          | [Agent-readable docs](/docs/developers/agent-readable-documentation.md)      |
-| Extend or rebrand the source                     | [Customize the starter](/docs/developers/customizing.md)                     |
-| Contribute a complete workflow                   | [Contributing](https://forge.smol.ai/andheller/programkit/blob/main/CONTRIBUTING.md)                                     |
-| Help as a coding agent                           | [Agent navigation](/docs/agents.md) and [`AGENTS.md`](https://forge.smol.ai/andheller/programkit/blob/main/AGENTS.md)   |
+Open `http://localhost:4173`. The sample data is seeded and deterministic. Nothing else is needed —
+no Cloudflare account, no email provider, no API key.
 
-## Product and user guides
+Prefer not to install anything? Open the [disposable demo](https://demo.programkit.dev), or read
+[Choose how to run ProgramKit](/docs/getting-started/choose-a-deployment.md) to compare the hosted app,
+the demo, and your own installation.
 
-- [Product and user guide](/docs/users.md): roles, surfaces, and the complete lifecycle.
-- [Set up your first event](/docs/getting-started/first-event.md): rehearse every handoff from CFP to
-  published program.
-- [Organizer workflows](/docs/users/organizer-workflows.md): forms, reviews, speakers, files,
-  communications, scheduling, CRM, and settings.
-- [Participant experiences](/docs/users/participant-experiences.md): submitter, reviewer, speaker, and
-  attendee views.
-- [Roles and access](/docs/users/roles-and-access.md): installation owners, event teams, invitations,
-  participant accounts, and scoped links.
-- [Reporting and exports](/docs/users/reporting-and-exports.md): the reporting available today, portable
-  exports, feeds, and honest gaps.
-- [Program lifecycle](/docs/product/program-lifecycle.md): the domain model behind the user journey.
+## Where to go next
 
-## Self-hosting and administration
+- **[Getting started](/docs/getting-started.md)** — the local sample, then
+  [a full event rehearsal](/docs/getting-started/first-event.md) that crosses every role from CFP to
+  published agenda.
+- **[Use ProgramKit](/docs/users.md)** — what organizers, submitters, reviewers, speakers, and
+  attendees each see and can do.
+- **[Self-hosting](/docs/self-hosting.md)** — deploy one Cloudflare Worker into your own account,
+  then operate it.
+- **[Developers](/docs/developers.md)** — how the repository is laid out, where a change belongs,
+  and which extension points are supported.
+- **[API and agents](/docs/api/quickstart.md)** — HTTP integration, [MCP](/docs/agents/connect.md), and the
+  portable Agent Plugin.
+- **Reference** — [routes and surfaces](/docs/reference/routes-and-surfaces.md),
+  [glossary](/docs/reference/glossary.md), and the architecture notes behind
+  [identity](/docs/architecture/identity-and-tenancy.md) and
+  [storage](/docs/architecture/storage-and-integrations.md).
 
-- [Self-hosting overview](/docs/self-hosting.md): what is deployed and which path to choose.
-- [Cloudflare deployment](/docs/self-hosting/cloudflare.md): one-click deployment and the verified CLI
-  walkthrough.
-- [First owner and access policy](/docs/self-hosting/first-owner.md): claim an installation safely and
-  choose open or invite-only organizer signup.
-- [Configuration reference](/docs/self-hosting/configuration.md): profiles, bindings, variables, secrets,
-  custom domains, email, and optional integrations.
-- [Administration](/docs/self-hosting/administration.md): keys, access, files, exports, updates, recovery,
-  and operating boundaries.
-- [Troubleshooting](/docs/self-hosting/troubleshooting.md): common setup, R2, login, API, MCP, and file
-  problems.
-- [Launch checklist](/docs/self-hosting/launch-checklist.md): decide whether an evaluation, private pilot,
-  or public event is ready for real data.
-- [Deployment architecture](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md), [operations](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md), and
-  [security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md): canonical production detail.
+## Before you trust it with real data
 
-## Developer and extension guides
+ProgramKit is a release candidate for evaluation and controlled conference-team pilots.
+[`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md) states what works today and separates the four production acceptance
+gates from optional future extensions. Every page here uses the same
+[capability status vocabulary](/docs/reference/capability-status.md), so "included," "optional,"
+"experimental," and "planned" mean the same thing wherever you read them.
 
-- [Developer guide](/docs/developers.md): setup, repository shape, and change workflow.
-- [Customize the starter](/docs/developers/customizing.md): exact branding, provider, field, module, and
-  fork-maintenance touchpoints.
-- [Repository tour](/docs/developers/repository-tour.md): package ownership and request flow.
-- [Extending ProgramKit](/docs/developers/extending-programkit.md): add a workflow, projection, route,
-  integration, agent capability, or deployment profile without bypassing invariants.
-- [Architecture](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md): domain engine, persistence, projections, and platform
-  boundaries.
-- [Contribution playbook](/docs/agents/contribution-playbook.md): trace one vertical change from core to
-  docs.
-- [Interface craft](/docs/product/interface-craft.md): UI quality and state standards.
-- [Contributing documentation](/docs/contributing-documentation.md): audience routing, page patterns,
-  status language, and validation.
-
-## API, agents, and integrations
-
-- [HTTP API quickstart](/docs/api/quickstart.md), complete [HTTP API](/docs/api.md), and generated
-  [OpenAPI 3.1 contract](/docs/api/openapi.json).
-- [Connect an agent](/docs/agents/connect.md): direct MCP or the portable plugin package.
-- [Agent recipes](/docs/agents/recipes.md): safe prompts for readiness, reminders, scheduling,
-  publication, and reconciliation.
-- [Agent Plugins and MCP](/docs/integrations/agent-plugins.md): packaging, client-managed authentication,
-  and distribution.
-- [Agent-readable documentation](/docs/developers/agent-readable-documentation.md): `llms.txt`, Markdown
-  pages, content negotiation, server logs, and the JavaScript boundary.
-- [`@programkit/agent`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md): protocol, tool, and resource reference.
-- [Airtable](/docs/integrations/airtable.md): optional experimental integration.
-- [Email](/docs/integrations/email.md): optional delivery and magic-link configuration.
-- [Accelevents handoff](/docs/integrations/accelevents.md): portable published-program package.
-
-## Reference
-
-- [Routes and surfaces](/docs/reference/routes-and-surfaces.md): stable human-facing paths and their trust
-  boundaries.
-- [Glossary](/docs/reference/glossary.md): ProgramKit product and architecture terms.
-- [Capability status vocabulary](/docs/reference/capability-status.md): included, optional, experimental,
-  operator-supplied, planned, and out-of-scope claims.
-- [Product status and roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md): what works, what is deliberately absent, and what
-  still needs production hardening.
-- [Identity and tenancy](/docs/architecture/identity-and-tenancy.md): account, membership, event, and file
-  ownership.
-- [Storage and integrations](/docs/architecture/storage-and-integrations.md): Durable Objects, R2,
-  Airtable, D1, and portability.
-
-## Sources of truth
-
-ProgramKit keeps one canonical fact and links to it from audience guides. This avoids a user guide,
-developer guide, and agent guide silently describing different products.
-
-| Question                                           | Canonical document or code                                                                 |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| What is in scope and what is complete?             | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md)                                                              |
-| What is the end-to-end product journey?            | [`program-lifecycle.md`](/docs/product/program-lifecycle.md)                                     |
-| Why are packages and hosts separated?              | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md)                                                    |
-| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)                                                        |
-| Which service owns each kind of data?              | [`storage-and-integrations.md`](/docs/architecture/storage-and-integrations.md)                  |
-| Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](/docs/architecture/identity-and-tenancy.md)                          |
-| How is an installation operated?                   | [`OPERATIONS.md`](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md)                                                        |
-| What must be hardened before sensitive data?       | [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md)                                                            |
-| Which named operations exist?                      | `packages/core/src/manifest.ts`                                                            |
-| Which HTTP resources exist?                        | [`docs/api/README.md`](/docs/api.md) and [`openapi.json`](/docs/api/openapi.json)               |
-| What does the domain store?                        | `packages/core/src/types.ts`                                                               |
-| Which browser routes exist?                        | `packages/web/src/routes` and [`routes-and-surfaces.md`](/docs/reference/routes-and-surfaces.md) |
-| Which MCP tools and resources exist?               | [`packages/agent/README.md`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md)                                  |
-
-When code, tests, and prose disagree, verify the executable behavior, update the canonical source,
-and fix the incoming links in the same change. Do not resolve drift by adding another summary.
+Read [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) and work through the
+[launch checklist](/docs/self-hosting/launch-checklist.md) before a real event.
 
 ---
 
@@ -177,7 +98,7 @@ Coding agents must read the root [`AGENTS.md`](https://forge.smol.ai/andheller/p
 | Product scope or capability claim    | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md)                                        |
 | End-to-end user journey              | [Program lifecycle](/docs/product/program-lifecycle.md)                    |
 | Package or persistence design        | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md)                              |
-| UI work                              | [Interface craft](/docs/product/interface-craft.md)                        |
+| UI work                              | [Interface craft](/docs/developers/interface-craft.md)                     |
 | Cloudflare assembly or profile       | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)                                  |
 | Identity, tenancy, or files          | [Identity and tenancy](/docs/architecture/identity-and-tenancy.md)         |
 | Airtable, R2, D1, or background work | [Storage and integrations](/docs/architecture/storage-and-integrations.md) |
@@ -595,6 +516,8 @@ These browser endpoints are available only on the hosted app. Mutations require 
 | `GET`    | `/api/v1/crm/state`             | Read the signed-in organization's contact projection |
 | `POST`   | `/api/v1/crm/operations/{name}` | Run an organization CRM operation                    |
 | `POST`   | `/public/v1/access/password`    | Create or restore an event participant account       |
+| `POST`   | `/public/v1/access/magic-link`  | Request a one-time participant sign-in link          |
+| `GET`    | `/access/verify?event=...`      | Exchange the link for a participant session          |
 | `GET`    | `/public/v1/access/session`     | Resolve that account's event-scoped destinations     |
 | `POST`   | `/public/v1/access/logout`      | Revoke the participant session                       |
 
@@ -605,11 +528,19 @@ required `newPassword`. Setting a password on a passwordless account needs only 
 session. Success revokes other sessions and pending magic links. Session reads expose only an opaque
 ID and creation/expiry times; the current session can be ended only through logout.
 
+Choosing **Forgot password?** requests the same enumeration-resistant email delivery with a
+recovery intent. Its single-use callback grants that session 15 minutes to set a new password
+without the old one. A successful reset consumes the grant, revokes other sessions, and invalidates
+pending links. An ordinary magic-link sign-in does not bypass the current-password check.
+
 Participant credentials use the same password policy but a separate per-event session. They never
 create a staff membership. After authentication, the Worker matches the normalized account email
 to submissions, reviewer records, and accepted-speaker participation records in that event. It
 returns only the corresponding record-scoped destinations. The underlying capability remains the
-authorization boundary for each projected surface.
+authorization boundary for each projected surface. When email is configured, an existing
+participant account can request a hashed, 15-minute, single-use sign-in link. The general discovery
+route sends one email containing an event-scoped link for every matching participant account while
+returning the same browser response when no account matches.
 
 Event team access uses these same-origin browser endpoints:
 
@@ -827,9 +758,10 @@ time, and then revoking the old key. Use one key per client so rotation and inci
 not interrupt unrelated integrations. Prefer a finite expiry and the **Agent operations** preset
 for MCP clients.
 
-## Production API milestones
+## Optional API extensions
 
-The next API work is intentionally practical:
+The released browser, API-key, and MCP workflows do not require these extensions. Add one only
+when a demonstrated integration needs it:
 
 1. Signed webhooks with endpoint subscriptions, retry history, replay, and secret rotation.
 2. Bulk import operations capped at a documented batch size with per-item results.
@@ -1159,8 +1091,10 @@ normalized email, usable once, and expired after seven days. Accepting an invita
 account switcher projection. Revocation removes that projection after the authoritative event
 membership is disabled.
 
-Account recovery, ownership transfer, and deployment-specific MFA or external OIDC policy remain
-future hardening.
+Staff password recovery uses a distinct email-link intent. Consuming the 15-minute, single-use link
+creates a session with a short reset grant; changing the password consumes the grant, revokes other
+sessions, and invalidates pending links. Ownership transfer remains operator-assisted. MFA or
+external OIDC is a deployment-specific extension rather than a baseline event requirement.
 
 ## One workspace object per event
 
@@ -1481,6 +1415,27 @@ Put a fact in its canonical document and link to it from audience entry points. 
 slightly different copies of an API route list, deployment topology, security boundary, or
 capability claim.
 
+### One canonical answer per question
+
+| Question                                           | Canonical document or code                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| What is in scope and what is complete?             | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md)                                                              |
+| What is the end-to-end product journey?            | [`program-lifecycle.md`](/docs/product/program-lifecycle.md)                                     |
+| Why are packages and hosts separated?              | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md)                                                    |
+| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)                                                        |
+| Which service owns each kind of data?              | [`storage-and-integrations.md`](/docs/architecture/storage-and-integrations.md)                  |
+| Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](/docs/architecture/identity-and-tenancy.md)                          |
+| How is an installation operated?                   | [`OPERATIONS.md`](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md)                                                        |
+| What must be hardened before sensitive data?       | [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md)                                                            |
+| Which named operations exist?                      | `packages/core/src/manifest.ts`                                                            |
+| Which HTTP resources exist?                        | [`docs/api/README.md`](/docs/api.md) and [`openapi.json`](/docs/api/openapi.json)               |
+| What does the domain store?                        | `packages/core/src/types.ts`                                                               |
+| Which browser routes exist?                        | `packages/web/src/routes` and [`routes-and-surfaces.md`](/docs/reference/routes-and-surfaces.md) |
+| Which MCP tools and resources exist?               | [`packages/agent/README.md`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md)                                  |
+
+When code, tests, and prose disagree, verify the executable behavior, update the canonical source,
+and fix the incoming links in the same change. Do not resolve drift by adding another summary.
+
 ## Use the right page shape
 
 A task page should answer, in order:
@@ -1658,7 +1613,7 @@ production Worker build, OpenAPI validation, and plugin validation.
 
 Read [Roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md), [Architecture](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md),
 [Storage and integrations](/docs/architecture/storage-and-integrations.md), and
-[Interface craft](/docs/product/interface-craft.md). Then describe the user outcome, trust boundary,
+[Interface craft](/docs/developers/interface-craft.md). Then describe the user outcome, trust boundary,
 new invariant, and smallest complete vertical slice before adding code.
 
 See [Contributing](https://forge.smol.ai/andheller/programkit/blob/main/CONTRIBUTING.md) for repository policy, the
@@ -2046,6 +2001,155 @@ self-host intentionally keeps them on one origin.
 
 ---
 
+Source page: https://programkit.dev/docs/developers/interface-craft
+
+<!-- Canonical: https://programkit.dev/docs/developers/interface-craft -->
+<!-- Markdown: https://programkit.dev/docs/developers/interface-craft.md -->
+
+# Interface craft
+
+ProgramKit is judged on whether an organizer would rather use it than pay for the SaaS it replaces.
+That is a craft question before it is a feature question. This page is the standard the interface is
+held to, and the checklist a change is reviewed against.
+
+## The four qualities
+
+Every interface decision is evaluated against these, in this order:
+
+- **Calm.** Complicated event work should feel manageable. One dominant thing per screen; the rest
+  supports it.
+- **Capable.** Dense operational tooling without enterprise heaviness. Density is achieved by
+  removing structure, not by shrinking type.
+- **Fast.** Immediate response, stable layout, minimal waiting. Perceived speed is part of the
+  design, not a build-time concern.
+- **Cared-for.** Language, edge cases, and motion are finished, not defaulted.
+
+"Modern" and "polished" are not standards. These are.
+
+## Reduce structural noise
+
+- One dominant content edge per screen. Sections align to it rather than nesting new margins.
+- Titles are short and usually one line. The page header carries the object, not a sentence about it.
+- No eyebrow labels unless they carry information the title cannot.
+- No subtitle that restates its title. If the subtitle only rephrases, delete it.
+- Related numbers live in one grid with dividers, never one box per number.
+- Content inside the workspace panel does not get its own card. Whitespace first, then a divider,
+  then a well; a card only for something independently interactive.
+- One primary button per screen. Every other action is secondary, ghost, or a text button.
+
+## Design around the current phase
+
+The organizer's progression is
+`Configure → Collect → Review → Decide → Prepare speakers → Schedule → Publish`.
+
+Navigation stays module-based, but each screen should answer: where am I, what needs attention now,
+what can wait, and what happens after this. Presenting every record and alert at equal prominence is
+the failure mode to avoid.
+
+## Dashboards report jobs, not numbers
+
+An overview that says "36 blockers" leaves the triage work to the reader. `nextActions` in
+`packages/core/src/selectors.ts` is the canonical projection: it groups outstanding work into jobs
+that carry a verb, a size, and a destination, so each row can be acted on directly. New summary
+surfaces should extend that selector rather than counting records in a view.
+
+Long tails fold behind a disclosure. Six visible groups is the current cap.
+
+## States are design artifacts, not QA discoveries
+
+Every consequential surface needs its states designed alongside the happy path:
+
+- Submission: draft, submitted, in review, decided.
+- Review: pending, assigned, partially reviewed, fully reviewed.
+- Schedule: unscheduled, scheduled, conflicting, released.
+- Publishing: draft, publishing, published, closing, closed.
+- Requests: saving, saved, conflicted, failed.
+
+Shared primitives exist so these look the same everywhere: `EmptyState` (with `tone="settled"` for a
+finished queue), `ErrorState` with a local retry, `SkeletonRows`, `StatusBadge`. A filtered list that
+can reach zero rows must render an empty state, and that empty state should offer the action that
+resolves it.
+
+## Make speed visible
+
+- Show cached data immediately; all operator routes share one workspace query so moving between them
+  does not refetch.
+- A failure retries in place. Never reset a workflow or lose scroll position to recover one panel.
+- First paint shows the workspace silhouette, not a centred spinner, so nothing jumps when data
+  lands.
+- Optimistic updates are for safe, reversible actions only.
+
+## Radius and elevation
+
+- Compact action groups may use a full pill radius when their neighboring controls share the same
+  height and treatment. Search fields, filter tabs, badges, and chips are pills by default. Text
+  inputs and textareas keep a generous finite radius so long values still read as fields rather
+  than capsules.
+- A row of related controls must share a height, label scale, and optical icon padding. Compact
+  desktop actions use smaller labels than full-size form controls; mobile actions retain the
+  accessible type and touch-target scale.
+- Workspace panels and dialogs use the larger shared radius scale. Closely nested surfaces define
+  their radius and padding as variables, then subtract the padding for an exactly concentric inner
+  edge.
+- Translucency belongs to temporary elevated surfaces only. Dark menus, shortcut guides, and toasts
+  use a nearly opaque zinc surface with background blur; persistent content panels remain solid.
+
+## Keyboard navigation
+
+The operator workspace has one shared command system. `/` opens global search, `Command-K` on Apple
+platforms or `Control-K` elsewhere opens the same command menu, and `?` opens its shortcut guide.
+Search matches page names, workflow language, and useful synonyms rather than routes alone. Inside
+the command menu, arrow keys move the selection, `Enter` opens it, and `Escape` closes the menu.
+
+The small set of navigation chords follows established web-app conventions and covers only the
+highest-frequency operator destinations:
+
+| Shortcut | Destination |
+| -------- | ----------- |
+| `G O`    | Overview    |
+| `G S`    | Submissions |
+| `G R`    | Review      |
+| `G A`    | Agenda      |
+| `G T`    | Tasks       |
+
+Keyboard commands never fire while the user is typing into an input, textarea, select, ARIA textbox,
+or editable region. Rich editors can also mark a wrapper with `data-shortcuts-disabled`. Modals trap
+and restore focus, `Escape` closes them, and reduced-motion preferences disable their entrance
+animation.
+
+## Navigation hierarchy
+
+The sidebar contains the event workflow people use every day. Infrastructure, change review, agent
+tools, and public links remain available through the workspace menu and command search without
+competing with the core program path. Navigation labels and icons must stay legible at a glance;
+color can distinguish workflow families, but never carries meaning by itself.
+
+## Reserve delight for consequential moments
+
+Distinctive motion and language are spent on: publishing the first CFP, the first proposal arriving,
+accepting a speaker, a speaker completing readiness, resolving the last schedule conflict, and
+publishing the public agenda. Routine filtering and table sorting get none of it.
+
+## What not to borrow
+
+No gradients on every card, no continuous decorative motion, no heavy glass, no custom replacements
+for familiar controls, no card around every piece of information, no animation that blocks rapid
+operation, and no label explaining obvious UI.
+
+## Review checklist
+
+Before a UI change lands:
+
+1. Does the screen have one dominant edge and one primary action?
+2. Did anything gain a card, a border, or a subtitle it did not need?
+3. Are empty, loading, and error states present for every list this change can empty?
+4. Do new numbers appear in an existing grid rather than a new box?
+5. Is the icon set Heroicons Micro, at `size-4`, with `shrink-0`?
+6. Does it hold up at 375px and at 1440px, and does the mobile type scale up rather than down?
+7. Does `pnpm check` pass?
+
+---
+
 Source page: https://programkit.dev/docs/developers/repository-tour
 
 <!-- Canonical: https://programkit.dev/docs/developers/repository-tour -->
@@ -2185,27 +2289,12 @@ Source page: https://programkit.dev/docs/getting-started
 
 # Getting started
 
-ProgramKit can be explored without an account, deployed as one Cloudflare application, or cloned
-as an open-source starter. All three paths run the same product packages.
+The fastest way to understand ProgramKit is to run the sample and walk one proposal all the way to
+a published agenda. Allow about ten minutes.
 
-## Choose the shortest useful path
+## Run the sample
 
-| Goal                             | Time to first screen | External account | Use this path                                          |
-| -------------------------------- | -------------------- | ---------------- | ------------------------------------------------------ |
-| Evaluate the hosted application  | Immediate            | ProgramKit       | [Choose how to run ProgramKit](/docs/getting-started/choose-a-deployment.md) |
-| Try a disposable hosted sample   | Immediate            | None             | [Open the demo](https://demo.programkit.dev)           |
-| Inspect a deterministic sample   | A few minutes        | None             | [Run locally](/docs/guides/local-development.md)          |
-| Own the runtime and stored data  | About 5–10 minutes   | Cloudflare       | [Deploy to Cloudflare](/docs/self-hosting/cloudflare.md)  |
-| Rebrand or add product behavior  | After local setup    | None             | [Developer guide](/docs/developers.md)             |
-| Connect an AI client to an event | A few minutes        | Running install  | [Connect an agent](/docs/agents/connect.md)               |
-
-The local sample is deterministic and uses sample data. A self-host includes real account and
-event isolation, but production operators should still review [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) before
-accepting sensitive participant data.
-
-## Run the complete sample locally
-
-Prerequisites: Git and Node.js 24 or newer. No global pnpm or Corepack installation is required.
+You need Git and Node.js 24 or newer.
 
 ```bash
 git clone https://forge.smol.ai/andheller/programkit.git
@@ -2214,60 +2303,41 @@ npm run setup
 npm start
 ```
 
-Open `http://localhost:4173`. One process starts the React application, Cloudflare Worker, and
-local SQLite-backed Durable Objects. It does not need a Cloudflare login, R2, email, Airtable, or an
-API key.
+Open `http://localhost:4173`. One process runs the React application, the Cloudflare Worker, and
+local SQLite-backed Durable Objects. There is no Cloudflare login, R2 bucket, email provider, or API
+key involved, and the seeded data is the same every time you reset it.
 
-Try the lifecycle in this order:
+## Walk the lifecycle
 
-1. Build or inspect a call for proposals in **Forms**.
-2. Submit a proposal through the public form.
-3. Assign and complete a review.
-4. Accept the proposal and inspect the resulting speaker, task, and session.
-5. Complete work in the speaker portal.
-6. Place the session, run schedule preflight, and publish.
-7. Open the public agenda and confirm it reads the immutable release.
-
-Use [Set up your first event](/docs/getting-started/first-event.md) for the role-crossing rehearsal and the detailed
-[local development walkthrough](/docs/guides/local-development.md) for sample routes, reset
-instructions, and verification commands.
-
-## Deploy your own installation
-
-The quickest path is the repository's **Deploy to Cloudflare** button. The most repeatable path is
-the guided CLI:
-
-```bash
-pnpm selfhost
-```
-
-Both produce one origin containing the web app, accounts, events, public pages, HTTP API, MCP
-server, and plugin download. Continue with the [self-hosting overview](/docs/self-hosting.md),
-then use the [launch checklist](/docs/self-hosting/launch-checklist.md) before real participant data.
-
-## Understand the product before configuring it
-
-ProgramKit follows one spine:
+Every ProgramKit event follows one spine:
 
 ```text
 configure event → publish CFP → receive proposals → review → decide
                 → onboard speakers → schedule sessions → publish program
 ```
 
-The organizer, submitter, reviewer, speaker, and attendee do not see one unrestricted database.
-They receive separate projections and operation allowlists. Read the [user guide](/docs/users.md)
-for the surfaces and [program lifecycle](/docs/product/program-lifecycle.md) for the underlying model.
+Try it in that order:
 
-## Verify a source change
+1. Inspect the call for proposals in **Forms**.
+2. Submit a proposal through the public form.
+3. Assign and complete a review.
+4. Accept the proposal, then look at the speaker, task, and session it created.
+5. Complete the assigned work in the speaker portal.
+6. Place the session, run schedule preflight, and publish.
+7. Open the public agenda.
 
-Run the same complete gate used by CI:
+Organizers, submitters, reviewers, speakers, and attendees never share one view of the data. Each
+role receives only the data and actions it needs, which is why step 7 looks nothing like step 1.
 
-```bash
-npm run verify
-```
+## Next
 
-It runs tests, linting, formatting checks, generated plugin drift checks, TypeScript and production
-builds, OpenAPI drift checks, and plugin validation.
+- [Set up your first event](/docs/getting-started/first-event.md) — the same journey run as a rehearsal, with a
+  checkpoint after every handoff.
+- [Local development](/docs/guides/local-development.md) — sample routes, resetting the seed, and the
+  verification commands.
+- [Deploy your own installation](/docs/self-hosting.md) — one Cloudflare Worker in your own
+  account.
+- [Choose how to run ProgramKit](/docs/getting-started/choose-a-deployment.md) — hosted app, demo, self-host, or fork.
 
 ---
 
@@ -2296,7 +2366,7 @@ data lifetime or operational owner.
 Open [app.programkit.dev/signup](https://app.programkit.dev/signup) when you need to test the real
 account and event model. A new organizer can create an isolated event, invite collaborators,
 exercise participant links, and publish public program surfaces. This is the correct entry point
-for competition evaluators and product review.
+for product evaluation and controlled conference-team pilots.
 
 The hosted app is an evaluation deployment, not a promise of general-availability production
 hosting or a service-level agreement. Confirm support, retention, privacy, and operating terms
@@ -2305,7 +2375,7 @@ before relying on it for a live event.
 ## Use the demo for a quick product tour
 
 Open [demo.programkit.dev](https://demo.programkit.dev) when you want to explore seeded conference
-data without an account. The demo creates a private capability link and expires automatically after
+data without an account. The demo creates a private access link and expires automatically after
 seven days.
 
 The demo is useful for learning the workflow. It is not evidence of account provisioning,
@@ -2332,7 +2402,7 @@ turn a new installation into a production service automatically. Read the
 ## Fork only when configuration is not enough
 
 Branding, event settings, forms, tracks, rooms, and optional integrations are configuration. Fork
-the source when you need different domain operations, projections, routes, or agent skills.
+the source when you need different operations, data views, routes, or agent skills.
 
 A fork gives you product control and also makes your team responsible for reviewing upstream
 changes and resolving upgrade conflicts. Use the
@@ -2341,7 +2411,8 @@ preserve the named-operation and authorization boundaries.
 
 ## Still deciding?
 
-- Reviewing the submission: use the [hosted signup](https://app.programkit.dev/signup).
+- Evaluating the complete account-based product: use the
+  [hosted signup](https://app.programkit.dev/signup).
 - Taking a five-minute tour: use the [disposable demo](https://demo.programkit.dev).
 - Rehearsing the whole workflow offline: [run the local sample](/docs/guides/local-development.md).
 - Preparing a customer-owned installation: read the [self-hosting overview](/docs/self-hosting.md).
@@ -2414,8 +2485,8 @@ Open **Review** and create an evaluation plan with criteria, weights, blind-revi
 and assignments. Open a reviewer invitation in a signed-out browser and submit a complete
 scorecard.
 
-If the review is blind, confirm identity-revealing fields are absent from the reviewer projection,
-not merely hidden by CSS.
+If the review is blind, confirm identity-revealing fields are absent from the data the reviewer
+receives, not merely hidden by CSS.
 
 **Ready when:** reviewer progress and the submitted scorecard appear in the committee view.
 
@@ -2500,8 +2571,8 @@ until the production requirements in [Security](https://forge.smol.ai/andheller/
 ## Start locally
 
 ```bash
-pnpm install
-pnpm dev
+npm run setup
+npm start
 ```
 
 Open `http://localhost:4173/forms`. The seed includes an open general CFP and a separate invited
@@ -3257,8 +3328,8 @@ The hosted app sign-in screen, password derivation, email delivery, one-time exc
 validation, event membership, team invitations, event creation, switching, and logout are
 implemented. Public participants can create a separate event-scoped password account and recover
 matching submission, reviewer, and speaker capabilities by normalized email. Authenticated
-password changes and other-session revocation are implemented; account recovery and optional MFA
-remain. See
+password changes, email-based password recovery, and other-session revocation are implemented.
+Optional MFA or external OIDC remains deployment-specific. See
 [Identity, events, and storage ownership](/docs/architecture/identity-and-tenancy.md).
 
 ## Required delivery path
@@ -3309,1349 +3380,6 @@ manual suppression, and safe pre-provider cancellation. Event-scoped participant
 implemented; stronger reviewer and speaker invitation lifecycle, edge abuse controls, self-service
 unsubscribe, provider bounce/complaint ingestion, and a final live-inbox acceptance run are still
 required before sending to a real event.
-
----
-
-Source page: https://programkit.dev/docs/product/competition-endgame
-
-<!-- Canonical: https://programkit.dev/docs/product/competition-endgame -->
-<!-- Markdown: https://programkit.dev/docs/product/competition-endgame.md -->
-
-# Competition endgame
-
-Deadline: **Wednesday 12 August 2026, 10:00 PM PT**.
-
-ProgramKit has moved past feature triage. The required workflows and optional Speaker CRM are
-implemented. The endgame is now about trustworthy hosted execution, evaluator discoverability,
-manual delivery evidence, and a clean public handoff.
-
-The repeatable production checks and latest verified evidence live in
-[`hosted-verification.md`](/docs/product/hosted-verification.md).
-
-## Submission target
-
-Use `https://app.programkit.dev` as the evaluator origin. It supports fixture-compatible
-email/password signup, multiple isolated events, same-origin public routes, and scoped participant,
-reviewer, and speaker access. Do not submit the marketing homepage or make the evaluator create a
-disposable demo first.
-
-Forge is the primary source host:
-
-```text
-https://forge.smol.ai/andheller/programkit
-```
-
-GitHub remains a synchronized mirror for Cloudflare's one-click deploy flow.
-
-## Final execution order
-
-### 1. Freeze product state
-
-- Run `pnpm check` on the exact candidate commit.
-- Deploy that commit to the app, demo, and site profiles.
-- Record the Worker version and both source-host commit URLs.
-- Make no unrelated visual changes after the evidence run starts.
-
-### 2. Run the full evaluator chain
-
-- Run `PROGRAMKIT_PUBLIC_EVENT_ID=<published-event-id> pnpm competition:preflight` and resolve every
-  failure before spending model tokens on the evaluator.
-- Create a fresh organizer account and the fixture event through the browser.
-- Execute the 20 scenarios in file order from `killmysaas-evals/specs`.
-- Capture before and after reload evidence for every persisted transition.
-- Record any place where the evaluator chooses the wrong route or misses an affordance, then fix
-  the product vocabulary or navigation rather than editing state.
-- Reset and run the chain a second time.
-
-### 3. Complete manual checks
-
-- Deliver submission confirmation, decision, reviewer reminder, speaker invitation, bulk speaker
-  email, CRM outreach, and automatic task reminder to controlled mailboxes.
-- Verify merge tags resolved and the calendar attachment imports into Gmail, Outlook, or Apple
-  Calendar with the right title, time, and location.
-- Download review CSV, logical workspace ZIP, selected-files ZIP, and iCal output and inspect their
-  contents.
-- Paste the public iframe into another origin and verify all selected filters and detail views.
-
-### 4. Prepare the public repository
-
-- Keep `README.md`, `ROADMAP.md`, `SECURITY.md`, `DEPLOYMENT.md`, and the evaluator maps current.
-- Confirm no archives, credentials, browser profiles, private fixtures, or generated evaluator
-  reports are tracked.
-- Verify the one-click deploy instructions from a clean clone.
-- Keep the repository small. Screenshot capture tools and private competition notes stay outside
-  this source tree.
-
-### 5. Prepare submission notes
-
-Include:
-
-- the organizer signup route;
-- the event switcher and new-event flow;
-- route names for Forms, Submissions, Review, Speakers, Tasks, Files, Communications, Agenda, CRM,
-  and Integrations;
-- how organizer-generated reviewer and speaker links work;
-- where delivery history and API keys are visible;
-- how to provision a second disposable evaluator account; and
-- the exact source commit and deployment version.
-
-## Stop conditions
-
-Do not add another provider, deployment target, database, or agent capability before submission.
-Only change code that fixes a broken evaluator journey, data integrity issue, security boundary,
-manual-delivery failure, or severe presentation defect.
-
-The project wins by feeling coherent and dependable from CFP through published program, not by
-having the longest feature list.
-
----
-
-Source page: https://programkit.dev/docs/product/evals/01-call-for-papers
-
-<!-- Canonical: https://programkit.dev/docs/product/evals/01-call-for-papers -->
-<!-- Markdown: https://programkit.dev/docs/product/evals/01-call-for-papers.md -->
-
-# Call for Papers evaluation
-
-This is the implementation and verification map for
-`killmysaas-evals/specs/01-call-for-papers.yaml`. It describes exercised behavior, not seeded
-screenshots.
-
-## Current coverage
-
-| Rubric | Status   | ProgramKit evidence                                                                                                                                                                                                   |
-| ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CFP-01 | Verified | The form builder adds text, long-text, select, file, and other question types, including required flags. The public renderer and operation boundary validate visible required fields.                                 |
-| CFP-02 | Verified | Fields can depend on another answer through equals, not-equals, or includes rules. The same visibility selector drives the builder preview, public form, and submit validation.                                       |
-| CFP-03 | Verified | The public route requires no login and shows event identity, location, close date, configured form fields, tracks, formats, and select options.                                                                       |
-| CFP-04 | Verified | Organizers edit opening and closing times in the event timezone. Scheduled and closed forms remain readable publicly while create, update, and submit operations reject writes outside the window.                    |
-| CFP-05 | Verified | A speaker capability is created on first draft, stored locally, and returned in the private dashboard URL. A completed proposal submits with an on-screen confirmation and status.                                    |
-| CFP-06 | Verified | Organizer submission detail resolves the same stored answers, participants, track, format, and custom fields supplied through the public form. Core and HTTP tests cover the round trip.                              |
-| CFP-07 | Verified | A title-only proposal can be saved as a private draft, resumed through its speaker link, completed, saved again, and submitted. Core, HTTP, and browser journeys exercise the lifecycle.                              |
-| CFP-08 | Verified | Submission creates a durable `submission_confirmation` outbox item with the submitter, event, and proposal title. A production message reached a controlled Gmail inbox in one provider attempt.                      |
-| CFP-09 | Verified | Speakers can edit their own submitted proposal while the call is open. Expected versions protect concurrent edits and the organizer reads the same updated record.                                                    |
-| CFP-10 | Verified | Organizers create reviewers, group them into pools, and optionally route each proposal category to a different pool. Automatic assignments use the submitted track and reviewer links expose only the assigned queue. |
-| CFP-11 | Verified | Assigned reviewers submit ratings and comments, completion updates immediately, and organizers see the same scorecard in submission review detail.                                                                    |
-| CFP-12 | Verified | Organizer decisions support accepted, rejected, and waitlisted states, including explicit override reasons where review minimums are not met. Distinct statuses persist in the list.                                  |
-| CFP-13 | Verified | The private speaker dashboard reads the same submission record, so organizer decisions appear as Accepted, Rejected, or Waitlisted without a second status store.                                                     |
-| CFP-14 | Verified | Decision notification includes an editable merge-field template and resolved recipient preview before queueing. The production acceptance message reached Gmail in one provider attempt.                              |
-| CFP-15 | Verified | Accepting a proposal atomically creates or reuses people, participation records, requirements, and a session carrying the proposal title, speakers, track, format, duration, and description.                         |
-| CFP-16 | Verified | The speaker dashboard removes editing outside the submission window, and the operation boundary independently rejects update and submit attempts after close.                                                         |
-| CFP-17 | Verified | A fresh organizer account can create a second event from the event switcher, and both events remain available in that switcher. Each event is backed by its own Workspace Durable Object.                             |
-| CFP-18 | Verified | Switching into a newly created event shows empty submissions, sessions, and speakers rather than the first event's records. This was exercised against the hosted app with “Forward Summit 2028.”                     |
-
-## Draft lifecycle exercised in the browser
-
-The local Worker-backed public form was exercised as a speaker:
-
-1. entered only a session title and selected **Save draft**;
-2. arrived at the private **Your submissions** dashboard with a Draft status;
-3. selected **Continue draft** and confirmed the title was restored;
-4. added the missing name, email, biography, abstract, format, and track;
-5. saved the completed draft and confirmed the dashboard reflected the persisted values; and
-6. resumed once more, submitted, and confirmed the status changed to Submitted.
-
-The browser run exposed and fixed a boundary defect where an empty contributor list still caused
-the draft operation to require a primary email. A focused HTTP test now protects the public route in
-addition to the core operation test.
-
-Category routing is stored on each evaluation round. The organizer can keep one default reviewer
-pool and override only the tracks that need specialist review. Core tests prove that a newly
-submitted proposal is assigned from its routed pool and that adding a route does not rewrite review
-assignments already in progress.
-
-## Identity model
-
-The hosted reference uses event-scoped email and password accounts for public submitters. A signed
-in participant can recover only the submission, reviewer, and speaker destinations whose stored
-email matches that account. Each destination still uses an unguessable record capability, and the
-Worker verifies that capability on every projected read and operation. Staff authentication and
-event membership remain completely separate.
-
-## Hosted delivery exercised
-
-A production title-only draft was resumed, validated, completed, submitted, accepted, and converted
-to a session without re-entering its title, speaker, track, format, or abstract. The submission
-confirmation and acceptance decision each reached a controlled Gmail inbox from the verified
-ProgramKit sender in one provider attempt. The acceptance message named the event and proposal and
-included the private speaker portal link. Private addresses, capabilities, and provider identifiers
-remain outside the repository.
-
----
-
-Source page: https://programkit.dev/docs/product/evals/02-abstract-management
-
-<!-- Canonical: https://programkit.dev/docs/product/evals/02-abstract-management -->
-<!-- Markdown: https://programkit.dev/docs/product/evals/02-abstract-management.md -->
-
-# Abstract management evaluation
-
-This is the implementation and verification map for
-`killmysaas-evals/specs/02-abstract-management.yaml`. It describes exercised behavior, not seeded
-screenshots.
-
-## Current coverage
-
-| Rubric | Status      | ProgramKit evidence                                                                                                                                                                                                                      |
-| ------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ABS-01 | Verified    | The evaluation-plan drawer creates independent rounds with names, open/close dates, and round-specific scorecards. Core tests reload the resulting state.                                                                                |
-| ABS-02 | Verified    | Every round selects its own default reviewer team and can override the pool by proposal category. Teams and routes persist by round ID without rewriting existing assignments.                                                           |
-| ABS-03 | Verified    | The editor and reviewer surface support numeric, select, and long-text criteria. Stored answers are covered by core tests.                                                                                                               |
-| ABS-04 | Verified    | Numeric criteria carry weights. Results and exports use the weighted aggregate and label it accordingly.                                                                                                                                 |
-| ABS-05 | Verified    | Organizers select exact proposals for one reviewer. The reviewer projection contains only that person's assignments.                                                                                                                     |
-| ABS-06 | Verified    | Bulk assignment supports a track filter and per-reviewer maximum. The selected track automatically limits eligible reviewers to its routed pool. Both paths are exercised by tests.                                                      |
-| ABS-07 | Verified    | Blindness is round-specific. Reviewer projections remove author, co-author, company, job title, biography, and email fields; organizer views retain them.                                                                                |
-| ABS-08 | Verified    | `/reviews` derives assigned, completed, outstanding, and percentage values from live assignments and scorecards.                                                                                                                         |
-| ABS-09 | Verified    | The organizer selects lagging reviewers, reviews an editable message, sees personalized counts and links, and queues one email per reviewer. The delivery test verifies an absolute private workspace link reaches the provider adapter. |
-| ABS-10 | Verified    | The results table shows weighted aggregates and toggles between ascending and descending score order.                                                                                                                                    |
-| ABS-11 | Verified    | Submission participants include primary and co-speaker roles in speaker and organizer detail views. Acceptance converts every participant.                                                                                               |
-| ABS-12 | Verified    | A reviewer can declare a proposal-scoped conflict and undo it. Both API behavior and the browser transition are exercised.                                                                                                               |
-| ABS-13 | Verified    | Review results download as CSV with one row per submission, criterion averages, weighted aggregate, recommendations, comments, participants, and status.                                                                                 |
-| ABS-14 | Not claimed | ProgramKit does not advertise AI evaluation. The V1 rubric marks this item not applicable when the feature is not claimed.                                                                                                               |
-
-## Reviewer handoff
-
-`/reviews` displays a separate copyable link for every reviewer. The hosted link includes event
-routing and a reviewer capability:
-
-```text
-/reviewer/{reviewerId}/{accessKey}?event={eventId}
-```
-
-The browser surface has no organizer navigation. Its data requests use the same-origin public
-reviewer endpoint plus `x-programkit-reviewer-key`; the server still verifies the reviewer actor,
-event, reviewer ID, and capability before reading or mutating anything.
-
-## Browser verification completed
-
-The local Worker-backed app was exercised through the organizer and reviewer UI:
-
-1. selected a lagging reviewer, reviewed the resolved message, and queued a reminder;
-2. opened the generated reviewer link;
-3. confirmed the queue contained only that reviewer's four assigned proposals;
-4. declared a conflict with a chair note;
-5. reopened the recused item and undid the conflict;
-6. submitted the remaining scorecards; and
-7. confirmed the capability URL stayed intact while the queue advanced to 4 of 4 complete.
-
-## Remaining scenario risk
-
-The hosted app supports same-origin email and password signup and sign-in in addition to magic
-links, so the evaluator can create an organizer account without leaving the target origin.
-Reviewer workspaces stay on same-origin capability links generated by the organizer. Participant
-accounts recover only reviewer, submission, and speaker destinations that match their normalized
-email and never receive organizer scopes.
-
----
-
-Source page: https://programkit.dev/docs/product/evals/03-speaker-management
-
-<!-- Canonical: https://programkit.dev/docs/product/evals/03-speaker-management -->
-<!-- Markdown: https://programkit.dev/docs/product/evals/03-speaker-management.md -->
-
-# Speaker management evaluation
-
-This is the implementation and verification map for
-`killmysaas-evals/specs/03-speaker-management.yaml`. It records exercised product behavior rather
-than seeded screenshots.
-
-## Current coverage
-
-| Rubric | Status   | ProgramKit evidence                                                                                                                                                                                                                                                                                                                                                                      |
-| ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SPK-01 | Verified | `/people` lists identity, title, company, workflow status, roles, readiness, sessions, and update time. Search and status views narrow the live roster.                                                                                                                                                                                                                                  |
-| SPK-02 | Verified | The add and edit drawers persist the required profile fields. Core tests cover manual creation and later edits.                                                                                                                                                                                                                                                                          |
-| SPK-03 | Verified | The CSV importer parses quoted fields, previews valid rows and duplicates, and deduplicates by email during one atomic import.                                                                                                                                                                                                                                                           |
-| SPK-04 | Verified | Participation status changes persist and drive the confirmed and awaiting-reply roster views.                                                                                                                                                                                                                                                                                            |
-| SPK-05 | Verified | Organizers create a dated action item once and assign it to multiple speakers. The task list shows due date, assignees, and aggregate progress.                                                                                                                                                                                                                                          |
-| SPK-06 | Verified | Each speaker record has an explicit Send portal invite action. One operation creates a personalized one-recipient communication containing the private portal URL, records it in history, queues it in the durable outbox, and reports success in place.                                                                                                                                 |
-| SPK-07 | Verified | The capability URL `/portal/{participationId}/{portalAccessKey}` renders a distinct speaker surface. Its server projection contains only that participant, their requirements, and their sessions. Invalid capabilities receive 403.                                                                                                                                                     |
-| SPK-08 | Verified | Bio changes round-trip between the portal and organizer view and automatically satisfy the bio requirement. Speakers can upload JPEG, PNG, or WebP headshots to R2, and the profile requirement updates immediately.                                                                                                                                                                     |
-| SPK-09 | Verified | Assigned tasks show their due dates in the private portal. Self-completable tasks persist directly as complete and non-self-completable work still follows submit-and-review.                                                                                                                                                                                                            |
-| SPK-10 | Verified | The organizer speaker drawer lists uploaded files with filename, kind, size, date, and a direct view link served from the event's R2-backed asset endpoint.                                                                                                                                                                                                                              |
-| SPK-11 | Verified | Organizer records and scoped speaker portals both show linked sessions. The portal also resolves placement, room, and track when available.                                                                                                                                                                                                                                              |
-| SPK-12 | Verified | `/readiness` shows the status of every assigned requirement without opening individual records. Unassigned tasks render as not assigned and do not lower readiness.                                                                                                                                                                                                                      |
-| SPK-13 | Verified | Communications supports filtered audiences, custom recipient sets, approval, delivery state, recipient count, history, attempt count, provider ID, retry visibility, and personalized calendar attachments. A production welcome campaign completed the approval flow and reached Gmail with resolved speaker, event, session, and portal values.                                        |
-| SPK-14 | Verified | Compose offers reusable welcome, portal, task, and calendar templates with merge tokens plus a recipient switcher that resolves subject, body, session, event, private portal link, and the exact `.ics` attachment against real speaker data.                                                                                                                                           |
-| SPK-15 | Verified | Each organizer speaker record includes a private travel and logistics field. It persists on the event participation record and is stripped from participant-facing projections.                                                                                                                                                                                                          |
-| SPK-16 | Verified | New tasks enable automatic reminders by default. Per-event Durable Object alarms queue one personalized reminder at the active due-date window, skip completed work, deliver through Cloudflare Email, retry failures, and expose the result in Communications. A production reminder reached a controlled Gmail inbox with its resolved task, due date, event, and private portal link. |
-
-## Speaker handoff
-
-The organizer can copy, open, or place the private portal URL into a one-recipient invitation
-draft. The public route carries both event routing and an unguessable participation capability:
-
-```text
-/portal/{participationId}/{portalAccessKey}?event={eventId}
-```
-
-The speaker client repeats the capability in `x-programkit-portal-key`. The server verifies the
-participant actor, active event, participation ID, and capability before returning the participant
-projection or accepting a mutation. Organizer records, other speakers, review data, change sets,
-and internal notes are removed from that projection.
-
-## Browser verification completed
-
-The local Worker-backed app was exercised through both sides of the workflow:
-
-1. created a general task once and assigned it to Jordan Bell and Jamie Brooks;
-2. confirmed the organizer task list showed the title, due date, both assignees, and progress;
-3. confirmed unrelated speakers rendered the task as not assigned with unchanged readiness;
-4. opened Jordan's private portal and confirmed no other speaker data was present;
-5. completed the task in the portal and reloaded to verify persistence;
-6. saved Jordan's public bio and confirmed the bio requirement became complete;
-7. created a portal invitation from Jordan's organizer record; and
-8. verified the one-recipient draft and subject appeared in communications history;
-9. uploaded the evaluator headshot fixture from Jordan's private portal and confirmed readiness
-   reached 100%; and
-10. opened Jordan's organizer record and verified the same file, metadata, avatar, and view link.
-
-Automated coverage also creates an incomplete task due in two days, runs the event alarm without an
-organizer action, verifies the email names the task and formatted due date, and confirms the sent
-message, attempt count, and provider message ID persist in the event communication history.
-Calendar coverage creates and approves a one-recipient campaign, freezes the speaker's published
-sessions into the outbox, and verifies the Cloudflare binding receives a real `text/calendar`
-attachment with the expected session events.
-
-The hosted reference has also delivered a portal invitation and an automatic due-date reminder to
-a controlled Gmail inbox. Both messages contained resolved event and recipient data plus an
-absolute, private speaker-portal link; their provider attempts remain visible in Communications.
-A separately approved welcome campaign reached the same inbox with the real first name, event,
-session, and private portal URL in place of every merge token.
-
-## Shared asset pipeline
-
-Headshots now use the first shared binary asset path: bytes live in R2, immutable metadata lives in
-the event Durable Object, uploads require the speaker's private portal capability, and public reads
-resolve only event-owned headshot records. The same asset operation and storage binding can now be
-extended to requested documents, submission attachments, and session deliverables without creating
-another storage model.
-
----
-
-Source page: https://programkit.dev/docs/product/evals/04-content-management
-
-<!-- Canonical: https://programkit.dev/docs/product/evals/04-content-management -->
-<!-- Markdown: https://programkit.dev/docs/product/evals/04-content-management.md -->
-
-# Content management evaluation
-
-This is the implementation and verification map for
-`killmysaas-evals/specs/04-content-management.yaml`. It records real product behavior and automated
-coverage rather than treating seeded data as evidence.
-
-## Current coverage
-
-| Rubric | Status   | ProgramKit evidence                                                                                                                                                                                                                                            |
-| ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CNT-01 | Verified | `/readiness` creates reusable file requests with instructions, a due date, optional session scope, file constraints, and an exact speaker selection. One definition creates a separate tracked instance for every assignee.                                    |
-| CNT-02 | Verified | The private speaker portal lists only that speaker's assigned tasks and due dates. File requests accept an R2-backed upload against the requirement and immediately move the instance to submitted.                                                            |
-| CNT-03 | Verified | Portal projections contain one participation, its person, sessions, requirements, assets, and comments. Capability checks guard every portal read and mutation; hosted organizer routes still require staff authentication.                                    |
-| CNT-04 | Verified | Re-uploading the same requirement creates another immutable asset version. The portal and organizer file drawer list every version, mark the latest, and retain an individual download action for older versions.                                              |
-| CNT-05 | Verified | `asset.comment` stores an attributed author and timestamp. Speaker and organizer views resolve the same thread across every version in the requirement slot and both roles can reply.                                                                          |
-| CNT-06 | Verified | The upload control states the accepted types and configured maximum size before selection. The server enforces the same content-type allowlist and byte limit.                                                                                                 |
-| CNT-07 | Verified | `/readiness` derives the full speaker-by-task matrix, deadlines, progress, and status from live requirement instances. All, incomplete, overdue, and review filters visibly change the result set.                                                             |
-| CNT-08 | Verified | The outstanding-task reminder path resolves each speaker's incomplete task names and due dates into personalized outbox entries. A production automatic reminder reached a controlled Gmail inbox, and the provider attempt remains visible in Communications. |
-| CNT-09 | Verified | The session drawer edits title, abstract, format, duration, track, and content status. Saves use version checks and persist into both the session detail and list.                                                                                             |
-| CNT-10 | Verified | The organizer speaker drawer edits public bio fields and now uploads or replaces a headshot directly from the admin surface. Staff uploads use the same R2/versioned asset pipeline, refresh the avatar, and survive reload.                                   |
-| CNT-11 | Verified | Every session edit snapshots a restorable revision with actor and timestamp. The history drawer restores an exact earlier version rather than applying a blanket undo.                                                                                         |
-| CNT-12 | Verified | Session content status is explicit: `ready` is presented as Approved. Public agenda selection includes only approved sessions from the latest published schedule release.                                                                                      |
-| CNT-13 | Verified | `/files` aggregates latest deliverables with filename, speaker, session, upload time, review status, and total version count. Its drawer exposes all versions and the cross-role comment thread.                                                               |
-| CNT-14 | Verified | Organizers can multi-select latest files, review or deselect them in the export dialog, and generate a ZIP grouped as `Speaker/Task/Filename`. The shared server plan rejects stale version IDs and handles path collisions.                                   |
-
-## File lifecycle
-
-File bytes and workflow state have separate jobs:
-
-1. the browser uploads directly to the same-origin Worker route;
-2. the Worker validates type, size, capability or staff identity, and active-event ownership;
-3. bytes are written to the event-scoped R2 key;
-4. `asset.register` commits immutable metadata, version state, attribution, and requirement progress to the event Durable Object; and
-5. a failed metadata operation removes the just-written R2 object so storage and workflow state do not drift.
-
-Both speaker and organizer headshot uploads use this pipeline. Speaker deliverables additionally
-inherit the selected task's accepted content types and maximum size.
-
-## Verification completed
-
-Automated core coverage exercises:
-
-1. reusable task creation and independent per-speaker completion;
-2. participant-only file ownership and staff-attributed headshot replacement;
-3. headshot-driven avatar and readiness updates;
-4. two immutable deliverable versions with only the second marked latest;
-5. task status changes after upload;
-6. attributed cross-role asset comments;
-7. two distinct session edits followed by exact revision restoration;
-8. approval filtering in the public agenda selector; and
-9. ZIP construction from selected latest asset versions.
-
-Hosted verification additionally uploaded both evaluator fixtures to R2, compared their downloaded
-SHA-256 hashes with the originals, rejected a cross-speaker asset request, and inspected a valid
-workspace ZIP containing JSON, manifest, CSV collections, and review results.
-
-## Evaluator handoff
-
-Use one disposable hosted organizer account for the chained evaluator run. Organizer, speaker,
-public agenda, and file endpoints remain on `app.programkit.dev` in one event state without asking
-the browser-only grader to leave the site for a magic link. The organizer can copy the generated
-speaker link from a speaker record, complete the portal steps in another tab, then return to the
-same organizer workspace.
-
----
-
-Source page: https://programkit.dev/docs/product/evals/05-ai-agenda
-
-<!-- Canonical: https://programkit.dev/docs/product/evals/05-ai-agenda -->
-<!-- Markdown: https://programkit.dev/docs/product/evals/05-ai-agenda.md -->
-
-# AI agenda evaluation
-
-This is the implementation and verification map for
-`killmysaas-evals/specs/05-ai-agenda.yaml`. The schedule is a durable draft until an organizer
-publishes an immutable release. Public program views read only the latest release.
-
-## Current coverage
-
-| Rubric | Status   | ProgramKit evidence                                                                                                                                                                                                                                      |
-| ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AIA-01 | Verified | `/schedule` derives its day switcher from the event date range and renders a room-by-time grid, an unscheduled-session pool, and a compact session-list alternative. Session cards show their exact local time, room column, track, and attendance.      |
-| AIA-02 | Verified | Event settings exposes organizer forms for tracks and rooms. New records are written through `track.create` and `room.create`, scoped to the active event, and appear immediately in session editing, placement controls, filters, and schedule columns. |
-| AIA-03 | Verified | Organizers can open an unscheduled session, choose an event-local date and time plus room, and place it. The resulting durable placement appears in the grid and reloads from the event workspace. Desktop cards can also be dragged between slots.      |
-| AIA-04 | Verified | Placement preview allows a speaker overlap to be saved but shows a visible `Speaker conflict` warning naming the shared speaker. The grid marks both affected cards and the page-level conflict callout repeats the named conflict.                      |
-| AIA-05 | Verified | Placement preview labels a same-room overlap as unavailable and disables submission. The core operation independently rejects the mutation with `ROOM_CONFLICT`, so API clients cannot bypass the rule.                                                  |
-| AIA-06 | Verified | The move drawer and drag interaction rerun conflict detection before save. A successful move updates the versioned placement immediately; the named speaker warning clears when the sessions no longer overlap and the new slot persists.                |
-| AIA-07 | Verified | `Publish schedule` refuses hard conflicts, snapshots approved-session placements into a new immutable schedule release, confirms success, and exposes the same release through Preview agenda, share links, and embed code.                              |
-| AIA-08 | Verified | `Auto-place` is visible beside the unscheduled pool and places every session it can into a conflict-free room and 30-minute slot in one action, reporting anything that could not be placed.                                                             |
-
-## Scheduling rules
-
-Draft placements and public releases are intentionally separate:
-
-1. a placement belongs to the active event, one session, and one room;
-2. its end time is derived from the session duration;
-3. event-boundary, missing-record, duration, cancellation, room-overlap, and speaker-overlap checks
-   run against the active event only;
-4. room overlaps and structural errors block placement;
-5. speaker overlaps remain visible in the draft so an organizer can see and resolve the problem;
-6. publishing is blocked while any approved placement has a hard conflict; and
-7. a successful publish creates a new release without changing an older public release.
-
-Capacity mismatches are warnings rather than hard failures. They stay visible without preventing an
-organizer from making a deliberate room choice.
-
-## Verification completed
-
-Automated core coverage exercises the evaluator sequence as one durable workflow:
-
-1. create a track, two rooms, Priya Raman, and three approved sessions;
-2. place two Priya sessions at the same time in different rooms and verify the warning names her;
-3. attempt a third session in an occupied room and verify the operation is rejected without adding
-   a placement;
-4. move the second Priya session and verify the speaker conflict clears;
-5. auto-place the remaining unscheduled session without a room overlap;
-6. publish the conflict-free draft; and
-7. resolve all three session titles through the public-agenda selector backed by that release.
-
-Separate tests prove draft moves do not change an existing public release, a later publish advances
-the release version, older releases remain immutable, and foreign-event rooms cannot be used.
-
-The hosted reference was also exercised from a newly created event with no tracks or rooms. Its
-first accepted proposal created the selected CFP track, the organizer added a room, Auto-place
-scheduled the converted session at an open time, Publish schedule created the release, and Preview
-agenda rendered the matching title, speaker, track, room, date, and time from that release.
-
-## Evaluator handoff
-
-The hosted evaluator flow keeps organizer and public program routes on one origin. The organizer
-configures rooms and tracks under Event settings, builds the draft under Schedule, then uses Preview
-agenda after publishing. Public document routing selects the event from the URL and does not require
-an organizer session.
-
----
-
-Source page: https://programkit.dev/docs/product/evals/06-public-widgets
-
-<!-- Canonical: https://programkit.dev/docs/product/evals/06-public-widgets -->
-<!-- Markdown: https://programkit.dev/docs/product/evals/06-public-widgets.md -->
-
-# Public widgets and embed evaluation
-
-This is the implementation and verification map for
-`killmysaas-evals/specs/06-public-widgets.yaml`. ProgramKit exposes one published program through
-five anonymous, shareable views plus portable JSON, XML, and iCal feeds.
-
-## Current coverage
-
-| Rubric | Status   | ProgramKit evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| EMB-01 | Verified | The Sessions view renders a card per published session with title, expandable description, local date and time, room, complete speaker identity, format, and track.                                                                                                                                                                                                                                                                                                                         |
-| EMB-02 | Verified | One search index includes session title and description, room, format, track, and every speaker's name, title, and company. The visible result count updates with the filtered set.                                                                                                                                                                                                                                                                                                         |
-| EMB-03 | Verified | Track, format, and room facets can be combined. Every filtered surface is derived from the same published-session set.                                                                                                                                                                                                                                                                                                                                                                      |
-| EMB-04 | Verified | The Speakers view is a distinct directory ordered by surname. Entries include headshot or fallback, name, title, and company.                                                                                                                                                                                                                                                                                                                                                               |
-| EMB-05 | Verified | Speaker search covers name, title, company, and bio. Opening an entry shows the bio and every published session with date, time, and room.                                                                                                                                                                                                                                                                                                                                                  |
-| EMB-06 | Verified | The Agenda view is grouped by event-local day and time. Session rows show the correct time, room, title, track, and format from the latest published release.                                                                                                                                                                                                                                                                                                                               |
-| EMB-07 | Verified | Day navigation changes both the active date and the published sessions rendered for that day.                                                                                                                                                                                                                                                                                                                                                                                               |
-| EMB-08 | Verified | Opening an agenda session shows its full time range, room, description, format, track, and speakers. Closing the drawer restores the agenda state.                                                                                                                                                                                                                                                                                                                                          |
-| EMB-09 | Verified | Itinerary sessions are ordered chronologically within day navigation and include track, format, title, optional description, full time, room, and complete speaker identities.                                                                                                                                                                                                                                                                                                              |
-| EMB-10 | Verified | Attendees can add or remove sessions and switch to My schedule, which contains only their selected sessions in chronological order.                                                                                                                                                                                                                                                                                                                                                         |
-| EMB-11 | Verified | Selections persist per event in local storage across reloads. Add to calendar downloads an iCal file containing the selected sessions with their titles, times, descriptions, and rooms.                                                                                                                                                                                                                                                                                                    |
-| EMB-12 | Verified | The Gallery is a visual, surname-sorted grid with name search, photos or resilient initial fallbacks, names, titles, and companies.                                                                                                                                                                                                                                                                                                                                                         |
-| EMB-13 | Verified | Gallery cards open the same complete speaker detail, including bio and session list, then return to the intact grid on close.                                                                                                                                                                                                                                                                                                                                                               |
-| EMB-14 | Verified | Agenda, Sessions, Speakers, Itinerary, and Gallery are all views of the anonymous `/agenda?event=...` route. No organizer session is required.                                                                                                                                                                                                                                                                                                                                              |
-| EMB-15 | Verified | Schedule studio's Share program dialog offers all five views; styled-script, basic-HTML, hosted-link, JSON, XML, and iCal outputs; track and room filters; description visibility; and an accent-color control. Organizers can save named embeds, retrieve their code later, and enable or disable them. Generated feeds are CORS-enabled and independently select the event. The production script was exercised from a separate localhost origin; calendar import remains a manual check. |
-| EMB-16 | Verified | Organizer and public surfaces resolve through the same event state and release selector. All five views and all three feeds share one public projection, so titles, times, rooms, tracks, and speaker identity cannot drift between formats.                                                                                                                                                                                                                                                |
-
-## Public contract
-
-The interactive route accepts stable query parameters:
-
-- `event` chooses the public event on a multi-event host;
-- `view` chooses `agenda`, `sessions`, `speakers`, `itinerary`, or `gallery`;
-- `track` and `room` narrow content by stable record ID;
-- `accent` applies a six-digit hexadecimal accent to the active public view; and
-- `descriptions=hide` removes session descriptions from the sessions list, itinerary, and session
-  detail.
-
-Portable outputs use the same event, filters, and description policy:
-
-- `/public/v1/program.json`
-- `/public/v1/program.xml`
-- `/public/v1/program.ics`
-
-The feeds expose only event metadata and published session, room, track, and public speaker fields.
-They allow cross-origin `GET` requests, cache for one minute, and never return operator records.
-
-## Verification completed
-
-Automated HTTP coverage proves that:
-
-1. JSON returns all ten seeded published sessions and no private workspace data;
-2. a combined track and room filter returns only matching sessions;
-3. `descriptions=hide` omits the field rather than returning an empty placeholder;
-4. XML contains event, track, session, and speaker records;
-5. iCal emits one `VEVENT` per published session with time and location;
-6. CORS preflight succeeds; and
-7. direct hosted feed URLs can select an event without relying on a prior page-view cookie.
-
-The schedule core suite separately proves that a draft move does not alter the public release, a
-later publish advances it, and older releases stay immutable.
-
-## Manual evaluator handoff
-
-From Schedule studio, open **Share program**, save a named embed, retrieve its code, and exercise
-each output. The production styled script has been loaded from a separate localhost origin and
-mounted the anonymous public program with all five view controls. Repeat that check after the final
-freeze with published sessions so search, filters, and detail drawers are visible in the retained
-evidence. Import the iCal URL into a calendar app and verify the published titles, dates, times, and
-rooms. These are delivery checks rather than unimplemented product state.
-
----
-
-Source page: https://programkit.dev/docs/product/evals/07-speaker-crm
-
-<!-- Canonical: https://programkit.dev/docs/product/evals/07-speaker-crm -->
-<!-- Markdown: https://programkit.dev/docs/product/evals/07-speaker-crm.md -->
-
-# Speaker CRM evaluation
-
-This is the implementation and verification map for
-`killmysaas-evals/specs/07-speaker-crm.yaml`. Speaker CRM is optional extra credit, but ProgramKit
-implements it as a useful organization layer above event-specific speaker operations.
-
-## Current coverage
-
-| Rubric | Status         | ProgramKit evidence                                                                                                                                                                                                                                                          |
-| ------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CRM-01 | Verified       | CRM is a top-level navigation item outside an event module. Directory rows show name, email, company, title, tags, event count, and last update. Search narrows the list and clears without changing stored data.                                                            |
-| CRM-02 | Verified       | Company, tag, and title filters combine with text search. Active filters expose a Clear action that restores the complete directory.                                                                                                                                         |
-| CRM-03 | Verified       | Contact detail includes identity, headshot, email, company/title, persistent private notes, event and session connections, sourcing history, and timestamps.                                                                                                                 |
-| CRM-04 | Verified       | Comma-separated tags are normalized, deduplicated, stored on the person record, shown in the directory, and available as a filter.                                                                                                                                           |
-| CRM-05 | Verified       | Import accepts the evaluator CSV shape, previews mapped rows, marks duplicate emails as skipped, reports validation errors, and commits new contacts to the organization directory.                                                                                          |
-| CRM-06 | Verified       | Same-name records appear as possible duplicates. The comparison names the kept and merged profiles, warns that merge is irreversible, and moves participations, sessions, notes, assets, tasks, segments, and pipeline history to the primary record.                        |
-| CRM-07 | Verified       | The pipeline has Researching, Identified, Contacted, Interested, Confirmed, and Declined columns. Enrollment accepts contact, starting stage, fit score, and rationale. Cards support drag and drop plus a select-based accessible move control, with versioned persistence. |
-| CRM-08 | Verified       | Contact detail exposes persistent sourcing notes and a reverse-chronological stage history with actor and timestamp.                                                                                                                                                         |
-| CRM-09 | Verified       | A filtered or selected directory set can be saved as a dynamic or curated segment. Segments reopen their current members and can feed outreach.                                                                                                                              |
-| CRM-10 | Verified       | Contact detail lists every event connection and offers Add to event for any unlinked event. The operation reuses the organization person, carries its profile fields, and creates one event participation without duplication.                                               |
-| CRM-11 | Verified queue | Multi-select reveals Email. The composer previews resolved `{{first_name}}` values, freezes personalized messages into the durable outbox, and reports success. Provider delivery remains a manual deployment check.                                                         |
-| CRM-12 | Verified       | Overview shows total contacts, events, returning speakers, active prospects, top companies, top tags, and recently updated contacts. Counts derive from the same directory state.                                                                                            |
-
-## Browser verification completed
-
-The running Worker-backed app was inspected at `/crm`:
-
-1. CRM appeared in the primary People navigation above event-specific Speakers.
-2. Overview showed 18 contacts, event and returning-speaker counts, pipeline prospects, populated
-   company/tag analytics, and recent contacts.
-3. Directory exposed text search, three attribute filters, save segment, selection, import, and
-   contact detail from a keyboard-operable table.
-4. Pipeline rendered all six stages and a persisted prospect in Identified.
-
-Focused core tests separately exercise event reuse, normalized tags, persistent notes, dynamic
-segments, pipeline moves and notes, duplicate merge compensation, dashboard counts, and resolved
-outreach personalization.
-
-## Final evaluator handoff
-
-Create the second fixture event before testing Add to event. Run the CSV import, note, tag, merge,
-segment, sourcing, and outreach actions through the browser, reloading wherever the rubric asks.
-For the manual CRM-11 half, include a controlled mailbox and confirm the delivered subject and body
-contain the real first name rather than the literal merge token.
-
----
-
-Source page: https://programkit.dev/docs/product/evals
-
-<!-- Canonical: https://programkit.dev/docs/product/evals -->
-<!-- Markdown: https://programkit.dev/docs/product/evals.md -->
-
-# Evaluator evidence map
-
-These documents map the current product to the exact V1 `killmysaas-evals` rubric at commit
-`2b0f7956ab0c6f4868d41356e495b3a225badaab`.
-
-| Area                     | Evidence map                                           |
-| ------------------------ | ------------------------------------------------------ |
-| 01 Call for Papers       | [01-call-for-papers.md](/docs/product/evals/01-call-for-papers.md)         |
-| 02 Abstract Management   | [02-abstract-management.md](/docs/product/evals/02-abstract-management.md) |
-| 03 Speaker Management    | [03-speaker-management.md](/docs/product/evals/03-speaker-management.md)   |
-| 04 Content Management    | [04-content-management.md](/docs/product/evals/04-content-management.md)   |
-| 05 AI Agenda             | [05-ai-agenda.md](/docs/product/evals/05-ai-agenda.md)                     |
-| 06 Public Widgets        | [06-public-widgets.md](/docs/product/evals/06-public-widgets.md)           |
-| 07 Speaker CRM, optional | [07-speaker-crm.md](/docs/product/evals/07-speaker-crm.md)                 |
-
-“Verified” means the product contains a discoverable browser action, the write crosses an
-authorized server boundary, state persists, and focused automated coverage exists. It does not
-claim the evaluator's final score or replace manual mailbox, calendar, cross-origin, and downloaded
-artifact checks.
-
-The concise readiness summary is in
-[`evaluator-gap-analysis.md`](/docs/product/evaluator-gap-analysis.md). The execution checklist is in
-[`competition-endgame.md`](/docs/product/competition-endgame.md).
-
----
-
-Source page: https://programkit.dev/docs/product/evaluator-gap-analysis
-
-<!-- Canonical: https://programkit.dev/docs/product/evaluator-gap-analysis -->
-<!-- Markdown: https://programkit.dev/docs/product/evaluator-gap-analysis.md -->
-
-# Competition evaluator readiness
-
-This is the current capability audit against `killmysaas-evals` commit
-`2b0f7956ab0c6f4868d41356e495b3a225badaab`: 98 rubric items across 20 browser
-scenarios. It is not a claimed score. The detailed implementation and verification map for each
-area lives in [`evals`](/docs/product/evals.md).
-
-## Current position
-
-| Area                | Product coverage                                                                | Remaining evidence or risk                                                 |
-| ------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Call for Papers     | All 18 browser criteria implemented                                             | Full fresh-account evaluator replay                                        |
-| Abstract Management | All applicable criteria implemented; AI evaluation intentionally not advertised | Keep AI claims absent                                                      |
-| Speaker Management  | All 16 browser criteria implemented                                             | Real calendar-import evidence                                              |
-| Content Management  | All 14 browser criteria implemented                                             | Full fresh-account evaluator replay                                        |
-| AI Agenda           | All 8 browser criteria implemented                                              | Full fresh-account conflict-resolution replay                              |
-| Public Widgets      | All 16 browser criteria implemented                                             | Real calendar import                                                       |
-| Speaker CRM         | All 12 optional criteria implemented                                            | Full chained browser evidence after fresh import and second-event creation |
-
-“Implemented” means the product has a real user action, an authorized server transition, persisted
-state, and focused automated coverage. It does not replace the evaluator's own screenshots or the
-manual mailbox, calendar, download, and cross-origin checks.
-
-## Manual browser audit — 11 August 2026
-
-A browser-only evaluator rehearsal at the runner's `1280 × 800` viewport completed the connected
-CFP path through organizer setup, public form rendering, speaker draft/resume, two submitted
-proposals, exact reviewer assignment, reviewer scoring, organizer review visibility, and acceptance
-handoff. No model API or evaluator API was used.
-
-The rehearsal found and fixed two real operator blockers:
-
-- review-round dates are required, but the setup form did not say so; the fields now expose visible
-  `Required` labels and stable accessible names;
-- a review plan correctly blocks ordinary decisions until its minimum is met, but the operator UI
-  did not expose the server's reasoned override for an intentionally unreviewed proposal; the
-  submission drawer now offers `Record decision early`, requires a reason, and supports accept,
-  waitlist, or decline without weakening the normal review gate.
-
-One deployment-state blocker remains outside the product UI: the default fixture organizer address
-already exists on production while its fixture password is no longer valid. A fresh plus-addressed
-organizer completed the rehearsal, proving open signup works, but the official evaluator must be
-given unused `personaEmails` (preferred) or the stale fixture identities must be cleaned up before
-the final run. The two UI fixes also require deployment before they can be scored on production.
-
-## How the evaluator reaches the product
-
-The V1 runner is browser-only, permits the target origin and sibling subdomains of the same site,
-and does not bring usable inbox credentials. The official evaluation target should be
-`app.programkit.dev`, where:
-
-- an organizer can create an email/password account without leaving the origin;
-- every event is stored in a separate Workspace Durable Object;
-- public CFP and agenda links retain validated event context on the target site;
-- submitters create event-scoped accounts and recover only their own proposal destinations;
-- reviewer and speaker workspaces use copyable record capability links on the target site; and
-- participant sessions never authorize operator endpoints.
-
-The anonymous seven-day demo remains useful for a fast walkthrough, but it is not the proof of
-hosted identity or event membership.
-
-## Evidence still required before submission
-
-1. Start with a new organizer account and create the fixture event through the UI.
-2. Run all 20 scenarios in order without directly modifying state.
-3. Reload after every round-trip action the rubric explicitly checks.
-4. Keep organizer, public, reviewer, speaker, and attendee surfaces on `programkit.dev` or its
-   sibling subdomains so the runner's containment policy can follow them.
-5. Inspect downloaded CSV, ZIP, and iCal artifacts rather than counting the click alone.
-6. Send the required messages to mailboxes we control and record subject, personalization,
-   attachment, timestamp, and delivery state.
-7. Re-run the generated iframe on another origin after the final freeze and retain a screenshot.
-8. Repeat the entire chain from a second disposable organizer account and retain the stronger
-   report. Never reset a collaborator's event in place.
-9. Set unused `personaEmails` in the evaluator configuration before either run; do not rely on the
-   shared placeholder identities in `fixtures/sample-data.json`.
-
-## Product risks outside the score
-
-The evaluator does not score backup policy, account recovery, MFA, abuse controls, malware
-scanning, observability, API lifecycle, or Airtable safety. Those still matter for a real product
-and remain on the [roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md).
-
-Airtable, Cloudflare, API breadth, Forge hosting, and speed are bonus or product-quality signals,
-not replacements for a complete browser workflow. Durable Object SQLite remains the recommended
-authoritative store. Airtable stays optional and disconnected during evaluator runs.
-
-## Buyer-brief work outside the V1 rubric
-
-The original brief also asks for a native, one-way Accelevents integration and speaker resources
-with trusted embeds. ProgramKit fully implements the resource pages with sandboxed HTTPS embeds.
-For Accelevents, it currently provides a reviewable published-program package using the official
-speaker and session CSV shapes. That removes re-entry, but it is an import handoff rather than a
-native credentialed connector, so the native integration remains the one material brief gap outside
-the V1 evaluator.
-
-Do not close that gap by guessing at undocumented Accelevents write endpoints. The supported
-Sessionboard integration is configured inside Accelevents with a source API key and event ID, while
-Accelevents' public API is an Enterprise feature. The next implementation should be based on a
-validated customer account contract: either a ProgramKit source API that Accelevents can pull from,
-or documented Accelevents write endpoints supplied by the event owner.
-
----
-
-Source page: https://programkit.dev/docs/product/evaluator-runbook
-
-<!-- Canonical: https://programkit.dev/docs/product/evaluator-runbook -->
-<!-- Markdown: https://programkit.dev/docs/product/evaluator-runbook.md -->
-
-# Competition evaluator runbook
-
-Use this runbook to turn the competition rubric into reproducible browser evidence. The canonical
-capability assessment remains the [evaluator gap analysis](/docs/product/evaluator-gap-analysis.md); this file
-describes how to run it.
-
-## Target
-
-Use a fresh organizer account at `app.programkit.dev`. Create the fixture event from the empty
-workspace, then keep every role and public page on `programkit.dev` or a sibling subdomain because
-the V1 runner blocks unrelated sites and cannot rely on an external inbox. Use a different
-disposable organizer account for each full run. Do not run destructive scenarios against a
-collaborator's long-lived event, and do not expose the seeded demonstration reset in the hosted app.
-
-The seven-day demo is still the fastest product walkthrough, but its seeded capability actors do
-not prove account signup, event membership, or participant recovery.
-
-The local `killmysaas-evals/evalconfig.json` should therefore target
-`https://app.programkit.dev`, leave credentials empty for a fresh run, and use the fixture
-email/password identities through open signup. Every scenario receives a fresh browser context but
-server state persists across the ordered run. If signup reports that a fixture account already
-exists, sign in with that fixture identity instead. `demo.programkit.dev` is for human review only
-and must not be used as the automated target.
-
-Password protection does not need an evaluator exception. ProgramKit counts failed password
-attempts, resets the email failure bucket after a successful sign-in, and does not count successful
-sign-ins. The standard 10-failure email limit remains active during evaluation.
-
-## Evidence rule
-
-A scenario is complete only when the browser can:
-
-1. start from a known fixture;
-2. perform the action through the intended UI;
-3. observe validation or authorization at the point of action;
-4. reload and see the accepted change;
-5. verify the result on each affected role or public surface; and
-6. capture the final state without private data or credentials.
-
-Record each rubric item as `verified`, `partial`, `missing`, or `blocked`. A seeded visual state is
-not verified evidence of a transition.
-
-## Role surfaces
-
-| Role      | Hosted route                                              | Expected boundary                                                |
-| --------- | --------------------------------------------------------- | ---------------------------------------------------------------- |
-| Organizer | `/`, `/forms`, `/submissions`, and other operator routes  | Verified event membership and role-derived scopes                |
-| Submitter | `/submit/{formSlug}?event={eventId}` then `/access`       | Only submissions matching the participant email                  |
-| Reviewer  | Link copied from `/reviews`                               | Only that reviewer's assignments and scorecard actions           |
-| Speaker   | Link copied from `/people` or recovered through `/access` | One accepted participation, profile, resources, files, and tasks |
-| Attendee  | `/agenda?event={eventId}&view={view}`                     | Five anonymous views of one published program                    |
-
-Reviewer and speaker destinations retain record capabilities. Participant sign-in makes them
-recoverable from another device but does not replace the server capability check or authorize
-organizer routes.
-
-Public program views use `agenda`, `sessions`, `speakers`, `itinerary`, and `gallery`. Add
-`track={trackId}` to verify filtered links and embeds. The itinerary selection must survive a reload,
-and its calendar export must contain the selected session's title, time, and room.
-
-## Recommended scenario order
-
-Run the workflow in dependency order so later evidence uses real earlier transitions:
-
-1. event and CFP setup;
-2. public submission;
-3. reviewer assignment, scoring, and decision;
-4. accepted-speaker profile and requirements;
-5. file delivery, versioning, comments, and organizer review;
-6. schedule construction and publication;
-7. public program, embeds, and calendar output;
-8. optional CRM and bonus scenarios.
-
-Provision a second disposable account before another full run. Keep screenshots, relevant IDs, the
-Worker version, and the source commit together in the evidence record.
-
-## What V1 does not score
-
-The browser rubric does not score Airtable, Cloudflare, API breadth, repository hosting, or raw
-performance directly. Those still matter for the overall product and bonus review. They should not
-replace a missing required transition in the implementation order.
-
----
-
-Source page: https://programkit.dev/docs/product/hosted-verification
-
-<!-- Canonical: https://programkit.dev/docs/product/hosted-verification -->
-<!-- Markdown: https://programkit.dev/docs/product/hosted-verification.md -->
-
-# Hosted verification
-
-This checklist verifies the production services that automated unit tests cannot prove. Run it
-against a disposable organizer account after deploying the exact candidate commit. Never use a
-collaborator's event as test data.
-
-## Current production evidence
-
-Verified through **11 August 2026** against `https://app.programkit.dev`. Application source commit
-`9fe4321` is deployed as Worker version `8d33d320-a7f4-45aa-8cb3-5673c1c42478`. The matching demo
-and site deployments are `5b86bab0-57d8-4740-87e0-d4e400bba1a1` and
-`1c5ba505-0720-409f-ac85-a87c3533f33f`.
-
-- email/password signup created an organizer session and first event;
-- the organizer created a second event and both events retained isolated workspace state;
-- the state endpoint reported the deployed Cloudflare Email Service and R2 bindings as connected;
-- a magic-link request reached Gmail from `notifications@mail.programkit.dev`;
-- the one-time callback created a session, selected the account's event, and redirected to the app;
-- a speaker portal invitation was accepted by the email provider on its first attempt;
-- the invitation reached Gmail with resolved speaker and event values;
-- its private portal URL returned only the event-scoped speaker projection;
-- a task due in two days triggered one automatic reminder through a Durable Object alarm;
-- the reminder reached Gmail with its resolved due date, event, and private portal link;
-- the evaluator headshot and slide fixtures persisted to R2 and matched their original SHA-256
-  hashes after portal download;
-- a second speaker capability received `404` when requesting the first speaker's slide asset;
-- a scheduled session was published with its speaker, room, start, and end time intact;
-- a title-only CFP draft resumed through its private projection, rejected an incomplete submit,
-  persisted its full answer set, and submitted successfully;
-- its confirmation reached Gmail in one provider attempt with the resolved proposal and event;
-- accepting that proposal created the speaker participation and session without re-entering its
-  title, track, format, duration, or abstract;
-- its acceptance notice reached Gmail in one provider attempt with the resolved proposal, event,
-  and private speaker portal link;
-- a submitted proposal was assigned to a reviewer, its editable reminder was queued from the
-  review workspace, and the message reached Gmail with the resolved outstanding count and an
-  absolute private reviewer-workspace link;
-- that reviewer completed the scorecard and the organizer accepted the proposal on an event with
-  no preconfigured tracks; ProgramKit created the selected CFP track and converted the proposal
-  into its linked speaker participation and approved session atomically;
-- the organizer added the event's first room, Auto-place scheduled that converted session into a
-  conflict-free slot, Publish schedule created the public release, and Preview agenda rendered the
-  same title, speaker, track, room, date, and time;
-- a general welcome campaign moved through draft, approval, send, provider handoff, and Gmail
-  delivery with its first name, event, session, and private portal link resolved;
-- an approved campaign reached Gmail with a `text/calendar` attachment containing the matching
-  title, start, end, and room;
-- the workspace ZIP passed an integrity check and contained its complete JSON backup, manifest,
-  readable CSV collections, and aggregated review-results CSV;
-- the public agenda rendered all five views and the published program in a signed-out browser;
-- Schedule studio saved a named public-program embed, retrieved its code, and persisted its enabled
-  state;
-- the production embed loader was served as JavaScript from all three official hosts and mounted
-  the anonymous public program from a separate localhost origin;
-- its 390 px layout had no document-level horizontal overflow; and
-- public JSON, XML, and iCal feeds returned the same release with wildcard CORS.
-
-Provider acceptance is recorded as **Sent** in ProgramKit. It is not mislabeled as end-recipient
-delivery because the current email binding does not provide delivery or bounce webhooks.
-
-## Repeatable checks
-
-Run the deterministic hosted and evaluator preflight before the manual sequence:
-
-```bash
-PROGRAMKIT_PUBLIC_EVENT_ID=<published-event-id> pnpm competition:preflight
-```
-
-The command pins the local evaluator checkout to the documented commit, runs its browser smoke and
-full dry-run plan, checks all three production hosts and embed loaders, and validates the selected
-event's anonymous agenda plus JSON, XML, and iCal outputs. It does not send mail, import a calendar,
-or invoke the paid evaluator.
-
-### Account and event isolation
-
-1. Create a new organizer account at `/signup`.
-2. Create a second event from the event switcher.
-3. Edit the second event's name, venue, dates, and timezone.
-4. Switch between events and confirm their forms, people, sessions, and settings do not cross over.
-5. Sign out, sign in again, and confirm the selected event and event list are preserved.
-
-### Magic-link authentication
-
-1. Request an email link from `/login` using a controlled mailbox.
-2. Confirm the message arrives from the configured sender with subject `Sign in to ProgramKit`.
-3. Confirm the link uses the deployed app origin and does not leak to another host.
-4. Open it once and confirm the app establishes a session.
-5. Open it again and confirm the consumed token is rejected.
-
-### Speaker invitation
-
-1. Add a speaker using a controlled mailbox.
-2. Send a portal invitation from the speaker record.
-3. In Communications, confirm the message moves from Queued to Sent and records one attempt and a
-   provider reference.
-4. Confirm the inbox message has resolved speaker and event values.
-5. Open the private link in a signed-out browser and confirm it exposes only that speaker's event,
-   profile, assigned sessions, tasks, files, and organizer-authored resources.
-
-### Reviewer reminder
-
-1. Submit a proposal to a review round with at least one assigned reviewer.
-2. Select the reviewer in Review, open the reminder composer, and inspect the resolved preview.
-3. Edit the subject or body, queue the reminder, and confirm its outbox status moves to Sent.
-4. Confirm the inbox message contains the correct outstanding count and event name.
-5. Open the private reviewer link signed out and confirm it exposes only that reviewer's assigned
-   proposals for the selected event.
-
-### Files and exports
-
-1. Upload the evaluator headshot and slide fixture through the speaker portal.
-2. Reload the portal and organizer Files page to confirm metadata and bytes persist.
-3. Download each file as an organizer and as the owning speaker.
-4. Download selected-files ZIP and workspace export ZIP, then inspect names and contents.
-5. Confirm another speaker's capability URL cannot read those files.
-
-### Calendar and public program
-
-1. Publish a schedule containing at least one placed speaker session.
-2. Send the calendar-invite campaign to a controlled mailbox.
-3. Import the attachment into Gmail, Outlook, or Apple Calendar and verify title, start, end, room,
-   and timezone.
-4. Download the public iCal feed and inspect the same fields.
-5. Embed the agenda iframe on another origin and verify filters, session details, and responsive
-   layout.
-
-## Before submission
-
-Run the official evaluator twice from fresh accounts. Record the source commit, Worker deployment
-version, test report, mailbox evidence, downloaded-artifact inspection, and any evaluator wording
-that selected the wrong route. Keep private tokens, cookies, fixture uploads, and captured mailbox
-contents outside the repository.
-
----
-
-Source page: https://programkit.dev/docs/product/interface-craft
-
-<!-- Canonical: https://programkit.dev/docs/product/interface-craft -->
-<!-- Markdown: https://programkit.dev/docs/product/interface-craft.md -->
-
-# Interface craft
-
-ProgramKit is judged on whether an organizer would rather use it than pay for the SaaS it replaces.
-That is a craft question before it is a feature question. This page is the standard the interface is
-held to, and the checklist a change is reviewed against.
-
-## The four qualities
-
-Every interface decision is evaluated against these, in this order:
-
-- **Calm.** Complicated event work should feel manageable. One dominant thing per screen; the rest
-  supports it.
-- **Capable.** Dense operational tooling without enterprise heaviness. Density is achieved by
-  removing structure, not by shrinking type.
-- **Fast.** Immediate response, stable layout, minimal waiting. Perceived speed is part of the
-  design, not a build-time concern.
-- **Cared-for.** Language, edge cases, and motion are finished, not defaulted.
-
-"Modern" and "polished" are not standards. These are.
-
-## Reduce structural noise
-
-- One dominant content edge per screen. Sections align to it rather than nesting new margins.
-- Titles are short and usually one line. The page header carries the object, not a sentence about it.
-- No eyebrow labels unless they carry information the title cannot.
-- No subtitle that restates its title. If the subtitle only rephrases, delete it.
-- Related numbers live in one grid with dividers, never one box per number.
-- Content inside the workspace panel does not get its own card. Whitespace first, then a divider,
-  then a well; a card only for something independently interactive.
-- One primary button per screen. Every other action is secondary, ghost, or a text button.
-
-## Design around the current phase
-
-The organizer's progression is
-`Configure → Collect → Review → Decide → Prepare speakers → Schedule → Publish`.
-
-Navigation stays module-based, but each screen should answer: where am I, what needs attention now,
-what can wait, and what happens after this. Presenting every record and alert at equal prominence is
-the failure mode to avoid.
-
-## Dashboards report jobs, not numbers
-
-An overview that says "36 blockers" leaves the triage work to the reader. `nextActions` in
-`packages/core/src/selectors.ts` is the canonical projection: it groups outstanding work into jobs
-that carry a verb, a size, and a destination, so each row can be acted on directly. New summary
-surfaces should extend that selector rather than counting records in a view.
-
-Long tails fold behind a disclosure. Six visible groups is the current cap.
-
-## States are design artifacts, not QA discoveries
-
-Every consequential surface needs its states designed alongside the happy path:
-
-- Submission: draft, submitted, in review, decided.
-- Review: pending, assigned, partially reviewed, fully reviewed.
-- Schedule: unscheduled, scheduled, conflicting, released.
-- Publishing: draft, publishing, published, closing, closed.
-- Requests: saving, saved, conflicted, failed.
-
-Shared primitives exist so these look the same everywhere: `EmptyState` (with `tone="settled"` for a
-finished queue), `ErrorState` with a local retry, `SkeletonRows`, `StatusBadge`. A filtered list that
-can reach zero rows must render an empty state, and that empty state should offer the action that
-resolves it.
-
-## Make speed visible
-
-- Show cached data immediately; all operator routes share one workspace query so moving between them
-  does not refetch.
-- A failure retries in place. Never reset a workflow or lose scroll position to recover one panel.
-- First paint shows the workspace silhouette, not a centred spinner, so nothing jumps when data
-  lands.
-- Optimistic updates are for safe, reversible actions only.
-
-## Radius and elevation
-
-- Compact action groups may use a full pill radius when their neighboring controls share the same
-  height and treatment. Search fields, filter tabs, badges, and chips are pills by default. Text
-  inputs and textareas keep a generous finite radius so long values still read as fields rather
-  than capsules.
-- A row of related controls must share a height, label scale, and optical icon padding. Compact
-  desktop actions use smaller labels than full-size form controls; mobile actions retain the
-  accessible type and touch-target scale.
-- Workspace panels and dialogs use the larger shared radius scale. Closely nested surfaces define
-  their radius and padding as variables, then subtract the padding for an exactly concentric inner
-  edge.
-- Translucency belongs to temporary elevated surfaces only. Dark menus, shortcut guides, and toasts
-  use a nearly opaque zinc surface with background blur; persistent content panels remain solid.
-
-## Keyboard navigation
-
-The operator workspace has one shared command system. `/` opens global search, `Command-K` on Apple
-platforms or `Control-K` elsewhere opens the same command menu, and `?` opens its shortcut guide.
-Search matches page names, workflow language, and useful synonyms rather than routes alone. Inside
-the command menu, arrow keys move the selection, `Enter` opens it, and `Escape` closes the menu.
-
-The small set of navigation chords follows established web-app conventions and covers only the
-highest-frequency operator destinations:
-
-| Shortcut | Destination |
-| -------- | ----------- |
-| `G O`    | Overview    |
-| `G S`    | Submissions |
-| `G R`    | Review      |
-| `G A`    | Agenda      |
-| `G T`    | Tasks       |
-
-Keyboard commands never fire while the user is typing into an input, textarea, select, ARIA textbox,
-or editable region. Rich editors can also mark a wrapper with `data-shortcuts-disabled`. Modals trap
-and restore focus, `Escape` closes them, and reduced-motion preferences disable their entrance
-animation.
-
-## Navigation hierarchy
-
-The sidebar contains the event workflow people use every day. Infrastructure, change review, agent
-tools, and public links remain available through the workspace menu and command search without
-competing with the core program path. Navigation labels and icons must stay legible at a glance;
-color can distinguish workflow families, but never carries meaning by itself.
-
-## Reserve delight for consequential moments
-
-Distinctive motion and language are spent on: publishing the first CFP, the first proposal arriving,
-accepting a speaker, a speaker completing readiness, resolving the last schedule conflict, and
-publishing the public agenda. Routine filtering and table sorting get none of it.
-
-## What not to borrow
-
-No gradients on every card, no continuous decorative motion, no heavy glass, no custom replacements
-for familiar controls, no card around every piece of information, no animation that blocks rapid
-operation, and no label explaining obvious UI.
-
-## Review checklist
-
-Before a UI change lands:
-
-1. Does the screen have one dominant edge and one primary action?
-2. Did anything gain a card, a border, or a subtitle it did not need?
-3. Are empty, loading, and error states present for every list this change can empty?
-4. Do new numbers appear in an existing grid rather than a new box?
-5. Is the icon set Heroicons Micro, at `size-4`, with `shrink-0`?
-6. Does it hold up at 375px and at 1440px, and does the mobile type scale up rather than down?
-7. Does `pnpm check` pass?
-
----
-
-Source page: https://programkit.dev/docs/product/perfect-score-spec
-
-<!-- Canonical: https://programkit.dev/docs/product/perfect-score-spec -->
-<!-- Markdown: https://programkit.dev/docs/product/perfect-score-spec.md -->
-
-# Perfect-score specification
-
-Companion to [competition-endgame.md](/docs/product/competition-endgame.md). That document says where we are;
-this one defines, item by item, what a **full-credit** result looks like for all 98 rubric items
-(182 required points + 19 extra credit) and what has to exist for the evaluator to observe it.
-
-> **Status note:** this file is the acceptance specification, not a current gap report. Many
-> historical “Build” notes below have since shipped. Use the area-by-area
-> [evaluator evidence maps](/docs/product/evals.md) for current implementation status.
-
-## How the evaluation actually runs — four facts that change everything
-
-Read `killmysaas-evals` closely and the picture is different from "point the agent at our demo":
-
-1. **The evaluator builds its own event.** Scenario CFP-S1 signs up as organizer **Jordan
-   Alvarez**, creates **DevFlow Conf 2027** (2027-05-12 → 05-14, Moscone West SF), configures
-   three tracks, five session formats, and four rooms, and builds the CFP form itself. Our seeded
-   AIE NYC workspace is _not_ what gets scored. **Every capability must work from an empty
-   workspace through the UI.** A seed-only feature scores zero.
-
-2. **All personas use email + password.** The fixtures carry passwords
-   (`SbekTest!2027-org/spk/spk2/rev`), every scenario can read those fixture values, and the brief
-   is explicit: _the agent has no inbox_. The accounts are not pre-created for us. Magic links
-   score only through a painful manual side
-   channel. Perfect score requires **open email+password signup and sign-in for organizer,
-   speaker, reviewer, and attendee — on one origin.** Priya's CFP submitter account and her
-   speaker-portal account are the _same account_, linked by email when the organizer rosters her.
-
-3. **Scenarios chain on one deployment.** Area 01 closes the CFP; area 02 reopens it. Area 01
-   rejects a talk; area 05 flips it to Accepted so it can be scheduled. Area 04 renames a session
-   and reverts it. State transitions must be freely reversible by the organizer, and nothing may
-   hard-lock.
-
-4. **"Manual verification" items are graded by a human afterwards — and an in-app outbox
-   passes.** CFP-08 says verbatim: _"if the clone exposes an in-app email log/outbox, a logged
-   message with correct recipient and title also passes."_ A visible **Email log / Outbox page**
-   plus real delivery via a provider converts nearly every side-effect item from unverifiable to
-   full credit.
-
-Also structural: the agent is a Playwright browser with ~70 turns per scenario. It finds features
-by trying conventional names (`/admin`, `/dashboard`, "Speakers", "Tasks", "Import", "Publish").
-Discoverability is scored de facto: a working feature the agent cannot find in three clicks is a
-zero with a screenshot of our navigation attached.
-
----
-
-## Platform prerequisites (blockers for more than one area)
-
-| #   | Prerequisite                          | Perfect-score definition                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| --- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P1  | **Password identity**                 | Open signup + sign-in with email/password for all four personas on the submission origin. Role routing: organizer signup → workspace + event creation; speaker signup from the public CFP → submitter/speaker account; reviewer is provisioned by the organizer **with a password set directly in the UI or a copyable on-screen invite link** (CFP-10 requires "usable credentials" without email). `/admin`, `/dashboard`, `/organizer`, `/login` all resolve. |
-| P2  | **Event + inventory creation**        | Create event with name, dates (→ 3 days), venue/city; manage tracks, session formats (the five fixture labels are formats, a first-class concept we don't have), and rooms from the UI, usable immediately after creation.                                                                                                                                                                                                                                       |
-| P3  | **Real mail + visible outbox**        | One provider (Resend or Cloudflare Email) sending to arbitrary real inboxes, behind a transactional outbox. An organizer-visible **Communications history / Email log** listing every message: recipient, subject, body, timestamp, trigger (manual/automated). Merge tokens (`{speaker_name}`, `{talk_title}`, portal link) with per-recipient resolved preview.                                                                                                |
-| P4  | **File pipeline on R2**               | Upload with visible constraints (accepted types + max size), versions (latest flagged, old versions individually accessible), per-file comment threads with author+timestamp, private authorized download, central files library, multi-select ZIP of latest versions with grouping options. One shared component reused everywhere a file appears.                                                                                                              |
-| P5  | **Session CRUD + approval + history** | Create/edit sessions (title, abstract, speakers, track, format, room, time); per-session content-approval status gating public output; field-level change history with editor attribution, timestamps, and restore.                                                                                                                                                                                                                                              |
-| P6  | **Scheduled jobs**                    | **Have:** per-event Durable Object alarms schedule automatic due-date reminders, queue one personalized message per reached window, skip completed work, deliver through Cloudflare Email, retry failures, and persist delivery history. A controlled live-inbox acceptance run remains.                                                                                                                                                                         |
-| P7  | **Robot ergonomics**                  | Every drag interaction has a click equivalent; result counts rendered; statuses as text labels not just color; toasts persist ≥ a few seconds; no feature behind hover-only affordances.                                                                                                                                                                                                                                                                         |
-
----
-
-## Area 01 — Call for Papers (20/20)
-
-Strong base: builder, conditional fields, public form, organizer round-trip all exist. Perfect
-requires the submitter side and the window rules.
-
-| Item       | Full credit means                                                                                                             | Build                                                                     |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| CFP-01 (3) | Add text/long-text/dropdown fields with required flags; they render publicly; empty-required blocked with visible error       | **Have.** Verify error styling is unmissable in screenshots               |
-| CFP-02 (1) | "Workshop prerequisites" toggles with format selection, both directions, no reload                                            | **Have.** Ensure format is a form field the builder can key conditions on |
-| CFP-03 (3) | Portal logged-out shows event name, **visible deadline**, track+format dropdowns with exact fixture options                   | Add deadline display to public form header                                |
-| CFP-04 (2) | Close date in past ⇒ public portal shows closed state, no way to start                                                        | Enforce window server-side + closed-state page                            |
-| CFP-05 (3) | Speaker creates account from portal, submits, sees confirmation, finds proposal in **"My submissions" dashboard with status** | P1 + submitter dashboard (new view)                                       |
-| CFP-06 (3) | Organizer list + detail shows title, abstract, track, format, audience level, custom fields verbatim                          | **Have.** Confirm custom-field values render in detail                    |
-| CFP-07 (1) | Save draft with only a title; resume prompt or pre-filled on return                                                           | Have draft save; add resume-on-return for a signed-in submitter           |
-| CFP-08 (1) | Confirmation email logged in outbox with recipient + title (in-app log passes explicitly)                                     | P3 + auto-send on submit                                                  |
-| CFP-09 (2) | Speaker edits open submission; edit persists and is what organizer sees                                                       | Submitter edit flow (currently no edit after submit)                      |
-| CFP-10 (2) | Reviewer provisioned with usable credentials; reviewer dashboard shows **no admin nav**                                       | P1 reviewer provisioning + strip Shell nav for reviewer role              |
-| CFP-11 (2) | Rating 4 + comment persist; reviewer dashboard flips to completed; organizer sees both                                        | **Mostly have.** Verify organizer surfacing of scorecard content          |
-| CFP-12 (3) | Accept + Reject recorded; distinct statuses in list                                                                           | **Have**                                                                  |
-| CFP-13 (2) | Priya's dashboard shows Accepted / Rejected per proposal                                                                      | Submitter dashboard reflects decisions                                    |
-| CFP-14 (2) | Notify action with accept/reject templates + merge fields; UI confirms sent/queued; log entries                               | P3 + decision-notification flow using fixture template                    |
-| CFP-15 (2) | Accepted proposal becomes session with title/speaker/track carried, zero re-typing                                            | **Have** (verify from agent-created event, not seed)                      |
-| CFP-16 (2) | After close, speaker's submission is read-only; no edit can be saved                                                          | Server-side lock + read-only UI state                                     |
-
-## Area 02 — Abstract Management (20/20)
-
-The domain model (plans, rounds, teams, blind review) exists with almost no administration UI.
-This area is mostly **new organizer surfaces over existing domain concepts**.
-
-| Item       | Full credit means                                                                                                                                                     | Build                                                                                                                                        |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| ABS-01 (3) | Two rounds, each with own name, open/close dates, scorecard; persists across reload                                                                                   | Round editor UI                                                                                                                              |
-| ABS-02 (2) | Reviewer pools attached **per round**, not globally                                                                                                                   | Pool management per round                                                                                                                    |
-| ABS-03 (3) | Scorecard editor builds numeric (1–5, 1–10), dropdown (Accept/Maybe/Reject), free-text; all three render reviewer-side and store values                               | Scorecard field editor + dynamic reviewer form                                                                                               |
-| ABS-04 (1) | Per-criterion weights persist; displayed aggregate matches weighted math (≈3.33 not 3.0) or is labeled "weighted"                                                     | Weight input + weighted aggregate in results                                                                                                 |
-| ABS-05 (3) | Sam's queue lists exactly the two assigned, not "Docs That Answer Back"                                                                                               | Assignment UI (domain supports it) + strict queue projection                                                                                 |
-| ABS-06 (2) | At least one of: per-reviewer cap, auto-distribute, track-filtered bulk assignment — exercised without error                                                          | Build **auto-distribute + track filter** (two of three, cheap once assignment UI exists)                                                     |
-| ABS-07 (2) | Blind round: reviewer view contains none of "Priya Raman", "Marcus Okafor", "Latticework Systems" — the agent greps the whole page; organizer view shows them         | Extend redaction to co-authors, company, avatar initials, email; audit every string on the reviewer page                                     |
-| ABS-08 (2) | Progress dashboard: 2 assigned/0 complete → 2/2 after submissions                                                                                                     | Progress view over live scorecard state                                                                                                      |
-| ABS-09 (1) | Select lagging reviewer, send reminder, success confirmation                                                                                                          | P3 + reminder action on progress view                                                                                                        |
-| ABS-10 (3) | Aggregate per submission in a results table, sortable **both directions**, values consistent                                                                          | Results table with sort toggle                                                                                                               |
-| ABS-11 (2) | Co-author with role label visible speaker-side and in organizer review views                                                                                          | Co-author capture on submission + display both sides                                                                                         |
-| ABS-12 (1) | Declare-conflict/recuse control in the reviewer scoring view; flags or removes the item                                                                               | Recusal operation + control                                                                                                                  |
-| ABS-13 (2) | Score export triggers a CSV whose rows match the on-screen table (manual half opens the file)                                                                         | CSV export endpoint with title, per-criterion, aggregate, recommendation, status                                                             |
-| ABS-14 (1) | AI review: numeric score + rationale that references the abstract's actual content (CI/builds/monorepo), visually distinct from human scores, human override persists | Workers AI / Claude call producing a stored AI scorecard + override flow. Judged only if we claim AI — we should claim it and do it properly |
-
-## Area 03 — Speaker Management (15/15)
-
-| Item       | Full credit means                                                                                              | Build                                                                                              |
-| ---------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| SPK-01 (3) | Roster with name + title/company; search narrows and clears                                                    | **Have** (verify title/company columns visible)                                                    |
-| SPK-02 (3) | Add-speaker form: name, email, title, company, bio; sentinel bio edit survives reload                          | **Have** (verify all fields present in add form)                                                   |
-| SPK-03 (2) | speakers.csv imports; Dana Kowalski appears; dedupe of Priya/Marcus acceptable                                 | CSV import with column mapping + email dedupe                                                      |
-| SPK-04 (2) | Status change persists; status filter narrows                                                                  | Participation status control + roster filter (domain has status)                                   |
-| SPK-05 (2) | Create 3 general tasks with due dates assigned to **both** speakers via multi-select                           | Requirement-definition create UI with multi-assign                                                 |
-| SPK-06 (2) | Portal-invite control per speaker; success state; entry in comms history                                       | P3 + invite send (contains portal link)                                                            |
-| SPK-07 (3) | Priya's login lands in a speaker portal with only her data; Marcus/Dana absent everywhere                      | P1 + portal scoped by session (not URL param)                                                      |
-| SPK-08 (3) | Portal saves sentinel bio + headshot.png; organizer record shows both                                          | P4 headshot upload in portal profile                                                               |
-| SPK-09 (2) | Three tasks with due dates in portal; two completed persist; one stays open                                    | **Mostly have** (requirement.set-status) — verify due dates render portal-side                     |
-| SPK-10 (2) | Headshot listed organizer-side with filename + uploader/timestamp; download works                              | P4 file listing on speaker record                                                                  |
-| SPK-11 (2) | Session link visible on organizer speaker record **and** inside portal                                         | Portal "My sessions" section (verify) + record link                                                |
-| SPK-12 (2) | List-level matrix: Priya 2 complete/1 open, Marcus 0 — visible without opening records; filters narrow         | Readiness matrix (have) + complete/incomplete filters                                              |
-| SPK-13 (2) | Bulk email to all speakers with fixture subject; success; history entry with recipients + timestamp            | P3 bulk compose from roster                                                                        |
-| SPK-14 (1) | Template with tokens + per-recipient preview resolving to "Priya"                                              | P3 merge preview                                                                                   |
-| SPK-15 (1) | Travel/logistics or generic custom field persists the sample text                                              | Custom field on person record                                                                      |
-| SPK-16 (1) | Unattended reminder email for an incomplete task near/past due, referencing task + due date, logged in history | **Have:** P6 event alarm + durable reminder job; run the live-inbox acceptance case before grading |
-
-## Area 04 — Content Management (15/15)
-
-Almost entirely new; every item flows from P4 + P5.
-
-| Item       | Full credit means                                                                                                                    | Build                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| CNT-01 (3) | File-request task type with **instructions** + due date, assigned to speakers                                                        | Extend requirement definitions with type=file + instructions                      |
-| CNT-02 (3) | Portal shows both tasks; slides.pdf upload attaches to task; status flips to uploaded                                                | P4 upload against requirement                                                     |
-| CNT-03 (3) | No Marcus data in Priya's portal; `/admin`-style routes denied for speaker session                                                   | P1 role guards on operator routes                                                 |
-| CNT-04 (2) | Second upload creates v2; latest flagged; v1 still individually viewable                                                             | P4 version chain                                                                  |
-| CNT-05 (2) | Speaker comment (name + timestamp) visible to organizer; organizer reply lands in same thread                                        | P4 comment thread                                                                 |
-| CNT-06 (1) | Constraint statement visible at upload point ("PDF/PNG up to 25 MB")                                                                 | P4 constraint display                                                             |
-| CNT-07 (3) | Dashboard: all speaker×task pairs with due dates; reflects S2 state; filter changes visible set                                      | Deliverables view (extend readiness)                                              |
-| CNT-08 (2) | Bulk reminder from the dashboard's incomplete set + send confirmation; manual: real emails naming the outstanding task + due date    | P3                                                                                |
-| CNT-09 (2) | Session title/abstract edits persist across navigation; list shows new title                                                         | P5                                                                                |
-| CNT-10 (2) | Organizer edits Priya's bio + replaces headshot from admin; persists                                                                 | P5 + P4                                                                           |
-| CNT-11 (2) | History: ≥2 timestamped entries attributed to Jordan; restore drops 2nd edit, keeps 1st                                              | P5 field-history with restore — **restore must be per-version, not blanket undo** |
-| CNT-12 (3) | Approval status control on sessions; public agenda shows approved (with updated title), omits unapproved                             | P5 gate wired into the public projection                                          |
-| CNT-13 (1) | Files library: slides.pdf with session, speaker, date, version count 2; per-session Files tab                                        | P4 library view                                                                   |
-| CNT-14 (2) | Multi-select → ZIP with grouping option + deselect; generation confirmation; manual: ZIP has only latest versions, grouped as chosen | P4 ZIP (have `createStoredZip` primitive already)                                 |
-
-## Area 05 — AI Agenda (10/10)
-
-| Item       | Full credit means                                                                     | Build                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| AIA-01 (3) | Builder shows time axis + room/track structure + **day navigation across three days** | Multi-day studio: day tabs + room-column grid (current view is a single-day list)        |
-| AIA-02 (2) | Rooms and tracks created in UI become immediately schedulable                         | P2 inventory UI                                                                          |
-| AIA-03 (3) | Unscheduled session placed at Day 1 10:00 Room 2A; survives reload                    | Unscheduled tray + click-to-place (move op exists)                                       |
-| AIA-04 (3) | Overlapping Priya sessions ⇒ visible warning **naming the speaker or sessions**, live | Have conflict engine — make the badge wording explicit ("Priya Raman is double-booked…") |
-| AIA-05 (2) | Same room + time blocked or clearly flagged                                           | Have — verify wording + visibility                                                       |
-| AIA-06 (2) | Moves clear conflicts; new positions survive reload                                   | Have — verify live clearing                                                              |
-| AIA-07 (2) | Publish reports success; sessions observable on public surface                        | Have                                                                                     |
-| AIA-08 (1) | Auto-schedule control places the unscheduled session in one action                    | Deterministic auto-place (first conflict-free slot); label it "Auto-schedule"            |
-
-## Area 06 — Public Widgets (20/20)
-
-Strongest area. Perfect closes eight small deltas:
-
-- **EMB-01**: session cards need speaker **job title + company** and a Show-more description
-  expansion. **EMB-02**: search must match speaker names too, and show a result count.
-- **EMB-03** full credit needs **Track + Format + Location** facets (room facet missing today).
-- **EMB-04/EMB-12**: order directories **alphabetically by surname**; gallery needs a
-  missing-photo fallback that degrades gracefully.
-- **EMB-05/EMB-08/EMB-13**: detail views must show each session's **title, date/time, and room**;
-  agenda detail needs the full start–end range; Back must restore state.
-- **EMB-06** full credit prefers a **grid with room columns and a time gutter** — build it once and
-  share it with the AIA-01 builder.
-- **EMB-09**: itinerary cards must list **every speaker with title and company**.
-- **EMB-10/11**: have (localStorage + ICS); add a remove-updates-view check and confirm the ICS
-  imports into a real calendar (manual half).
-- **EMB-15** now has an **Embeds studio** in Schedule studio: widget-type picker covering all five,
-  output formats **styled HTML script + basic HTML + JSON + XML + iCal**, branding/color,
-  content filters, field selection, named saved embeds, and enable/disable management. The manual
-  half still pastes the snippet on a foreign origin and verifies the rendered interaction.
-- **EMB-16** — ⚠ **architectural decision.** The manual half edits a session organizer-side and
-  expects the public widget to update **without republishing**. Our immutable-release model
-  contradicts this. Resolution that keeps both properties: placements stay release-pinned, but
-  public surfaces read session/speaker **content** (title, abstract, bio, headshot) live from
-  approved records — or content edits auto-refresh the release. Decide before building anything
-  else in this area.
-
-## Area 07 — Speaker CRM (19/19 extra credit)
-
-All-new, org-level (outside any event): directory with search + multi-criteria filters (CRM-01/02),
-contact profiles with persistent notes + linked-events history (CRM-03), custom-field creation
-("Speaker Type" dropdown) or tags (CRM-04), CSV import (CRM-05, reuse SPK-03), same-name duplicate
-detection with side-by-side merge (CRM-06), kanban pipeline with ≥4 named stages including
-Confirmed/Declined, enroll dialog with score + rationale, drag/move persisting across reload
-(CRM-07), card detail with notes + timestamped stage history (CRM-08), saved segments (CRM-09),
-add-to-event handoff carrying name/email/company/bio (CRM-10), bulk email with merge preview + log
-(CRM-11, reuse P3), and a dashboard with KPI counts consistent with the directory + one analytics
-widget with drill-through (CRM-12).
-
-Worth building **only after** every required area above is at full credit — but note it is 19 points
-of pure upside on a 178-point required pool, and most of it composes from P3/P4 + the people model.
-
----
-
-## Evidence and discoverability engineering
-
-The judge is an LLM reading screenshots. Features must _photograph well_:
-
-- Statuses as labeled chips with text ("Accepted", "2 of 2 complete"), never color alone.
-- Result counts on every list that can be searched or filtered.
-- Deadline, due dates, and timestamps rendered where the rubric expects them.
-- Conflict warnings that name the speaker/room in words.
-- After every write: a visible confirmation state that survives long enough to screenshot.
-- Navigation labels from the agent's search vocabulary: "Speakers", "Tasks", "Reviews",
-  "Agenda", "Files", "Communications", "Embeds", "Import", "Publish". Alias redirects for
-  `/admin`, `/dashboard`, `/organizer`, `/login`.
-- The root URL must present, without scrolling: the public event content and Sign in / Sign up.
-
-## Submission-config strategy
-
-- Submit the app origin (not the marketing site). Provide the pre-seeded organizer credentials in
-  `evalconfig` `credentials.organizer` **and** support open signup so either path works.
-- The deployment starts effectively empty (the agent builds DevFlow Conf 2027). Provision a second
-  disposable organizer account for repeat runs; never expose the seeded demo reset to hosted events.
-- Fill `submissionNotes` with the route map, role model, outbox location, and disposable-account
-  fixture instructions.
-- Before submitting: run the eval kit end-to-end at least twice (`npm run eval -- --url …`), fix
-  every item where the agent got lost, and keep the best `report.html` as our own evidence.
 
 ---
 
@@ -5027,7 +3755,8 @@ Use the guided CLI when you want collision checks, repeatable names, a selected 
 or a custom domain in the generated configuration:
 
 ```bash
-pnpm selfhost
+npm run cloudflare:login
+npm run selfhost
 ```
 
 This is the path the project verifies end to end. Follow [Cloudflare deployment](/docs/self-hosting/cloudflare.md).
@@ -5078,14 +3807,17 @@ Configure email before adding event teammates. Airtable is optional and experime
 7. Configure email only if the installation needs real delivery.
 8. Exercise the public, reviewer, speaker, file, API, and MCP handoffs before importing real data.
 
-See [First owner and access policy](/docs/self-hosting/first-owner.md) for the security model.
+See [First owner and access policy](/docs/self-hosting/first-owner.md) for the security model,
+[Configuration](/docs/self-hosting/configuration.md) for bindings, variables, secrets, and custom domains, and
+[Troubleshooting](/docs/self-hosting/troubleshooting.md) when a step does not behave as described.
 
 ## Before real participant data
 
-The repository is production-shaped but still marked active alpha. A production operator must own
-the remaining deployment-specific controls: account recovery and ownership transfer, MFA or OIDC
-where required, edge abuse protection, malware scanning and retention, complete backups, restore
-drills, monitoring, alerting, and incident response.
+The application is a release candidate; production approval is deployment-specific. A public event
+operator must test email recovery, name an ownership-transfer contact, and own edge abuse
+protection, file scanning and retention, complete backups, restore drills, monitoring, alerting, and
+incident response. MFA or external OIDC is required only when the deployment's assurance policy
+calls for it.
 
 Read [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) and [Administration](/docs/self-hosting/administration.md) before opening a public
 event. Record the decision with the [self-host launch checklist](/docs/self-hosting/launch-checklist.md).
@@ -5143,7 +3875,7 @@ Treat the repository as the application source of truth:
 
 1. read the incoming diff and migration notes;
 2. export important events and R2 objects;
-3. run `pnpm install --frozen-lockfile` and `pnpm check`;
+3. run `npm run setup` and `npm run verify`;
 4. deploy a staging Worker or isolated installation;
 5. exercise owner login, event switching, uploads, API, MCP, and public pages;
 6. deploy the production installation; and
@@ -5280,7 +4012,7 @@ npm run setup
 ### 2. Authenticate Wrangler
 
 ```bash
-npx --yes pnpm@11.20.0 --filter @programkit/app-cloudflare exec wrangler login --use-keyring
+npm run cloudflare:login
 ```
 
 The keyring flag asks Wrangler to protect its OAuth credential through the operating system's
@@ -5290,7 +4022,7 @@ secret store.
 ### 3. Provision, deploy, and verify the installation
 
 ```bash
-npx --yes pnpm@11.20.0 selfhost
+npm run selfhost
 ```
 
 The walkthrough asks for:
@@ -5308,7 +4040,7 @@ for public health, verifies the plugin download, and writes ignored local instal
 For a repeatable non-interactive setup:
 
 ```bash
-npx --yes pnpm@11.20.0 selfhost -- \
+npm run selfhost -- \
   --account "YOUR CLOUDFLARE ACCOUNT" \
   --name my-programkit \
   --bucket my-programkit-assets \
@@ -5324,9 +4056,9 @@ To review the generated names and configuration before changing Worker traffic, 
 path:
 
 ```bash
-npx --yes pnpm@11.20.0 selfhost:setup
+npm run selfhost:setup
 # Review .programkit/wrangler.json and .programkit/self-host.json.
-npx --yes pnpm@11.20.0 selfhost:deploy
+npm run selfhost:deploy
 ```
 
 `selfhost:deploy` sends the bootstrap secret alongside the code in one Worker deployment. It then
@@ -5344,7 +4076,7 @@ After installation and Wrangler login, a named installation can be provisioned, 
 checked in one command:
 
 ```bash
-npx --yes pnpm@11.20.0 selfhost -- \
+npm run selfhost -- \
   --name my-programkit \
   --bucket my-programkit-assets
 ```
@@ -5366,8 +4098,8 @@ deploying.
 To keep two test installations in one checkout, set a safe generated-directory name:
 
 ```bash
-PROGRAMKIT_SELFHOST_DIRECTORY=.programkit-staging pnpm selfhost:setup
-PROGRAMKIT_SELFHOST_DIRECTORY=.programkit-staging pnpm selfhost:deploy
+PROGRAMKIT_SELFHOST_DIRECTORY=.programkit-staging npm run selfhost:setup
+PROGRAMKIT_SELFHOST_DIRECTORY=.programkit-staging npm run selfhost:deploy
 ```
 
 The value must be `.programkit` or start with `.programkit-` and contain lowercase letters,
@@ -5590,7 +4322,7 @@ openssl rand -base64 24
 
 ## CLI setup code
 
-`pnpm selfhost` creates a 32-character random code in the ignored
+`npm run selfhost` creates a 32-character random code in the ignored
 `.programkit/bootstrap-token` file, sends it with the first Worker deployment, and prints it after
 the public smoke checks pass. The two-step `selfhost:setup` and `selfhost:deploy` path provides the
 same behavior when an operator wants to inspect the generated configuration first.
@@ -5635,10 +4367,11 @@ acceptance flow.
 - Leave organizer signup invite-only unless public SaaS signup is intentional.
 - Add separate administrator and viewer accounts instead of sharing credentials.
 - Review active account sessions in Settings.
+- Test **Forgot password?** against the owner's real mailbox.
 - Revoke departed members and unused API keys promptly.
 - Store deployment secrets in Cloudflare or a secrets manager, never event records.
-- Document an ownership-transfer and account-recovery procedure before the installation becomes
-  business-critical; automated flows are not yet complete.
+- Name the operator who can assist with ownership transfer before the installation becomes
+  business-critical.
 
 The full account and membership model is in
 [Identity, events, and storage ownership](/docs/architecture/identity-and-tenancy.md).
@@ -5678,8 +4411,9 @@ place.
 ### Public event
 
 Complete every required item below and the deployment-specific controls in
-[Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md). ProgramKit is active alpha; the operator must explicitly accept or
-close the remaining gaps before real data.
+[Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md). ProgramKit is a release candidate; the operator approves the
+specific runtime, data, and support policy for the event rather than inheriting a blanket
+production claim from the repository.
 
 ## Infrastructure
 
@@ -5697,7 +4431,7 @@ close the remaining gaps before real data.
 - [ ] Organizer signup is invite-only unless public SaaS signup is intentional.
 - [ ] Every team member uses an individual owner, administrator, or viewer account.
 - [ ] Active browser sessions and event membership have been reviewed.
-- [ ] Account recovery and ownership transfer have a documented operator procedure.
+- [ ] Email password recovery was tested, and ownership transfer has a named operator procedure.
 - [ ] MFA or external OIDC requirements have been decided for this deployment.
 - [ ] Public, participant, reviewer, speaker, staff, API, and MCP boundaries were tested separately.
 
@@ -5790,13 +4524,13 @@ the trust boundary.
 Run:
 
 ```bash
-pnpm --filter @programkit/app-cloudflare exec wrangler whoami
+npx --yes pnpm@11.20.0 --filter @programkit/app-cloudflare exec wrangler whoami
 ```
 
 If needed:
 
 ```bash
-pnpm --filter @programkit/app-cloudflare exec wrangler login --use-keyring
+npm run cloudflare:login
 ```
 
 When the login reaches multiple accounts, pass `--account` to `selfhost:setup` using the exact
@@ -5805,14 +4539,15 @@ account name or ID.
 ## R2 is not enabled
 
 Open the selected Cloudflare account's **Storage & databases → R2 → Overview**, activate its R2
-subscription, and rerun `pnpm selfhost:setup`. R2 activation belongs to the account, not the Worker.
+subscription, and rerun `npm run selfhost:setup`. R2 activation belongs to the account, not the
+Worker.
 
 ## Worker or bucket already exists
 
 The setup script stops before overwriting an unrelated resource. Choose a new name:
 
 ```bash
-pnpm selfhost:setup -- --name my-programkit-2 --bucket my-programkit-2-assets
+npm run selfhost:setup -- --name my-programkit-2 --bucket my-programkit-2-assets
 ```
 
 Use `--reuse-worker` or `--reuse-bucket` only after confirming that the existing resource belongs to
@@ -5927,12 +4662,12 @@ does not try to become a ticketing, payments, attendee-networking, or general ma
 | Accepted speaker | Speaker portal     | Confirm participation, maintain a profile, and complete requirements |
 | Attendee         | Public program     | Find released sessions and speakers without seeing internal drafts   |
 
-These are separate authorization surfaces. A participant account never becomes an organizer
-account, and a public event link never grants operator access.
+These are separate experiences with server-enforced access. A participant account never becomes
+an organizer account, and a public event link never grants operator access.
 
 ## Organizer navigation
 
-| Surface                | Use it for                                                                 |
+| Area                   | Use it for                                                                 |
 | ---------------------- | -------------------------------------------------------------------------- |
 | **Overview**           | Current phase, deadlines, blockers, and the next high-value actions        |
 | **Forms**              | CFP structure, mapped fields, conditional questions, preview, and publish  |
@@ -5997,10 +4732,13 @@ Source page: https://programkit.dev/docs/users/organizer-workflows
 
 # Organizer workflows
 
-This guide follows the navigation an event team sees after signing in. Availability depends on the
-event role: owners and administrators can make changes; viewers receive read-only access.
+What each area of the organizer workspace is for. Owners and administrators can make changes;
+viewers get read-only access.
 
-## 1. Configure the event
+To run these steps as a rehearsal in order, with a checkpoint after each one, use
+[Set up your first event](/docs/getting-started/first-event.md) instead.
+
+## Configure the event
 
 Open **Settings** and set the event name, slug, logo, venue, city, start and end dates, timezone,
 and lifecycle status. Add the tracks and rooms that the schedule will use.
@@ -6012,7 +4750,7 @@ from it.
 Owners also use Settings to invite teammates, choose the installation's organizer signup policy,
 change their password, and review active sessions.
 
-## 2. Build and publish a call for proposals
+## Build and publish a call for proposals
 
 Open **Forms** to create one or more proposal forms. Each form controls its public slug, title,
 introduction, confirmation message, accepted submission kinds, ordered questions, options,
@@ -6022,7 +4760,9 @@ Map structured answers to speaker and session fields so acceptance can safely cr
 Use **Publish readiness** before opening a form and **Preview draft** to test both desktop and mobile
 layouts. The detailed workflow is in [Build and publish a CFP](/docs/guides/build-and-publish-a-cfp.md).
 
-## 3. Monitor and decide submissions
+![Call for proposals form builder with fields and publishing controls](/assets/marketing/forms.png)
+
+## Accept, reject, or waitlist proposals
 
 Open **Submissions** to search and filter the proposal pipeline, inspect answers and participants,
 track the record history, and record accepted, rejected, or waitlisted decisions.
@@ -6031,22 +4771,26 @@ Acceptance is a consequential operation. It creates or reuses the person, create
 participation and onboarding requirements, and creates the session from mapped answers as one
 atomic transition.
 
-## 4. Configure review
+![Proposal pipeline showing submitted session information and status](/assets/marketing/submissions.png)
+
+## Set up review and assign reviewers
 
 Open **Review** to create evaluation plans, define weighted numeric, select, or text criteria,
 choose blind-review behavior, assemble reviewer teams, route or assign proposals, monitor progress,
 send reminders, and inspect submitted scorecards.
 
-Reviewer portals receive only assigned proposals. Blind plans remove identity-revealing answers
-from that projection. Committee summaries support a decision; they do not silently make it.
+Reviewers see only the proposals assigned to them. A blind plan strips identity-revealing answers
+out of what they receive. Committee summaries support a decision; they never make it for you.
 
-## 5. Shape accepted sessions
+![Review workspace showing evaluation progress and proposal decisions](/assets/marketing/reviews.png)
+
+## Edit accepted sessions
 
 Open **Sessions** to edit accepted content, inspect history, restore an earlier version, and move
 content through approval gates. A session is the attendee-facing content record; its placement in
 the schedule remains a separate draft record.
 
-## 6. Onboard speakers
+## Onboard speakers and track their tasks
 
 Open **Speakers** for the event roster, profiles, participation status, logistics, invitations,
 linked sessions, and CSV import. Open **Tasks** for requirements, assignees, due dates, readiness,
@@ -6056,7 +4800,7 @@ Accepted speakers use a scoped portal to confirm participation, update public pr
 complete assigned work. ProgramKit supports reusable people across events without sharing an
 event's private participation records.
 
-## 7. Manage files and resources
+## Collect files and publish speaker resources
 
 Open **Files** to review headshots and assigned deliverables, compare versions, exchange attributed
 comments, download authorized files, delete a version as an owner, and export selected latest
@@ -6066,7 +4810,7 @@ The **Speaker resources** area publishes event guides, links, and sandboxed HTTP
 accepted-speaker portal. Draft and archived pages stay organizer-only. See
 [Publish speaker resources](/docs/guides/publish-speaker-resources.md).
 
-## 8. Prepare communications
+## Email participants
 
 Open **Communications** to create templates, select supported audiences, preview merge fields,
 review the resolved recipients, approve the frozen message, and inspect delivery or retry state.
@@ -6074,7 +4818,7 @@ review the resolved recipients, approve the frozen message, and inspect delivery
 Drafting, approval, and sending are intentionally separate. Email delivery requires a configured
 provider binding; without it, ProgramKit still records product state but cannot deliver real mail.
 
-## 9. Build and publish the agenda
+## Build and publish the agenda
 
 Open **Agenda** to manage draft placements on the multi-day room grid. Use the unscheduled tray,
 drag and drop, the accessible move form, auto-place, clear, and undo while resolving named conflicts
@@ -6083,16 +4827,18 @@ and warnings.
 Run publication preflight before publishing. Publication creates an immutable release. The public
 agenda, JSON/XML feeds, iCal feeds, and embed read that release until another is published.
 
-## 10. Use the CRM across events
+![Agenda workspace with sessions arranged by time and room](/assets/marketing/schedule.png)
+
+## Reuse people across events
 
 Open **CRM** to search the organization's people across events, filter by participation and profile
 signals, manage tags and notes, merge duplicates, build dynamic or static segments, track sourcing,
 reuse a contact in another event, and review organization-level analytics.
 
-The CRM is a bounded projection across events in the same organization. Each participation,
-session, task, and note still belongs to its event.
+The CRM reads across events in the same organization. Each participation, session, task, and note
+still belongs to its own event.
 
-## 11. Read operational reporting
+## Find reporting
 
 **Overview**, **Review**, **Tasks**, **Agenda**, and **CRM** each provide task-shaped reporting:
 pipeline health, review progress, readiness blockers, schedule preflight, and organization
@@ -6101,7 +4847,7 @@ activity. **Data & connections** provides portable exports and service status.
 ProgramKit does not yet have a single free-form report builder. See
 [Reporting and exports](/docs/users/reporting-and-exports.md) for the available reports and honest limits.
 
-## 12. Connect external systems
+## Export data and connect other systems
 
 Open **Data & connections** to:
 
@@ -6115,18 +4861,13 @@ Open **Data & connections** to:
 Use one API key per client, save its copy-once secret immediately, prefer a finite expiry, and
 revoke it when the integration is no longer used.
 
-## 13. Finish with the public experience
+## Before you announce
 
-Before announcing the event, exercise every handoff as the recipient:
-
-1. complete the public CFP;
-2. open a reviewer invitation and submit a scorecard;
-3. accept a speaker invitation and complete a requirement;
-4. import the public iCal feed; and
-5. open the agenda and embeds without an organizer session.
-
-This catches projection, permission, content, and delivery problems that an organizer-only test
-cannot reveal.
+The organizer interface can look complete while a public form, invitation, portal, or feed is
+still broken. Walk every handoff as the person who receives it — submitter, reviewer, speaker,
+attendee — before announcing. [Set up your first event](/docs/getting-started/first-event.md) is
+that rehearsal, and the [launch checklist](/docs/self-hosting/launch-checklist.md) decides whether
+an installation is ready for real data.
 
 ---
 
@@ -6138,7 +4879,7 @@ Source page: https://programkit.dev/docs/users/participant-experiences
 # Participant experiences
 
 ProgramKit gives submitters, reviewers, accepted speakers, and attendees focused views instead of
-the organizer workspace. Each view has a smaller data projection and operation allowlist.
+the organizer workspace. Each one receives less data and can take fewer actions.
 
 ## Submitter
 
@@ -6171,7 +4912,7 @@ The speaker portal is scoped to one event participation. It can include:
 - attributed file comments; and
 - organizer-published guides, links, and safe embeds.
 
-Draft or archived resources and another speaker's files are not included in this projection.
+Draft or archived resources and another speaker's files are never sent to the portal.
 
 ## Attendee
 
@@ -6181,11 +4922,16 @@ session, speaker, itinerary, and gallery views, plus embeddable and machine-read
 Changes to the organizer's draft schedule are invisible until another publication. This gives
 attendees a stable release instead of a page that changes mid-edit.
 
+![Published conference agenda with attendee-facing session details](/assets/marketing/agenda.png)
+
 ## Recovering access
 
 The general access flow can restore the event-scoped destinations associated with a participant
-email. The resulting participant session is not accepted by operator endpoints and does not replace
-the record-scoped authorization check on a submission, review queue, or speaker portal.
+email. Participants can use their password or, when email delivery is configured, request a
+15-minute single-use sign-in link. A discovery email includes a separate link for each matching
+event account without revealing those matches in the browser. The resulting participant session is
+not accepted by operator endpoints and does not replace the record-scoped authorization check on a
+submission, review queue, or speaker portal.
 
 ## When sharing links
 
@@ -6237,8 +4983,9 @@ Other exports include:
 
 - reviewer and evaluation CSV data;
 - selected latest speaker files as a structured ZIP;
-- speaker and session handoff CSVs for Accelevents;
-- public agenda JSON/XML projections;
+- speaker and session handoff CSVs for the
+  [Accelevents handoff](/docs/integrations/accelevents.md);
+- public agenda JSON and XML feeds;
 - public iCal feeds and attendee calendar downloads; and
 - the generated OpenAPI contract for integration clients.
 
@@ -6254,7 +5001,7 @@ operational data and cannot publish, send, approve, commit, or perform destructi
 Use [Connect an agent](/docs/agents/connect.md) for setup and the
 [`@programkit/agent` reference](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md) for the exact tool inventory.
 
-## What is not included yet
+## Intentional reporting boundary
 
 - a drag-and-drop report builder;
 - scheduled report delivery;
@@ -6263,8 +5010,8 @@ Use [Connect an agent](/docs/agents/connect.md) for setup and the
 - a guaranteed restore that coordinates event state, identity, access, and R2 automatically.
 
 A future cross-event analytics store should be a rebuildable D1 projection fed by domain events,
-not another source of truth. Current status and remaining work live in the
-[roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md).
+not another source of truth. The [roadmap](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md) keeps these possible extensions
+separate from the current release definition.
 
 ---
 
@@ -6292,11 +5039,11 @@ Open organizer signup does not make event data public. Every event still has sep
 
 ## Event team roles
 
-| Role          | Typical capability                                                         |
+| Role          | What they can do                                                           |
 | ------------- | -------------------------------------------------------------------------- |
 | Owner         | Full event control, team policy, API keys, and owner-only destructive work |
 | Administrator | Operate the event and manage viewers within server-enforced policy         |
-| Viewer        | Read the organizer workspace without mutation capability                   |
+| Viewer        | Read the organizer workspace but change nothing                            |
 
 Invitation tokens are bound to one email, expire, work once, and create membership only for the
 target event. Removing a member takes effect against the authoritative event access object even if
@@ -6308,9 +5055,11 @@ Organizer accounts can use passwords. A configured email binding also enables ma
 and transactional delivery. Password changes happen from Settings and revoke every other account
 session plus pending sign-in links while keeping the current browser signed in.
 
-Account recovery, ownership transfer, and deployment-specific MFA or external OIDC remain
-production-hardening work. Review [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) before relying on the installation
-for sensitive data.
+**Forgot password?** sends a 15-minute, single-use recovery link. The verified session can choose a
+new password without the old one; saving it revokes other sessions and consumes the recovery grant.
+Ownership transfer remains operator-assisted. MFA or external OIDC is deployment-specific rather
+than required for every conference. Review [Security](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md) before relying on the
+installation for sensitive data.
 
 ## Participant accounts
 
@@ -6319,9 +5068,9 @@ can recover matching submissions, reviews, and speaker portals but never receive
 
 ## Scoped links and public routes
 
-- CFP and agenda links expose only public event projections.
+- CFP and agenda links expose only public event data.
 - Reviewer and speaker links are record-scoped.
-- A public event routing cookie selects the event for public projections; it is not staff
+- A public event routing cookie selects which event the public pages show; it is not staff
   authentication.
 - API keys are event-scoped server-to-server credentials with explicit scopes, expiry, last-used
   state, and revocation.
@@ -6336,5 +5085,5 @@ can recover matching submissions, reviews, and speaker portals but never receive
 5. Review account sessions and event membership regularly.
 6. Revoke access immediately when a person or integration leaves the event.
 
-The canonical implementation boundary is documented in
+The exact implementation is documented in
 [Identity, events, and storage ownership](/docs/architecture/identity-and-tenancy.md).

@@ -14,12 +14,12 @@ does not try to become a ticketing, payments, attendee-networking, or general ma
 | Accepted speaker | Speaker portal     | Confirm participation, maintain a profile, and complete requirements |
 | Attendee         | Public program     | Find released sessions and speakers without seeing internal drafts   |
 
-These are separate authorization surfaces. A participant account never becomes an organizer
-account, and a public event link never grants operator access.
+These are separate experiences with server-enforced access. A participant account never becomes
+an organizer account, and a public event link never grants operator access.
 
 ## Organizer navigation
 
-| Surface                | Use it for                                                                 |
+| Area                   | Use it for                                                                 |
 | ---------------------- | -------------------------------------------------------------------------- |
 | **Overview**           | Current phase, deadlines, blockers, and the next high-value actions        |
 | **Forms**              | CFP structure, mapped fields, conditional questions, preview, and publish  |

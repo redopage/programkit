@@ -20,6 +20,7 @@
     "setup": "npx --yes pnpm@11.20.0 install --frozen-lockfile",
     "start": "npx --yes pnpm@11.20.0 dev",
     "verify": "npx --yes pnpm@11.20.0 check",
+    "cloudflare:login": "npx --yes pnpm@11.20.0 --filter @programkit/app-cloudflare exec wrangler login --use-keyring",
     "predev": "pnpm docs-site:generate",
     "dev": "pnpm --filter @programkit/app-cloudflare dev",
     "dev:cloudflare": "pnpm --filter @programkit/app-cloudflare dev",

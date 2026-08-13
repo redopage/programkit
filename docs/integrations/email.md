@@ -82,8 +82,8 @@ The hosted app sign-in screen, password derivation, email delivery, one-time exc
 validation, event membership, team invitations, event creation, switching, and logout are
 implemented. Public participants can create a separate event-scoped password account and recover
 matching submission, reviewer, and speaker capabilities by normalized email. Authenticated
-password changes and other-session revocation are implemented; account recovery and optional MFA
-remain. See
+password changes, email-based password recovery, and other-session revocation are implemented.
+Optional MFA or external OIDC remains deployment-specific. See
 [Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).
 
 ## Required delivery path

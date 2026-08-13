@@ -21,7 +21,7 @@ data lifetime or operational owner.
 Open [app.programkit.dev/signup](https://app.programkit.dev/signup) when you need to test the real
 account and event model. A new organizer can create an isolated event, invite collaborators,
 exercise participant links, and publish public program surfaces. This is the correct entry point
-for competition evaluators and product review.
+for product evaluation and controlled conference-team pilots.
 
 The hosted app is an evaluation deployment, not a promise of general-availability production
 hosting or a service-level agreement. Confirm support, retention, privacy, and operating terms
@@ -30,7 +30,7 @@ before relying on it for a live event.
 ## Use the demo for a quick product tour
 
 Open [demo.programkit.dev](https://demo.programkit.dev) when you want to explore seeded conference
-data without an account. The demo creates a private capability link and expires automatically after
+data without an account. The demo creates a private access link and expires automatically after
 seven days.
 
 The demo is useful for learning the workflow. It is not evidence of account provisioning,
@@ -57,7 +57,7 @@ turn a new installation into a production service automatically. Read the
 ## Fork only when configuration is not enough
 
 Branding, event settings, forms, tracks, rooms, and optional integrations are configuration. Fork
-the source when you need different domain operations, projections, routes, or agent skills.
+the source when you need different operations, data views, routes, or agent skills.
 
 A fork gives you product control and also makes your team responsible for reviewing upstream
 changes and resolving upgrade conflicts. Use the
@@ -66,7 +66,8 @@ preserve the named-operation and authorization boundaries.
 
 ## Still deciding?
 
-- Reviewing the submission: use the [hosted signup](https://app.programkit.dev/signup).
+- Evaluating the complete account-based product: use the
+  [hosted signup](https://app.programkit.dev/signup).
 - Taking a five-minute tour: use the [disposable demo](https://demo.programkit.dev).
 - Rehearsing the whole workflow offline: [run the local sample](/docs/guides/local-development.md).
 - Preparing a customer-owned installation: read the [self-hosting overview](/docs/self-hosting.md).

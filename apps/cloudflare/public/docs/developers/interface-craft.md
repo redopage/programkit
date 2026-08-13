@@ -1,5 +1,5 @@
-<!-- Canonical: https://programkit.dev/docs/product/interface-craft -->
-<!-- Markdown: https://programkit.dev/docs/product/interface-craft.md -->
+<!-- Canonical: https://programkit.dev/docs/developers/interface-craft -->
+<!-- Markdown: https://programkit.dev/docs/developers/interface-craft.md -->
 
 # Interface craft
 

@@ -20,6 +20,10 @@ export function AccessView() {
   const search = new URLSearchParams(window.location.search)
   const eventId = search.get('event') ?? ''
   const formSlug = search.get('form') ?? undefined
+  const linkError =
+    search.get('error') === 'expired'
+      ? 'That sign-in link expired or was already used. Request a new one.'
+      : ''
   const access = useExternalAccess(eventId, formSlug)
 
   if (!access.session.authenticated) {
@@ -53,8 +57,13 @@ export function AccessView() {
                       : 'Use the email address connected to your event.'
                   }
                   defaultIntent="signin"
+                  emailSignInAvailable={access.session.emailConfigured === true}
+                  initialError={linkError}
                   onSubmit={async (input) => {
                     await access.authenticate(input)
+                  }}
+                  onSendMagicLink={async (email) => {
+                    await access.sendMagicLink(email)
                   }}
                 />
               )}

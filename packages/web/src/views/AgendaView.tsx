@@ -74,6 +74,11 @@ function initialShowDescriptions() {
   return new URLSearchParams(window.location.search).get('descriptions') !== 'hide'
 }
 
+function initialShowManageEvent() {
+  if (typeof window === 'undefined') return true
+  return !new URLSearchParams(window.location.search).has('event')
+}
+
 function isPublishedSession(item: AgendaItem): item is PublishedSession {
   return item.session != null
 }
@@ -309,6 +314,7 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
   const [format, setFormat] = useState('all')
   const [programAccent] = useState(initialAccent)
   const [showDescriptions] = useState(initialShowDescriptions)
+  const [showManageEvent] = useState(initialShowManageEvent)
   const [selectedDay, setSelectedDay] = useState('')
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [selectedSpeakerId, setSelectedSpeakerId] = useState<string | null>(null)
@@ -502,15 +508,17 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
       <header className="sticky top-0 z-30 border-b border-zinc-950/5 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <EventIdentity name={event.name} logoUrl={event.logoUrl} />
-          <button
-            type="button"
-            aria-label="Manage event"
-            className="focus-ring flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-base text-zinc-500 hover:bg-zinc-950/4 hover:text-zinc-950 sm:text-sm"
-            onClick={() => navigate('/')}
-          >
-            <ArrowLeftIcon className="size-4 shrink-0 fill-current" />
-            <span className="hidden sm:inline">Manage event</span>
-          </button>
+          {showManageEvent ? (
+            <button
+              type="button"
+              aria-label="Manage event"
+              className="focus-ring flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-base text-zinc-500 hover:bg-zinc-950/4 hover:text-zinc-950 sm:text-sm"
+              onClick={() => navigate('/')}
+            >
+              <ArrowLeftIcon className="size-4 shrink-0 fill-current" />
+              <span className="hidden sm:inline">Manage event</span>
+            </button>
+          ) : null}
         </div>
       </header>
 

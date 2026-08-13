@@ -7,6 +7,7 @@ import {
 } from './password-rate-limit.ts'
 
 const magicLinkLifetimeMs = 15 * 60 * 1_000
+const passwordRecoveryLifetimeMs = 15 * 60 * 1_000
 const sessionLifetimeMs = 30 * 24 * 60 * 60 * 1_000
 const requestWindowMs = 60 * 60 * 1_000
 // Cloudflare Workers currently rejects PBKDF2 iteration counts above 100,000.
@@ -73,6 +74,7 @@ interface MagicLinkRecord {
   intent: 'signin' | 'signup'
   name?: string
   claimInstanceOwner?: boolean
+  recoverPassword?: boolean
   createdAt: string
   expiresAt: string
 }
@@ -82,6 +84,7 @@ interface SessionRecord {
   userId: string
   createdAt: string
   expiresAt: string
+  passwordRecoveryExpiresAt?: string
 }
 
 export interface AuthSessionSummary {
@@ -267,6 +270,7 @@ export class AuthDurableObject extends DurableObject {
       name?: string
       allowSignup?: boolean
       claimInstanceOwner?: boolean
+      recoverPassword?: boolean
     },
   ) {
     const existingUser = await this.#existingUserForEmail(email)
@@ -296,6 +300,7 @@ export class AuthDurableObject extends DurableObject {
       intent,
       name: options.name,
       claimInstanceOwner: options.claimInstanceOwner,
+      recoverPassword: options.recoverPassword,
       createdAt,
       expiresAt,
     } satisfies MagicLinkRecord)
@@ -399,13 +404,16 @@ export class AuthDurableObject extends DurableObject {
     if (!user) return { ok: false as const }
     const updatedUser = { ...user, lastSignedInAt: new Date().toISOString() }
     await this.#ctx.storage.put(`user:${user.id}`, updatedUser)
-    const session = await this.#createSession(updatedUser)
+    const session = await this.#createSession(updatedUser, {
+      recoverPassword: record.recoverPassword === true,
+    })
     return {
       ok: true as const,
       sessionToken: session.token,
       sessionExpiresAt: session.record.expiresAt,
       account: await this.#account(updatedUser),
       claimInstanceOwner: record.claimInstanceOwner === true,
+      passwordRecoveryAvailable: record.recoverPassword === true,
     }
   }
 
@@ -555,7 +563,7 @@ export class AuthDurableObject extends DurableObject {
     return { ok: false as const, code: 'INVALID_ACTION' }
   }
 
-  async #createSession(user: AuthUser) {
+  async #createSession(user: AuthUser, options: { recoverPassword?: boolean } = {}) {
     const token = randomHex(32)
     const tokenHash = await sha256(token)
     const record: SessionRecord = {
@@ -563,6 +571,13 @@ export class AuthDurableObject extends DurableObject {
       userId: user.id,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + sessionLifetimeMs).toISOString(),
+      ...(options.recoverPassword
+        ? {
+            passwordRecoveryExpiresAt: new Date(
+              Date.now() + passwordRecoveryLifetimeMs,
+            ).toISOString(),
+          }
+        : {}),
     }
     await this.#ctx.storage.put(`session:${tokenHash}`, record)
     await this.#scheduleCleanup()
@@ -687,6 +702,9 @@ export class AuthDurableObject extends DurableObject {
       passwordConfigured: Boolean(
         await this.#ctx.storage.get<PasswordRecord>(`password:${resolved.account.user.id}`),
       ),
+      passwordRecoveryAvailable:
+        Boolean(resolved.session.passwordRecoveryExpiresAt) &&
+        Date.parse(resolved.session.passwordRecoveryExpiresAt ?? '') > now,
       sessions: summaries,
     }
   }
@@ -707,28 +725,38 @@ export class AuthDurableObject extends DurableObject {
     const emailHash = await sha256(resolved.account.user.email)
     const existing = await this.#ctx.storage.get<PasswordRecord>(`password:${userId}`)
     if (existing) {
-      const emailAllowed = await this.#passwordFailuresAllow(
-        `email:${emailHash}`,
-        this.#passwordFailureLimits.email,
-      )
-      const ipAllowed = await this.#passwordFailuresAllow(
-        `ip:${ipHash}`,
-        this.#passwordFailureLimits.ip,
-      )
-      if (!emailAllowed || !ipAllowed) {
-        return { ok: false as const, code: 'TOO_MANY_ATTEMPTS' as const }
-      }
+      const passwordRecoveryAvailable =
+        Boolean(resolved.session.passwordRecoveryExpiresAt) &&
+        Date.parse(resolved.session.passwordRecoveryExpiresAt ?? '') > Date.now()
+      if (passwordRecoveryAvailable) {
+        const candidate = await passwordHash(newPassword, existing.salt, existing.iterations)
+        if (equalHex(candidate, existing.hash)) {
+          return { ok: false as const, code: 'PASSWORD_REUSED' as const }
+        }
+      } else {
+        const emailAllowed = await this.#passwordFailuresAllow(
+          `email:${emailHash}`,
+          this.#passwordFailureLimits.email,
+        )
+        const ipAllowed = await this.#passwordFailuresAllow(
+          `ip:${ipHash}`,
+          this.#passwordFailureLimits.ip,
+        )
+        if (!emailAllowed || !ipAllowed) {
+          return { ok: false as const, code: 'TOO_MANY_ATTEMPTS' as const }
+        }
 
-      const rejectCurrentPassword = async () => {
-        await this.#recordPasswordFailure(`email:${emailHash}`, this.#passwordFailureLimits.email)
-        await this.#recordPasswordFailure(`ip:${ipHash}`, this.#passwordFailureLimits.ip)
-        return { ok: false as const, code: 'CURRENT_PASSWORD_INVALID' as const }
-      }
-      if (!validPassword(currentPassword)) return rejectCurrentPassword()
-      const candidate = await passwordHash(currentPassword, existing.salt, existing.iterations)
-      if (!equalHex(candidate, existing.hash)) return rejectCurrentPassword()
-      if (currentPassword === newPassword) {
-        return { ok: false as const, code: 'PASSWORD_REUSED' as const }
+        const rejectCurrentPassword = async () => {
+          await this.#recordPasswordFailure(`email:${emailHash}`, this.#passwordFailureLimits.email)
+          await this.#recordPasswordFailure(`ip:${ipHash}`, this.#passwordFailureLimits.ip)
+          return { ok: false as const, code: 'CURRENT_PASSWORD_INVALID' as const }
+        }
+        if (!validPassword(currentPassword)) return rejectCurrentPassword()
+        const candidate = await passwordHash(currentPassword, existing.salt, existing.iterations)
+        if (!equalHex(candidate, existing.hash)) return rejectCurrentPassword()
+        if (currentPassword === newPassword) {
+          return { ok: false as const, code: 'PASSWORD_REUSED' as const }
+        }
       }
     }
 
@@ -754,8 +782,11 @@ export class AuthDurableObject extends DurableObject {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     }
+    const currentSession = { ...resolved.session }
+    delete currentSession.passwordRecoveryExpiresAt
     await this.#ctx.storage.transaction(async (transaction) => {
       await transaction.put(`password:${userId}`, passwordRecord)
+      await transaction.put(`session:${resolved.sessionHash}`, currentSession)
       if (otherSessionKeys.length > 0) await transaction.delete(otherSessionKeys)
       if (pendingMagicLinks.length > 0) await transaction.delete(pendingMagicLinks)
       await transaction.delete(`rate:password-failure:email:${emailHash}`)
@@ -974,6 +1005,7 @@ export class AuthDurableObject extends DurableObject {
             intent === 'signup' || intent === 'auto' ? normalizeName(input.name, email) : undefined,
           allowSignup: intent === 'auto' || input.allowSignup === true,
           claimInstanceOwner: input.claimInstanceOwner === true,
+          recoverPassword: input.recoverPassword === true && intent === 'signin',
         }),
       )
     }

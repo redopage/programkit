@@ -23,6 +23,27 @@ Put a fact in its canonical document and link to it from audience entry points. 
 slightly different copies of an API route list, deployment topology, security boundary, or
 capability claim.
 
+### One canonical answer per question
+
+| Question                                           | Canonical document or code                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| What is in scope and what is complete?             | [`ROADMAP.md`](https://forge.smol.ai/andheller/programkit/blob/main/ROADMAP.md)                                                              |
+| What is the end-to-end product journey?            | [`program-lifecycle.md`](/docs/product/program-lifecycle.md)                                     |
+| Why are packages and hosts separated?              | [`ARCHITECTURE.md`](https://forge.smol.ai/andheller/programkit/blob/main/ARCHITECTURE.md)                                                    |
+| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](https://forge.smol.ai/andheller/programkit/blob/main/DEPLOYMENT.md)                                                        |
+| Which service owns each kind of data?              | [`storage-and-integrations.md`](/docs/architecture/storage-and-integrations.md)                  |
+| Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](/docs/architecture/identity-and-tenancy.md)                          |
+| How is an installation operated?                   | [`OPERATIONS.md`](https://forge.smol.ai/andheller/programkit/blob/main/OPERATIONS.md)                                                        |
+| What must be hardened before sensitive data?       | [`SECURITY.md`](https://forge.smol.ai/andheller/programkit/blob/main/SECURITY.md)                                                            |
+| Which named operations exist?                      | `packages/core/src/manifest.ts`                                                            |
+| Which HTTP resources exist?                        | [`docs/api/README.md`](/docs/api.md) and [`openapi.json`](/docs/api/openapi.json)               |
+| What does the domain store?                        | `packages/core/src/types.ts`                                                               |
+| Which browser routes exist?                        | `packages/web/src/routes` and [`routes-and-surfaces.md`](/docs/reference/routes-and-surfaces.md) |
+| Which MCP tools and resources exist?               | [`packages/agent/README.md`](https://forge.smol.ai/andheller/programkit/blob/main/packages/agent/README.md)                                  |
+
+When code, tests, and prose disagree, verify the executable behavior, update the canonical source,
+and fix the incoming links in the same change. Do not resolve drift by adding another summary.
+
 ## Use the right page shape
 
 A task page should answer, in order:

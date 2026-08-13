@@ -18,17 +18,19 @@ Documentation changes follow the audience and status conventions in
 
 ## Local setup
 
-ProgramKit uses the Node.js version supported by the current pnpm release and records the exact
-package manager in `package.json`.
+You need Git and Node.js 24 or newer. Nothing else: the setup script fetches the exact pnpm version
+pinned in `package.json`.
 
 ```bash
-corepack enable
-pnpm install --frozen-lockfile
-pnpm dev
+npm run setup
+npm start
 ```
 
 The reference app runs at `http://localhost:4173` with a local Worker and SQLite-backed Durable
 Object. The seed is deterministic; resetting it never requires private fixture data.
+
+If you already have pnpm on your `PATH`, `pnpm install --frozen-lockfile` and `pnpm dev` do the
+same thing.
 
 ## Where changes belong
 
@@ -59,7 +61,7 @@ Add focused tests for relevant behavior:
 Run the complete gate before opening a pull request:
 
 ```bash
-pnpm check
+npm run verify
 ```
 
 This runs Vitest, oxlint, Prettier and documentation validation, package declarations, the
@@ -72,7 +74,7 @@ Cloudflare production build, OpenAPI drift checks, and plugin validation. CI run
 - Public/scoped projections expose only records the surface needs.
 - New Cloudflare SDK code stays in the host or an explicit platform export.
 - Documentation and the roadmap capability claim remain accurate.
-- `pnpm check` passes from a clean install.
+- `npm run verify` passes from a clean install.
 
 Do not commit real participant data, credentials, copied proprietary interfaces, or assets without
 clear redistribution rights. Report security vulnerabilities through the process in

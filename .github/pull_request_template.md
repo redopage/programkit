@@ -11,6 +11,6 @@ Describe the user workflow this completes and the smallest observable result.
 
 ## Verification
 
-- [ ] `pnpm check`
+- [ ] `npm run verify`
 - [ ] Relevant desktop and narrow-screen flows exercised
 - [ ] Documentation and `ROADMAP.md` claims remain accurate

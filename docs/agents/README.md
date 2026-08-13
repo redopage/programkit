@@ -29,7 +29,7 @@ Coding agents must read the root [`AGENTS.md`](../../AGENTS.md) first. Then rout
 | Product scope or capability claim    | [`ROADMAP.md`](../../ROADMAP.md)                                        |
 | End-to-end user journey              | [Program lifecycle](../product/program-lifecycle.md)                    |
 | Package or persistence design        | [`ARCHITECTURE.md`](../../ARCHITECTURE.md)                              |
-| UI work                              | [Interface craft](../product/interface-craft.md)                        |
+| UI work                              | [Interface craft](../developers/interface-craft.md)                     |
 | Cloudflare assembly or profile       | [`DEPLOYMENT.md`](../../DEPLOYMENT.md)                                  |
 | Identity, tenancy, or files          | [Identity and tenancy](../architecture/identity-and-tenancy.md)         |
 | Airtable, R2, D1, or background work | [Storage and integrations](../architecture/storage-and-integrations.md) |
