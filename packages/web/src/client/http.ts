@@ -133,6 +133,7 @@ export function createProgramKitHttpClient(
     async readSurface(surface, signal) {
       return parseJson<WorkspacePayload>(
         await fetcher(resolveUrl(scopedEndpoint(surface, stateEndpoint(surface))), {
+          cache: 'no-store',
           headers: surfaceHeaders(surface, { accept: 'application/json' }),
           signal,
         }),

@@ -22,7 +22,7 @@ const operatorRouteSegments = new Set([
  * organizer session exists.
  */
 export function routeUsesWorkspaceShell(pathname: string) {
-  return !standaloneRoutes.has(pathname)
+  return !standaloneRoutes.has(pathname) && pathname !== '/docs' && !pathname.startsWith('/docs/')
 }
 
 export function routeUsesOperatorShell(pathname: string) {

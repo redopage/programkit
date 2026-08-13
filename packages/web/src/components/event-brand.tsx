@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 
 import { cx } from './ui.tsx'
 
@@ -66,31 +66,5 @@ export function EventIdentity({
         {name}
       </span>
     </div>
-  )
-}
-
-export function EventPageFooter({
-  children,
-  linked = true,
-}: {
-  children?: ReactNode
-  linked?: boolean
-}) {
-  return (
-    <footer className="border-t border-zinc-950/5 px-4 py-6 text-sm text-zinc-500 sm:px-6">
-      <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3">
-        {children ? <div>{children}</div> : <span />}
-        {linked ? (
-          <a
-            href="https://programkit.dev"
-            className="focus-ring rounded-md underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950 hover:decoration-zinc-950"
-          >
-            Powered by ProgramKit
-          </a>
-        ) : (
-          <span>Powered by ProgramKit</span>
-        )}
-      </div>
-    </footer>
   )
 }

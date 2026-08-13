@@ -6,6 +6,8 @@ import {
 } from '@heroicons/react/16/solid'
 import { useEffect, useState, type FormEvent } from 'react'
 
+import { sessionFormatOptions } from '@programkit/core'
+
 import { useWorkspace } from '../lib/workspace.tsx'
 import { eventDateTime } from '../lib/date.ts'
 import {
@@ -83,7 +85,7 @@ export function SessionsView({ navigate }: { navigate: (to: string) => void }) {
         />
       ) : (
         <>
-          <div className="hidden sm:block">
+          <div className="hidden xl:block">
             <div className="-mx-6 -my-2 overflow-x-auto whitespace-nowrap">
               <div className="inline-block min-w-full px-6 py-2 align-middle">
                 <table className="w-full">
@@ -180,7 +182,7 @@ export function SessionsView({ navigate }: { navigate: (to: string) => void }) {
             </div>
           </div>
 
-          <ul role="list" className="divide-y divide-zinc-950/5 sm:hidden">
+          <ul role="list" className="divide-y divide-zinc-950/5 xl:hidden">
             {sessions.map((session) => {
               const track = state.tracks.find((entry) => entry.id === session.trackId)!
               return (
@@ -563,12 +565,11 @@ function SessionEditor({
             onChange={(event) => update('format', event.target.value as SessionDraft['format'])}
             className={selectControl}
           >
-            <option value="keynote">Keynote</option>
-            <option value="talk">Talk</option>
-            <option value="lightning">Lightning talk</option>
-            <option value="panel">Panel</option>
-            <option value="workshop">Workshop</option>
-            <option value="break">Break</option>
+            {sessionFormatOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Track" htmlFor="session-track">

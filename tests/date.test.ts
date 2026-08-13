@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { toZonedDateTimeInput, zonedDateTimeInputToIso } from '../packages/web/src/lib/date.ts'
+import {
+  eventCalendarDayLabel,
+  eventCalendarDays,
+  toZonedDateTimeInput,
+  zonedDateTimeInputToIso,
+} from '../packages/web/src/lib/date.ts'
 
 describe('event timezone conversion', () => {
   it('uses the zone offset in effect on the selected date', () => {
@@ -27,5 +32,12 @@ describe('event timezone conversion', () => {
     expect(() => zonedDateTimeInputToIso('not-a-date', 'America/New_York')).toThrow(
       'valid local date and time',
     )
+  })
+
+  it('includes every event-local day even when no session is scheduled on it', () => {
+    expect(
+      eventCalendarDays('2026-10-04T13:00:00.000Z', '2026-10-06T21:00:00.000Z', 'America/New_York'),
+    ).toEqual(['2026-10-04', '2026-10-05', '2026-10-06'])
+    expect(eventCalendarDayLabel('2026-10-05', true)).toBe('Monday, October 5')
   })
 })

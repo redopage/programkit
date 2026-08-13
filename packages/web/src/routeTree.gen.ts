@@ -13,6 +13,7 @@ import { Route as OperatorRouteImport } from './routes/_operator'
 import { Route as AccessRouteImport } from './routes/access'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as DemoRouteImport } from './routes/demo'
+import { Route as DocsRouteImport } from './routes/docs'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as OperatorIndexRouteImport } from './routes/_operator.index'
@@ -30,6 +31,8 @@ import { Route as OperatorScheduleRouteImport } from './routes/_operator.schedul
 import { Route as OperatorSessionsRouteImport } from './routes/_operator.sessions'
 import { Route as OperatorSettingsRouteImport } from './routes/_operator.settings'
 import { Route as OperatorSubmissionsRouteImport } from './routes/_operator.submissions'
+import { Route as DocsIndexRouteImport } from './routes/docs.index'
+import { Route as DocsSplatRouteImport } from './routes/docs.$'
 import { Route as PortalParticipationIdRouteImport } from './routes/portal.$participationId'
 import { Route as ReviewerReviewerIdRouteImport } from './routes/reviewer.$reviewerId'
 import { Route as SubmitFormSlugRouteImport } from './routes/submit.$formSlug'
@@ -54,6 +57,11 @@ const AgendaRoute = AgendaRouteImport.update({
 const DemoRoute = DemoRouteImport.update({
   id: '/demo',
   path: '/demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -141,6 +149,16 @@ const OperatorSubmissionsRoute = OperatorSubmissionsRouteImport.update({
   path: '/submissions',
   getParentRoute: () => OperatorRoute,
 } as any)
+const DocsIndexRoute = DocsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DocsRoute,
+} as any)
+const DocsSplatRoute = DocsSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => DocsRoute,
+} as any)
 const PortalParticipationIdRoute = PortalParticipationIdRouteImport.update({
   id: '/portal/$participationId',
   path: '/portal/$participationId',
@@ -180,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/access': typeof AccessRoute
   '/agenda': typeof AgendaRoute
   '/demo': typeof DemoRoute
+  '/docs': typeof DocsRouteWithChildren
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/agent': typeof OperatorAgentRoute
@@ -196,9 +215,11 @@ export interface FileRoutesByFullPath {
   '/sessions': typeof OperatorSessionsRoute
   '/settings': typeof OperatorSettingsRoute
   '/submissions': typeof OperatorSubmissionsRoute
+  '/docs/$': typeof DocsSplatRoute
   '/portal/$participationId': typeof PortalParticipationIdRoute
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
+  '/docs/': typeof DocsIndexRoute
   '/portal/$participationId/$portalAccessKey': typeof PortalParticipationIdPortalAccessKeyRoute
   '/reviewer/$reviewerId/$reviewerAccessKey': typeof ReviewerReviewerIdReviewerAccessKeyRoute
   '/submit/$formSlug/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
@@ -223,10 +244,12 @@ export interface FileRoutesByTo {
   '/sessions': typeof OperatorSessionsRoute
   '/settings': typeof OperatorSettingsRoute
   '/submissions': typeof OperatorSubmissionsRoute
+  '/docs/$': typeof DocsSplatRoute
   '/portal/$participationId': typeof PortalParticipationIdRoute
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
   '/': typeof OperatorIndexRoute
+  '/docs': typeof DocsIndexRoute
   '/portal/$participationId/$portalAccessKey': typeof PortalParticipationIdPortalAccessKeyRoute
   '/reviewer/$reviewerId/$reviewerAccessKey': typeof ReviewerReviewerIdReviewerAccessKeyRoute
   '/submit/$formSlug/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
@@ -237,6 +260,7 @@ export interface FileRoutesById {
   '/access': typeof AccessRoute
   '/agenda': typeof AgendaRoute
   '/demo': typeof DemoRoute
+  '/docs': typeof DocsRouteWithChildren
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/_operator/agent': typeof OperatorAgentRoute
@@ -253,10 +277,12 @@ export interface FileRoutesById {
   '/_operator/sessions': typeof OperatorSessionsRoute
   '/_operator/settings': typeof OperatorSettingsRoute
   '/_operator/submissions': typeof OperatorSubmissionsRoute
+  '/docs/$': typeof DocsSplatRoute
   '/portal/$participationId': typeof PortalParticipationIdRoute
   '/reviewer/$reviewerId': typeof ReviewerReviewerIdRoute
   '/submit/$formSlug': typeof SubmitFormSlugRoute
   '/_operator/': typeof OperatorIndexRoute
+  '/docs/': typeof DocsIndexRoute
   '/portal/$participationId_/$portalAccessKey': typeof PortalParticipationIdPortalAccessKeyRoute
   '/reviewer/$reviewerId_/$reviewerAccessKey': typeof ReviewerReviewerIdReviewerAccessKeyRoute
   '/submit/$formSlug_/mine/$speakerAccessKey': typeof SubmitFormSlugMineSpeakerAccessKeyRoute
@@ -268,6 +294,7 @@ export interface FileRouteTypes {
     | '/access'
     | '/agenda'
     | '/demo'
+    | '/docs'
     | '/privacy'
     | '/terms'
     | '/agent'
@@ -284,9 +311,11 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/submissions'
+    | '/docs/$'
     | '/portal/$participationId'
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
+    | '/docs/'
     | '/portal/$participationId/$portalAccessKey'
     | '/reviewer/$reviewerId/$reviewerAccessKey'
     | '/submit/$formSlug/mine/$speakerAccessKey'
@@ -311,10 +340,12 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/submissions'
+    | '/docs/$'
     | '/portal/$participationId'
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
     | '/'
+    | '/docs'
     | '/portal/$participationId/$portalAccessKey'
     | '/reviewer/$reviewerId/$reviewerAccessKey'
     | '/submit/$formSlug/mine/$speakerAccessKey'
@@ -324,6 +355,7 @@ export interface FileRouteTypes {
     | '/access'
     | '/agenda'
     | '/demo'
+    | '/docs'
     | '/privacy'
     | '/terms'
     | '/_operator/agent'
@@ -340,10 +372,12 @@ export interface FileRouteTypes {
     | '/_operator/sessions'
     | '/_operator/settings'
     | '/_operator/submissions'
+    | '/docs/$'
     | '/portal/$participationId'
     | '/reviewer/$reviewerId'
     | '/submit/$formSlug'
     | '/_operator/'
+    | '/docs/'
     | '/portal/$participationId_/$portalAccessKey'
     | '/reviewer/$reviewerId_/$reviewerAccessKey'
     | '/submit/$formSlug_/mine/$speakerAccessKey'
@@ -354,6 +388,7 @@ export interface RootRouteChildren {
   AccessRoute: typeof AccessRoute
   AgendaRoute: typeof AgendaRoute
   DemoRoute: typeof DemoRoute
+  DocsRoute: typeof DocsRouteWithChildren
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
   PortalParticipationIdRoute: typeof PortalParticipationIdRoute
@@ -392,6 +427,13 @@ declare module '@tanstack/react-router' {
       path: '/demo'
       fullPath: '/demo'
       preLoaderRoute: typeof DemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -513,6 +555,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperatorSubmissionsRouteImport
       parentRoute: typeof OperatorRoute
     }
+    '/docs/': {
+      id: '/docs/'
+      path: '/'
+      fullPath: '/docs/'
+      preLoaderRoute: typeof DocsIndexRouteImport
+      parentRoute: typeof DocsRoute
+    }
+    '/docs/$': {
+      id: '/docs/$'
+      path: '/$'
+      fullPath: '/docs/$'
+      preLoaderRoute: typeof DocsSplatRouteImport
+      parentRoute: typeof DocsRoute
+    }
     '/portal/$participationId': {
       id: '/portal/$participationId'
       path: '/portal/$participationId'
@@ -598,11 +654,24 @@ const OperatorRouteWithChildren = OperatorRoute._addFileChildren(
   OperatorRouteChildren,
 )
 
+interface DocsRouteChildren {
+  DocsSplatRoute: typeof DocsSplatRoute
+  DocsIndexRoute: typeof DocsIndexRoute
+}
+
+const DocsRouteChildren: DocsRouteChildren = {
+  DocsSplatRoute: DocsSplatRoute,
+  DocsIndexRoute: DocsIndexRoute,
+}
+
+const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   OperatorRoute: OperatorRouteWithChildren,
   AccessRoute: AccessRoute,
   AgendaRoute: AgendaRoute,
   DemoRoute: DemoRoute,
+  DocsRoute: DocsRouteWithChildren,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
   PortalParticipationIdRoute: PortalParticipationIdRoute,

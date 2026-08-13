@@ -14,7 +14,7 @@ import {
   type SubmissionKind,
 } from '@programkit/core'
 
-import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
+import { EventIdentity } from '../components/event-brand.tsx'
 import { ExternalAccessForm } from '../components/ExternalAccessForm.tsx'
 import { SubmissionAnswerFields } from '../components/SubmissionAnswerFields.tsx'
 import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
@@ -238,9 +238,9 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
             <p className="text-base font-medium text-zinc-950 sm:text-sm">What happens next</p>
             <ol role="list" className="flex flex-col gap-3 pt-3">
               {[
-                'Your email is saved with the proposal for program updates.',
+                'Your proposal is safely recorded. Keep the reference below as your receipt.',
                 'The program committee reviews submissions after the call closes.',
-                'You will receive a decision and portal link by email.',
+                'The program team will use your contact details for decisions and portal access.',
               ].map((step, index) => (
                 <li key={step} className="flex items-start gap-3">
                   <span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-mono text-sm tabular-nums text-zinc-500 ring-1 ring-zinc-950/10">
@@ -328,7 +328,9 @@ export function PublicSubmissionView({ slug }: { slug: string }) {
             trackOptions={trackOptions}
           />
           <ExternalAccessForm
-            title="Start your proposal"
+            signInTitle="Continue your proposal"
+            signUpTitle="Start your proposal"
+            description="Create an account to save your work and return before the deadline."
             onSubmit={async (input) => {
               const result = await externalAccess.authenticate(input)
               if (input.intent === 'signin' && result.submissionAccessKey) {
@@ -478,7 +480,6 @@ function PublicSubmissionPage({
     <div className="flex min-h-dvh flex-col bg-white">
       <PublicHeader event={event} accountEmail={accountEmail} onSignOut={onSignOut} />
       {children}
-      <EventPageFooter />
     </div>
   )
 }

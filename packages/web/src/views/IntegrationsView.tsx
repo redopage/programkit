@@ -4,7 +4,7 @@ import {
   ArrowPathIcon,
   CheckCircleIcon,
   ClipboardDocumentIcon,
-  CloudIcon,
+  CommandLineIcon,
   ExclamationTriangleIcon,
   KeyIcon,
   MinusCircleIcon,
@@ -16,7 +16,14 @@ import { useEffect, useState } from 'react'
 
 import { ProgramKitMark } from '../components/brand.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
-import { Button, Callout, PageHeader, cx, selectControl, sentenceCase } from '../components/ui.tsx'
+import {
+  Button,
+  PageHeader,
+  SectionHeading,
+  cx,
+  selectControl,
+  sentenceCase,
+} from '../components/ui.tsx'
 
 interface AirtableSetupStatus {
   available: boolean
@@ -239,7 +246,9 @@ export function IntegrationsView() {
   if (!payload) return null
   const { state } = payload
   const airtable = state.integrations.find((integration) => integration.kind === 'airtable')
-  const connections = state.integrations.filter((integration) => integration.kind !== 'airtable')
+  const connections = state.integrations.filter(
+    (integration) => integration.kind !== 'airtable' && integration.kind !== 'api',
+  )
   const airtableConnected = setup?.connected ?? airtable?.status === 'connected'
   const activeEvent = state.events.find((event) => event.id === state.activeEventId)
   const publishedRelease = state.scheduleReleases
@@ -336,350 +345,250 @@ export function IntegrationsView() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Infrastructure & API"
-        description="Cloudflare runtime, data ownership, exports, and optional connections."
-        actions={
-          <Button variant="primary" onClick={() => window.location.assign('/api/v1/export')}>
-            <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
-            Download full export
-          </Button>
-        }
+        title="Data & connections"
+        description="Export program data and connect optional services."
       />
 
-      <section aria-labelledby="deployment-heading">
-        <div className="border-b border-zinc-950/5 pb-2">
-          <h2 id="deployment-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-            Deployment shape
-          </h2>
-          <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-            Cloudflare is the supported host. Each event lives in its own SQLite-backed Durable
-            Object. Other services are optional.
-          </p>
-        </div>
+      <section aria-labelledby="airtable-heading">
+        <SectionHeading
+          id="airtable-heading"
+          title="Airtable"
+          description="Choose the workflow that matches how your team uses Airtable."
+        />
 
-        <div className="@container pt-5">
-          <div className="grid gap-4 @4xl:grid-cols-2">
-            <article className="relative overflow-hidden rounded-2xl bg-zinc-950 p-5 text-white sm:p-6">
-              <div
-                aria-hidden="true"
-                className="absolute -right-16 -top-20 size-52 rounded-full bg-blue-400/15 blur-3xl"
-              />
-              <div className="relative flex h-full flex-col justify-between gap-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <CloudIcon className="size-4 h-lh shrink-0 fill-blue-300" />
-                    <div className="min-w-0">
-                      <h3 className="text-balance text-lg font-semibold">Cloudflare</h3>
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-sm font-semibold text-emerald-200 ring-1 ring-inset ring-emerald-300/20">
-                    Active
+        <div className="grid gap-4 pt-5 lg:grid-cols-2">
+          <article className="flex flex-col justify-between gap-5 rounded-2xl bg-violet-50/70 p-5 ring-1 ring-inset ring-violet-950/10 sm:p-6">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-zinc-950 text-white">
+                    <ProgramKitMark className="size-5" />
                   </span>
+                  <div className="min-w-0">
+                    <h3 className="text-balance text-lg font-semibold text-zinc-950">
+                      Compare and reconcile
+                    </h3>
+                    <p className="text-sm text-zinc-500">ProgramKit Agent Plugin</p>
+                  </div>
                 </div>
-
-                <p className="max-w-xl text-pretty text-base text-zinc-300 sm:text-sm">
-                  The web app, API, and serialized event workspace deploy together. Cached reads do
-                  not wait on a third-party database round trip.
-                </p>
-
-                <dl className="grid gap-3 sm:grid-cols-3">
-                  {[
-                    ['Worker', 'App + API'],
-                    ['SQLite DO', 'Source of truth'],
-                    ['Static Assets', 'Vite build'],
-                  ].map(([term, detail]) => (
-                    <div key={term} className="min-w-0">
-                      <dt className="truncate text-base font-semibold text-white sm:text-sm">
-                        {term}
-                      </dt>
-                      <dd className="text-base text-zinc-400 sm:text-sm">{detail}</dd>
-                    </div>
-                  ))}
-                </dl>
+                <span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-violet-700 ring-1 ring-inset ring-violet-950/10">
+                  Recommended
+                </span>
               </div>
-            </article>
+              <p className="text-pretty text-base text-zinc-600 sm:text-sm">
+                Keep ProgramKit as the operational source, compare an authorized Airtable base by
+                stable record ID, and get a field-level plan before anything changes.
+              </p>
+              <p className="text-pretty text-sm text-zinc-500">
+                Read-only by default. Requires a separately authorized Airtable connection in your
+                agent client.
+              </p>
+            </div>
+            <div>
+              <Button variant="primary" onClick={() => window.location.assign('/agent')}>
+                Open Agent workspace
+                <ArrowRightIcon className="size-4 h-lh shrink-0 fill-current" />
+              </Button>
+            </div>
+          </article>
 
-            <article className="rounded-2xl bg-violet-50/70 p-5 ring-1 ring-inset ring-violet-950/10 sm:p-6">
-              <div className="flex h-full flex-col justify-between gap-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <TableCellsIcon className="size-4 h-lh shrink-0 fill-violet-700" />
-                    <div className="min-w-0">
-                      <h3 className="text-balance text-lg font-semibold text-zinc-950">Airtable</h3>
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-violet-700 ring-1 ring-inset ring-violet-950/10">
-                    {airtableConnected ? 'Connected · experimental' : 'Experimental'}
-                  </span>
+          <article className="flex flex-col gap-5 rounded-2xl bg-white p-5 ring-1 ring-inset ring-zinc-950/10 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-violet-50">
+                  <TableCellsIcon className="size-4 fill-violet-700" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-balance text-lg font-semibold text-zinc-950">
+                    Connect a dedicated base
+                  </h3>
+                  <p className="text-sm text-zinc-500">Direct persistence</p>
                 </div>
-
-                <p className="text-pretty text-base text-zinc-600 sm:text-sm">
-                  The optional Airtable-backed mode provides reconstructable program records and
-                  direct team edits. It is not the recommended V1 store yet.
-                </p>
-
-                <div className="flex flex-wrap items-center gap-2 text-base font-semibold text-zinc-700 sm:text-sm">
-                  <span className="flex items-center gap-1.5 rounded-lg bg-zinc-950 px-2.5 py-1.5 text-white">
-                    <ProgramKitMark className="size-4" />
-                    ProgramKit
-                  </span>
-                  <ArrowRightIcon className="size-4 h-lh shrink-0 rotate-180 fill-violet-500" />
-                  <ArrowRightIcon className="size-4 h-lh shrink-0 fill-violet-500" />
-                  <span className="rounded-lg bg-white px-2.5 py-1.5 ring-1 ring-inset ring-violet-950/10">
-                    Airtable
-                  </span>
-                  <span className="font-normal text-zinc-500">
-                    Acknowledged writes + cached reads
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5" aria-label="Managed tables">
-                  {['People', 'Submissions', 'Tasks', 'Sessions', 'Schedule'].map((table) => (
-                    <span
-                      key={table}
-                      className="rounded-md bg-violet-100/70 px-2 py-1 text-sm font-medium text-violet-950"
-                    >
-                      {table}
-                    </span>
-                  ))}
-                </div>
-
-                {oauthStatus === 'error' || setupError ? (
-                  <p role="alert" className="text-pretty text-sm font-medium text-red-700">
-                    {setupError ?? oauthMessage ?? 'Airtable authorization did not finish.'}
-                  </p>
-                ) : null}
-
-                {setup && setup.bases.length > 0 && !setup.connected ? (
-                  <div className="rounded-xl bg-white/80 p-3 ring-1 ring-inset ring-violet-950/10">
-                    <label
-                      htmlFor="airtable-base"
-                      className="block text-sm font-medium text-zinc-950"
-                    >
-                      Choose the base ProgramKit should use
-                    </label>
-                    <p className="pt-0.5 text-sm text-zinc-500">
-                      A dedicated blank base is recommended. Unrelated tables are left alone.
-                    </p>
-                    <div className="flex flex-col gap-2 pt-3 sm:flex-row sm:items-center">
-                      <span className="grid min-w-0 flex-1 grid-cols-1">
-                        <select
-                          id="airtable-base"
-                          className={selectControl}
-                          value={selectedBaseId}
-                          onChange={(event) => setSelectedBaseId(event.target.value)}
-                        >
-                          {setup.bases.map((base) => (
-                            <option key={base.id} value={base.id}>
-                              {base.name}
-                            </option>
-                          ))}
-                        </select>
-                      </span>
-                      <Button
-                        variant="primary"
-                        disabled={setupBusy || !selectedBaseId}
-                        onClick={() => void connectAirtable()}
-                      >
-                        {setupBusy ? 'Preparing base…' : 'Use this base'}
-                      </Button>
-                    </div>
-                  </div>
-                ) : airtableConnected ? (
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm text-zinc-600">
-                        {setup?.base?.name ?? 'Airtable base'} is the acknowledged persistence
-                        backend for this experimental mode.
-                      </p>
-                      {setup?.liveSync?.status === 'active' ? (
-                        <p className="pt-0.5 text-sm text-emerald-700">
-                          Webhook refresh is active. Conflict-review hardening is still required.
-                        </p>
-                      ) : setup?.mode === 'oauth' ? (
-                        <p className="pt-0.5 text-sm text-amber-700">
-                          {setup.liveSync?.error ??
-                            'Automatic inbound sync is unavailable. Reconnect from the deployed HTTPS app.'}
-                        </p>
-                      ) : null}
-                    </div>
-                    {setup?.mode === 'oauth' ? (
-                      <Button
-                        variant="ghost"
-                        size="compact"
-                        disabled={setupBusy}
-                        onClick={() => void disconnectAirtable()}
-                      >
-                        Disconnect
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : setup?.available ? (
-                  <div>
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        window.location.assign('/api/v1/integrations/airtable/oauth/start')
-                      }
-                    >
-                      <TableCellsIcon className="size-4 h-lh shrink-0 fill-violet-600" />
-                      Connect Airtable
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-zinc-500">
-                    Add an Airtable OAuth client or installation token to this deployment.
-                  </p>
+              </div>
+              <span
+                className={cx(
+                  'rounded-full px-2.5 py-1 text-sm font-semibold ring-1 ring-inset',
+                  airtableConnected
+                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10'
+                    : 'bg-zinc-50 text-zinc-600 ring-zinc-950/10',
                 )}
+              >
+                {airtableConnected ? 'Connected' : 'Experimental'}
+              </span>
+            </div>
+
+            <p className="text-pretty text-base text-zinc-600 sm:text-sm">
+              Use a dedicated Airtable base as the persistence backend for this event. This path is
+              intended for controlled testing, not the recommended production setup.
+            </p>
+
+            {oauthStatus === 'error' || setupError ? (
+              <p role="alert" className="text-pretty text-sm font-medium text-red-700">
+                {setupError ?? oauthMessage ?? 'Airtable authorization did not finish.'}
+              </p>
+            ) : null}
+
+            {setup && setup.bases.length > 0 && !setup.connected ? (
+              <div className="rounded-xl bg-zinc-50 p-3 ring-1 ring-inset ring-zinc-950/5">
+                <label htmlFor="airtable-base" className="block text-sm font-medium text-zinc-950">
+                  Choose a base
+                </label>
+                <p className="pt-0.5 text-sm text-zinc-500">
+                  A dedicated blank base is recommended. Unrelated tables are left alone.
+                </p>
+                <div className="flex flex-col gap-2 pt-3 sm:flex-row sm:items-center">
+                  <span className="grid min-w-0 flex-1 grid-cols-1">
+                    <select
+                      id="airtable-base"
+                      className={selectControl}
+                      value={selectedBaseId}
+                      onChange={(event) => setSelectedBaseId(event.target.value)}
+                    >
+                      {setup.bases.map((base) => (
+                        <option key={base.id} value={base.id}>
+                          {base.name}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                  <Button
+                    variant="primary"
+                    disabled={setupBusy || !selectedBaseId}
+                    onClick={() => void connectAirtable()}
+                  >
+                    {setupBusy ? 'Preparing base…' : 'Use this base'}
+                  </Button>
+                </div>
               </div>
-            </article>
-          </div>
+            ) : airtableConnected ? (
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-700">
+                    {setup?.base?.name ?? 'Airtable base'} is connected.
+                  </p>
+                  {setup?.liveSync?.status === 'active' ? (
+                    <p className="pt-0.5 text-sm text-emerald-700">Automatic refresh is active.</p>
+                  ) : setup?.mode === 'oauth' ? (
+                    <p className="pt-0.5 text-sm text-amber-700">
+                      {setup.liveSync?.error ?? 'Automatic refresh needs attention.'}
+                    </p>
+                  ) : null}
+                </div>
+                {setup?.mode === 'oauth' ? (
+                  <Button
+                    variant="ghost"
+                    size="compact"
+                    disabled={setupBusy}
+                    onClick={() => void disconnectAirtable()}
+                  >
+                    Disconnect
+                  </Button>
+                ) : null}
+              </div>
+            ) : setup?.available ? (
+              <div>
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    window.location.assign('/api/v1/integrations/airtable/oauth/start')
+                  }
+                >
+                  <TableCellsIcon className="size-4 h-lh shrink-0 fill-violet-600" />
+                  Connect Airtable
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">
+                Direct connection is not configured for this workspace.
+              </p>
+            )}
+          </article>
         </div>
 
-        <div className="pt-4">
-          <Callout tone="success" title="Cached reads">
-            <p>
-              Page loads use the Durable Object cache and make zero Airtable calls. A simple edit
-              writes only the workspace revision and changed native record.
+        <div className="mt-4 flex items-start gap-3 rounded-xl bg-zinc-50 p-4 ring-1 ring-inset ring-zinc-950/5">
+          <CommandLineIcon className="size-4 h-lh shrink-0 fill-zinc-500" />
+          <div className="min-w-0">
+            <h3 className="text-base font-medium text-zinc-950 sm:text-sm">
+              CLI setup for self-hosted testing
+            </h3>
+            <p className="text-pretty text-base text-zinc-500 sm:text-sm">
+              Prepare and validate a dedicated base from the terminal. Credentials stay in
+              environment configuration and are never entered here.
             </p>
-          </Callout>
+            <div className="flex flex-wrap gap-2 pt-3">
+              {['pnpm airtable:setup', 'pnpm airtable:verify'].map((command) => (
+                <code
+                  key={command}
+                  className="rounded-md bg-white px-2 py-1 text-sm text-zinc-700 ring-1 ring-inset ring-zinc-950/10"
+                >
+                  {command}
+                </code>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
-      {recovery ? (
-        <section aria-labelledby="recovery-heading">
-          <div className="border-b border-zinc-950/5 pb-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 id="recovery-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-                Point-in-time recovery
-              </h2>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-sm font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-700/10">
-                {recovery.retentionDays} days available
-              </span>
-            </div>
-            <p className="max-w-3xl text-pretty text-base text-zinc-500 sm:text-sm">
-              Inspect Cloudflare recovery points for this event workspace. This does not restore,
-              delete, or otherwise change event data.
-            </p>
-          </div>
-
-          <div className="grid gap-5 py-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
-            <div className="rounded-2xl bg-zinc-50 p-5 ring-1 ring-inset ring-zinc-950/5">
-              <dl className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <dt className="text-sm font-medium text-zinc-500">Recovery unit</dt>
-                  <dd className="pt-1 text-base font-medium text-zinc-950 sm:text-sm">
-                    Event workspace object
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-zinc-500">SQLite data</dt>
-                  <dd className="pt-1 text-base font-medium text-zinc-950 sm:text-sm">
-                    {new Intl.NumberFormat(undefined, {
-                      style: 'unit',
-                      unit: 'kilobyte',
-                      maximumFractionDigits: 1,
-                    }).format(recovery.databaseSizeBytes / 1_000)}
-                  </dd>
-                </div>
-              </dl>
-              <p className="pt-5 text-sm text-zinc-500">
-                Account access and R2 file bytes have separate recovery boundaries. Use a logical
-                export before any incident restore.
+      <section aria-labelledby="exports-heading">
+        <SectionHeading
+          id="exports-heading"
+          title="Exports & handoffs"
+          description="Take a portable copy or prepare files for another event platform."
+        />
+        <div className="divide-y divide-zinc-950/5">
+          <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h3 className="text-base font-medium text-zinc-950 sm:text-sm">
+                Full ProgramKit export
+              </h3>
+              <p className="max-w-2xl text-pretty text-base text-zinc-500 sm:text-sm">
+                Download a portable archive of the event workspace and change history.
               </p>
             </div>
+            <Button
+              variant="secondary"
+              className="shrink-0"
+              onClick={() => window.location.assign('/api/v1/export')}
+            >
+              <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
+              Download full export
+            </Button>
+          </div>
 
-            <div className="rounded-2xl bg-white p-5 ring-1 ring-inset ring-zinc-950/10">
-              <label htmlFor="recovery-time" className="text-sm font-medium text-zinc-950">
-                Approximate recovery time
-              </label>
-              <input
-                id="recovery-time"
-                type="datetime-local"
-                value={recoveryTime}
-                max={localDateTimeInput(Date.now())}
-                onChange={(event) => setRecoveryTime(event.target.value)}
-                className="focus-ring mt-2 min-h-10 w-full rounded-lg bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:text-sm"
-              />
-              <Button
-                variant="secondary"
-                className="mt-3 w-full"
-                disabled={recoveryBusy || !recoveryTime}
-                onClick={() => void inspectRecoveryPoint()}
-              >
-                <ArrowPathIcon className="size-4 h-lh shrink-0 fill-current" />
-                {recoveryBusy ? 'Checking…' : 'Check recovery point'}
-              </Button>
-              {recoveryPoint ? (
-                <div className="mt-4 rounded-xl bg-emerald-50 p-3 ring-1 ring-inset ring-emerald-700/10">
-                  <p role="status" className="text-sm font-medium text-emerald-800">
-                    Recovery point available near{' '}
-                    {new Date(recoveryPoint.requestedAt).toLocaleString()}.
-                  </p>
-                  <button
-                    type="button"
-                    className="focus-ring mt-2 rounded-md font-mono text-sm text-emerald-800 underline decoration-emerald-700/30 underline-offset-4 hover:decoration-emerald-700"
-                    onClick={() => void navigator.clipboard.writeText(recoveryPoint.bookmark)}
-                  >
-                    Copy bookmark
-                  </button>
-                </div>
-              ) : null}
-              {recoveryError ? (
-                <p role="alert" className="pt-3 text-sm font-medium text-red-700">
-                  {recoveryError}
+          <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h3 className="text-base font-medium text-zinc-950 sm:text-sm">
+                Accelevents package
+              </h3>
+              <p className="max-w-2xl text-pretty text-base text-zinc-500 sm:text-sm">
+                Prepare speaker and session CSVs, room mapping, and an import guide for{' '}
+                {activeEvent?.name ?? 'the current event'}. Uses the latest published schedule.
+              </p>
+              {acceleventsMessage ? (
+                <p role="status" className="pt-2 text-sm font-medium text-zinc-700">
+                  {acceleventsMessage}
                 </p>
               ) : null}
             </div>
+            <Button
+              variant="secondary"
+              className="shrink-0"
+              disabled={!publishedRelease}
+              onClick={downloadAcceleventsExport}
+            >
+              <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
+              {publishedRelease ? 'Download Accelevents package' : 'Publish agenda first'}
+            </Button>
           </div>
-        </section>
-      ) : null}
-
-      <section aria-labelledby="accelevents-heading">
-        <div className="border-b border-zinc-950/5 pb-2">
-          <h2 id="accelevents-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-            Accelevents handoff
-          </h2>
-          <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-            Move a published program into Accelevents without changing where it is managed.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-base font-medium text-zinc-950 sm:text-sm">
-              {activeEvent?.name ?? 'Current event'}
-            </p>
-            <p className="max-w-2xl text-pretty text-base text-zinc-500 sm:text-sm">
-              Download Accelevents-ready speaker and session CSVs, a room mapping sheet, and a short
-              import guide. The package uses the latest published schedule.
-            </p>
-            {acceleventsMessage ? (
-              <p role="status" className="pt-2 text-sm font-medium text-zinc-700">
-                {acceleventsMessage}
-              </p>
-            ) : null}
-          </div>
-          <Button
-            variant="secondary"
-            className="shrink-0"
-            disabled={!publishedRelease}
-            onClick={downloadAcceleventsExport}
-          >
-            <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
-            {publishedRelease ? 'Download Accelevents package' : 'Publish agenda first'}
-          </Button>
         </div>
       </section>
 
       <section aria-labelledby="connections-heading">
-        <div className="border-b border-zinc-950/5 pb-2">
-          <h2 id="connections-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-            Connections
-          </h2>
-          <p className="text-base text-zinc-500 sm:text-sm">
-            Delivery services around the primary Cloudflare runtime.
-          </p>
-        </div>
+        <SectionHeading
+          id="connections-heading"
+          title="Connected services"
+          description="Optional services for email, files, calendars, and your public website."
+        />
         <ul role="list" className="divide-y divide-zinc-950/5">
           {connections.map((integration) => {
             const Icon =
@@ -715,7 +624,11 @@ export function IntegrationsView() {
                     </p>
                   </div>
                   <p className="text-pretty text-base text-zinc-500 sm:text-sm">
-                    {integration.detail}
+                    {integration.kind === 'email'
+                      ? 'Connect an email provider before sending real notifications.'
+                      : integration.kind === 'storage'
+                        ? 'Uploaded headshots and speaker deliverables are stored securely.'
+                        : integration.detail}
                   </p>
                 </div>
               </li>
@@ -725,50 +638,152 @@ export function IntegrationsView() {
       </section>
 
       {hostedApp ? (
-        <ApiKeysSection
-          eventId={state.activeEventId}
-          apiKeys={apiKeys}
-          loadError={apiKeysError}
-          onChange={setApiKeys}
-        />
+        <>
+          <AgentConnectionSection />
+          <ApiKeysSection
+            eventId={state.activeEventId}
+            apiKeys={apiKeys}
+            loadError={apiKeysError}
+            onChange={setApiKeys}
+          />
+        </>
       ) : null}
 
       <section aria-labelledby="endpoints-heading">
-        <div className="border-b border-zinc-950/5 pb-2">
-          <h2 id="endpoints-heading" className="text-base font-medium text-zinc-950 sm:text-sm">
-            Integration API
-          </h2>
-          <p className="text-base text-zinc-500 sm:text-sm">
-            Predictable event resources for reads; named operations for validated writes.
-          </p>
-        </div>
-        <dl className="grid gap-0 sm:grid-cols-2">
-          {[
-            ['Events', 'GET /api/v1/events'],
-            ['Sessions', 'GET /api/v1/events/{eventId}/sessions'],
-            ['Speakers', 'GET /api/v1/events/{eventId}/speakers'],
-            ['Submissions', 'GET /api/v1/events/{eventId}/submissions'],
-            ['Named writes', 'POST /api/v1/operations/{operationName}'],
-            ['Domain event feed', 'GET /api/v1/domain-events'],
-            ['Operation manifest', 'GET /api/v1/manifest'],
-            ['Logical export', 'GET /api/v1/export'],
-            ['Recovery inspection', 'GET /api/v1/recovery'],
-          ].map(([term, detail], index) => (
-            <div
-              key={term}
-              className={cx(
-                'border-zinc-950/5 py-4',
-                index > 0 && 'border-t',
-                index === 1 && 'sm:border-t-0',
-                index % 2 === 0 ? 'sm:pr-6' : 'sm:border-l sm:pl-6',
-              )}
-            >
-              <dt className="text-base font-medium text-zinc-950 sm:text-sm">{term}</dt>
-              <dd className="break-all font-mono text-base text-zinc-500 sm:text-sm">{detail}</dd>
-            </div>
-          ))}
-        </dl>
+        <SectionHeading
+          id="endpoints-heading"
+          title="API reference"
+          description="Event resources for reads and named operations for validated writes."
+        />
+        <details className="group mt-4 rounded-xl bg-zinc-50 ring-1 ring-inset ring-zinc-950/5">
+          <summary className="focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 text-base font-medium text-zinc-950 marker:hidden sm:text-sm">
+            View endpoint reference
+            <ArrowRightIcon className="size-4 shrink-0 fill-zinc-500 transition-transform group-open:rotate-90" />
+          </summary>
+          <dl className="grid gap-0 border-t border-zinc-950/5 px-4 sm:grid-cols-2">
+            {[
+              ['Events', 'GET /api/v1/events'],
+              ['Sessions', 'GET /api/v1/events/{eventId}/sessions'],
+              ['Speakers', 'GET /api/v1/events/{eventId}/speakers'],
+              ['Submissions', 'GET /api/v1/events/{eventId}/submissions'],
+              ['Named writes', 'POST /api/v1/operations/{operationName}'],
+              ['Domain event feed', 'GET /api/v1/domain-events'],
+              ['Operation manifest', 'GET /api/v1/manifest'],
+              ['Logical export', 'GET /api/v1/export'],
+              ['Recovery inspection', 'GET /api/v1/recovery'],
+            ].map(([term, detail], index) => (
+              <div
+                key={term}
+                className={cx(
+                  'border-zinc-950/5 py-4',
+                  index > 0 && 'border-t',
+                  index === 1 && 'sm:border-t-0',
+                  index % 2 === 0 ? 'sm:pr-6' : 'sm:border-l sm:pl-6',
+                )}
+              >
+                <dt className="text-base font-medium text-zinc-950 sm:text-sm">{term}</dt>
+                <dd className="break-all font-mono text-base text-zinc-500 sm:text-sm">{detail}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
       </section>
+
+      {recovery ? (
+        <section aria-labelledby="recovery-heading">
+          <details className="group rounded-xl bg-zinc-50 ring-1 ring-inset ring-zinc-950/5">
+            <summary className="focus-ring flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl p-4 marker:hidden">
+              <span className="min-w-0">
+                <span
+                  id="recovery-heading"
+                  className="block text-base font-medium text-zinc-950 sm:text-sm"
+                >
+                  Data recovery
+                </span>
+                <span className="block text-pretty text-base text-zinc-500 sm:text-sm">
+                  Inspect a recovery point without changing event data.
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-sm font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-700/10 sm:inline">
+                  {recovery.retentionDays} days
+                </span>
+                <ArrowRightIcon className="size-4 fill-zinc-500 transition-transform group-open:rotate-90" />
+              </span>
+            </summary>
+
+            <div className="grid gap-5 border-t border-zinc-950/5 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
+              <div className="rounded-xl bg-white p-5 ring-1 ring-inset ring-zinc-950/5">
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-sm font-medium text-zinc-500">Recovery unit</dt>
+                    <dd className="pt-1 text-base font-medium text-zinc-950 sm:text-sm">
+                      Event workspace
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-zinc-500">Workspace data</dt>
+                    <dd className="pt-1 text-base font-medium text-zinc-950 sm:text-sm">
+                      {new Intl.NumberFormat(undefined, {
+                        style: 'unit',
+                        unit: 'kilobyte',
+                        maximumFractionDigits: 1,
+                      }).format(recovery.databaseSizeBytes / 1_000)}
+                    </dd>
+                  </div>
+                </dl>
+                <p className="pt-5 text-sm text-zinc-500">
+                  Account access and uploaded files have separate recovery boundaries. Download a
+                  full export before an incident restore.
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white p-5 ring-1 ring-inset ring-zinc-950/10">
+                <label htmlFor="recovery-time" className="text-sm font-medium text-zinc-950">
+                  Approximate recovery time
+                </label>
+                <input
+                  id="recovery-time"
+                  type="datetime-local"
+                  value={recoveryTime}
+                  max={localDateTimeInput(Date.now())}
+                  onChange={(event) => setRecoveryTime(event.target.value)}
+                  className="focus-ring mt-2 min-h-10 w-full rounded-lg bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:text-sm"
+                />
+                <Button
+                  variant="secondary"
+                  className="mt-3 w-full"
+                  disabled={recoveryBusy || !recoveryTime}
+                  onClick={() => void inspectRecoveryPoint()}
+                >
+                  <ArrowPathIcon className="size-4 h-lh shrink-0 fill-current" />
+                  {recoveryBusy ? 'Checking…' : 'Check recovery point'}
+                </Button>
+                {recoveryPoint ? (
+                  <div className="mt-4 rounded-xl bg-emerald-50 p-3 ring-1 ring-inset ring-emerald-700/10">
+                    <p role="status" className="text-sm font-medium text-emerald-800">
+                      Recovery point available near{' '}
+                      {new Date(recoveryPoint.requestedAt).toLocaleString()}.
+                    </p>
+                    <button
+                      type="button"
+                      className="focus-ring mt-2 rounded-md font-mono text-sm text-emerald-800 underline decoration-emerald-700/30 underline-offset-4 hover:decoration-emerald-700"
+                      onClick={() => void navigator.clipboard.writeText(recoveryPoint.bookmark)}
+                    >
+                      Copy bookmark
+                    </button>
+                  </div>
+                ) : null}
+                {recoveryError ? (
+                  <p role="alert" className="pt-3 text-sm font-medium text-red-700">
+                    {recoveryError}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </details>
+        </section>
+      ) : null}
 
       {!hostedApp ? (
         <section
@@ -798,6 +813,64 @@ export function IntegrationsView() {
         </section>
       ) : null}
     </div>
+  )
+}
+
+function AgentConnectionSection() {
+  return (
+    <section aria-labelledby="agent-connection-heading">
+      <div className="flex flex-col gap-4 border-b border-zinc-950/5 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h2
+            id="agent-connection-heading"
+            className="text-base font-medium text-zinc-950 sm:text-sm"
+          >
+            Agent connection
+          </h2>
+          <p className="max-w-2xl text-pretty text-base text-zinc-500 sm:text-sm">
+            The API and MCP server are already part of this ProgramKit deployment. Install the
+            plugin in your agent client; there is no second service to host.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          className="shrink-0"
+          onClick={() => {
+            window.location.href = '/agent-plugin.zip'
+          }}
+        >
+          <ArrowDownTrayIcon className="size-4 h-lh shrink-0 fill-current" />
+          Download agent plugin
+        </Button>
+      </div>
+      <ol role="list" className="grid gap-4 py-5 sm:grid-cols-3">
+        {[
+          ['1', 'Create a key', 'Choose Agent operations below and save the copy-once secret.'],
+          [
+            '2',
+            'Install the plugin',
+            'The download is preconfigured for this deployment’s MCP URL.',
+          ],
+          ['3', 'Set the secret', 'Store the key as PROGRAMKIT_API_KEY in the agent client.'],
+        ].map(([number, title, detail]) => (
+          <li key={number} className="flex min-w-0 items-start gap-3">
+            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-blue-50 font-mono text-sm text-blue-700 ring-1 ring-inset ring-blue-700/10">
+              {number}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-base font-medium text-zinc-950 sm:text-sm">{title}</span>
+              <span className="block text-pretty text-base text-zinc-500 sm:text-sm">{detail}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <div className="flex min-w-0 items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2 ring-1 ring-inset ring-zinc-950/5">
+        <CommandLineIcon className="size-4 h-lh shrink-0 fill-zinc-500" />
+        <code className="min-w-0 overflow-x-auto text-sm text-zinc-600">
+          {window.location.origin}/mcp
+        </code>
+      </div>
+    </section>
   )
 }
 

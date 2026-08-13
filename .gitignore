@@ -1,8 +1,15 @@
 node_modules/
 dist/
 .wrangler/
-.programkit/
+.programkit*/
 .dev.vars
 .DS_Store
 coverage/
 *.tsbuildinfo
+
+# Local visual-review captures. The public showcase uses screenshots/appflow and
+# screenshots/programkit; these folders are working evidence rather than product assets.
+showcase/screenshots/appflow-ui/
+showcase/screenshots/appflow/contact-*.jpg
+showcase/screenshots/audit-*/
+showcase/screenshots/programkit-clean/

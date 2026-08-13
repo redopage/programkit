@@ -27,6 +27,33 @@ export function toZonedDateTimeInput(iso: string, timeZone: string) {
   return `${value.year}-${value.month}-${value.day}T${value.hour}:${value.minute}`
 }
 
+export function eventDayKey(iso: string, timeZone: string) {
+  return toZonedDateTimeInput(iso, timeZone).slice(0, 10)
+}
+
+export function eventCalendarDays(startsAt: string, endsAt: string, timeZone: string) {
+  const first = eventDayKey(startsAt, timeZone)
+  const last = eventDayKey(endsAt, timeZone)
+  const days: string[] = []
+  let cursor = first
+  while (cursor <= last && days.length < 31) {
+    days.push(cursor)
+    const next = new Date(`${cursor}T12:00:00.000Z`)
+    next.setUTCDate(next.getUTCDate() + 1)
+    cursor = next.toISOString().slice(0, 10)
+  }
+  return days
+}
+
+export function eventCalendarDayLabel(day: string, long = false) {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: long ? 'long' : undefined,
+    month: long ? 'long' : 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${day}T12:00:00.000Z`))
+}
+
 export function zonedDateTimeInputToIso(value: string, timeZone: string) {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/u)
   if (!match) throw new Error('Enter a valid local date and time.')

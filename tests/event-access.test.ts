@@ -248,6 +248,7 @@ describe('EventAccessDurableObject', () => {
     const signup = await access.fetch(
       request('/internal/event-access/external/password', {
         eventId: event.id,
+        name: 'Priya Nair',
         email: 'Priya@example.com',
         password: 'a-long-test-password',
         intent: 'signup',
@@ -256,7 +257,7 @@ describe('EventAccessDurableObject', () => {
     )
     const signedUp = await body(signup)
     expect(signup.status).toBe(201)
-    expect(signedUp.identity).toMatchObject({ email: 'priya@example.com' })
+    expect(signedUp.identity).toMatchObject({ name: 'Priya Nair', email: 'priya@example.com' })
     expect(signedUp.sessionToken).toMatch(/^[a-f0-9]{64}$/u)
 
     const restored = await access.fetch(
@@ -268,7 +269,7 @@ describe('EventAccessDurableObject', () => {
     expect(await body(restored)).toMatchObject({
       ok: true,
       event,
-      identity: { email: 'priya@example.com' },
+      identity: { name: 'Priya Nair', email: 'priya@example.com' },
     })
 
     vi.advanceTimersByTime(1_000)
@@ -286,6 +287,22 @@ describe('EventAccessDurableObject', () => {
     expect(await body(duplicate)).toMatchObject({ code: 'ACCOUNT_EXISTS' })
   })
 
+  it('requires a participant name when creating an account', async () => {
+    await initialize()
+    const signup = await access.fetch(
+      request('/internal/event-access/external/password', {
+        eventId: event.id,
+        email: 'unnamed-speaker@example.com',
+        password: 'a-long-test-password',
+        intent: 'signup',
+        ipHash: 'ip-unnamed',
+      }),
+    )
+
+    expect(signup.status).toBe(400)
+    expect(await body(signup)).toMatchObject({ code: 'INVALID_INPUT' })
+  })
+
   it('counts participant password failures without throttling successful sign-ins', async () => {
     await initialize()
     const email = 'repeat-speaker@example.com'
@@ -294,6 +311,7 @@ describe('EventAccessDurableObject', () => {
     const signup = await access.fetch(
       request('/internal/event-access/external/password', {
         eventId: event.id,
+        name: 'Repeat Speaker',
         email,
         password,
         intent: 'signup',
@@ -469,6 +487,7 @@ describe('EventAccessDurableObject', () => {
     const signup = await access.fetch(
       request('/internal/event-access/external/password', {
         eventId: event.id,
+        name: 'Speaker Example',
         email: 'speaker@example.com',
         password: 'speaker-password',
         intent: 'signup',

@@ -84,10 +84,11 @@ function participantState(state: WorkspaceState, participationId: string, portal
   const requirementIds = new Set(clone.requirementInstances.map((entry) => entry.id))
   clone.assets = (state.assets ?? []).filter(
     (entry) =>
-      (entry.owner.type === 'submission' && submissionIds.has(entry.owner.id)) ||
-      (entry.owner.type === 'participation' && entry.owner.id === participationId) ||
-      (entry.owner.type === 'person' && entry.owner.id === person.id) ||
-      (entry.owner.type === 'requirement' && requirementIds.has(entry.owner.id)),
+      !entry.deletedAt &&
+      ((entry.owner.type === 'submission' && submissionIds.has(entry.owner.id)) ||
+        (entry.owner.type === 'participation' && entry.owner.id === participationId) ||
+        (entry.owner.type === 'person' && entry.owner.id === person.id) ||
+        (entry.owner.type === 'requirement' && requirementIds.has(entry.owner.id))),
   )
   const assetIds = new Set(clone.assets.map((entry) => entry.id))
   clone.assetComments = (state.assetComments ?? []).filter((entry) => assetIds.has(entry.assetId))
@@ -113,6 +114,7 @@ function participantState(state: WorkspaceState, participationId: string, portal
   clone.scheduleReleases = []
   clone.campaigns = []
   clone.outboundMessages = []
+  clone.emailSuppressions = []
   clone.portalResourcePages = (state.portalResourcePages ?? [])
     .filter((entry) => entry.eventId === participation.eventId && entry.status === 'published')
     .sort((left, right) => left.sortOrder - right.sortOrder)
@@ -149,6 +151,7 @@ function projectionBase(state: WorkspaceState) {
   clone.scheduleReleases = []
   clone.campaigns = []
   clone.outboundMessages = []
+  clone.emailSuppressions = []
   clone.portalResourcePages = []
   clone.programEmbeds = []
   clone.changeSets = []
@@ -182,7 +185,12 @@ function publicSubmissionState(state: WorkspaceState, slug: string, speakerAcces
       .map((entry) => structuredClone(entry))
     const submissionIds = new Set(projected.submissions.map((entry) => entry.id))
     projected.assets = state.assets
-      .filter((entry) => entry.owner.type === 'submission' && submissionIds.has(entry.owner.id))
+      .filter(
+        (entry) =>
+          !entry.deletedAt &&
+          entry.owner.type === 'submission' &&
+          submissionIds.has(entry.owner.id),
+      )
       .map((entry) => structuredClone(entry))
   }
   return projected

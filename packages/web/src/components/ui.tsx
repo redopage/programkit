@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
   type ButtonHTMLAttributes,
+  type CSSProperties,
   type InputHTMLAttributes,
   type ReactNode,
   type RefObject,
@@ -23,6 +24,7 @@ import { createPortal } from 'react-dom'
 import type {
   CampaignStatus,
   ChangeSetStatus,
+  OutboundMessageStatus,
   ParticipationStatus,
   PortalResourcePage,
   RequirementStatus,
@@ -180,19 +182,56 @@ export function Avatar({
   name: string
   size?: 'small' | 'regular' | 'large'
 }) {
+  const [failed, setFailed] = useState(() => src.trim().length === 0)
+
+  useEffect(() => setFailed(src.trim().length === 0), [src])
+
+  const className = cx(
+    'shrink-0 rounded-full bg-zinc-100 outline-1 -outline-offset-1 outline-black/10',
+    size === 'small' && 'size-7',
+    size === 'regular' && 'size-9',
+    size === 'large' && 'size-14',
+  )
+
+  if (failed) {
+    return (
+      <span
+        role="img"
+        aria-label={name}
+        className={cx(
+          className,
+          'inline-flex items-center justify-center font-medium uppercase text-zinc-600',
+          size === 'small' && 'text-[0.625rem]',
+          size === 'regular' && 'text-xs',
+          size === 'large' && 'text-sm',
+        )}
+        title={name}
+      >
+        {avatarInitials(name)}
+      </span>
+    )
+  }
+
   return (
     <img
       src={src}
       alt=""
-      className={cx(
-        'shrink-0 rounded-full bg-zinc-100 object-cover outline-1 -outline-offset-1 outline-black/10',
-        size === 'small' && 'size-7',
-        size === 'regular' && 'size-9',
-        size === 'large' && 'size-14',
-      )}
+      className={cx(className, 'object-cover')}
+      onError={() => setFailed(true)}
       title={name}
     />
   )
+}
+
+export function avatarInitials(name: string) {
+  const parts = name.trim().split(/\s+/u).filter(Boolean)
+  if (parts.length === 0) return '?'
+
+  const first = Array.from(parts[0] ?? '')[0] ?? ''
+  if (parts.length === 1) return first.toUpperCase()
+
+  const last = Array.from(parts.at(-1) ?? '')[0] ?? ''
+  return `${first}${last}`.toUpperCase()
 }
 
 const statusLabels: Record<string, string> = {
@@ -219,6 +258,8 @@ const statusLabels: Record<string, string> = {
   failed: 'Failed',
   published: 'Published',
   archived: 'Archived',
+  cancelled: 'Cancelled',
+  suppressed: 'Suppressed',
 }
 
 export function StatusBadge({
@@ -232,8 +273,7 @@ export function StatusBadge({
     | ChangeSetStatus
     | SubmissionStatus
     | PortalResourcePage['status']
-    | 'queued'
-    | 'failed'
+    | OutboundMessageStatus
   label?: string
 }) {
   return (
@@ -264,10 +304,12 @@ export function StatusBadge({
         (status === 'declined' ||
           status === 'withdrawn' ||
           status === 'rejected' ||
-          status === 'archived') &&
+          status === 'archived' ||
+          status === 'cancelled') &&
           'bg-zinc-100 text-zinc-500 ring-1 ring-zinc-950/5',
         status === 'waived' && 'bg-sky-50 text-sky-700 ring-1 ring-sky-700/10',
         status === 'sent' && 'bg-violet-50 text-violet-700 ring-1 ring-violet-700/10',
+        status === 'suppressed' && 'bg-orange-50 text-orange-700 ring-1 ring-orange-700/10',
       )}
     >
       {label ?? statusLabels[status] ?? status}
@@ -305,23 +347,24 @@ export const textAreaControl =
   'focus-ring-control min-w-0 resize-y rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 placeholder:text-zinc-400 sm:text-sm'
 
 export const selectControl =
-  'focus-ring-control col-span-full row-start-1 min-h-11 min-w-0 appearance-none rounded-xl bg-white py-2 pr-8 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 sm:min-h-9 sm:text-sm'
+  'focus-ring-control col-span-full row-start-1 min-h-11 w-full min-w-0 appearance-none rounded-xl bg-white py-2 pr-8 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 sm:min-h-9 sm:text-sm'
 
 /**
  * The row above a list: view filters on the left, search on the right. Owning
- * the layout here keeps every list screen on the same rhythm.
+ * the layout here keeps every list screen on the same rhythm. It becomes two
+ * full-width rows before either control has to clip or shrink.
  */
 export function Toolbar({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-w-0 flex-col gap-2 pb-3 xl:flex-row xl:items-center xl:justify-between">
       {children}
     </div>
   )
 }
 
 /**
- * The one filter treatment in the app. Scrolls rather than wrapping so a long
- * option list never pushes the search field onto another line.
+ * The one filter treatment in the app. Options remain on one line and scroll
+ * inside their own row when the labels exceed the available width.
  */
 export function FilterTabs<Value extends string>({
   label,
@@ -360,7 +403,7 @@ export function FilterTabs<Value extends string>({
   }, [activeIndex, options.length])
 
   return (
-    <div className="max-w-full overflow-x-auto">
+    <div className="min-w-0 max-w-full overflow-x-auto pb-px">
       <div
         ref={groupRef}
         role="group"
@@ -399,6 +442,76 @@ export function FilterTabs<Value extends string>({
   )
 }
 
+/**
+ * Keeps wide content usable when the platform hides scrollbars. The edge fades
+ * are an affordance only: they appear when more content exists in that direction
+ * and never intercept pointer input.
+ */
+export function HorizontalScrollArea({
+  children,
+  className,
+  viewportClassName,
+}: {
+  children: ReactNode
+  className?: string
+  viewportClassName?: string
+}) {
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const [edges, setEdges] = useState({ left: false, right: false })
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    const updateEdges = () => {
+      const next = {
+        left: viewport.scrollLeft > 1,
+        right: viewport.scrollLeft + viewport.clientWidth < viewport.scrollWidth - 1,
+      }
+      setEdges((current) =>
+        current.left === next.left && current.right === next.right ? current : next,
+      )
+    }
+
+    updateEdges()
+    viewport.addEventListener('scroll', updateEdges, { passive: true })
+
+    const observer = new ResizeObserver(updateEdges)
+    observer.observe(viewport)
+    if (viewport.firstElementChild) observer.observe(viewport.firstElementChild)
+
+    return () => {
+      viewport.removeEventListener('scroll', updateEdges)
+      observer.disconnect()
+    }
+  }, [])
+
+  const maskImage = edges.left
+    ? edges.right
+      ? 'linear-gradient(to right, transparent 0, #000 1.5rem, #000 calc(100% - 1.5rem), transparent 100%)'
+      : 'linear-gradient(to right, transparent 0, #000 1.5rem, #000 100%)'
+    : edges.right
+      ? 'linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent 100%)'
+      : 'none'
+
+  return (
+    <div className={className}>
+      <div
+        ref={viewportRef}
+        data-scroll-mask-left={edges.left ? '' : undefined}
+        data-scroll-mask-right={edges.right ? '' : undefined}
+        className={cx(
+          'overflow-x-auto [mask-image:var(--scroll-edge-mask)] [-webkit-mask-image:var(--scroll-edge-mask)]',
+          viewportClassName,
+        )}
+        style={{ '--scroll-edge-mask': maskImage } as CSSProperties}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export function SearchInput({
   label,
   name,
@@ -416,7 +529,7 @@ export function SearchInput({
   const hasValue = value.length > 0
 
   return (
-    <div className="relative min-w-0 sm:w-72">
+    <div className="relative w-full min-w-0 xl:w-72">
       <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 fill-zinc-400" />
       <input
         ref={inputRef}
@@ -633,14 +746,14 @@ export function PageHeader({
   return (
     // Only the desktop panel pins its header: on mobile the app already has a
     // fixed top bar, and a second pinned block would eat the viewport.
-    <div className="@container/page-header -mx-4 -mt-4 rounded-t-2xl border-b border-zinc-950/5 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6 lg:sticky lg:top-0 lg:z-20">
+    <div className="@container/page-header -mx-4 -mt-4 rounded-t-2xl border-b border-zinc-950/5 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6 lg:sticky lg:top-(--workspace-sticky-top) lg:z-30">
       <div className="flex flex-col gap-3 @3xl/page-header:flex-row @3xl/page-header:items-center @3xl/page-header:justify-between">
         <div className="min-w-0">
-          <h1 className="max-w-[40ch] truncate text-balance text-lg font-semibold tracking-tight text-zinc-950">
+          <h1 className="max-w-[40ch] text-balance text-lg font-semibold tracking-tight text-zinc-950 [overflow-wrap:anywhere]">
             {title}
           </h1>
           {description ? (
-            <p className="max-w-[72ch] truncate text-pretty text-base text-zinc-500 sm:text-sm">
+            <p className="max-w-[72ch] text-pretty text-base text-zinc-500 sm:text-sm">
               {description}
             </p>
           ) : null}
@@ -673,11 +786,14 @@ export function SectionHeading({
   return (
     <div className="flex items-end justify-between gap-4 border-b border-zinc-950/5 pb-2">
       <div className="min-w-0">
-        <h2 id={id} className="truncate text-base font-medium text-zinc-950 sm:text-sm">
+        <h2
+          id={id}
+          className="text-balance text-base font-medium text-zinc-950 sm:text-sm [overflow-wrap:anywhere]"
+        >
           {title}
         </h2>
         {description ? (
-          <p className="truncate text-pretty text-base text-zinc-500 sm:text-sm">{description}</p>
+          <p className="text-pretty text-base text-zinc-500 sm:text-sm">{description}</p>
         ) : null}
       </div>
       {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
@@ -717,14 +833,14 @@ export function StatGrid({
       <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-zinc-950/5 ring-1 ring-zinc-950/5 @3xl:grid-cols-4">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-white px-4 py-3.5 sm:px-5">
-            <dt className="truncate text-base font-medium text-zinc-500 sm:text-sm">
+            <dt className="text-pretty text-base font-medium text-zinc-500 sm:text-sm">
               {stat.label}
             </dt>
             <dd className="pt-0.5 text-2xl font-semibold tracking-tight tabular-nums text-zinc-950">
               {stat.value}
             </dd>
             {stat.detail ? (
-              <dd className="truncate text-base text-zinc-500 sm:text-sm">{stat.detail}</dd>
+              <dd className="text-pretty text-base text-zinc-500 sm:text-sm">{stat.detail}</dd>
             ) : null}
           </div>
         ))}
@@ -831,7 +947,7 @@ export function Drawer({
         ref={panelRef}
         tabIndex={-1}
         className={cx(
-          'absolute inset-x-0 bottom-0 flex max-h-[min(88dvh,48rem)] w-full flex-col rounded-t-3xl bg-white shadow-2xl ring-1 ring-black/5 focus:outline-none motion-safe:animate-slide-from-bottom sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:rounded-l-3xl sm:rounded-r-none sm:motion-safe:animate-slide-from-right',
+          'absolute inset-x-0 bottom-0 flex max-h-[min(88dvh,48rem)] w-full flex-col rounded-t-3xl bg-white shadow-2xl ring-1 ring-inset ring-black/5 focus:outline-none motion-safe:animate-slide-from-bottom sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:rounded-l-3xl sm:rounded-r-none sm:motion-safe:animate-slide-from-right',
           size === 'regular' ? 'sm:max-w-xl' : 'sm:max-w-5xl',
         )}
       >
@@ -839,8 +955,11 @@ export function Drawer({
           aria-hidden="true"
           className="absolute top-2 left-1/2 h-1 w-10 -translate-x-1/2 rounded-full bg-zinc-300 sm:hidden"
         />
-        <div className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-zinc-950/5 px-4 pt-2 sm:px-6 sm:pt-0">
-          <h2 id={titleId} className="truncate text-lg font-semibold text-zinc-950">
+        <div className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-zinc-950/5 px-4 py-3 pt-5 sm:px-6 sm:py-3">
+          <h2
+            id={titleId}
+            className="min-w-0 text-pretty text-lg font-semibold text-zinc-950 [overflow-wrap:anywhere]"
+          >
             {title}
           </h2>
           <IconButton label="Close panel" onClick={onClose}>
@@ -966,25 +1085,44 @@ export function Dialog({
         ref={panelRef}
         tabIndex={-1}
         className={cx(
-          'relative flex w-full flex-col overflow-hidden rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-black/10 focus:outline-none sm:p-6',
+          'relative flex w-full flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/10 focus:outline-none',
           size === 'regular'
             ? 'max-h-[min(90dvh,48rem)] max-w-md'
             : 'h-[min(90dvh,48rem)] max-w-3xl',
         )}
       >
-        <h2 id={titleId} className="text-lg font-semibold text-zinc-950">
-          {title}
-        </h2>
-        {description ? (
-          <p id={descriptionId} className="pt-1 text-pretty text-base text-zinc-500 sm:text-sm">
-            {description}
-          </p>
+        <div
+          className={cx(
+            'shrink-0 px-5 pt-5 sm:px-6 sm:pt-6',
+            !children && !footer && 'pb-5 sm:pb-6',
+          )}
+        >
+          <h2
+            id={titleId}
+            className="text-pretty text-lg font-semibold text-zinc-950 [overflow-wrap:anywhere]"
+          >
+            {title}
+          </h2>
+          {description ? (
+            <p id={descriptionId} className="pt-1 text-pretty text-base text-zinc-500 sm:text-sm">
+              {description}
+            </p>
+          ) : null}
+        </div>
+        {children ? (
+          <div
+            className={cx(
+              'min-h-0 flex-1 overflow-y-auto px-5 pt-4 sm:px-6',
+              !footer && 'pb-5 sm:pb-6',
+            )}
+          >
+            {children}
+          </div>
         ) : null}
-        {children ? <div className="min-h-0 flex-1 overflow-y-auto pt-4">{children}</div> : null}
         {footer ? (
           <div
             className={cx(
-              'flex shrink-0 gap-2 pt-5',
+              'mt-4 flex shrink-0 flex-wrap gap-2 border-t border-zinc-950/5 bg-white px-5 py-4 sm:px-6',
               size === 'regular' ? 'justify-start' : 'justify-end',
             )}
           >
@@ -1112,10 +1250,10 @@ export function NextActionRow({
         )}
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-base font-medium text-zinc-950 sm:text-sm">
+        <span className="block text-pretty text-base font-medium text-zinc-950 sm:text-sm">
           {label}
         </span>
-        <span className="block truncate text-base text-zinc-500 sm:text-sm">{detail}</span>
+        <span className="block text-pretty text-base text-zinc-500 sm:text-sm">{detail}</span>
       </span>
       <span className="shrink-0 text-base font-medium tabular-nums text-zinc-950 sm:text-sm">
         {count}
@@ -1162,7 +1300,7 @@ export function ToastViewport() {
   const { toast, dismissToast } = useWorkspace()
   if (!toast) return null
   return (
-    <div className="pointer-events-none fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-60 flex justify-center sm:bottom-6">
+    <div className="pointer-events-none fixed inset-x-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-60 flex justify-center sm:bottom-6">
       <div
         role="status"
         className="pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl bg-zinc-950/90 py-2 pr-2 pl-3 text-white shadow-xl ring-1 ring-white/10 backdrop-blur-xl motion-safe:animate-rise-in"

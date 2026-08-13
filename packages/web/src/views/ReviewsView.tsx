@@ -28,8 +28,10 @@ import {
 import {
   Button,
   Dialog,
+  HorizontalScrollArea,
   PageHeader,
   ProgressBar,
+  StatGrid,
   StatusBadge,
   cx,
   sentenceCase,
@@ -263,32 +265,19 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
         <div className="pt-3">
           <ProgressBar value={completion} />
         </div>
-        <dl className="grid grid-cols-2 pt-5 @3xl:grid-cols-4">
-          {[
-            ['Assigned reviews', activeAssignments.length],
-            ['Outstanding', activeAssignments.length - completed],
-            [
-              'Active reviewers',
-              reviewers.filter((reviewer) => reviewer.status === 'active').length,
-            ],
-            ['Proposals in review', inReview.length],
-          ].map(([label, value], index) => (
-            <div
-              key={String(label)}
-              className={cx(
-                'border-zinc-950/5 py-3',
-                index % 2 === 0 ? 'pr-5' : 'border-l pl-5',
-                index > 1 && 'border-t @3xl:border-t-0',
-                index === 2 && '@3xl:border-l @3xl:pl-5',
-              )}
-            >
-              <dt className="truncate text-base font-medium text-zinc-500 sm:text-sm">{label}</dt>
-              <dd className="pt-1 text-2xl font-semibold tracking-tight tabular-nums text-zinc-950">
-                {value}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <div className="pt-5">
+          <StatGrid
+            stats={[
+              { label: 'Assigned reviews', value: activeAssignments.length },
+              { label: 'Outstanding', value: activeAssignments.length - completed },
+              {
+                label: 'Active reviewers',
+                value: reviewers.filter((reviewer) => reviewer.status === 'active').length,
+              },
+              { label: 'Proposals in review', value: inReview.length },
+            ]}
+          />
+        </div>
       </section>
 
       <section aria-labelledby="reviewer-progress-heading" className="min-w-0">
@@ -309,7 +298,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             Review reminder{reminderReviewerIds.length === 1 ? '' : 's'}
           </Button>
         </div>
-        <div className="-mx-4 overflow-x-auto sm:-mx-6">
+        <HorizontalScrollArea className="-mx-4 sm:-mx-6">
           <div className="inline-block min-w-full px-4 align-middle sm:px-6">
             <table className="w-full">
               <thead>
@@ -416,7 +405,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </HorizontalScrollArea>
       </section>
 
       <section aria-labelledby="review-results-heading" className="min-w-0">
@@ -437,7 +426,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             {exported ? 'Downloaded' : 'Export CSV'}
           </Button>
         </div>
-        <div className="-mx-4 overflow-x-auto sm:-mx-6">
+        <HorizontalScrollArea className="-mx-4 sm:-mx-6">
           <div className="inline-block min-w-full px-4 align-middle sm:px-6">
             <table className="w-full">
               <thead>
@@ -512,7 +501,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </HorizontalScrollArea>
       </section>
 
       <div className="grid gap-8 xl:grid-cols-[7fr_5fr]">
@@ -658,7 +647,10 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             Every outstanding review and its owner.
           </p>
         </div>
-        <div className="-mx-4 -my-2 overflow-x-auto whitespace-nowrap sm:-mx-6">
+        <HorizontalScrollArea
+          className="-mx-4 -my-2 sm:-mx-6"
+          viewportClassName="whitespace-nowrap"
+        >
           <div className="inline-block min-w-full px-4 py-2 align-middle sm:px-6">
             <table className="w-full">
               <thead>
@@ -713,7 +705,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </HorizontalScrollArea>
       </section>
       <Dialog
         open={reminderComposerOpen}
@@ -753,7 +745,7 @@ export function ReviewsView({ navigate }: { navigate: (to: string) => void }) {
             <p className="text-sm text-zinc-500">
               {reminderPreviews.length} recipient{reminderPreviews.length === 1 ? '' : 's'}
             </p>
-            <p className="truncate pt-0.5 text-base font-medium text-zinc-950 sm:text-sm">
+            <p className="pt-0.5 text-pretty text-base font-medium text-zinc-950 sm:text-sm [overflow-wrap:anywhere]">
               {reminderPreviews.map((preview) => preview.recipientName).join(', ')}
             </p>
           </div>

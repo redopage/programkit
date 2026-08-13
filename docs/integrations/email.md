@@ -39,11 +39,19 @@ their confirmed sessions, times, and rooms. The attachment is stored with the ou
 later schedule edit cannot silently change an already approved delivery. Cloudflare Email Service
 sends it as `text/calendar`, which can be imported by Google Calendar, Outlook, and Apple Calendar.
 
-The operator can inspect the exact recipient, subject, body, trigger, queued or sent time, attempt
-count, provider ID, and last delivery error in Communications. Workspace exports include the same
-records in `csv/outbound-messages.csv`. A message is marked `sent` only after Cloudflare Email
+The operator can search and filter the exact recipient, subject, body, trigger, queued or sent time,
+attempt count, provider ID, and last delivery error in Communications. A draft, submitted, or
+approved campaign can be cancelled before it creates outbox messages. An individual queued or
+retrying message can also be cancelled before provider acceptance. Workspace exports include the
+same records in `csv/outbound-messages.csv`. A message is marked `sent` only after Cloudflare Email
 accepts it. The anonymous demo has no outbound binding, so its messages remain safe, inspectable
 outbox examples instead of contacting real recipients.
+
+Event-scoped email suppressions stop every queued or retrying message to the normalized address and
+block future messages before they enter the delivery queue. Organizers can inspect and remove a
+suppression in Communications; removal permits future messages but never restarts already stopped
+ones. Suppression records are auditable domain state and are included in
+`csv/email-suppressions.csv`.
 
 Automatic speaker-task reminders are enabled by default when an organizer creates a task. The
 scheduler considers four windows: seven days before, two days before, when due, and one day
@@ -74,7 +82,8 @@ The hosted app sign-in screen, password derivation, email delivery, one-time exc
 validation, event membership, team invitations, event creation, switching, and logout are
 implemented. Public participants can create a separate event-scoped password account and recover
 matching submission, reviewer, and speaker capabilities by normalized email. Authenticated
-password changes, account recovery, and optional MFA remain. See
+password changes and other-session revocation are implemented; account recovery and optional MFA
+remain. See
 [Identity, events, and storage ownership](../architecture/identity-and-tenancy.md).
 
 ## Required delivery path
@@ -93,9 +102,11 @@ queue or Durable Object alarm
 ```
 
 The outbox covers submission confirmations, decision notices, invitations, reminders, approved
-campaigns, and personalized calendar attachments. Suppression and unsubscribe state, a dead-letter
-action, and provider-level idempotency across a crash immediately after provider acceptance remain
-before using bulk mail for a production event.
+campaigns, and personalized calendar attachments. Manual suppression and pre-provider cancellation
+are enforced by the same durable state transition used by the UI and API. Recipient self-service
+unsubscribe, provider bounce/complaint ingestion, a dead-letter action, and provider-level
+idempotency across a crash immediately after provider acceptance remain before using bulk mail for
+a production event.
 
 ## Self-hosting
 
@@ -106,8 +117,10 @@ official sender into another deployment.
 2. Let Cloudflare configure or verify the required bounce, SPF, DKIM, and DMARC records.
 3. Add a `send_email` binding to your production Wrangler environment.
 4. Restrict `allowed_sender_addresses` to the exact application sender.
-5. Configure the support or reply-to address separately through Email Routing or another inbox.
-6. Run one direct delivery test before enabling product notifications.
+5. For a custom domain, set `PROGRAMKIT_APP_ORIGIN` to the installation's exact public HTTPS
+   origin. A `workers.dev` installation uses its current request origin automatically.
+6. Configure the support or reply-to address separately through Email Routing or another inbox.
+7. Run one direct delivery test before enabling product notifications and team invitations.
 
 Cloudflare's official documentation covers [Email Sending](https://developers.cloudflare.com/email-service/),
 [send bindings](https://developers.cloudflare.com/email-service/configuration/send-bindings/), and
@@ -116,6 +129,8 @@ Cloudflare's official documentation covers [Email Sending](https://developers.cl
 ## Safety boundary
 
 Outbound mail remains disabled for anonymous demos. The hosted staff sign-in has verified identity,
-workspace-scoped event selection, application resend limits, and auditable product-delivery
-history. Edge abuse controls, participant identity, unsubscribe and suppression handling where
-applicable, and a final live-inbox acceptance run are still required before sending to a real event.
+workspace-scoped event selection, application resend limits, auditable product-delivery history,
+manual suppression, and safe pre-provider cancellation. Event-scoped participant accounts are
+implemented; stronger reviewer and speaker invitation lifecycle, edge abuse controls, self-service
+unsubscribe, provider bounce/complaint ingestion, and a final live-inbox acceptance run are still
+required before sending to a real event.

@@ -32,6 +32,7 @@ import { submissionPipelineSummary } from '@programkit/core'
 
 import type { DemoStatus } from '../lib/demo.ts'
 import { zonedDateTimeInputToIso } from '../lib/date.ts'
+import { shouldHandleProgramNavigation } from '../lib/navigation.ts'
 import { publicProgramPath, publicSubmissionPath } from '../lib/public-links.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 import { CommandCenter, type CommandMode, type ProgramCommand } from './CommandCenter.tsx'
@@ -107,13 +108,6 @@ const navigation = [
   },
 ]
 
-const mobileNavigation = [
-  { href: '/', label: 'Home', icon: HomeIcon },
-  { href: '/submissions', label: 'Inbox', icon: InboxStackIcon },
-  { href: '/schedule', label: 'Agenda', icon: CalendarDaysIcon },
-  { href: '/readiness', label: 'Tasks', icon: ChartBarSquareIcon },
-]
-
 const commandDetails: Record<
   string,
   {
@@ -176,8 +170,8 @@ const commandDetails: Record<
     keywords: ['email', 'campaigns', 'messages'],
   },
   '/settings': {
-    description: 'Update event identity, dates, and status.',
-    keywords: ['event', 'timezone', 'venue'],
+    description: 'Manage event details, team access, and account security.',
+    keywords: ['event', 'timezone', 'venue', 'team', 'password', 'sessions', 'security'],
     section: 'Settings',
   },
   '/changes': {
@@ -187,19 +181,17 @@ const commandDetails: Record<
   },
   '/integrations': {
     description: 'Connect data and delivery services.',
-    keywords: ['airtable', 'api', 'cloudflare'],
+    keywords: ['airtable', 'api', 'exports', 'connections'],
     section: 'Settings',
   },
 }
 
 function SidebarUtilities({
-  pathname,
   navigate,
   demoUrl,
   eventId,
   onNavigate,
 }: {
-  pathname: string
   navigate: (to: string) => void
   demoUrl?: string
   eventId?: string
@@ -245,7 +237,6 @@ function SidebarUtilities({
   ]
   return (
     <div className="border-t border-zinc-950/6 pt-2">
-      <SidebarSettingsItem pathname={pathname} navigate={navigate} onNavigate={onNavigate} />
       {items.map(({ label, icon: Icon, action }) => (
         <button
           key={label}
@@ -286,6 +277,7 @@ function SidebarSettingsItem({
         !active && 'hover:bg-zinc-950/4 hover:text-zinc-950',
       )}
       onClick={(event) => {
+        if (!shouldHandleProgramNavigation(event)) return
         event.preventDefault()
         navigate('/settings')
         onNavigate?.()
@@ -327,6 +319,7 @@ function NavigationItems({
                       href={item.href}
                       aria-current={active ? 'page' : undefined}
                       onClick={(event) => {
+                        if (!shouldHandleProgramNavigation(event)) return
                         event.preventDefault()
                         navigate(item.href)
                         onNavigate?.()
@@ -444,6 +437,11 @@ function AccountMenu({
     setOpen(false)
     onNavigate?.()
   }
+  const openAccountSecurity = () => {
+    setOpen(false)
+    onNavigate?.()
+    window.location.assign('/settings#account-security')
+  }
   const signOut = async () => {
     setOpen(false)
     try {
@@ -465,6 +463,12 @@ function AccountMenu({
       icon: ArrowTopRightOnSquareIcon,
       action: preview,
       disabled: !activeEvent,
+    },
+    {
+      label: 'Account security',
+      icon: Cog6ToothIcon,
+      action: openAccountSecurity,
+      disabled: false,
     },
     {
       label: 'Sign out',
@@ -567,6 +571,17 @@ function newEventDraft(): NewEventDraft {
   }
 }
 
+function eventSlug(name: string) {
+  return (
+    name
+      .trim()
+      .toLocaleLowerCase('en-US')
+      .replace(/[^a-z0-9]+/gu, '-')
+      .replace(/^-+|-+$/gu, '')
+      .slice(0, 48) || 'event'
+  )
+}
+
 const eventCreationControl =
   'focus-ring-control min-h-11 min-w-0 w-full rounded-xl bg-white px-3 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 placeholder:text-zinc-400 sm:min-h-10 sm:text-sm'
 
@@ -574,12 +589,14 @@ function WorkspaceIdentity({
   commandOpen,
   account,
   onRequestAccount,
+  onAccountChanged,
 }: {
   commandOpen: boolean
   account: AccountSummary | null
   onRequestAccount: () => void
+  onAccountChanged: () => Promise<void>
 }) {
-  const { payload } = useWorkspace()
+  const { payload, execute, refresh } = useWorkspace()
   const state = payload?.state
   const event = state?.events.find((entry) => entry.id === state.activeEventId)
   const [open, setOpen] = useState(false)
@@ -598,6 +615,16 @@ function WorkspaceIdentity({
       return ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles']
     }
   }, [])
+  const requiresFirstEventSetup = Boolean(
+    account?.events.length === 1 &&
+    event?.name === 'My first event' &&
+    event.slug === 'my-first-event' &&
+    state &&
+    state.submissionForms.every((entry) => entry.eventId !== event.id) &&
+    state.submissions.every((entry) => entry.eventId !== event.id) &&
+    state.sessions.every((entry) => entry.eventId !== event.id) &&
+    state.people.length === 0,
+  )
 
   const updateEventDraft = <Key extends keyof NewEventDraft>(
     key: Key,
@@ -633,6 +660,12 @@ function WorkspaceIdentity({
     if (commandOpen) setOpen(false)
   }, [commandOpen])
 
+  useEffect(() => {
+    if (!requiresFirstEventSetup || !event) return
+    setEventDraft(newEventDraft())
+    setCreating(true)
+  }, [event?.id, requiresFirstEventSetup])
+
   const selectEvent = async (eventId: string) => {
     if (!account || eventId === account.activeEventId) return
     setSaving(true)
@@ -645,10 +678,12 @@ function WorkspaceIdentity({
         body: JSON.stringify({ eventId }),
       })
       if (!response.ok) throw new Error('The event could not be opened.')
-      window.location.assign('/')
+      setOpen(false)
+      await Promise.all([refresh(), onAccountChanged()])
     } catch {
-      setSaving(false)
       setError('The event could not be opened.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -660,6 +695,30 @@ function WorkspaceIdentity({
       const endsAt = zonedDateTimeInputToIso(`${eventDraft.endsOn}T17:00`, eventDraft.timezone)
       if (Date.parse(startsAt) >= Date.parse(endsAt)) {
         throw new Error('The event end must be after its start.')
+      }
+      if (requiresFirstEventSetup && event) {
+        const updated = await execute(
+          'event.update',
+          {
+            eventId: event.id,
+            name: eventDraft.name,
+            slug: eventSlug(eventDraft.name),
+            startsAt,
+            endsAt,
+            timezone: eventDraft.timezone,
+            venue: eventDraft.venue,
+            city: eventDraft.city,
+          },
+          { expectedVersions: { [event.id]: event.version } },
+          'Your event is ready.',
+        )
+        if (!updated.ok) {
+          throw new Error(updated.error?.message ?? 'The event could not be set up.')
+        }
+        setCreating(false)
+        setEventDraft(newEventDraft())
+        await onAccountChanged()
+        return
       }
       const response = await fetch('/api/v1/events', {
         method: 'POST',
@@ -678,10 +737,14 @@ function WorkspaceIdentity({
       if (!response.ok || !body.ok) {
         throw new Error(body.error ?? 'The event could not be created.')
       }
-      window.location.assign('/')
+      setCreating(false)
+      setOpen(false)
+      setEventDraft(newEventDraft())
+      await Promise.all([refresh(), onAccountChanged()])
     } catch (caught) {
-      setSaving(false)
       setError(caught instanceof Error ? caught.message : 'The event could not be created.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -773,34 +836,51 @@ function WorkspaceIdentity({
       <Dialog
         open={creating}
         onClose={() => {
-          if (saving) return
+          if (saving || requiresFirstEventSetup) return
           setCreating(false)
           setEventDraft(newEventDraft())
           setError(null)
         }}
-        title="Create an event"
-        description="Add the basics now. Rooms, tracks, and forms come next."
+        title={requiresFirstEventSetup ? 'Set up your first event' : 'Create an event'}
+        description={
+          requiresFirstEventSetup
+            ? 'Add the basics now. You can refine them later in Settings.'
+            : 'Add the basics now. Rooms, tracks, and forms come next.'
+        }
         initialFocusRef={eventNameRef}
         footer={
           <>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setCreating(false)
-                setEventDraft(newEventDraft())
-                setError(null)
-              }}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
+            {!requiresFirstEventSetup ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setCreating(false)
+                  setEventDraft(newEventDraft())
+                  setError(null)
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+            ) : null}
             <Button
               variant="primary"
               type="submit"
               form="new-event-form"
-              disabled={saving || eventDraft.name.trim().length < 2}
+              disabled={
+                saving ||
+                eventDraft.name.trim().length < 2 ||
+                eventDraft.venue.trim().length < 2 ||
+                eventDraft.city.trim().length < 2
+              }
             >
-              {saving ? 'Creating…' : 'Create event'}
+              {saving
+                ? requiresFirstEventSetup
+                  ? 'Saving…'
+                  : 'Creating…'
+                : requiresFirstEventSetup
+                  ? 'Continue'
+                  : 'Create event'}
             </Button>
           </>
         }
@@ -817,6 +897,7 @@ function WorkspaceIdentity({
             <span className="text-sm font-medium text-zinc-800">Event name</span>
             <input
               ref={eventNameRef}
+              name="event-name"
               required
               value={eventDraft.name}
               onChange={(changeEvent) => updateEventDraft('name', changeEvent.currentTarget.value)}
@@ -827,6 +908,7 @@ function WorkspaceIdentity({
           <label className="grid gap-1.5">
             <span className="text-sm font-medium text-zinc-800">Starts</span>
             <input
+              name="event-starts-on"
               type="date"
               required
               value={eventDraft.startsOn}
@@ -839,6 +921,7 @@ function WorkspaceIdentity({
           <label className="grid gap-1.5">
             <span className="text-sm font-medium text-zinc-800">Ends</span>
             <input
+              name="event-ends-on"
               type="date"
               required
               min={eventDraft.startsOn}
@@ -850,6 +933,7 @@ function WorkspaceIdentity({
           <label className="grid gap-1.5 sm:col-span-2">
             <span className="text-sm font-medium text-zinc-800">Timezone</span>
             <select
+              name="event-timezone"
               value={eventDraft.timezone}
               onChange={(changeEvent) =>
                 updateEventDraft('timezone', changeEvent.currentTarget.value)
@@ -866,6 +950,8 @@ function WorkspaceIdentity({
           <label className="grid gap-1.5">
             <span className="text-sm font-medium text-zinc-800">Venue</span>
             <input
+              name="event-venue"
+              required
               value={eventDraft.venue}
               onChange={(changeEvent) => updateEventDraft('venue', changeEvent.currentTarget.value)}
               placeholder="Moscone West"
@@ -875,6 +961,8 @@ function WorkspaceIdentity({
           <label className="grid gap-1.5">
             <span className="text-sm font-medium text-zinc-800">City</span>
             <input
+              name="event-city"
+              required
               value={eventDraft.city}
               onChange={(changeEvent) => updateEventDraft('city', changeEvent.currentTarget.value)}
               placeholder="San Francisco"
@@ -967,7 +1055,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
     pageCommands.push(
       {
         id: 'page-settings',
-        label: 'Event settings',
+        label: 'Settings',
         description: commandDetails['/settings'].description,
         href: '/settings',
         section: 'Settings',
@@ -1092,14 +1180,14 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
       <DemoBanner onStatusChange={setDemoStatus} />
       <div
         className={cx(
-          'isolate min-h-dvh antialiased max-lg:bg-white lg:flex lg:bg-canvas',
+          'isolate min-h-dvh antialiased [--workspace-sticky-top:0px] max-lg:bg-white lg:flex lg:bg-canvas',
           demoActive &&
-            'pt-[calc(3rem+env(safe-area-inset-top))] sm:pt-[calc(2.5rem+env(safe-area-inset-top))]',
+            'pt-[calc(3rem+env(safe-area-inset-top))] [--workspace-sticky-top:calc(2.5rem+env(safe-area-inset-top))] sm:pt-[calc(2.5rem+env(safe-area-inset-top))]',
         )}
       >
         <aside
           className={cx(
-            'fixed bottom-0 left-0 z-30 hidden w-60 flex-col p-2 lg:flex',
+            'fixed bottom-0 left-0 z-40 hidden w-60 flex-col p-2 lg:flex',
             demoActive ? 'top-[calc(2.5rem+env(safe-area-inset-top))]' : 'top-0',
           )}
         >
@@ -1109,6 +1197,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                 commandOpen={commandMode !== null}
                 account={account}
                 onRequestAccount={() => void loadAccount()}
+                onAccountChanged={loadAccount}
               />
             </div>
             <div>
@@ -1127,9 +1216,11 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
           <div className="min-h-0 flex-1 overflow-y-auto pt-4 pb-2">
             <NavigationItems pathname={pathname} navigate={navigate} />
           </div>
+          <div className="pb-2">
+            <SidebarSettingsItem pathname={pathname} navigate={navigate} />
+          </div>
           {hostedApp ? (
             <div className="border-t border-zinc-950/6 pt-2">
-              <SidebarSettingsItem pathname={pathname} navigate={navigate} />
               {account ? (
                 <AccountMenu account={account} activeEvent={activeEvent} />
               ) : (
@@ -1137,12 +1228,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
               )}
             </div>
           ) : (
-            <SidebarUtilities
-              pathname={pathname}
-              navigate={navigate}
-              demoUrl={demoUrl}
-              eventId={activeEvent?.id}
-            />
+            <SidebarUtilities navigate={navigate} demoUrl={demoUrl} eventId={activeEvent?.id} />
           )}
         </aside>
 
@@ -1159,6 +1245,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
             aria-label="Event overview"
             className="focus-ring min-w-0 rounded-md"
             onClick={(event) => {
+              if (!shouldHandleProgramNavigation(event)) return
               event.preventDefault()
               navigate('/')
             }}
@@ -1169,9 +1256,14 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
               compact
             />
           </a>
-          <IconButton label="Search ProgramKit" onClick={() => setCommandMode('commands')}>
-            <MagnifyingGlassIcon className="size-4 shrink-0 fill-current" />
-          </IconButton>
+          <div className="flex items-center gap-1">
+            <IconButton label="Search ProgramKit" onClick={() => setCommandMode('commands')}>
+              <MagnifyingGlassIcon className="size-4 shrink-0 fill-current" />
+            </IconButton>
+            <IconButton label="Open navigation" onClick={() => setMobileOpen(true)}>
+              <Bars3Icon className="size-4 shrink-0 fill-current" />
+            </IconButton>
+          </div>
         </header>
 
         {mobileOpen
@@ -1189,7 +1281,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                 />
                 <div
                   ref={mobilePanelRef}
-                  className="absolute inset-y-0 left-0 flex w-[min(86vw,20rem)] flex-col rounded-r-2xl bg-white p-3 pb-[max(--spacing(3),env(safe-area-inset-bottom))] pt-[max(--spacing(3),env(safe-area-inset-top))] shadow-2xl ring-1 ring-black/5 motion-safe:animate-slide-from-left"
+                  className="absolute inset-y-0 left-0 flex w-[min(86vw,20rem)] flex-col rounded-r-2xl bg-white p-3 pb-[max(--spacing(3),env(safe-area-inset-bottom))] pt-[max(--spacing(3),env(safe-area-inset-top))] shadow-2xl ring-1 ring-inset ring-black/5 motion-safe:animate-slide-from-left"
                 >
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
@@ -1197,6 +1289,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                         commandOpen={commandMode !== null}
                         account={account}
                         onRequestAccount={() => void loadAccount()}
+                        onAccountChanged={loadAccount}
                       />
                     </div>
                     <IconButton label="Close navigation" onClick={() => setMobileOpen(false)}>
@@ -1213,13 +1306,15 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                       onNavigate={() => setMobileOpen(false)}
                     />
                   </div>
+                  <div className="pb-2">
+                    <SidebarSettingsItem
+                      pathname={pathname}
+                      navigate={navigate}
+                      onNavigate={() => setMobileOpen(false)}
+                    />
+                  </div>
                   {hostedApp ? (
                     <div className="border-t border-zinc-950/6 pt-2">
-                      <SidebarSettingsItem
-                        pathname={pathname}
-                        navigate={navigate}
-                        onNavigate={() => setMobileOpen(false)}
-                      />
                       {account ? (
                         <AccountMenu
                           account={account}
@@ -1232,7 +1327,6 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
                     </div>
                   ) : (
                     <SidebarUtilities
-                      pathname={pathname}
                       navigate={navigate}
                       demoUrl={demoUrl}
                       eventId={activeEvent?.id}
@@ -1253,77 +1347,7 @@ export function Shell({ pathname, navigate, children }: ShellProps) {
           navigate={navigate}
         />
 
-        <nav
-          aria-label="Mobile primary navigation"
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-950/5 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
-        >
-          <ul role="list" className="grid grid-cols-5 px-1">
-            {mobileNavigation.map((item) => {
-              const active =
-                item.href === '/'
-                  ? pathname === '/'
-                  : pathname === item.href || pathname.startsWith(`${item.href}/`)
-              const Icon = item.icon
-              return (
-                <li key={item.href}>
-                  <a
-                    href={item.href}
-                    aria-current={active ? 'page' : undefined}
-                    onClick={(event) => {
-                      event.preventDefault()
-                      navigate(item.href)
-                    }}
-                    className={cx(
-                      'group focus-ring flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg text-sm',
-                      active ? 'text-blue-600' : 'text-zinc-500 hover:text-zinc-950',
-                    )}
-                  >
-                    <Icon
-                      className={cx(
-                        'size-4 shrink-0',
-                        active ? 'fill-blue-600' : 'fill-zinc-500 group-hover:fill-zinc-950',
-                      )}
-                    />
-                    <p>{item.label}</p>
-                  </a>
-                </li>
-              )
-            })}
-            <li>
-              <button
-                type="button"
-                aria-label="Open all navigation"
-                onClick={() => setMobileOpen(true)}
-                className={cx(
-                  'group focus-ring flex min-h-16 w-full flex-col items-center justify-center gap-1 rounded-lg text-sm',
-                  mobileNavigation.some(
-                    (item) =>
-                      pathname === item.href ||
-                      (item.href !== '/' && pathname.startsWith(`${item.href}/`)),
-                  )
-                    ? 'text-zinc-500 hover:text-zinc-950'
-                    : 'text-blue-600',
-                )}
-              >
-                <Bars3Icon
-                  className={cx(
-                    'size-4 shrink-0',
-                    mobileNavigation.some(
-                      (item) =>
-                        pathname === item.href ||
-                        (item.href !== '/' && pathname.startsWith(`${item.href}/`)),
-                    )
-                      ? 'fill-zinc-500 group-hover:fill-zinc-950'
-                      : 'fill-blue-600',
-                  )}
-                />
-                <p>More</p>
-              </button>
-            </li>
-          </ul>
-        </nav>
-
-        <main className="min-w-0 flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pb-0 lg:pt-0 lg:pl-60">
+        <main className="min-w-0 flex-1 pb-[env(safe-area-inset-bottom)] pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pb-0 lg:pt-0 lg:pl-60">
           {/* The panel floats on the canvas, so the workspace reads as one document
             with the navigation living outside it. */}
           <div className="lg:py-2 lg:pr-2">

@@ -7,6 +7,19 @@ import type {
 
 export type SubmissionFormAvailability = 'draft' | 'scheduled' | 'open' | 'closed'
 
+export const sessionFormatOptions = [
+  { value: 'keynote', label: 'Keynote' },
+  { value: 'talk', label: 'Talk' },
+  { value: 'lightning', label: 'Lightning talk' },
+  { value: 'panel', label: 'Panel' },
+  { value: 'workshop', label: 'Workshop' },
+  { value: 'break', label: 'Break' },
+] as const
+
+export const proposalSessionFormatOptions = sessionFormatOptions.filter(
+  (option) => option.value !== 'break',
+)
+
 export function submissionFormAvailability(
   form: SubmissionForm,
   at: number = Date.now(),
@@ -92,7 +105,9 @@ export function submissionFormPublishReadiness(
     return (
       matches.length !== 1 ||
       !matches[0].required ||
-      !submissionFieldPurposeSupportsKind(purpose, matches[0].kind)
+      !submissionFieldPurposeSupportsKind(purpose, matches[0].kind) ||
+      ((matches[0].kind === 'select' || matches[0].kind === 'multi_select') &&
+        matches[0].options.length === 0)
     )
   })
   const completedCount = requiredSubmissionFieldPurposes.length - incompletePurposes.length

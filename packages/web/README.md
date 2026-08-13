@@ -66,18 +66,24 @@ not authorization.
   readiness, and draft preview
 - `/submissions` — proposal pipeline, review context, and decisions
 - `/reviews` — committee progress and evaluation-plan overview
+- `/crm` — organization-scoped people, segments, sourcing, reuse, and analytics
 - `/people` — relational people and participation records
 - `/readiness` — requirement completion and blockers
+- `/files` — private assets, versions, comments, exports, and speaker resources
 - `/sessions` — program content
 - `/schedule` — draft placements, conflict checks, and publication
-- `/communications` — campaign drafting, approval, and demo send state
+- `/communications` — templates, audience resolution, approval, delivery, retry, and history
 - `/changes` — proposed changes and human review
-- `/integrations` — integration status and demo reset
+- `/integrations` — data exports, service status, API keys, agent connection, and recovery inspection
+- `/settings` — event identity, dates, inventory, team, installation access, and account security
 - `/agent` — agent tasks and guardrails
 - `/agenda` — public agenda, sessions, speakers, itinerary, and gallery from one immutable release
 - `/submit/{formSlug}` — public submission form
 - `/reviewer/{reviewerId}/{accessKey}` — scoped reviewer scorecard workspace
-- `/portal/{participationId}` — scoped participant profile and requirements
+- `/portal/{participationId}/{accessKey}` — scoped participant profile and requirements
+
+See [Routes and surfaces](../../docs/reference/routes-and-surfaces.md) for the hosted and local
+authorization differences.
 
 Dense data uses desktop tables and mobile relational lists rather than shrinking a spreadsheet.
 Drawers provide focused editing, while keyboard focus management, focus restoration, progress

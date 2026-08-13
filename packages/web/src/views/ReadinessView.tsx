@@ -78,6 +78,26 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
   const speakerTasks = state.requirementDefinitions.filter(
     (definition) => definition.eventId === state.activeEventId && definition.systemKey === null,
   )
+  const speakerTaskRows = speakerTasks.map((definition) => {
+    const instances = state.requirementInstances.filter(
+      (instance) => instance.definitionId === definition.id,
+    )
+    const assignees = instances
+      .map((instance) => {
+        const participation = state.participations.find(
+          (entry) => entry.id === instance.participationId,
+        )
+        const person = participation
+          ? state.people.find((entry) => entry.id === participation.personId)
+          : null
+        return person ? `${person.firstName} ${person.lastName}` : null
+      })
+      .filter((name): name is string => Boolean(name))
+    const completed = instances.filter(
+      (instance) => instance.status === 'approved' || instance.status === 'waived',
+    ).length
+    return { definition, instances, assignees, completed }
+  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -99,7 +119,11 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
 
       <StatGrid
         stats={[
-          { label: 'Average readiness', value: `${derived.readiness.readinessPercent}%` },
+          {
+            label: 'Average readiness',
+            value:
+              derived.readiness.participants === 0 ? '—' : `${derived.readiness.readinessPercent}%`,
+          },
           { label: 'Fully ready', value: derived.readiness.ready },
           { label: 'Hard blockers', value: derived.readiness.blockers },
           { label: 'Awaiting review', value: derived.readiness.awaitingReview },
@@ -118,7 +142,7 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
               </p>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="hidden overflow-x-auto xl:block">
             <table className="w-full min-w-2xl">
               <thead>
                 <tr className="border-b border-zinc-950/10">
@@ -134,24 +158,7 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-950/5">
-                {speakerTasks.map((definition) => {
-                  const instances = state.requirementInstances.filter(
-                    (instance) => instance.definitionId === definition.id,
-                  )
-                  const assignees = instances
-                    .map((instance) => {
-                      const participation = state.participations.find(
-                        (entry) => entry.id === instance.participationId,
-                      )
-                      const person = participation
-                        ? state.people.find((entry) => entry.id === participation.personId)
-                        : null
-                      return person ? `${person.firstName} ${person.lastName}` : null
-                    })
-                    .filter((name): name is string => Boolean(name))
-                  const completed = instances.filter(
-                    (instance) => instance.status === 'approved' || instance.status === 'waived',
-                  ).length
+                {speakerTaskRows.map(({ definition, instances, assignees, completed }) => {
                   return (
                     <tr key={definition.id}>
                       <td className="py-3 pr-6">
@@ -182,31 +189,78 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
               </tbody>
             </table>
           </div>
+          <ul role="list" className="divide-y divide-zinc-950/5 xl:hidden">
+            {speakerTaskRows.map(({ definition, instances, completed }) => (
+              <li key={definition.id} className="py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-pretty text-base font-medium text-zinc-950">
+                      {definition.label}
+                    </p>
+                    {definition.description ? (
+                      <p className="line-clamp-2 text-pretty text-base text-zinc-500 sm:text-sm">
+                        {definition.description}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span className="shrink-0 text-base font-medium tabular-nums text-zinc-950 sm:text-sm">
+                    {completed} of {instances.length}
+                  </span>
+                </div>
+                <dl className="mt-3 grid grid-cols-3 gap-4 text-sm">
+                  <div className="min-w-0">
+                    <dt className="text-zinc-400">Due</dt>
+                    <dd className="truncate text-zinc-700">
+                      {new Intl.DateTimeFormat('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      }).format(new Date(definition.dueAt))}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-zinc-400">Assigned</dt>
+                    <dd className="truncate text-zinc-700">
+                      {instances.length} {instances.length === 1 ? 'speaker' : 'speakers'}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-zinc-400">Reminders</dt>
+                    <dd className="truncate text-zinc-700">
+                      {definition.automaticReminders ? 'Automatic' : 'Off'}
+                    </dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 
-      <Toolbar>
-        <FilterTabs
-          label="Readiness views"
-          value={filter}
-          onChange={setFilter}
-          options={[
-            ['all', 'All'],
-            ['blockers', 'Blockers'],
-            ['review', 'Awaiting review'],
-            ['ready', 'Ready'],
-          ]}
-        />
-        <SearchInput
-          label="Search readiness"
-          name="readiness-search"
-          placeholder="Search participants"
-          value={search}
-          onChange={setSearch}
-        />
-      </Toolbar>
+      <div className="lg:sticky lg:top-[calc(var(--workspace-sticky-top)+3.75rem)] lg:z-20 lg:bg-white/95 lg:backdrop-blur">
+        <Toolbar>
+          <FilterTabs
+            label="Readiness views"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              ['all', 'All'],
+              ['blockers', 'Blockers'],
+              ['review', 'Awaiting review'],
+              ['ready', 'Ready'],
+            ]}
+          />
+          <SearchInput
+            label="Search readiness"
+            name="readiness-search"
+            placeholder="Search participants"
+            value={search}
+            onChange={setSearch}
+          />
+        </Toolbar>
+      </div>
 
-      <div className="hidden sm:block">
+      <div className="hidden xl:block">
         <div className="-mx-6 -my-2 overflow-x-auto whitespace-nowrap">
           <div className="inline-block min-w-full px-6 py-2 align-middle">
             <table className="w-full">
@@ -287,7 +341,7 @@ export function ReadinessView({ navigate }: { navigate: (to: string) => void }) 
         </div>
       </div>
 
-      <ul role="list" className="divide-y divide-zinc-950/5 sm:hidden">
+      <ul role="list" className="divide-y divide-zinc-950/5 xl:hidden">
         {rows.map((row) => {
           const person = state.people.find((entry) => entry.id === row.personId)!
           return (

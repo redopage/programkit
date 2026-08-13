@@ -13,7 +13,7 @@ export interface ExternalAccessSession {
   eventId?: string
   eventName?: string
   eventLogoUrl?: string
-  identity?: { id: string; email: string }
+  identity?: { id: string; name: string; email: string }
   destinations?: ExternalAccessDestination[]
   submissionAccessKey?: string | null
 }
@@ -89,7 +89,12 @@ export function useExternalAccess(eventId: string, formSlug?: string) {
   }, [refresh])
 
   const authenticate = useCallback(
-    async (input: { email: string; password: string; intent: 'signin' | 'signup' }) => {
+    async (input: {
+      email: string
+      name: string
+      password: string
+      intent: 'signin' | 'signup'
+    }) => {
       setError('')
       const result = await responseBody(
         await fetch(

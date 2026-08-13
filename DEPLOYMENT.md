@@ -4,6 +4,10 @@ Cloudflare is ProgramKit's supported deployment target. The repository ships one
 application in `apps/cloudflare`; there is no generated adapter layer and no second host to keep in
 sync.
 
+For a task-oriented installation walkthrough, use the
+[self-hosting guide](docs/self-hosting/README.md). This document remains the canonical deployment
+architecture and production-boundary reference.
+
 This is an opinionated product decision, not an accidental lock-in. It keeps installation,
 operations, performance work, and documentation focused enough for a small open-source team to do
 well. The domain packages remain clean, and the logical export remains provider-independent, but
@@ -30,20 +34,43 @@ The runnable application currently includes the Worker, static assets, one accou
 identity object for hosted users, one access object per event, and one SQLite-backed workspace
 object per event. The official demo root creates isolated hosted trials that expire after seven
 days. Local development needs no D1 database, R2 bucket, queue, or email binding to run the
-deterministic sample workspace. The production self-host walkthrough provisions R2 and enables the
-complete account and multi-event assembly without requiring mail.
+deterministic sample workspace. The checked-in top-level profile and generated self-host profiles
+both enable the complete account and multi-event assembly without requiring mail.
+
+## One deployment boundary
+
+Self-hosters deploy one Worker and receive one origin:
+
+```text
+https://events.example.com/
+  ├── operator and participant web app
+  ├── /api/v1/*       HTTP API and public projections
+  ├── /mcp            remote MCP server
+  └── static assets
+
+Worker bindings
+  ├── account identity Durable Object
+  ├── event access Durable Object
+  ├── event workspace Durable Objects
+  └── R2 private files
+```
+
+The project website and disposable demo are separate official profiles and are not deployed into a
+self-host. The Agent Plugin is a client-side installation package that points back to `/mcp`; it is
+not another runtime.
 
 ## Official hosted environments
 
-The project deploys the same assembly into four explicit Wrangler profiles. This keeps product
+The project deploys the same assembly into explicit Wrangler profiles. This keeps product
 code, migrations, tests, and documentation together while isolating runtime state.
 
-| Profile | Host                  | Worker            | Purpose                         | Email                     |
-| ------- | --------------------- | ----------------- | ------------------------------- | ------------------------- |
-| default | Local or private test | `programkit`      | Single deterministic workspace  | None required             |
-| `site`  | `programkit.dev`      | `programkit-site` | Public site, no workspace API   | No binding                |
-| `demo`  | `demo.programkit.dev` | `programkit-demo` | Seven-day sample workspaces     | No binding                |
-| `app`   | `app.programkit.dev`  | `programkit-app`  | Staff sessions and event stores | Restricted sender binding |
+| Profile | Host                  | Worker             | Purpose                         | Email                     |
+| ------- | --------------------- | ------------------ | ------------------------------- | ------------------------- |
+| default | Self-host / direct    | `programkit`       | Accounts and event workspaces   | None required             |
+| `local` | Local Vite dev        | `programkit-local` | Single deterministic workspace  | None required             |
+| `site`  | `programkit.dev`      | `programkit-site`  | Public site, no workspace API   | No binding                |
+| `demo`  | `demo.programkit.dev` | `programkit-demo`  | Seven-day sample workspaces     | No binding                |
+| `app`   | `app.programkit.dev`  | `programkit-app`   | Staff sessions and event stores | Restricted sender binding |
 
 The site profile serves the small public homepage and rejects workspace APIs. The demo host
 rejects operator or API access until a private demo has been created or opened. The app and
@@ -180,13 +207,37 @@ SQLite-backed Durable Object together in `workerd`.
 
 ## Deploy
 
-### Recommended self-host walkthrough
+### One-click self-host
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
+
+Cloudflare clones the public mirror, runs the root build and deploy commands, and provisions the R2
+and Durable Object resources declared in `wrangler.jsonc`. The result is the authenticated
+`hosted-app` profile with password sign-up, multiple events, private files, event-scoped API keys,
+the HTTP API, and `/mcp` on one origin.
+
+After the first deployment:
+
+1. Open the Worker URL and create the owner account using the private
+   `PROGRAMKIT_BOOTSTRAP_TOKEN` entered during Cloudflare setup.
+2. Create the first event and configure its tracks before publishing a submission form.
+3. Confirm **Settings → Installation access** is invite-only, or explicitly enable open organizer
+   signup for a public SaaS installation.
+4. Open **Data & connections** to create scoped integration keys or download the deployment's
+   Agent Plugin bundle.
+5. Add email only when confirmations, invitations, and campaigns must be delivered. Password
+   sign-in works without it.
+
+Cloudflare's setup screen can change the default Worker and resource names. Add a custom domain in
+Cloudflare after deployment, or use the controlled walkthrough below to generate that route in the
+initial configuration.
+
+### Controlled self-host walkthrough
 
 For a production-style installation from a local checkout, authenticate Wrangler and run:
 
 ```bash
-pnpm selfhost:setup
-pnpm selfhost:deploy
+pnpm selfhost
 ```
 
 The setup command asks for a Worker name, an R2 bucket name, and an optional custom domain. It:
@@ -196,17 +247,19 @@ The setup command asks for a Worker name, an R2 bucket name, and an optional cus
   override;
 - creates the R2 bucket when needed;
 - generates an ignored `.programkit/wrangler.json` with all three Durable Object bindings,
-  migrations, static assets, R2, and the authenticated `hosted-app` profile.
+  migrations, static assets, R2, and the authenticated `hosted-app` profile; and
+- generates a private first-owner setup code that `selfhost:deploy` installs as a Worker secret.
 
-The resulting deployment has open password sign-up and does not require an email provider. Add a
-Cloudflare Email binding later if you want magic links and transactional mail. Each event gets its
-own Durable Object, while the account object provides a fast event switcher without cross-event
-scans.
+The first account must provide the setup code printed by `selfhost:deploy`. After that owner claim,
+the installation defaults to invite-only organizer signup; the owner can enable open signup from
+Settings. Password sign-in does not require an email provider. Add a Cloudflare Email binding later
+if you want magic links and transactional mail. Each event gets its own Durable Object, while the
+account object provides a fast event switcher without cross-event scans.
 
 For a repeatable non-interactive setup:
 
 ```bash
-pnpm selfhost:setup -- \
+pnpm selfhost -- \
   --name my-programkit \
   --bucket my-programkit-assets \
   --domain events.example.com
@@ -217,31 +270,22 @@ want to adopt existing resources, pass `--reuse-worker` and/or `--reuse-bucket`.
 `--no-provision` only to generate and inspect the configuration without contacting Cloudflare.
 
 ProgramKit serves the web app, HTTP API, public forms and agenda, and `/mcp` from this one Worker.
-An operator can create an **Agent operations** API key under **Infrastructure & API** and connect an
+An operator can create an **Agent operations** API key under **Data & connections** and connect an
 AI client to `https://YOUR_HOST/mcp`; no second service or plugin deployment is required. The
-portable plugin bundle can be generated for that same domain. See
+portable plugin bundle is available at `https://YOUR_HOST/agent-plugin.zip` and is generated for
+that same domain. See
 [Agent Plugins and MCP](docs/integrations/agent-plugins.md).
 
-### One-click local sample
-
-Use the Deploy to Cloudflare button for the shortest path:
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/redopage/programkit)
-
-Cloudflare clones the public repository, builds it, and provisions the SQLite Durable Object from
-the root `wrangler.jsonc`. This path intentionally starts the single deterministic workspace and is
-best for trying the code. Use the walkthrough above when you need accounts, multiple events, R2
-files, and event-scoped API keys. Airtable remains an optional follow-up because every self-hosted
-callback domain needs its own Airtable OAuth registration.
-
-For the checked-in single-workspace profile, review `wrangler.jsonc`, then run:
+For a direct deployment from the checked-in hosted profile, review `wrangler.jsonc`, then run:
 
 ```bash
 pnpm deploy
 ```
 
 The command builds the three public packages, type-checks the workspace, builds the Vite client and
-Worker, and deploys the checked-in Cloudflare application.
+Worker, and deploys the same authenticated application used by the one-click flow. Airtable remains
+an optional follow-up because every self-hosted callback domain needs its own Airtable OAuth
+registration.
 
 ### Enable Airtable on a deployment
 
@@ -254,7 +298,7 @@ consent and base-selection flow is documented in the
 After deploying, verify:
 
 ```bash
-curl https://YOUR_HOST/api/v1/health
+curl --fail https://YOUR_HOST/api/health
 curl https://YOUR_HOST/api/v1/events
 curl https://YOUR_HOST/public/agenda.json
 ```
@@ -280,9 +324,11 @@ The golden-path production work should land in this sequence:
 
 1. Add participant and reviewer magic-link sessions, then complete account recovery and ownership
    transfer for hosted staff.
-2. Add OAuth and workspace-scoped authorization to MCP and API tokens.
-3. Add R2 upload initiation, direct upload, finalize/scanning, private download, and lifecycle
-   cleanup.
+2. Add OAuth for delegated multi-account MCP and API installations; retain the current event-scoped
+   API keys for owner-managed clients.
+3. Add provider-backed scanning/quarantine, orphan discovery, automatic retention and offboarding,
+   legal holds, and storage observability around the existing private R2 upload, mediated download,
+   and explicit owner-deletion path.
 4. Add suppression, unsubscribe, dead-letter recovery, and calendar attachment support to the
    transactional email outbox.
 5. Add webhook delivery from a durable outbox, with signed payloads, retries, and delivery history.

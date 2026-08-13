@@ -18,7 +18,7 @@ import {
   type SubmissionAnswerValue,
 } from '@programkit/core'
 
-import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
+import { EventIdentity } from '../components/event-brand.tsx'
 import {
   Button,
   Dialog,
@@ -537,7 +537,6 @@ function ReviewerWorkspace({
           </div>
         )}
       </main>
-      <EventPageFooter />
       <Dialog
         open={recusalOpen}
         onClose={() => setRecusalOpen(false)}

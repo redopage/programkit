@@ -31,6 +31,7 @@ const csvCollectionKeys = [
   'scheduleReleases',
   'campaigns',
   'outboundMessages',
+  'emailSuppressions',
   'portalResourcePages',
   'programEmbeds',
   'changeSets',
@@ -170,6 +171,13 @@ const fallbackColumns: Record<CsvCollectionKey, readonly string[]> = {
     'uploadedBy.type',
     'uploadedBy.id',
     'uploadedBy.name',
+    'deletedAt',
+    'deletedBy.type',
+    'deletedBy.id',
+    'deletedBy.name',
+    'deletionReason',
+    'deletionStatus',
+    'purgedAt',
     'createdAt',
   ],
   assetComments: [
@@ -270,6 +278,8 @@ const fallbackColumns: Record<CsvCollectionKey, readonly string[]> = {
     'createdAt',
     'approvedAt',
     'sentAt',
+    'cancelledAt',
+    'cancelledBy',
     'createdBy',
     'version',
   ],
@@ -293,7 +303,11 @@ const fallbackColumns: Record<CsvCollectionKey, readonly string[]> = {
     'lastAttemptAt',
     'nextAttemptAt',
     'lastError',
+    'cancelledAt',
+    'cancelledBy',
+    'version',
   ],
+  emailSuppressions: ['id', 'eventId', 'email', 'reason', 'createdAt', 'createdBy', 'version'],
   portalResourcePages: [
     'id',
     'eventId',
@@ -577,7 +591,10 @@ export function createStoredAssetExportPlan(
   requestedIds: ReadonlySet<string>,
 ): StoredAssetExportEntry[] {
   const requirementAssets = state.assets.filter(
-    (asset) => asset.eventId === state.activeEventId && asset.owner.type === 'requirement',
+    (asset) =>
+      asset.eventId === state.activeEventId &&
+      asset.owner.type === 'requirement' &&
+      !asset.deletedAt,
   )
   const assetsByRequirement = new Map<string, typeof requirementAssets>()
   for (const asset of requirementAssets) {

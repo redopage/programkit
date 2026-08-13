@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta
+      name="description"
+      content="A visual library of product screens, flows, and evaluator evidence."
+    />
+    <title>Appflow</title>
+    <link rel="icon" href="./programkit-mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./appflow.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./appflow.html" aria-label="Appflow home">
+        <img src="./programkit-mark.svg" alt="" />
+      </a>
+
+      <nav class="primary-tabs" aria-label="Library views">
+        <button class="tab is-active" type="button" data-view="screens">Screens</button>
+        <button class="tab" type="button" data-view="flows">Flows</button>
+        <button class="tab" type="button" data-view="evals">Evals</button>
+      </nav>
+
+      <div class="header-summary" aria-live="polite">
+        <strong id="header-count">26 screens</strong>
+      </div>
+    </header>
+
+    <main>
+      <section id="screens-view" class="library-view" aria-labelledby="screens-title">
+        <div class="view-heading sr-only-heading">
+          <div>
+            <h1 id="screens-title">Every product screen</h1>
+            <p>One current desktop capture per route. Open any screen at full size.</p>
+          </div>
+        </div>
+
+        <div class="toolbar" aria-label="Screen filters">
+          <label class="search-field">
+            <span class="sr-only">Search screens</span>
+            <input
+              id="screen-search"
+              type="search"
+              placeholder="Search screens, roles, or routes"
+            />
+          </label>
+          <label>
+            <span class="sr-only">Filter by audience</span>
+            <select id="audience-filter">
+              <option value="all">All audiences</option>
+              <option value="Organizer">Organizer</option>
+              <option value="Speaker">Speaker</option>
+              <option value="Reviewer">Reviewer</option>
+              <option value="Attendee">Attendee</option>
+              <option value="Account">Account</option>
+              <option value="Legal">Legal</option>
+            </select>
+          </label>
+          <span id="visible-count" class="visible-count">26 shown</span>
+        </div>
+
+        <div id="screen-grid" class="screen-grid"></div>
+        <div id="screen-empty" class="empty-state" hidden>
+          <h2>No screens match</h2>
+          <p>Clear a filter or try a different search.</p>
+        </div>
+      </section>
+
+      <section id="flows-view" class="library-view" aria-labelledby="flows-title" hidden>
+        <div class="view-heading sr-only-heading">
+          <div>
+            <h1 id="flows-title">Core product flows</h1>
+            <p>Key states arranged in task order, from setup through the public experience.</p>
+          </div>
+          <span class="flow-total" id="flow-total">7 flows</span>
+        </div>
+
+        <div class="flow-layout">
+          <aside class="flow-sidebar">
+            <label class="search-field">
+              <span class="sr-only">Search flows</span>
+              <input id="flow-search" type="search" placeholder="Search flows" />
+            </label>
+            <nav id="flow-nav" aria-label="Product flows"></nav>
+          </aside>
+          <div id="flow-list" class="flow-list"></div>
+        </div>
+      </section>
+
+      <section id="evals-view" class="library-view" aria-labelledby="evals-title" hidden>
+        <div class="view-heading sr-only-heading">
+          <div>
+            <h1 id="evals-title">Evaluator evidence</h1>
+            <p>The local eval requirements beside ProgramKit product evidence and screenshots.</p>
+          </div>
+        </div>
+
+        <div class="eval-intro">
+          <div>
+            <p class="eval-kicker">Evidence view</p>
+            <h2>Requirements next to the product proof</h2>
+            <p>
+              This is a visual comparison, not an API-judge run. Open a criterion to see what the
+              eval asks, what ProgramKit implements, and the expected evidence.
+            </p>
+          </div>
+          <a id="source-brief-link" href="#" target="_blank" rel="noreferrer">Open source brief</a>
+        </div>
+
+        <div id="brief-map" class="brief-map" aria-label="Source brief mapping"></div>
+
+        <div class="eval-layout">
+          <aside class="eval-sidebar">
+            <label class="search-field">
+              <span class="sr-only">Search evals</span>
+              <input id="eval-search" type="search" placeholder="Search evals" />
+            </label>
+            <nav id="eval-nav" aria-label="Evaluator areas"></nav>
+          </aside>
+          <div id="eval-list" class="eval-list"></div>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="review-dialog" class="review-dialog">
+      <div class="dialog-stage">
+        <div class="dialog-media">
+          <img id="dialog-image" src="" alt="" />
+        </div>
+        <aside class="dialog-panel">
+          <div class="dialog-actions">
+            <span id="dialog-position"></span>
+            <button id="dialog-close" type="button">Close</button>
+          </div>
+          <p class="dialog-kicker" id="dialog-kicker"></p>
+          <h2 id="dialog-title"></h2>
+          <p class="dialog-description" id="dialog-description"></p>
+          <dl class="screen-meta">
+            <div>
+              <dt>Audience</dt>
+              <dd id="dialog-audience"></dd>
+            </div>
+            <div>
+              <dt>Surface</dt>
+              <dd id="dialog-surface"></dd>
+            </div>
+          </dl>
+          <a id="dialog-route" class="route-link" href="#" target="_blank" rel="noreferrer"></a>
+
+          <div class="dialog-pagination">
+            <button id="dialog-previous" type="button">Previous</button>
+            <button id="dialog-next" type="button">Next</button>
+          </div>
+          <p class="keyboard-hint">Use ← and → to move between screens.</p>
+        </aside>
+      </div>
+    </dialog>
+
+    <script src="./evals-data.js"></script>
+    <script src="./appflow.js"></script>
+  </body>
+</html>

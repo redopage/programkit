@@ -22,6 +22,14 @@
         "name": "PROGRAMKIT_WORKSPACES",
         "class_name": "WorkspaceDurableObject",
       },
+      {
+        "name": "PROGRAMKIT_AUTH",
+        "class_name": "AuthDurableObject",
+      },
+      {
+        "name": "PROGRAMKIT_EVENT_ACCESS",
+        "class_name": "EventAccessDurableObject",
+      },
     ],
   },
   "migrations": [
@@ -41,7 +49,43 @@
   "observability": {
     "enabled": true,
   },
+  "vars": {
+    "PROGRAMKIT_DEPLOYMENT_PROFILE": "hosted-app",
+    "PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_EMAIL": "10",
+    "PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_IP": "40",
+    "PROGRAMKIT_SIGNUP_MODE": "bootstrap",
+  },
   "env": {
+    "local": {
+      "vars": {
+        "PROGRAMKIT_DEPLOYMENT_PROFILE": "single-workspace",
+        "PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_EMAIL": "10",
+        "PROGRAMKIT_PASSWORD_FAILURE_LIMIT_PER_IP": "40",
+        "PROGRAMKIT_SIGNUP_MODE": "bootstrap",
+      },
+      "r2_buckets": [
+        {
+          "binding": "PROGRAMKIT_FILES",
+          "bucket_name": "programkit-local-assets",
+        },
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "PROGRAMKIT_WORKSPACES",
+            "class_name": "WorkspaceDurableObject",
+          },
+          {
+            "name": "PROGRAMKIT_AUTH",
+            "class_name": "AuthDurableObject",
+          },
+          {
+            "name": "PROGRAMKIT_EVENT_ACCESS",
+            "class_name": "EventAccessDurableObject",
+          },
+        ],
+      },
+    },
     "site": {
       "routes": [
         {
@@ -96,6 +140,7 @@
       ],
       "vars": {
         "PROGRAMKIT_DEPLOYMENT_PROFILE": "hosted-app",
+        "PROGRAMKIT_SIGNUP_MODE": "open",
         "PROGRAMKIT_APP_ORIGIN": "https://app.programkit.dev",
         "PROGRAMKIT_EMAIL_FROM": "notifications@mail.programkit.dev",
         "PROGRAMKIT_SUPPORT_EMAIL": "support@programkit.dev",

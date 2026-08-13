@@ -1,0 +1,3 @@
+# Required for a self-hosted ProgramKit deployment.
+# Cloudflare's deploy flow will prompt for this secret. Use at least 16 characters.
+PROGRAMKIT_BOOTSTRAP_TOKEN=replace_with_a_private_setup_code

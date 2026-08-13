@@ -12,7 +12,6 @@
   <a href="https://programkit.dev">Website</a> ·
   <a href="https://demo.programkit.dev">Try a seven-day demo</a> ·
   <a href="https://forge.smol.ai/andheller/programkit">Forge</a> ·
-  <a href="https://github.com/redopage/programkit">GitHub mirror</a> ·
   <a href="docs/README.md">Documentation</a>
 </p>
 
@@ -63,9 +62,9 @@ Useful routes:
 | `/portal/par_003`          | Accepted-speaker portal                                             |
 | `/agenda`                  | Agenda, sessions, speakers, itinerary, and gallery from one release |
 
-For a guided first workflow, use [Build and publish a CFP](docs/guides/build-and-publish-a-cfp.md).
-The complete setup and reset instructions are in
-[Local development](docs/guides/local-development.md).
+For a guided first workflow, use [Set up your first event](docs/getting-started/first-event.md).
+The focused CFP guide is [Build and publish a CFP](docs/guides/build-and-publish-a-cfp.md), and the
+complete setup and reset instructions are in [Local development](docs/guides/local-development.md).
 
 ## How it is organized
 
@@ -101,17 +100,30 @@ decision.
 ## Deploy it
 
 Cloudflare is the supported runtime. One Worker serves the app and API, Workers Static Assets
-serves the Vite build, and one SQLite-backed Durable Object owns each event.
+serves the Vite build, and one SQLite-backed Durable Object owns each event. The deploy button is
+the shortest production-style path: Cloudflare provisions the Worker, R2 bucket, and three Durable
+Object bindings declared by the repository.
+
+After deployment, use the private setup code to claim the first owner account and event in the
+browser. The installation becomes invite-only after that claim unless the owner explicitly enables
+open organizer signup. That same origin serves the operator app, public pages, HTTP API, `/mcp`,
+and a deployment-specific Agent Plugin download; the demo site is not part of a self-host.
+
+Use the local walkthrough when you want collision checks, repeatable resource names, or a custom
+domain from the start:
 
 ```bash
-pnpm selfhost:setup
-pnpm selfhost:deploy
+pnpm selfhost
 ```
 
-The setup walkthrough checks Cloudflare access, protects existing Worker and R2 names, creates the
-upload bucket, and writes an ignored `.programkit/wrangler.json` for that installation. The deployed
-app includes password sign-up, multiple event workspaces, private R2 uploads, event-scoped API keys,
-and the MCP endpoint on the same origin. Email and Airtable are optional follow-up integrations.
+The walkthrough checks Cloudflare access, protects existing Worker and R2 names, creates the upload
+bucket, deploys the code and setup secret together, and verifies public health and the plugin
+download. The deployed app includes password sign-up, multiple event workspaces, private R2
+uploads, event-scoped API keys, and the MCP endpoint on the same origin. Email and Airtable are
+optional follow-up integrations.
+Under **Data & connections**, a self-hoster can create an Agent operations key and download a
+plugin bundle already configured for that deployment. The plugin is installed in the agent client;
+it is not another hosted service.
 
 Use `pnpm dev` when you only want the deterministic local sample without accounts or Cloudflare
 resources. See [Deployment](DEPLOYMENT.md) for non-interactive flags, custom domains, and the exact
@@ -125,17 +137,19 @@ The official environments use the same code with isolated runtime state:
 | [demo.programkit.dev](https://demo.programkit.dev) | Anonymous, disposable seven-day workspaces         |
 | [app.programkit.dev](https://app.programkit.dev)   | Staff accounts, event workspaces, and public flows |
 
-The one-click Cloudflare button uses the public GitHub mirror because Cloudflare's deploy flow does
-not currently accept Forge repositories. Forge is the primary collaboration host; the two remotes
-contain the same `main` branch.
+The one-click Cloudflare button uses the GitHub mirror because Cloudflare's deploy flow does not
+currently accept Forge repositories. Forge is the primary collaboration host. A release must push
+the same candidate commit to both `main` branches and confirm the GitHub mirror is anonymously
+readable before advertising the button.
 
 Airtable is optional and experimental. The recommended V1 store is the event Durable Object. The
 current Airtable-backed mode is useful for integration testing, but it still needs a durable retry
 journal, narrow webhook processing, conflict review, and clearer ownership controls before real
 conference data. It is not required for local development or deployment.
 
-See [Deployment](DEPLOYMENT.md) for Cloudflare setup, environment profiles, and production
-bindings.
+See [Deployment](DEPLOYMENT.md) for Cloudflare setup, environment profiles, and production bindings,
+then use the [self-host launch checklist](docs/self-hosting/launch-checklist.md) before real
+participant data.
 
 ## Verify a change
 
@@ -143,22 +157,31 @@ bindings.
 pnpm check
 ```
 
-This runs tests, linting, formatting verification, TypeScript, package builds, the production
-Worker build, and plugin validation.
+This runs tests, linting, formatting and documentation-link verification, TypeScript, package
+builds, the production Worker build, generated-contract checks, and plugin validation.
 
 ## Documentation
 
 - [Documentation map](docs/README.md)
+- [Getting started](docs/getting-started/README.md)
+- [Set up your first event](docs/getting-started/first-event.md)
+- [Product and user guide](docs/users/README.md)
+- [Self-hosting](docs/self-hosting/README.md)
+- [Self-host launch checklist](docs/self-hosting/launch-checklist.md)
+- [Developer guide](docs/developers/README.md)
+- [Customize the starter](docs/developers/customizing.md)
 - [Program lifecycle](docs/product/program-lifecycle.md)
 - [Product status and roadmap](ROADMAP.md)
 - [Competition evaluator readiness](docs/product/evaluator-gap-analysis.md)
 - [Architecture](ARCHITECTURE.md)
 - [Deployment](DEPLOYMENT.md)
-- [HTTP API](docs/api/README.md)
+- [HTTP API quickstart](docs/api/quickstart.md) and [reference](docs/api/README.md)
 - [Agent Plugins and MCP](docs/integrations/agent-plugins.md)
 - [Security](SECURITY.md)
 - [Operations](OPERATIONS.md)
 - [Agent navigation](docs/agents/README.md)
+- [Connect an agent](docs/agents/connect.md)
+- [Agent recipes](docs/agents/recipes.md)
 - [Contributing](CONTRIBUTING.md)
 
 The agent guides point back to the same canonical product and architecture documents humans use.

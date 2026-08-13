@@ -527,7 +527,7 @@ function ContactTable({
     return <EmptyState title="No contacts found" description="Try a different search or filter." />
   return (
     <>
-      <div className="divide-y divide-zinc-950/5 sm:hidden">
+      <div className="divide-y divide-zinc-950/5 xl:hidden">
         <label className="flex items-center gap-3 border-b border-zinc-950/10 py-3 text-sm font-medium text-zinc-500">
           <input
             aria-label="Select visible contacts"
@@ -576,7 +576,7 @@ function ContactTable({
           )
         })}
       </div>
-      <div className="hidden overflow-x-auto sm:block">
+      <div className="hidden overflow-x-auto xl:block">
         <table className="w-full min-w-[48rem]">
           <thead>
             <tr className="border-b border-zinc-950/10">
@@ -683,14 +683,14 @@ function PipelineBoard({
 }) {
   return (
     <div className="-mx-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
-      <div className="grid min-w-[63rem] grid-cols-6 gap-3 pb-2">
+      <div className="grid min-w-[63rem] grid-cols-6 gap-3 pt-px pb-2">
         {pipelineStages.map((stage) => {
           const entries = state.speakerPipeline.filter((entry) => entry.stage === stage)
           return (
             <section
               key={stage}
               aria-label={sentenceCase(stage)}
-              className="min-h-96 rounded-2xl bg-zinc-50 p-2 ring-1 ring-zinc-950/5"
+              className="min-h-96 rounded-2xl bg-zinc-50 p-2 ring-1 ring-inset ring-zinc-950/5"
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
                 const entryId = event.dataTransfer.getData('text/programkit-pipeline')

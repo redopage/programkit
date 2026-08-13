@@ -1,8 +1,11 @@
 import {
+  ArrowPathIcon,
   ArrowDownTrayIcon,
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   DocumentIcon,
+  ExclamationTriangleIcon,
+  TrashIcon,
 } from '@heroicons/react/16/solid'
 import { useState, type FormEvent } from 'react'
 
@@ -25,6 +28,8 @@ import {
 
 type FileFilter = 'all' | 'review' | 'approved'
 
+type LifecycleAsset = Asset
+
 export function FilesView() {
   const { payload, execute, mutating } = useWorkspace()
   const [filter, setFilter] = useState<FileFilter>('all')
@@ -34,10 +39,17 @@ export function FilesView() {
   const [exportStarted, setExportStarted] = useState(false)
   const [openRequirementId, setOpenRequirementId] = useState<string | null>(null)
   const [comment, setComment] = useState('')
+  const [deletingAsset, setDeletingAsset] = useState<LifecycleAsset | null>(null)
+  const [deletionReason, setDeletionReason] = useState('')
   if (!payload) return null
   const { state } = payload
-  const latestAssets = state.assets.filter(
-    (asset) => asset.owner.type === 'requirement' && asset.isLatest !== false,
+  const requirementAssets = state.assets.filter(
+    (asset): asset is LifecycleAsset => asset.owner.type === 'requirement',
+  )
+  const activeRequirementAssets = requirementAssets.filter((asset) => !asset.deletedAt)
+  const latestAssets = activeRequirementAssets.filter((asset) => asset.isLatest !== false)
+  const cleanupPendingAssets = requirementAssets.filter(
+    (asset) => asset.deletedAt && asset.deletionStatus !== 'purged',
   )
   const query = search.trim().toLowerCase()
   const rows = latestAssets
@@ -54,7 +66,10 @@ export function FilesView() {
   const openAssets = openRequirementId
     ? state.assets
         .filter(
-          (asset) => asset.owner.type === 'requirement' && asset.owner.id === openRequirementId,
+          (asset) =>
+            asset.owner.type === 'requirement' &&
+            asset.owner.id === openRequirementId &&
+            !asset.deletedAt,
         )
         .sort((left, right) => (right.version ?? 1) - (left.version ?? 1))
     : []
@@ -102,6 +117,35 @@ export function FilesView() {
     if (response.ok) setComment('')
   }
 
+  async function confirmDeletion() {
+    if (!deletingAsset) return
+    const response = await execute(
+      'asset.delete',
+      {
+        assetId: deletingAsset.id,
+        reason: deletionReason.trim() || 'Removed from the event file library.',
+      },
+      {
+        expectedVersions: { [deletingAsset.id]: deletingAsset.version ?? 1 },
+      },
+      'File deleted from storage.',
+    )
+    if (response.ok || response.error?.code === 'ASSET_CLEANUP_PENDING') {
+      setSelectedIds((current) => current.filter((id) => id !== deletingAsset.id))
+      setDeletingAsset(null)
+      setDeletionReason('')
+    }
+  }
+
+  async function retryCleanup(asset: LifecycleAsset) {
+    await execute(
+      'asset.delete',
+      { assetId: asset.id, reason: asset.deletionReason ?? 'Removed by the event owner.' },
+      undefined,
+      'Storage cleanup complete.',
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -117,6 +161,39 @@ export function FilesView() {
       />
 
       <PortalResourcesManager />
+
+      {cleanupPendingAssets.length > 0 ? (
+        <section aria-labelledby="cleanup-heading" className="border-y border-amber-900/10 py-4">
+          <div className="flex items-start gap-3">
+            <ExclamationTriangleIcon className="mt-0.5 size-4 shrink-0 fill-amber-600" />
+            <div className="min-w-0 flex-1">
+              <h2 id="cleanup-heading" className="text-sm font-semibold text-zinc-950">
+                Storage cleanup pending
+              </h2>
+              <p className="mt-0.5 text-sm text-zinc-600">
+                These files are already unavailable. Retry to finish deleting their stored bytes.
+              </p>
+              <ul className="mt-3 divide-y divide-zinc-950/5 border-t border-zinc-950/5">
+                {cleanupPendingAssets.map((asset) => (
+                  <li key={asset.id} className="flex items-center gap-3 py-3">
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800">
+                      {asset.filename}
+                    </span>
+                    <Button
+                      size="compact"
+                      disabled={mutating}
+                      onClick={() => void retryCleanup(asset)}
+                    >
+                      <ArrowPathIcon className="size-4 fill-current" />
+                      Retry cleanup
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <Toolbar>
         <FilterTabs
@@ -155,74 +232,76 @@ export function FilesView() {
         />
       ) : (
         <div className="overflow-hidden rounded-2xl ring-1 ring-zinc-950/10">
-          <table className="w-full min-w-3xl">
-            <thead className="bg-zinc-50">
-              <tr className="border-b border-zinc-950/10">
-                <th className="w-12 px-4 py-3 text-left">
-                  <span className="sr-only">Select</span>
-                </th>
-                {['File', 'Speaker', 'Session', 'Uploaded', 'Status'].map((heading) => (
-                  <th
-                    key={heading}
-                    scope="col"
-                    className="px-3 py-3 text-left text-sm font-medium text-zinc-500 last:pr-4"
-                  >
-                    {heading}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-3xl">
+              <thead className="bg-zinc-50">
+                <tr className="border-b border-zinc-950/10">
+                  <th className="w-12 px-4 py-3 text-left">
+                    <span className="sr-only">Select</span>
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-950/5">
-              {rows.map((row) => (
-                <tr key={row.asset.id} className="hover:bg-zinc-950/2">
-                  <td className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${row.asset.filename}`}
-                      checked={selectedSet.has(row.asset.id)}
-                      onChange={() => toggleAsset(row.asset.id)}
-                      className="size-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </td>
-                  <td className="px-3 py-3">
-                    <button
-                      type="button"
-                      className="focus-ring flex min-w-0 items-center gap-3 rounded-lg text-left"
-                      onClick={() => setOpenRequirementId(row.asset.owner.id)}
+                  {['File', 'Speaker', 'Session', 'Uploaded', 'Status'].map((heading) => (
+                    <th
+                      key={heading}
+                      scope="col"
+                      className="px-3 py-3 text-left text-sm font-medium text-zinc-500 last:pr-4"
                     >
-                      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600">
-                        <DocumentIcon className="size-4 fill-current" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block max-w-xs truncate text-sm font-medium text-zinc-950">
-                          {row.asset.filename}
-                        </span>
-                        <span className="block text-sm text-zinc-500">
-                          {row.definition?.label ?? 'File'} · {row.versionCount}{' '}
-                          {row.versionCount === 1 ? 'version' : 'versions'}
-                        </span>
-                      </span>
-                    </button>
-                  </td>
-                  <td className="px-3 py-3 text-sm text-zinc-700">{row.personName}</td>
-                  <td className="max-w-xs truncate px-3 py-3 text-sm text-zinc-600">
-                    {row.session?.title ?? 'Event-wide'}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-sm text-zinc-500">
-                    {new Intl.DateTimeFormat('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    }).format(new Date(row.asset.createdAt))}
-                  </td>
-                  <td className="px-3 py-3 pr-4">
-                    {row.instance ? <StatusBadge status={row.instance.status} /> : null}
-                  </td>
+                      {heading}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-zinc-950/5">
+                {rows.map((row) => (
+                  <tr key={row.asset.id} className="hover:bg-zinc-950/2">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${row.asset.filename}`}
+                        checked={selectedSet.has(row.asset.id)}
+                        onChange={() => toggleAsset(row.asset.id)}
+                        className="size-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-3 py-3">
+                      <button
+                        type="button"
+                        className="focus-ring flex min-w-0 items-center gap-3 rounded-lg text-left"
+                        onClick={() => setOpenRequirementId(row.asset.owner.id)}
+                      >
+                        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600">
+                          <DocumentIcon className="size-4 fill-current" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block max-w-xs truncate text-sm font-medium text-zinc-950">
+                            {row.asset.filename}
+                          </span>
+                          <span className="block text-sm text-zinc-500">
+                            {row.definition?.label ?? 'File'} · {row.versionCount}{' '}
+                            {row.versionCount === 1 ? 'version' : 'versions'}
+                          </span>
+                        </span>
+                      </button>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-zinc-700">{row.personName}</td>
+                    <td className="max-w-xs truncate px-3 py-3 text-sm text-zinc-600">
+                      {row.session?.title ?? 'Event-wide'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3 text-sm text-zinc-500">
+                      {new Intl.DateTimeFormat('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      }).format(new Date(row.asset.createdAt))}
+                    </td>
+                    <td className="px-3 py-3 pr-4">
+                      {row.instance ? <StatusBadge status={row.instance.status} /> : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -307,12 +386,26 @@ export function FilesView() {
                         Version {asset.version ?? 1} · {(asset.sizeBytes / 1_000_000).toFixed(1)} MB
                       </p>
                     </div>
-                    <a
-                      href={`/api/v1/assets/${encodeURIComponent(asset.id)}`}
-                      className="focus-ring rounded-full px-3 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/10 hover:bg-zinc-50"
-                    >
-                      Download
-                    </a>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <a
+                        href={`/api/v1/assets/${encodeURIComponent(asset.id)}`}
+                        className="focus-ring rounded-full px-3 py-1.5 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/10 hover:bg-zinc-50"
+                      >
+                        Download
+                      </a>
+                      <Button
+                        size="compact"
+                        variant="danger"
+                        disabled={mutating}
+                        onClick={() => {
+                          setDeletingAsset(asset)
+                          setDeletionReason('')
+                        }}
+                      >
+                        <TrashIcon className="size-4 fill-current" />
+                        Delete
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -359,6 +452,62 @@ export function FilesView() {
           </div>
         ) : null}
       </Drawer>
+
+      <Dialog
+        open={Boolean(deletingAsset)}
+        onClose={() => {
+          if (mutating) return
+          setDeletingAsset(null)
+          setDeletionReason('')
+        }}
+        title="Delete file version?"
+        description="The stored bytes will be permanently deleted. ProgramKit keeps the metadata and audit entry."
+        footer={
+          <>
+            <Button
+              disabled={mutating}
+              onClick={() => {
+                setDeletingAsset(null)
+                setDeletionReason('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button variant="danger" disabled={mutating} onClick={() => void confirmDeletion()}>
+              <TrashIcon className="size-4 fill-current" />
+              {mutating ? 'Deleting…' : 'Delete permanently'}
+            </Button>
+          </>
+        }
+      >
+        {deletingAsset ? (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-xl bg-rose-50 px-4 py-3 ring-1 ring-rose-900/10">
+              <p className="text-sm font-medium text-rose-950 [overflow-wrap:anywhere]">
+                {deletingAsset.filename}
+              </p>
+              <p className="mt-0.5 text-sm text-rose-800">
+                {deletingAsset.isLatest
+                  ? openAssets.length > 1
+                    ? 'The previous retained version will become current.'
+                    : 'No retained version will remain, so this file task will reopen.'
+                  : `Version ${deletingAsset.version ?? 1} will be removed from history.`}
+              </p>
+            </div>
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-zinc-950">
+              Reason <span className="font-normal text-zinc-500">(optional)</span>
+              <textarea
+                rows={3}
+                maxLength={500}
+                value={deletionReason}
+                onChange={(event) => setDeletionReason(event.target.value)}
+                placeholder="Uploaded by mistake, contains outdated information…"
+                className={textControl}
+              />
+            </label>
+          </div>
+        ) : null}
+      </Dialog>
 
       <Dialog
         open={exportOpen}
@@ -455,7 +604,8 @@ function fileContext(state: WorkspaceState, asset: Asset) {
     : undefined
   const personName = person ? `${person.firstName} ${person.lastName}` : 'Unknown speaker'
   const versionCount = state.assets.filter(
-    (entry) => entry.owner.type === 'requirement' && entry.owner.id === asset.owner.id,
+    (entry) =>
+      entry.owner.type === 'requirement' && entry.owner.id === asset.owner.id && !entry.deletedAt,
   ).length
   return {
     asset,

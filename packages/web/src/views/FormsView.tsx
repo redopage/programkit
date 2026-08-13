@@ -162,7 +162,7 @@ export function FormsView({
         description: 'Share your session idea with the program committee.',
         allowedKinds: ['abstract'],
         confirmationMessage:
-          'Thanks for sharing your proposal. We sent a confirmation to your email address.',
+          'Thanks for sharing your proposal. Your submission is safely recorded for the program team.',
         fields: starterSubmissionFields(
           (state?.tracks ?? []).filter((track) => track.eventId === state?.activeEventId),
         ),
@@ -267,6 +267,8 @@ export function FormsView({
 
   const activeForm = formDraft ?? form
   const selected = fields.find((field) => field.id === selectedFieldId) ?? fields[0]
+  const eventTracks = (state?.tracks ?? []).filter((track) => track.eventId === event?.id)
+  const eventTrackOptions = eventTracks.map((track) => ({ value: track.id, label: track.name }))
   const conditionSource = selected?.visibleWhen
     ? fields.find((field) => field.id === selected.visibleWhen?.fieldId)
     : undefined
@@ -572,6 +574,10 @@ export function FormsView({
               onChange={(event) => updateForm({ confirmationMessage: event.target.value })}
               className={textAreaControl}
             />
+            <span className="text-pretty text-base text-zinc-500 sm:text-sm">
+              Shown after the proposal is recorded. Email delivery is reported separately, so this
+              message should not promise that an email was sent.
+            </span>
           </label>
           <fieldset className="@3xl/form-builder:col-span-2">
             <legend className="text-base font-medium text-zinc-950 sm:text-sm">
@@ -881,11 +887,13 @@ export function FormsView({
                     <select
                       name="field-purpose"
                       value={selected.purpose}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const purpose = event.target.value as SubmissionFieldPurpose
                         updateSelected({
-                          purpose: event.target.value as SubmissionFieldPurpose,
+                          purpose,
+                          ...(purpose === 'track' ? { options: eventTrackOptions } : {}),
                         })
-                      }
+                      }}
                       className={selectControl}
                     >
                       <option value="custom">{fieldPurposeLabels.custom}</option>
@@ -936,7 +944,68 @@ export function FormsView({
                     className={textControl}
                   />
                 </label>
-                {selected.kind === 'select' || selected.kind === 'multi_select' ? (
+                {(selected.kind === 'select' || selected.kind === 'multi_select') &&
+                selected.purpose === 'track' ? (
+                  <fieldset className="border-t border-zinc-950/5 pt-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <legend className="text-base font-medium text-zinc-950 sm:text-sm">
+                        Available tracks
+                      </legend>
+                      <Button
+                        size="compact"
+                        variant="ghost"
+                        type="button"
+                        onClick={() => navigate('/settings')}
+                      >
+                        Manage tracks
+                      </Button>
+                    </div>
+                    {eventTracks.length > 0 ? (
+                      <div className="flex flex-col gap-2 pt-2">
+                        {eventTracks.map((track) => {
+                          const checked = selected.options.some(
+                            (option) => option.value === track.id,
+                          )
+                          return (
+                            <label
+                              key={track.id}
+                              className="flex min-h-10 items-center gap-3 rounded-lg bg-white px-3 ring-1 ring-inset ring-zinc-950/10"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  updateSelected({
+                                    options: checked
+                                      ? selected.options.filter(
+                                          (option) => option.value !== track.id,
+                                        )
+                                      : [
+                                          ...selected.options,
+                                          { value: track.id, label: track.name },
+                                        ],
+                                  })
+                                }
+                                className="size-4 accent-blue-600"
+                              />
+                              <span className="text-base text-zinc-700 sm:text-sm">
+                                {track.name}
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p className="pt-2 text-pretty text-base text-amber-700 sm:text-sm">
+                        Add at least one event track before publishing this form.
+                      </p>
+                    )}
+                    <p className="pt-2 text-pretty text-base text-zinc-500 sm:text-sm">
+                      Track answers use the same records as sessions, review routing, filters, and
+                      reports.
+                    </p>
+                  </fieldset>
+                ) : selected.kind === 'select' || selected.kind === 'multi_select' ? (
                   <fieldset className="border-t border-zinc-950/5 pt-4">
                     <div className="flex items-center justify-between gap-3">
                       <legend className="text-base font-medium text-zinc-950 sm:text-sm">

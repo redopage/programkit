@@ -40,6 +40,7 @@ import type {
   ContactNote,
   CrmSegment,
   DomainEvent,
+  EmailSuppression,
   EvaluationCriterion,
   EvaluationPlan,
   EvaluationRound,
@@ -130,6 +131,7 @@ export function initializeProgramCollections(state: WorkspaceState) {
   state.scorecards ??= []
   state.reviewDecisions ??= []
   state.outboundMessages ??= []
+  state.emailSuppressions ??= []
   state.portalResourcePages ??= []
   state.programEmbeds ??= []
   for (const message of state.outboundMessages) {
@@ -138,6 +140,14 @@ export function initializeProgramCollections(state: WorkspaceState) {
     message.lastAttemptAt ??= null
     message.nextAttemptAt ??= null
     message.lastError ??= null
+    message.cancelledAt ??= null
+    message.cancelledBy ??= null
+    message.version ??= 1
+    message.recipientEmail = message.recipientEmail.trim().toLowerCase()
+  }
+  for (const suppression of state.emailSuppressions) {
+    suppression.email = suppression.email.trim().toLowerCase()
+    suppression.version ??= 1
   }
   for (const submission of state.submissions) {
     submission.contributors ??= []
@@ -180,13 +190,22 @@ export function initializeProgramCollections(state: WorkspaceState) {
     asset.isLatest ??= true
     asset.sessionId ??= null
     asset.uploadedBy ??= { type: 'staff', id: 'system', name: 'ProgramKit' }
+    asset.deletedAt ??= null
+    asset.deletedBy ??= null
+    asset.deletionReason ??= null
+    asset.deletionStatus ??= asset.deletedAt ? 'pending' : null
+    asset.purgedAt ??= null
   }
   for (const campaign of state.campaigns) campaign.includeCalendarInvite ??= false
+  for (const campaign of state.campaigns) {
+    campaign.cancelledAt ??= null
+    campaign.cancelledBy ??= null
+  }
   for (const message of state.outboundMessages ?? []) message.calendarAttachment ??= null
   for (const plan of state.evaluationPlans) {
     for (const round of plan.rounds) round.categoryRoutes ??= []
   }
-  state.schemaVersion = Math.max(state.schemaVersion, 15)
+  state.schemaVersion = Math.max(state.schemaVersion, 17)
 }
 
 function queueOutboundMessage(
@@ -198,18 +217,27 @@ function queueOutboundMessage(
   timestamp: string,
 ) {
   state.outboundMessages ??= []
+  state.emailSuppressions ??= []
+  const recipientEmail = input.recipientEmail.trim().toLowerCase()
+  const suppression = state.emailSuppressions.find(
+    (entry) => entry.eventId === state.activeEventId && entry.email === recipientEmail,
+  )
   const message: OutboundMessage = {
     id: createId('msg'),
     eventId: state.activeEventId,
     ...input,
-    status: 'queued',
+    recipientEmail,
+    status: suppression ? 'suppressed' : 'queued',
     queuedAt: timestamp,
     sentAt: null,
     providerMessageId: null,
     attempts: 0,
     lastAttemptAt: null,
     nextAttemptAt: null,
-    lastError: null,
+    lastError: suppression ? `Suppressed: ${suppression.reason}` : null,
+    cancelledAt: null,
+    cancelledBy: null,
+    version: 1,
   }
   state.outboundMessages.unshift(message)
   return message
@@ -666,6 +694,33 @@ function parseSubmissionFormFields(formId: string, value: unknown): SubmissionFo
   })
 }
 
+function normalizeSubmissionTrackFields(
+  state: WorkspaceState,
+  eventId: string,
+  fields: readonly SubmissionFormField[],
+) {
+  const tracks = state.tracks.filter((track) => track.eventId === eventId)
+  return fields.map((field) => {
+    if (field.purpose !== 'track') return field
+    const selected: Array<{ value: string; label: string }> = []
+    for (const option of field.options) {
+      const track =
+        tracks.find((entry) => entry.id === option.value) ??
+        tracks.find(
+          (entry) =>
+            entry.name.localeCompare(option.label, undefined, { sensitivity: 'base' }) === 0,
+        )
+      if (track && !selected.some((entry) => entry.value === track.id)) {
+        selected.push({ value: track.id, label: track.name })
+      }
+    }
+    return {
+      ...field,
+      options: selected,
+    }
+  })
+}
+
 function validateSubmissionForm(
   form: SubmissionForm,
   fields: readonly SubmissionFormField[],
@@ -705,7 +760,11 @@ function validateSubmissionForm(
       }
       systemPurposes.add(field.purpose)
     }
-    if ((field.kind === 'select' || field.kind === 'multi_select') && field.options.length === 0) {
+    if (
+      (field.kind === 'select' || field.kind === 'multi_select') &&
+      field.options.length === 0 &&
+      (options.forPublish || field.purpose !== 'track')
+    ) {
       throw new OperationError('INVALID_INPUT', `${field.label} needs at least one option.`)
     }
     if (
@@ -848,6 +907,7 @@ function allVersionedRecords(state: WorkspaceState) {
     ...state.requirementInstances,
     ...(state.submissionForms ?? []),
     ...(state.submissions ?? []),
+    ...(state.assets ?? []),
     ...(state.reviewers ?? []),
     ...(state.reviewerTeams ?? []),
     ...(state.evaluationPlans ?? []),
@@ -857,6 +917,8 @@ function allVersionedRecords(state: WorkspaceState) {
     ...state.sessions,
     ...state.placements,
     ...state.campaigns,
+    ...(state.outboundMessages ?? []),
+    ...(state.emailSuppressions ?? []),
     ...(state.portalResourcePages ?? []),
     ...(state.programEmbeds ?? []),
     ...state.changeSets,
@@ -1553,8 +1615,11 @@ function applyHandler(
         updatedAt: timestamp,
         version: 1,
       }
-      const fields =
-        input.fields === undefined ? [] : parseSubmissionFormFields(form.id, input.fields)
+      const fields = normalizeSubmissionTrackFields(
+        state,
+        form.eventId,
+        input.fields === undefined ? [] : parseSubmissionFormFields(form.id, input.fields),
+      )
       validateSubmissionForm(form, fields, { forPublish: false })
       state.submissionForms.push(form)
       state.submissionFormFields.push(...fields)
@@ -1612,7 +1677,11 @@ function applyHandler(
       const fields =
         input.fields === undefined
           ? state.submissionFormFields.filter((field) => field.formId === form.id)
-          : parseSubmissionFormFields(form.id, input.fields)
+          : normalizeSubmissionTrackFields(
+              state,
+              form.eventId,
+              parseSubmissionFormFields(form.id, input.fields),
+            )
       if (
         input.fields !== undefined &&
         state.submissions.some((submission) => submission.formId === form.id)
@@ -3776,6 +3845,9 @@ function applyHandler(
       if (filename.length > 255 || contentType.length > 200 || storageKey.length > 1_000) {
         throw new OperationError('INVALID_INPUT', 'Asset metadata exceeds the supported size.')
       }
+      if (!storageKey.startsWith(`${state.activeEventId}/`)) {
+        throw new OperationError('FORBIDDEN', 'The asset storage key is outside the active event.')
+      }
       const participant =
         context.actor.type === 'participant'
           ? findRequired(state.participations, context.actor.id, 'participation')
@@ -3876,6 +3948,11 @@ function applyHandler(
           id: context.actor.id,
           name: context.actor.name,
         },
+        deletedAt: null,
+        deletedBy: null,
+        deletionReason: null,
+        deletionStatus: null,
+        purgedAt: null,
         createdAt: timestamp,
       }
       state.assets.push(asset)
@@ -3948,10 +4025,211 @@ function applyHandler(
       return { asset }
     }
 
+    case 'asset.delete': {
+      if (context.actor.type !== 'staff') {
+        throw new OperationError('FORBIDDEN', 'Only an event owner can delete stored files.')
+      }
+      const asset = findRequired(state.assets, input.assetId, 'asset')
+      if (asset.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The file is outside the active event.')
+      }
+      if (asset.deletedAt) {
+        throw new OperationError('INVALID_TRANSITION', 'This file has already been deleted.')
+      }
+      const reason =
+        typeof input.reason === 'string' && input.reason.trim()
+          ? assertString(input.reason, 'reason')
+          : null
+      if (reason && reason.length > 500) {
+        throw new OperationError(
+          'INVALID_INPUT',
+          'Deletion reasons must be 500 characters or fewer.',
+          {
+            reason: 'Shorten this reason.',
+          },
+        )
+      }
+
+      const wasLatest = asset.isLatest !== false
+      asset.deletedAt = timestamp
+      asset.deletedBy = {
+        type: context.actor.type,
+        id: context.actor.id,
+        name: context.actor.name,
+      }
+      asset.deletionReason = reason
+      asset.deletionStatus = 'pending'
+      asset.purgedAt = null
+      asset.isLatest = false
+      asset.version = (asset.version ?? 1) + 1
+
+      const retainedVersions = state.assets
+        .filter(
+          (entry) =>
+            entry.id !== asset.id &&
+            entry.eventId === asset.eventId &&
+            entry.owner.type === asset.owner.type &&
+            entry.owner.id === asset.owner.id &&
+            !entry.deletedAt,
+        )
+        .sort((left, right) => {
+          const byVersion = (right.version ?? 1) - (left.version ?? 1)
+          return byVersion !== 0 ? byVersion : right.createdAt.localeCompare(left.createdAt)
+        })
+      const replacement = retainedVersions[0] ?? null
+      if (wasLatest && replacement) replacement.isLatest = true
+
+      if (asset.owner.type === 'submission') {
+        const submission = state.submissions.find((entry) => entry.id === asset.owner.id)
+        if (submission?.assetIds.includes(asset.id)) {
+          submission.assetIds = submission.assetIds.filter((assetId) => assetId !== asset.id)
+          submission.updatedAt = timestamp
+          submission.version += 1
+        }
+      }
+
+      if (asset.owner.type === 'requirement') {
+        const instance = state.requirementInstances.find((entry) => entry.id === asset.owner.id)
+        const definition = instance
+          ? state.requirementDefinitions.find((entry) => entry.id === instance.definitionId)
+          : null
+        if (instance && definition && (wasLatest || instance.value === asset.id)) {
+          const previous = instance.status
+          instance.value = replacement?.id ?? ''
+          instance.status = replacement ? 'submitted' : 'not_started'
+          instance.submittedAt = replacement?.createdAt ?? null
+          instance.reviewedAt = null
+          instance.updatedAt = timestamp
+          instance.version += 1
+          appendEvent(state, context, {
+            type: 'requirement.status-changed',
+            aggregate: {
+              type: 'requirement',
+              id: instance.id,
+              version: instance.version,
+            },
+            summary: replacement
+              ? `${definition.label} returned to review with the previous file version.`
+              : `${definition.label} was reopened after its file was deleted.`,
+            data: {
+              participationId: instance.participationId,
+              previous,
+              next: instance.status,
+              deletedAssetId: asset.id,
+              replacementAssetId: replacement?.id ?? null,
+            },
+          })
+        }
+      }
+
+      if (asset.owner.type === 'person' && asset.kind === 'headshot') {
+        const person = state.people.find((entry) => entry.id === asset.owner.id)
+        if (person && (wasLatest || person.avatarUrl.includes(encodeURIComponent(asset.id)))) {
+          person.avatarUrl = replacement
+            ? `/public/v1/assets/${encodeURIComponent(replacement.id)}`
+            : ''
+          person.updatedAt = timestamp
+          person.version += 1
+
+          const participation = state.participations.find(
+            (entry) => entry.eventId === state.activeEventId && entry.personId === person.id,
+          )
+          const definition = state.requirementDefinitions.find(
+            (entry) =>
+              entry.eventId === state.activeEventId && entry.systemKey === 'profile_headshot',
+          )
+          const instance =
+            participation && definition
+              ? state.requirementInstances.find(
+                  (entry) =>
+                    entry.participationId === participation.id &&
+                    entry.definitionId === definition.id,
+                )
+              : null
+          if (instance && definition) {
+            const previous = instance.status
+            instance.value = replacement?.id ?? ''
+            instance.status = replacement ? 'approved' : 'not_started'
+            instance.submittedAt = replacement?.createdAt ?? null
+            instance.reviewedAt = replacement ? timestamp : null
+            instance.updatedAt = timestamp
+            instance.version += 1
+            appendEvent(state, context, {
+              type: 'requirement.status-changed',
+              aggregate: {
+                type: 'requirementInstance',
+                id: instance.id,
+                version: instance.version,
+              },
+              summary: replacement
+                ? `${person.firstName} ${person.lastName}'s previous headshot was restored.`
+                : `${person.firstName} ${person.lastName}'s headshot task was reopened.`,
+              data: {
+                participationId: participation?.id,
+                previous,
+                next: instance.status,
+                deletedAssetId: asset.id,
+                replacementAssetId: replacement?.id ?? null,
+              },
+            })
+          }
+        }
+      }
+
+      appendEvent(state, context, {
+        type: 'asset.deleted',
+        aggregate: { type: 'asset', id: asset.id, version: asset.version },
+        summary: `Deleted ${asset.filename}.`,
+        data: {
+          assetId: asset.id,
+          ownerType: asset.owner.type,
+          ownerId: asset.owner.id,
+          reason,
+          replacementAssetId: replacement?.id ?? null,
+          storageCleanupPending: true,
+        },
+      })
+      return { asset, replacementAsset: replacement }
+    }
+
+    case 'asset.confirm-deletion': {
+      if (context.actor.type !== 'system') {
+        throw new OperationError(
+          'FORBIDDEN',
+          'Only the trusted storage cleanup service can confirm file deletion.',
+        )
+      }
+      const asset = findRequired(state.assets, input.assetId, 'asset')
+      if (asset.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'The file is outside the active event.')
+      }
+      if (!asset.deletedAt) {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          'Delete the file metadata before confirming storage cleanup.',
+        )
+      }
+      if (asset.deletionStatus === 'purged') return { asset, alreadyPurged: true }
+
+      asset.deletionStatus = 'purged'
+      asset.purgedAt = timestamp
+      asset.version = (asset.version ?? 1) + 1
+      appendEvent(state, context, {
+        type: 'asset.storage-purged',
+        aggregate: { type: 'asset', id: asset.id, version: asset.version },
+        summary: `Confirmed storage cleanup for ${asset.filename}.`,
+        data: { assetId: asset.id, deletedAt: asset.deletedAt, purgedAt: asset.purgedAt },
+      })
+      return { asset }
+    }
+
     case 'asset.comment': {
       const asset = findRequired(state.assets, input.assetId, 'asset')
       if (asset.eventId !== state.activeEventId) {
         throw new OperationError('FORBIDDEN', 'The file is outside the active event.')
+      }
+      if (asset.deletedAt) {
+        throw new OperationError('INVALID_TRANSITION', 'Deleted files cannot receive comments.')
       }
       if (context.actor.type === 'participant') {
         if (asset.owner.type !== 'requirement') {
@@ -4869,6 +5147,132 @@ function applyHandler(
         },
       })
       return { campaign, messages }
+    }
+
+    case 'campaign.cancel': {
+      const campaign = findRequired(state.campaigns, input.campaignId, 'campaign')
+      if (campaign.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'That campaign belongs to another event.')
+      }
+      if (campaign.status === 'sent' || campaign.status === 'cancelled') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          campaign.status === 'sent'
+            ? 'A sent campaign cannot be cancelled. Cancel individual queued messages instead.'
+            : 'This campaign is already cancelled.',
+        )
+      }
+      campaign.status = 'cancelled'
+      campaign.cancelledAt = timestamp
+      campaign.cancelledBy = context.actor.name
+      campaign.version += 1
+      appendEvent(state, context, {
+        type: 'campaign.cancelled',
+        aggregate: { type: 'campaign', id: campaign.id, version: campaign.version },
+        summary: `Cancelled ${campaign.name} before delivery.`,
+        data: { previousRecipientCount: campaign.recipientParticipationIds.length },
+      })
+      return { campaign }
+    }
+
+    case 'communications.cancel-message': {
+      const message = findRequired(state.outboundMessages ?? [], input.messageId, 'message')
+      if (message.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'That message belongs to another event.')
+      }
+      if (message.status !== 'queued' && message.status !== 'failed') {
+        throw new OperationError(
+          'INVALID_TRANSITION',
+          message.status === 'sent'
+            ? 'The provider has already accepted this message.'
+            : `A ${message.status} message cannot be cancelled.`,
+        )
+      }
+      message.status = 'cancelled'
+      message.cancelledAt = timestamp
+      message.cancelledBy = context.actor.name
+      message.nextAttemptAt = null
+      message.lastError = null
+      message.version = (message.version ?? 1) + 1
+      appendEvent(state, context, {
+        type: 'communications.message-cancelled',
+        aggregate: { type: 'outbound-message', id: message.id, version: message.version },
+        summary: `Cancelled delivery to ${message.recipientEmail}.`,
+        data: { campaignId: message.campaignId, trigger: message.trigger },
+      })
+      return { message }
+    }
+
+    case 'communications.suppress-email': {
+      state.emailSuppressions ??= []
+      state.outboundMessages ??= []
+      const email = assertEmail(input.email)
+      const reason = assertString(input.reason, 'reason')
+      if (reason.length > 500) {
+        throw new OperationError('INVALID_INPUT', 'Suppression reason is too long.', {
+          reason: 'Keep the reason under 500 characters.',
+        })
+      }
+      if (
+        state.emailSuppressions.some(
+          (entry) => entry.eventId === state.activeEventId && entry.email === email,
+        )
+      ) {
+        throw new OperationError('DUPLICATE', 'That email address is already suppressed.')
+      }
+      const suppression: EmailSuppression = {
+        id: createId('sup'),
+        eventId: state.activeEventId,
+        email,
+        reason,
+        createdAt: timestamp,
+        createdBy: context.actor.name,
+        version: 1,
+      }
+      state.emailSuppressions.unshift(suppression)
+      const suppressedMessages = state.outboundMessages.filter(
+        (message) =>
+          message.eventId === state.activeEventId &&
+          message.recipientEmail.trim().toLowerCase() === email &&
+          (message.status === 'queued' || message.status === 'failed'),
+      )
+      for (const message of suppressedMessages) {
+        message.status = 'suppressed'
+        message.nextAttemptAt = null
+        message.lastError = `Suppressed: ${reason}`
+        message.version = (message.version ?? 1) + 1
+      }
+      appendEvent(state, context, {
+        type: 'communications.email-suppressed',
+        aggregate: { type: 'email-suppression', id: suppression.id, version: 1 },
+        summary: `Suppressed delivery to ${email}.`,
+        data: { messageIds: suppressedMessages.map((message) => message.id), reason },
+      })
+      return { suppression, messages: suppressedMessages }
+    }
+
+    case 'communications.remove-suppression': {
+      state.emailSuppressions ??= []
+      const suppression = findRequired(
+        state.emailSuppressions,
+        input.suppressionId,
+        'email suppression',
+      )
+      if (suppression.eventId !== state.activeEventId) {
+        throw new OperationError('FORBIDDEN', 'That suppression belongs to another event.')
+      }
+      state.emailSuppressions.splice(state.emailSuppressions.indexOf(suppression), 1)
+      appendEvent(state, context, {
+        type: 'communications.suppression-removed',
+        aggregate: {
+          type: 'email-suppression',
+          id: suppression.id,
+          version: suppression.version + 1,
+        },
+        summary: `Allowed future delivery to ${suppression.email}.`,
+        data: { email: suppression.email },
+      })
+      return { suppression }
     }
 
     case 'change-set.create': {

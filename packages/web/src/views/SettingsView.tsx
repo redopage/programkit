@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import { toZonedDateTimeInput, zonedDateTimeInputToIso } from '../lib/date.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
+import { AccountSecuritySettings } from '../components/AccountSecuritySettings.tsx'
 import { EventIdentity } from '../components/event-brand.tsx'
 import {
   Button,
@@ -103,11 +104,110 @@ function roleLabel(role: TeamRole) {
   return role.charAt(0).toLocaleUpperCase() + role.slice(1)
 }
 
+function InstanceAccessSettings() {
+  const [access, setAccess] = useState<{
+    managed: boolean
+    initialized: boolean
+    policy: 'open' | 'invite_only'
+    isInstanceOwner: boolean
+  } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    void fetch('/api/v1/instance/access', { credentials: 'same-origin' })
+      .then(async (response) => {
+        const body = (await response.json()) as typeof access & { ok?: boolean }
+        if (!active || !response.ok || !body?.ok) return
+        setAccess(body)
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (!access?.managed || !access.isInstanceOwner) return null
+
+  async function updatePolicy(policy: 'open' | 'invite_only') {
+    if (policy === access?.policy) return
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/v1/instance/access', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ policy }),
+      })
+      const body = (await response.json()) as typeof access & { ok?: boolean; error?: string }
+      if (!response.ok || !body?.ok)
+        throw new Error(body?.error ?? 'Signup access could not be saved.')
+      setAccess(body)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Signup access could not be saved.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="mx-auto w-full max-w-4xl" aria-labelledby="instance-access-heading">
+      <SectionHeading
+        id="instance-access-heading"
+        title="Installation access"
+        description="Control who can create organizer accounts on this ProgramKit installation. Participant and reviewer access still follows each event’s invitations and public forms."
+      />
+      <fieldset disabled={saving} className="grid gap-3 pt-5 sm:grid-cols-2">
+        <legend className="sr-only">Organizer signup policy</legend>
+        {[
+          {
+            value: 'invite_only' as const,
+            title: 'Invite-only',
+            detail: 'Recommended for self-hosting. Only people invited from an event can join.',
+          },
+          {
+            value: 'open' as const,
+            title: 'Open organizer signup',
+            detail: 'Anyone with this installation URL can create an organization and first event.',
+          },
+        ].map((option) => (
+          <label
+            key={option.value}
+            className={`focus-within:ring-2 focus-within:ring-blue-600/30 grid cursor-pointer grid-cols-[auto_1fr] gap-x-3 rounded-xl p-4 ring-1 ring-inset ${access.policy === option.value ? 'bg-blue-50 ring-blue-600/20' : 'bg-white ring-zinc-950/10'}`}
+          >
+            <input
+              type="radio"
+              name="instance-signup-policy"
+              value={option.value}
+              checked={access.policy === option.value}
+              onChange={() => void updatePolicy(option.value)}
+              className="mt-0.5 size-4 accent-blue-600"
+            />
+            <span>
+              <span className="block text-sm font-medium text-zinc-950">{option.title}</span>
+              <span className="block pt-1 text-sm text-zinc-500">{option.detail}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      {error ? (
+        <p role="alert" className="pt-3 text-sm text-rose-700">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  )
+}
+
 function TeamSettings({
   eventId,
+  emailConfigured,
   onRoleChange,
 }: {
   eventId: string
+  emailConfigured: boolean
   onRoleChange: (role: TeamRole) => void
 }) {
   const [team, setTeam] = useState<TeamState | null>(null)
@@ -210,7 +310,7 @@ function TeamSettings({
         <p className="pt-5 text-pretty text-base text-zinc-500 sm:text-sm">Loading team…</p>
       ) : team ? (
         <div className="grid gap-6 pt-5">
-          {canInvite ? (
+          {canInvite && emailConfigured ? (
             <form
               className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-end"
               onSubmit={(event) => {
@@ -255,6 +355,13 @@ function TeamSettings({
                 {working ? 'Sending…' : 'Invite'}
               </Button>
             </form>
+          ) : null}
+
+          {canInvite && !emailConfigured ? (
+            <Callout tone="warning" title="Email is required to invite teammates.">
+              Configure transactional email for this installation, then reload Settings. Password
+              sign-in and single-owner use remain available without email.
+            </Callout>
           ) : null}
 
           {notice ? <Callout tone="success" title={notice} /> : null}
@@ -605,6 +712,9 @@ export function SettingsView() {
   const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft)
   const eventId = event.id
   const eventVersion = event.version ?? 1
+  const emailConfigured = payload.state.integrations.some(
+    (integration) => integration.kind === 'email' && integration.status === 'connected',
+  )
 
   function update<Key extends keyof EventSettingsDraft>(key: Key, value: EventSettingsDraft[Key]) {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -698,7 +808,7 @@ export function SettingsView() {
   return (
     <div className="flex w-full flex-col gap-8">
       <PageHeader
-        title="Event settings"
+        title="Settings"
         actions={
           <Button
             variant="primary"
@@ -927,7 +1037,17 @@ export function SettingsView() {
 
       <ProgramInventory disabled={teamRole === 'member'} />
 
-      {isHostedApp() ? <TeamSettings eventId={eventId} onRoleChange={setTeamRole} /> : null}
+      {isHostedApp() ? (
+        <TeamSettings
+          eventId={eventId}
+          emailConfigured={emailConfigured}
+          onRoleChange={setTeamRole}
+        />
+      ) : null}
+
+      {isHostedApp() ? <InstanceAccessSettings /> : null}
+
+      {isHostedApp() ? <AccountSecuritySettings /> : null}
     </div>
   )
 }

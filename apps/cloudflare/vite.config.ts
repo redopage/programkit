@@ -8,23 +8,29 @@ import { defineConfig } from 'vite'
 const webSource = fileURLToPath(new URL('../../packages/web/src/index.ts', import.meta.url))
 const webStyles = fileURLToPath(new URL('../../packages/web/src/styles.css', import.meta.url))
 
-export default defineConfig(({ mode }) => ({
-  plugins: [
-    tanstackRouter({
-      target: 'react',
-      autoCodeSplitting: true,
-      routesDirectory: '../../packages/web/src/routes',
-      generatedRouteTree: '../../packages/web/src/routeTree.gen.ts',
-    }),
-    react(),
-    tailwindcss(),
-    ...(mode === 'test' ? [] : [cloudflare({ configPath: '../../wrangler.jsonc' })]),
-  ],
-  resolve: {
-    alias: [
-      { find: '@programkit/web/styles.css', replacement: webStyles },
-      { find: '@programkit/web', replacement: webSource },
+export default defineConfig(({ command, mode }) => {
+  // The checked-in top-level Wrangler profile is the one-click self-host target.
+  // Local Vite development keeps the deterministic sample explicitly isolated.
+  if (command === 'serve' && !process.env.CLOUDFLARE_ENV) process.env.CLOUDFLARE_ENV = 'local'
+
+  return {
+    plugins: [
+      tanstackRouter({
+        target: 'react',
+        autoCodeSplitting: true,
+        routesDirectory: '../../packages/web/src/routes',
+        generatedRouteTree: '../../packages/web/src/routeTree.gen.ts',
+      }),
+      react(),
+      tailwindcss(),
+      ...(mode === 'test' ? [] : [cloudflare({ configPath: '../../wrangler.jsonc' })]),
     ],
-    dedupe: ['react', 'react-dom'],
-  },
-}))
+    resolve: {
+      alias: [
+        { find: '@programkit/web/styles.css', replacement: webStyles },
+        { find: '@programkit/web', replacement: webSource },
+      ],
+      dedupe: ['react', 'react-dom'],
+    },
+  }
+})

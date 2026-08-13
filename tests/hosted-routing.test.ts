@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  canDeleteStoredAssets,
   browserSecurityHeaders,
+  configuredAppOrigin,
+  docsMarkdownPathname,
   eventLogoStorageKeyFromUrl,
   hostedPublicEventId,
   isApiKeyAccessiblePath,
   isApiKeyCredentialPath,
   isHostedDemoReset,
   isHostedRecoveryPath,
+  isHostedSiteDocument,
   isWorkspaceCrmPath,
   normalizeHostedEventCreateInput,
   parseApiKeyToken,
+  prefersMarkdown,
   publicOperationalResponse,
   runtimeIntegrations,
 } from '../apps/cloudflare/src/worker.ts'
@@ -65,6 +70,64 @@ describe('hosted public event routing', () => {
         eventId,
       ),
     ).toBeNull()
+  })
+})
+
+describe('hosted project site routing', () => {
+  it('keeps documentation pages public without opening application routes', () => {
+    expect(isHostedSiteDocument('/')).toBe(true)
+    expect(isHostedSiteDocument('/docs')).toBe(true)
+    expect(isHostedSiteDocument('/docs/self-hosting/cloudflare')).toBe(true)
+    expect(isHostedSiteDocument('/docs/self-hosting/cloudflare.md')).toBe(true)
+    expect(isHostedSiteDocument('/docs.md')).toBe(true)
+    expect(isHostedSiteDocument('/llms.txt')).toBe(true)
+    expect(isHostedSiteDocument('/llms-full.txt')).toBe(true)
+    expect(isHostedSiteDocument('/sitemap.xml')).toBe(true)
+    expect(isHostedSiteDocument('/privacy')).toBe(true)
+
+    expect(isHostedSiteDocument('/forms')).toBe(false)
+    expect(isHostedSiteDocument('/api/v1/state')).toBe(false)
+  })
+
+  it('maps human documentation routes to explicit Markdown resources', () => {
+    expect(docsMarkdownPathname('/docs')).toBe('/docs.md')
+    expect(docsMarkdownPathname('/docs/')).toBe('/docs.md')
+    expect(docsMarkdownPathname('/docs/self-hosting/cloudflare')).toBe(
+      '/docs/self-hosting/cloudflare.md',
+    )
+    expect(docsMarkdownPathname('/docs/self-hosting/cloudflare/')).toBe(
+      '/docs/self-hosting/cloudflare.md',
+    )
+    expect(docsMarkdownPathname('/docs/self-hosting/cloudflare.md')).toBeNull()
+    expect(docsMarkdownPathname('/forms')).toBeNull()
+  })
+
+  it('negotiates Markdown only when the client prefers it over HTML', () => {
+    const request = (accept: string) =>
+      new Request('https://programkit.dev/docs', { headers: { accept } })
+
+    expect(prefersMarkdown(request('text/markdown'))).toBe(true)
+    expect(prefersMarkdown(request('text/markdown, text/html;q=0.8'))).toBe(true)
+    expect(prefersMarkdown(request('text/html, text/markdown;q=0.8'))).toBe(false)
+    expect(prefersMarkdown(request('text/html,application/xhtml+xml,*/*;q=0.8'))).toBe(false)
+    expect(prefersMarkdown(request('*/*'))).toBe(false)
+  })
+})
+
+describe('hosted canonical origins', () => {
+  it('uses an explicit canonical origin when configured', () => {
+    expect(
+      configuredAppOrigin(
+        { PROGRAMKIT_APP_ORIGIN: 'https://events.example.com' },
+        new URL('https://programkit.workers.dev/login'),
+      ),
+    ).toBe('https://events.example.com')
+  })
+
+  it('keeps workers.dev links on the current installation when no custom origin is configured', () => {
+    expect(
+      configuredAppOrigin({}, new URL('https://my-programkit.example.workers.dev/login')),
+    ).toBe('https://my-programkit.example.workers.dev')
   })
 })
 
@@ -155,6 +218,15 @@ describe('hosted event safety', () => {
     expect(isHostedRecoveryPath('POST', '/api/v1/recovery')).toBe(false)
     expect(isHostedRecoveryPath('POST', '/api/v1/recovery/restore')).toBe(false)
     expect(isApiKeyAccessiblePath('/api/v1/recovery')).toBe(false)
+  })
+
+  it('reserves stored-file deletion for the hosted event owner', () => {
+    expect(canDeleteStoredAssets('hosted-app', 'owner')).toBe(true)
+    expect(canDeleteStoredAssets('hosted-app', 'admin')).toBe(false)
+    expect(canDeleteStoredAssets('hosted-app', 'member')).toBe(false)
+    expect(canDeleteStoredAssets('hosted-app', null)).toBe(false)
+    expect(canDeleteStoredAssets('single-workspace')).toBe(true)
+    expect(canDeleteStoredAssets('hosted-demo')).toBe(true)
   })
 })
 
@@ -296,6 +368,16 @@ describe('public operational endpoints', () => {
     await expect(response?.text()).resolves.toContain('Disallow: /')
   })
 
+  it('allows crawlers to discover the public project site and its sitemap', async () => {
+    const request = new Request('https://programkit.dev/robots.txt')
+    const response = publicOperationalResponse(request, new URL(request.url), 'hosted-site')
+    const text = await response?.text()
+
+    expect(text).toContain('Allow: /')
+    expect(text).toContain('Disallow: /api/')
+    expect(text).toContain('Sitemap: https://programkit.dev/sitemap.xml')
+  })
+
   it('serves a security contact and rejects unknown well-known files', async () => {
     const securityRequest = new Request('https://app.programkit.dev/.well-known/security.txt')
     const securityResponse = publicOperationalResponse(
@@ -308,6 +390,25 @@ describe('public operational endpoints', () => {
     const unknownResponse = publicOperationalResponse(unknownRequest, new URL(unknownRequest.url))
     expect(unknownResponse?.status).toBe(404)
     await expect(unknownResponse?.text()).resolves.toBe('Not found.\n')
+  })
+
+  it('serves a public, deployment-specific Agent Plugin without credentials', async () => {
+    const request = new Request('https://events.example.com/agent-plugin.zip')
+    const response = publicOperationalResponse(request, new URL(request.url))
+
+    expect(response?.status).toBe(200)
+    expect(response?.headers.get('content-type')).toBe('application/zip')
+    expect(response?.headers.get('cache-control')).toBe('public, max-age=300')
+    expect(response?.headers.get('x-content-type-options')).toBe('nosniff')
+    const body = new Uint8Array(await response!.arrayBuffer())
+    expect(Array.from(body.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04])
+    expect(new TextDecoder().decode(body)).toContain('https://events.example.com/mcp')
+    expect(new TextDecoder().decode(body)).not.toContain('pk_live_')
+
+    const head = new Request(request.url, { method: 'HEAD' })
+    const headResponse = publicOperationalResponse(head, new URL(head.url))
+    expect(headResponse?.headers.get('content-length')).toBe(String(body.byteLength))
+    expect((await headResponse?.arrayBuffer())?.byteLength).toBe(0)
   })
 
   it('does not consume unrelated application routes', () => {

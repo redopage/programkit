@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host localhost --port 4173 --strictPort",
+    "prebuild": "node ../../scripts/generate-agent-plugin-source.mjs",
     "build": "vite build",
     "preview": "vite preview --host localhost --port 4173 --strictPort",
     "deploy": "wrangler deploy --config ../../wrangler.jsonc"

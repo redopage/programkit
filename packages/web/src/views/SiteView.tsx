@@ -232,6 +232,12 @@ export function SiteView() {
                 Product
               </a>
               <a
+                href="/docs"
+                className="focus-ring inline-flex min-h-10 items-center rounded-full px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-950/4 hover:text-zinc-950"
+              >
+                Docs
+              </a>
+              <a
                 href="https://forge.smol.ai/andheller/programkit"
                 className="focus-ring hidden min-h-10 items-center rounded-full px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-950/4 hover:text-zinc-950 md:inline-flex"
               >
@@ -354,6 +360,12 @@ export function SiteView() {
                   Browse the code
                 </a>
                 <a
+                  href="/docs"
+                  className="focus-ring rounded-md text-zinc-300 underline decoration-white/20 underline-offset-4 hover:text-white hover:decoration-white"
+                >
+                  Read the docs
+                </a>
+                <a
                   href="https://app.programkit.dev/login"
                   className="focus-ring rounded-md text-zinc-300 underline decoration-white/20 underline-offset-4 hover:text-white hover:decoration-white"
                 >
@@ -380,6 +392,9 @@ export function SiteView() {
               </a>
               <a className="focus-ring rounded-md hover:text-zinc-950" href="/terms">
                 Terms
+              </a>
+              <a className="focus-ring rounded-md hover:text-zinc-950" href="/docs">
+                Docs
               </a>
               <a
                 className="focus-ring rounded-md hover:text-zinc-950"

@@ -11,7 +11,7 @@ import {
   type SubmissionContributor,
 } from '@programkit/core'
 
-import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
+import { EventIdentity } from '../components/event-brand.tsx'
 import { SubmissionAnswerFields } from '../components/SubmissionAnswerFields.tsx'
 import { SubmissionParticipantsEditor } from '../components/SubmissionParticipantsEditor.tsx'
 import { Button, StatusBadge, sentenceCase } from '../components/ui.tsx'
@@ -407,7 +407,6 @@ export function SpeakerSubmissionsView({
           </a>
         </div>
       </main>
-      <EventPageFooter />
     </div>
   )
 }

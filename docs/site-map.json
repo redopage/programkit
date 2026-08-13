@@ -1,0 +1,122 @@
+{
+  "groups": [
+    {
+      "title": "Start here",
+      "items": [
+        { "source": "docs/README.md", "label": "Documentation home" },
+        { "source": "docs/getting-started/README.md", "label": "Getting started" },
+        { "source": "docs/getting-started/first-event.md", "label": "Set up your first event" },
+        {
+          "source": "docs/getting-started/choose-a-deployment.md",
+          "label": "Choose a deployment"
+        },
+        {
+          "source": "docs/guides/build-and-publish-a-cfp.md",
+          "label": "Build and publish a CFP"
+        }
+      ]
+    },
+    {
+      "title": "Use ProgramKit",
+      "items": [
+        { "source": "docs/users/README.md", "label": "Product and user guide" },
+        { "source": "docs/users/organizer-workflows.md", "label": "Organizer workflows" },
+        {
+          "source": "docs/users/participant-experiences.md",
+          "label": "Participant experiences"
+        },
+        { "source": "docs/users/roles-and-access.md", "label": "Roles and access" },
+        {
+          "source": "docs/users/reporting-and-exports.md",
+          "label": "Reporting and exports"
+        },
+        { "source": "docs/product/program-lifecycle.md", "label": "Program lifecycle" },
+        {
+          "source": "docs/guides/publish-speaker-resources.md",
+          "label": "Publish speaker resources"
+        }
+      ]
+    },
+    {
+      "title": "Self-hosting",
+      "items": [
+        { "source": "docs/self-hosting/README.md", "label": "Self-hosting overview" },
+        { "source": "docs/self-hosting/cloudflare.md", "label": "Deploy to Cloudflare" },
+        { "source": "docs/self-hosting/first-owner.md", "label": "First owner and signup" },
+        { "source": "docs/self-hosting/configuration.md", "label": "Configuration" },
+        { "source": "docs/self-hosting/launch-checklist.md", "label": "Launch checklist" },
+        { "source": "docs/self-hosting/administration.md", "label": "Administration" },
+        { "source": "docs/self-hosting/troubleshooting.md", "label": "Troubleshooting" }
+      ]
+    },
+    {
+      "title": "Developers",
+      "items": [
+        { "source": "docs/developers/README.md", "label": "Developer guide" },
+        { "source": "docs/guides/local-development.md", "label": "Local development" },
+        { "source": "docs/developers/repository-tour.md", "label": "Repository tour" },
+        { "source": "docs/developers/customizing.md", "label": "Customize the starter" },
+        {
+          "source": "docs/developers/extending-programkit.md",
+          "label": "Extend ProgramKit"
+        },
+        {
+          "source": "docs/agents/contribution-playbook.md",
+          "label": "Contribution playbook"
+        },
+        {
+          "source": "docs/contributing-documentation.md",
+          "label": "Contribute documentation"
+        }
+      ]
+    },
+    {
+      "title": "API and agents",
+      "items": [
+        { "source": "docs/api/quickstart.md", "label": "HTTP API quickstart" },
+        { "source": "docs/api/README.md", "label": "HTTP API reference" },
+        { "source": "docs/agents/connect.md", "label": "Connect an agent" },
+        {
+          "source": "docs/developers/agent-readable-documentation.md",
+          "label": "Agent-readable documentation"
+        },
+        { "source": "docs/agents/recipes.md", "label": "Agent recipes" },
+        { "source": "docs/integrations/agent-plugins.md", "label": "Agent Plugins and MCP" },
+        { "source": "docs/integrations/email.md", "label": "Email" },
+        { "source": "docs/integrations/airtable.md", "label": "Airtable" },
+        { "source": "docs/integrations/accelevents.md", "label": "Accelevents handoff" }
+      ]
+    },
+    {
+      "title": "Reference",
+      "items": [
+        {
+          "source": "docs/reference/capability-status.md",
+          "label": "Capability status"
+        },
+        {
+          "source": "docs/reference/routes-and-surfaces.md",
+          "label": "Routes and surfaces"
+        },
+        { "source": "docs/reference/glossary.md", "label": "Glossary" },
+        {
+          "source": "docs/architecture/identity-and-tenancy.md",
+          "label": "Identity and tenancy"
+        },
+        {
+          "source": "docs/architecture/storage-and-integrations.md",
+          "label": "Storage and integrations"
+        },
+        { "source": "docs/architecture/live-updates.md", "label": "Live updates" },
+        {
+          "href": "https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md",
+          "label": "Product roadmap"
+        },
+        {
+          "href": "https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md",
+          "label": "Security"
+        }
+      ]
+    }
+  ]
+}

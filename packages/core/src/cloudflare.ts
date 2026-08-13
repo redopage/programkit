@@ -608,13 +608,18 @@ export class WorkspaceDurableObject extends DurableObject {
       const attempt = await repository.mutate((current) => {
         const next = structuredClone(current)
         const message = next.outboundMessages?.find((entry) => entry.id === candidate.id)
-        if (!message || message.status === 'sent' || (message.attempts ?? 0) >= 5) {
+        if (
+          !message ||
+          (message.status !== 'queued' && message.status !== 'failed') ||
+          (message.attempts ?? 0) >= 5
+        ) {
           return { state: current, result: null }
         }
         message.attempts = (message.attempts ?? 0) + 1
         message.lastAttemptAt = at
         message.nextAttemptAt = null
         message.lastError = null
+        message.version = (message.version ?? 1) + 1
         next.revision += 1
         return { state: next, result: structuredClone(message) }
       })
@@ -649,6 +654,7 @@ export class WorkspaceDurableObject extends DurableObject {
           message.providerMessageId = delivered.messageId
           message.nextAttemptAt = null
           message.lastError = null
+          message.version = (message.version ?? 1) + 1
           next.revision += 1
           return { state: next, result: undefined }
         })
@@ -663,6 +669,7 @@ export class WorkspaceDurableObject extends DurableObject {
           message.lastError = error instanceof Error ? error.message : 'Email delivery failed.'
           message.nextAttemptAt =
             attempts < 5 ? new Date(now + retryMinutes * 60_000).toISOString() : null
+          message.version = (message.version ?? 1) + 1
           next.revision += 1
           return { state: next, result: undefined }
         })
@@ -873,7 +880,7 @@ export class WorkspaceDurableObject extends DurableObject {
     } catch (error) {
       return Response.json(
         { ok: false, error: error instanceof Error ? error.message : 'This demo has expired.' },
-        { status: 410 },
+        { status: 410, headers: { 'cache-control': 'no-store' } },
       )
     }
 

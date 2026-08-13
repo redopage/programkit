@@ -50,6 +50,36 @@ restore only after explicit owner confirmation, restart the object session, reco
 files, and verify the event before reopening writes. Logical exports remain the portability and
 departure mechanism; PITR is an incident-recovery layer.
 
+## File lifecycle and scan boundary
+
+Live upload routes write private objects below the active event prefix and then register metadata
+through `asset.register`. Explicit deletion is a host-coordinated, two-phase operation because an
+event-record transaction cannot include an R2 mutation:
+
+1. An authenticated event owner invokes `asset.delete`. Core records who deleted the version, the
+   time and optional reason, marks storage cleanup pending, repairs the current-version pointer,
+   and reopens or returns the related requirement to review. The tombstone and domain events remain
+   in the logical workspace export.
+2. The Worker immediately denies downloads and removes the tombstone from participant and public
+   projections. It refuses to turn a legacy or cross-event object key into an arbitrary R2 delete.
+3. The Worker deletes the event-rooted R2 object and invokes the internal, system-only
+   `asset.confirm-deletion` operation. That confirmation records the purge time and a second domain
+   event.
+
+R2 deletion is idempotent. If it fails after the tombstone commits, Files shows a cleanup-pending
+record that an owner can retry; the file stays unavailable in the meantime. Deterministic
+`demo/...` assets are generated fixtures with no R2 bytes, so they follow the same metadata flow
+without an object-store call.
+
+This is explicit per-version deletion, not a complete retention program. ProgramKit does not yet
+apply age-based retention, legal holds, automatic workspace-offboarding cleanup, orphan discovery,
+or R2 usage alerts. Deleted metadata and audit events are retained in workspace state; purged bytes
+cannot be reconstructed from a logical export or Durable Object point-in-time recovery.
+
+Upload type and size checks are not malware scanning. There is currently no scanner provider,
+quarantine state, or scan-before-availability gate. Do not accept sensitive participant files at
+scale until a production deployment supplies and verifies that boundary.
+
 ## Airtable decision
 
 The repository includes a real OAuth flow, versioned schema, native operational tables, delta

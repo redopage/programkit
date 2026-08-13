@@ -14,7 +14,7 @@ import {
   type SubmissionKind,
 } from '@programkit/core'
 
-import { EventIdentity, EventPageFooter } from './event-brand.tsx'
+import { EventIdentity } from './event-brand.tsx'
 import { cx, FileDropField } from './ui.tsx'
 
 const speakerPurposes = new Set([
@@ -223,7 +223,6 @@ export function SubmissionFormPreview({
               </div>
             </div>
           </div>
-          <EventPageFooter linked={false} />
         </div>
       </div>
     </div>

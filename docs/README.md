@@ -1,89 +1,129 @@
 # ProgramKit documentation
 
-ProgramKit keeps one set of canonical documentation for organizers, contributors, operators, and
-agents. Agent-facing guides route readers to that material and add execution guardrails; they do
-not maintain a second version of product or architecture facts.
+ProgramKit is an open-source conference-program starter that can be used as hosted software,
+self-hosted as one Cloudflare application, or adapted from source. The same repository contains the
+organizer interface, participant surfaces, HTTP API, MCP server, portable Agent Plugin, and the
+domain rules that keep them consistent.
 
-## Choose a path
+The documentation is organized by what you are trying to do. Start with one path; follow the links
+to shared reference material only when you need the extra depth.
 
-### I want to understand the product
+## Start here
 
-1. [Program lifecycle](product/program-lifecycle.md) explains the golden path from a call for
-   proposals to a published agenda.
-2. [Interface craft](product/interface-craft.md) is the standard the operator and public interfaces
-   are held to, and the checklist a UI change is reviewed against.
-3. [Product status and roadmap](../ROADMAP.md) distinguishes working capabilities from production
-   depth that is still needed.
-4. [Evaluator readiness](product/evaluator-gap-analysis.md) summarizes the complete competition
-   rubric and the remaining manual evidence.
-5. [Evaluator runbook](product/evaluator-runbook.md) explains how to produce repeatable browser
-   evidence without overstating a seeded screen.
-6. [Evaluator evidence](product/evals/README.md) records exercised behavior for Call for Papers,
-   Abstract Management, Speaker Management, Content Management, AI Agenda, Public Widgets, and
-   optional Speaker CRM.
-7. [Product evidence showcase](../showcase/index.html) compares the running demo with the supplied
-   competition brief.
-8. [Architecture](../ARCHITECTURE.md) explains the three packages, scoped surfaces, operation
-   processor, and persistence boundary.
+| I want to…                                       | Start with                                                           |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| Understand what ProgramKit does                  | [Product and user guide](users/README.md)                            |
+| Try the complete workflow locally                | [Getting started](getting-started/README.md)                         |
+| Rehearse my first event end to end               | [Set up your first event](getting-started/first-event.md)            |
+| Deploy my own copy to Cloudflare                 | [Self-hosting overview](self-hosting/README.md)                      |
+| Use a managed ProgramKit installation            | [Hosted or self-hosted?](getting-started/choose-a-deployment.md)     |
+| Administer accounts, access, files, and recovery | [Self-hosting administration](self-hosting/administration.md)        |
+| Integrate through HTTP                           | [HTTP API quickstart](api/quickstart.md)                             |
+| Connect Codex or another agent client            | [Connect an agent](agents/connect.md)                                |
+| Make documentation readable by an agent          | [Agent-readable docs](developers/agent-readable-documentation.md)    |
+| Extend or rebrand the source                     | [Customize the starter](developers/customizing.md)                   |
+| Contribute a complete workflow                   | [Contributing](../CONTRIBUTING.md)                                   |
+| Help as a coding agent                           | [Agent navigation](agents/README.md) and [`AGENTS.md`](../AGENTS.md) |
 
-### I want to run or adapt ProgramKit
+## Product and user guides
 
-1. Start with the root [quick start](../README.md#run-it-locally).
-2. Use [Local development](guides/local-development.md) for setup, the seeded walkthrough, reset,
-   and verification.
-3. Follow [Build and publish a call for proposals](guides/build-and-publish-a-cfp.md) for the first
-   end-to-end product workflow.
-4. Use [Publish speaker resources](guides/publish-speaker-resources.md) for event guides, links, and
-   safe embedded documents in the accepted-speaker portal.
-5. Read [Storage and integrations](architecture/storage-and-integrations.md) before changing
-   persistence, Airtable, D1, R2, or background work.
-6. Read [Deployment](../DEPLOYMENT.md) before deploying the Cloudflare application.
-7. Use the [HTTP API](api/README.md) for integrations and data sync.
-8. Read the [Airtable integration guide](integrations/airtable.md) before testing the experimental
-   Airtable-backed mode.
-9. Use [Agent Plugins and MCP](integrations/agent-plugins.md) to connect an AI client without
-   embedding credentials in the portable package.
-10. Use the [Accelevents handoff](integrations/accelevents.md) to move a published program into
-    Accelevents without changing ProgramKit's source of truth.
-11. Read the [Cloudflare email guide](integrations/email.md) before enabling confirmations or
-    reminders.
-12. Read [Live workspace updates](architecture/live-updates.md) before adding WebSockets or durable
-    notifications.
-13. Read [Identity, events, and storage ownership](architecture/identity-and-tenancy.md) before
-    changing sign-in, membership, event routing, Airtable ownership, or R2 boundaries.
-14. Read [Hosted demos](architecture/hosted-demos.md) before changing trial routing or retention.
-15. Complete [Security](../SECURITY.md) and [Operations](../OPERATIONS.md) before using real data.
+- [Product and user guide](users/README.md): roles, surfaces, and the complete lifecycle.
+- [Set up your first event](getting-started/first-event.md): rehearse every handoff from CFP to
+  published program.
+- [Organizer workflows](users/organizer-workflows.md): forms, reviews, speakers, files,
+  communications, scheduling, CRM, and settings.
+- [Participant experiences](users/participant-experiences.md): submitter, reviewer, speaker, and
+  attendee views.
+- [Roles and access](users/roles-and-access.md): installation owners, event teams, invitations,
+  participant accounts, and scoped links.
+- [Reporting and exports](users/reporting-and-exports.md): the reporting available today, portable
+  exports, feeds, and honest gaps.
+- [Program lifecycle](product/program-lifecycle.md): the domain model behind the user journey.
 
-### I want to contribute
+## Self-hosting and administration
 
-1. Read [Contributing](../CONTRIBUTING.md) and the [roadmap](../ROADMAP.md).
-2. Use the [contribution playbook](agents/contribution-playbook.md) to trace a change through core,
-   projections, web, the Cloudflare host, tests, and docs.
-3. Run `pnpm check` before handoff or a pull request.
+- [Self-hosting overview](self-hosting/README.md): what is deployed and which path to choose.
+- [Cloudflare deployment](self-hosting/cloudflare.md): one-click deployment and the verified CLI
+  walkthrough.
+- [First owner and access policy](self-hosting/first-owner.md): claim an installation safely and
+  choose open or invite-only organizer signup.
+- [Configuration reference](self-hosting/configuration.md): profiles, bindings, variables, secrets,
+  custom domains, email, and optional integrations.
+- [Administration](self-hosting/administration.md): keys, access, files, exports, updates, recovery,
+  and operating boundaries.
+- [Troubleshooting](self-hosting/troubleshooting.md): common setup, R2, login, API, MCP, and file
+  problems.
+- [Launch checklist](self-hosting/launch-checklist.md): decide whether an evaluation, private pilot,
+  or public event is ready for real data.
+- [Deployment architecture](../DEPLOYMENT.md), [operations](../OPERATIONS.md), and
+  [security](../SECURITY.md): canonical production detail.
 
-### I am an agent helping a human
+## Developer and extension guides
 
-Start at [Agent navigation](agents/README.md). Coding agents should also read the root
-[`AGENTS.md`](../AGENTS.md), which is deliberately short enough for automatic repository context.
+- [Developer guide](developers/README.md): setup, repository shape, and change workflow.
+- [Customize the starter](developers/customizing.md): exact branding, provider, field, module, and
+  fork-maintenance touchpoints.
+- [Repository tour](developers/repository-tour.md): package ownership and request flow.
+- [Extending ProgramKit](developers/extending-programkit.md): add a workflow, projection, route,
+  integration, agent capability, or deployment profile without bypassing invariants.
+- [Architecture](../ARCHITECTURE.md): domain engine, persistence, projections, and platform
+  boundaries.
+- [Contribution playbook](agents/contribution-playbook.md): trace one vertical change from core to
+  docs.
+- [Interface craft](product/interface-craft.md): UI quality and state standards.
+- [Contributing documentation](contributing-documentation.md): audience routing, page patterns,
+  status language, and validation.
+
+## API, agents, and integrations
+
+- [HTTP API quickstart](api/quickstart.md), complete [HTTP API](api/README.md), and generated
+  [OpenAPI 3.1 contract](api/openapi.json).
+- [Connect an agent](agents/connect.md): direct MCP or the portable plugin package.
+- [Agent recipes](agents/recipes.md): safe prompts for readiness, reminders, scheduling,
+  publication, and reconciliation.
+- [Agent Plugins and MCP](integrations/agent-plugins.md): packaging, client-managed authentication,
+  and distribution.
+- [Agent-readable documentation](developers/agent-readable-documentation.md): `llms.txt`, Markdown
+  pages, content negotiation, server logs, and the JavaScript boundary.
+- [`@programkit/agent`](../packages/agent/README.md): protocol, tool, and resource reference.
+- [Airtable](integrations/airtable.md): optional experimental integration.
+- [Email](integrations/email.md): optional delivery and magic-link configuration.
+- [Accelevents handoff](integrations/accelevents.md): portable published-program package.
+
+## Reference
+
+- [Routes and surfaces](reference/routes-and-surfaces.md): stable human-facing paths and their trust
+  boundaries.
+- [Glossary](reference/glossary.md): ProgramKit product and architecture terms.
+- [Capability status vocabulary](reference/capability-status.md): included, optional, experimental,
+  operator-supplied, planned, and out-of-scope claims.
+- [Product status and roadmap](../ROADMAP.md): what works, what is deliberately absent, and what
+  still needs production hardening.
+- [Identity and tenancy](architecture/identity-and-tenancy.md): account, membership, event, and file
+  ownership.
+- [Storage and integrations](architecture/storage-and-integrations.md): Durable Objects, R2,
+  Airtable, D1, and portability.
 
 ## Sources of truth
 
-| Question                                           | Canonical document or code                                                |
-| -------------------------------------------------- | ------------------------------------------------------------------------- |
-| What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                                             |
-| How do we compare with the full evaluator?         | [`evaluator-gap-analysis.md`](product/evaluator-gap-analysis.md)          |
-| How do we run and record evaluator evidence?       | [`evaluator-runbook.md`](product/evaluator-runbook.md)                    |
-| Why are the packages and hosts separated?          | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                                   |
-| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                                       |
-| Which service owns each kind of data?              | [`storage-and-integrations.md`](architecture/storage-and-integrations.md) |
-| Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](architecture/identity-and-tenancy.md)         |
-| How is the repository operated?                    | [`OPERATIONS.md`](../OPERATIONS.md)                                       |
-| What must change before real data?                 | [`SECURITY.md`](../SECURITY.md)                                           |
-| Which operations exist?                            | `packages/core/src/manifest.ts`                                           |
-| Which HTTP resources exist?                        | [`docs/api/README.md`](api/README.md)                                     |
-| What does the domain store?                        | `packages/core/src/types.ts`                                              |
-| Which URLs and surfaces exist?                     | `packages/web/src/routes` and `packages/web/README.md`                    |
-| Which MCP tools and resources exist?               | `packages/agent/README.md`                                                |
+ProgramKit keeps one canonical fact and links to it from audience guides. This avoids a user guide,
+developer guide, and agent guide silently describing different products.
 
-When behavior and prose disagree, verify the executable code and tests, then update the canonical
-document in the same change. Do not solve drift by adding another summary.
+| Question                                           | Canonical document or code                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| What is in scope and what is complete?             | [`ROADMAP.md`](../ROADMAP.md)                                                              |
+| What is the end-to-end product journey?            | [`program-lifecycle.md`](product/program-lifecycle.md)                                     |
+| Why are packages and hosts separated?              | [`ARCHITECTURE.md`](../ARCHITECTURE.md)                                                    |
+| How does the supported Cloudflare deployment work? | [`DEPLOYMENT.md`](../DEPLOYMENT.md)                                                        |
+| Which service owns each kind of data?              | [`storage-and-integrations.md`](architecture/storage-and-integrations.md)                  |
+| Who owns identity, event routing, and file state?  | [`identity-and-tenancy.md`](architecture/identity-and-tenancy.md)                          |
+| How is an installation operated?                   | [`OPERATIONS.md`](../OPERATIONS.md)                                                        |
+| What must be hardened before sensitive data?       | [`SECURITY.md`](../SECURITY.md)                                                            |
+| Which named operations exist?                      | `packages/core/src/manifest.ts`                                                            |
+| Which HTTP resources exist?                        | [`docs/api/README.md`](api/README.md) and [`openapi.json`](api/openapi.json)               |
+| What does the domain store?                        | `packages/core/src/types.ts`                                                               |
+| Which browser routes exist?                        | `packages/web/src/routes` and [`routes-and-surfaces.md`](reference/routes-and-surfaces.md) |
+| Which MCP tools and resources exist?               | [`packages/agent/README.md`](../packages/agent/README.md)                                  |
+
+When code, tests, and prose disagree, verify the executable behavior, update the canonical source,
+and fix the incoming links in the same change. Do not resolve drift by adding another summary.

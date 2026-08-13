@@ -69,6 +69,107 @@ describe('AuthDurableObject membership projections', () => {
     ).toEqual(defaultPasswordFailureRateLimits)
   })
 
+  it('reserves the first self-host signup, closes it after owner bootstrap, and lets the owner choose open signup', async () => {
+    const initial = await auth.fetch(
+      request('/internal/instance/access', {
+        action: 'status',
+        defaultMode: 'bootstrap',
+        bootstrapConfigured: true,
+      }),
+    )
+    await expect(initial.json()).resolves.toMatchObject({
+      ok: true,
+      managed: true,
+      initialized: false,
+      policy: 'invite_only',
+      signupAvailable: true,
+    })
+
+    const missingSetupCode = await auth.fetch(
+      request('/internal/instance/access', {
+        action: 'begin_signup',
+        defaultMode: 'bootstrap',
+        bootstrapConfigured: true,
+        bootstrapAuthorized: false,
+        email: 'first-owner@example.com',
+      }),
+    )
+    expect(missingSetupCode.status).toBe(409)
+    await expect(missingSetupCode.json()).resolves.toMatchObject({
+      ok: false,
+      code: 'BOOTSTRAP_TOKEN_INVALID',
+    })
+
+    const reservation = await auth.fetch(
+      request('/internal/instance/access', {
+        action: 'begin_signup',
+        defaultMode: 'bootstrap',
+        bootstrapConfigured: true,
+        bootstrapAuthorized: true,
+        email: 'first-owner@example.com',
+      }),
+    )
+    await expect(reservation.json()).resolves.toMatchObject({
+      ok: true,
+      claimInstanceOwner: true,
+    })
+    const competing = await auth.fetch(
+      request('/internal/instance/access', {
+        action: 'begin_signup',
+        defaultMode: 'bootstrap',
+        bootstrapConfigured: true,
+        bootstrapAuthorized: true,
+        email: 'other-owner@example.com',
+      }),
+    )
+    expect(competing.status).toBe(409)
+    await expect(competing.json()).resolves.toMatchObject({ code: 'SIGNUP_IN_PROGRESS' })
+
+    const ownerUserId = 'usr_abcdefabcdefabcdefabcdef'
+    const completed = await auth.fetch(
+      request('/internal/instance/access', {
+        action: 'complete_signup',
+        defaultMode: 'bootstrap',
+        email: 'first-owner@example.com',
+        userId: ownerUserId,
+      }),
+    )
+    await expect(completed.json()).resolves.toMatchObject({
+      ok: true,
+      initialized: true,
+      policy: 'invite_only',
+      signupAvailable: false,
+    })
+
+    const ownerStatus = await auth.fetch(
+      request('/internal/instance/access', {
+        action: 'status',
+        defaultMode: 'bootstrap',
+        email: 'first-owner@example.com',
+        userId: ownerUserId,
+      }),
+    )
+    await expect(ownerStatus.json()).resolves.toMatchObject({
+      isInstanceOwner: true,
+      signupAvailable: false,
+    })
+
+    const opened = await auth.fetch(
+      request('/internal/instance/access', {
+        action: 'update',
+        defaultMode: 'bootstrap',
+        email: 'first-owner@example.com',
+        userId: ownerUserId,
+        policy: 'open',
+      }),
+    )
+    await expect(opened.json()).resolves.toMatchObject({
+      ok: true,
+      policy: 'open',
+      signupAvailable: true,
+    })
+  })
+
   it('links and unlinks event membership projections from the account switcher', async () => {
     const issuedResponse = await auth.fetch(
       request('/internal/auth/request', {
@@ -209,6 +310,276 @@ describe('AuthDurableObject membership projections', () => {
     )
     expect(invalidResponse.status).toBe(401)
     await expect(invalidResponse.json()).resolves.toEqual({ ok: false })
+  })
+
+  it('changes an authenticated password and revokes every other session and pending sign-in link', async () => {
+    const email = 'security@example.com'
+    const originalPassword = 'correct horse battery staple'
+    const newPassword = 'a newly chosen secure password'
+    const signupResponse = await auth.fetch(
+      request('/internal/auth/password', {
+        email,
+        name: 'Security Owner',
+        password: originalPassword,
+        intent: 'signup',
+        ipHash: 'security-signup',
+      }),
+    )
+    const signup = (await signupResponse.json()) as { sessionToken: string }
+    vi.advanceTimersByTime(1_000)
+    const signinResponse = await auth.fetch(
+      request('/internal/auth/password', {
+        email,
+        password: originalPassword,
+        intent: 'signin',
+        ipHash: 'security-signin',
+      }),
+    )
+    const signin = (await signinResponse.json()) as { sessionToken: string }
+    const pendingLink = await body(
+      await auth.fetch(
+        request('/internal/auth/request', { email, ipHash: 'security-link-request' }),
+      ),
+    )
+    const otherPendingLink = await body(
+      await auth.fetch(
+        request('/internal/auth/request', {
+          email: 'another-owner@example.com',
+          ipHash: 'another-security-link-request',
+        }),
+      ),
+    )
+
+    const beforeResponse = await auth.fetch(
+      request('/internal/auth/security', { token: signin.sessionToken }),
+    )
+    const before = (await beforeResponse.json()) as {
+      ok: boolean
+      email: string
+      passwordConfigured: boolean
+      sessions: Array<{ id: string; current: boolean; createdAt: string; expiresAt: string }>
+    }
+    expect(before).toMatchObject({
+      ok: true,
+      email,
+      passwordConfigured: true,
+    })
+    expect(before.sessions).toHaveLength(2)
+    expect(before.sessions.filter((session) => session.current)).toHaveLength(1)
+    expect(before.sessions.every((session) => /^ses_[a-f0-9]{24}$/u.test(session.id))).toBe(true)
+    expect(JSON.stringify(before)).not.toContain(signin.sessionToken)
+
+    const changedResponse = await auth.fetch(
+      request('/internal/auth/password/change', {
+        token: signin.sessionToken,
+        currentPassword: originalPassword,
+        newPassword,
+        ipHash: 'security-change',
+      }),
+    )
+    expect(changedResponse.status).toBe(200)
+    await expect(changedResponse.json()).resolves.toMatchObject({
+      ok: true,
+      passwordConfigured: true,
+      revokedSessions: 1,
+    })
+
+    expect(
+      (await auth.fetch(request('/internal/auth/session', { token: signup.sessionToken }))).status,
+    ).toBe(401)
+    expect(
+      (await auth.fetch(request('/internal/auth/session', { token: signin.sessionToken }))).status,
+    ).toBe(200)
+    await expect(
+      auth
+        .fetch(request('/internal/auth/consume', { token: pendingLink.token }))
+        .then((response) => response.json()),
+    ).resolves.toEqual({ ok: false })
+    await expect(
+      auth
+        .fetch(request('/internal/auth/consume', { token: otherPendingLink.token }))
+        .then((response) => response.json()),
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', {
+            email,
+            password: originalPassword,
+            intent: 'signin',
+            ipHash: 'old-password-signin',
+          }),
+        )
+      ).status,
+    ).toBe(401)
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', {
+            email,
+            password: newPassword,
+            intent: 'signin',
+            ipHash: 'new-password-signin',
+          }),
+        )
+      ).status,
+    ).toBe(200)
+  })
+
+  it('lets an authenticated passwordless account set its first password', async () => {
+    const email = 'passwordless-owner@example.com'
+    const issued = await body(
+      await auth.fetch(request('/internal/auth/request', { email, ipHash: 'passwordless-link' })),
+    )
+    const consumed = await body(
+      await auth.fetch(request('/internal/auth/consume', { token: issued.token })),
+    )
+
+    await expect(
+      auth
+        .fetch(request('/internal/auth/security', { token: consumed.sessionToken }))
+        .then((response) => response.json()),
+    ).resolves.toMatchObject({ ok: true, email, passwordConfigured: false })
+
+    const changedResponse = await auth.fetch(
+      request('/internal/auth/password/change', {
+        token: consumed.sessionToken,
+        newPassword: 'passwordless account now secured',
+        ipHash: 'passwordless-change',
+      }),
+    )
+    expect(changedResponse.status).toBe(200)
+    await expect(changedResponse.json()).resolves.toMatchObject({
+      ok: true,
+      passwordConfigured: true,
+      revokedSessions: 0,
+    })
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', {
+            email,
+            password: 'passwordless account now secured',
+            intent: 'signin',
+            ipHash: 'passwordless-signin',
+          }),
+        )
+      ).status,
+    ).toBe(200)
+  })
+
+  it('rejects an incorrect current password without changing credentials or sessions', async () => {
+    const email = 'protected-change@example.com'
+    const password = 'correct horse battery staple'
+    const signup = (await (
+      await auth.fetch(
+        request('/internal/auth/password', {
+          email,
+          password,
+          intent: 'signup',
+          ipHash: 'protected-signup',
+        }),
+      )
+    ).json()) as { sessionToken: string }
+    const signin = (await (
+      await auth.fetch(
+        request('/internal/auth/password', {
+          email,
+          password,
+          intent: 'signin',
+          ipHash: 'protected-signin',
+        }),
+      )
+    ).json()) as { sessionToken: string }
+
+    const rejected = await auth.fetch(
+      request('/internal/auth/password/change', {
+        token: signin.sessionToken,
+        currentPassword: 'this password is not right',
+        newPassword: 'a different secure password',
+        ipHash: 'protected-change',
+      }),
+    )
+    expect(rejected.status).toBe(401)
+    await expect(rejected.json()).resolves.toEqual({
+      ok: false,
+      code: 'CURRENT_PASSWORD_INVALID',
+    })
+    expect(
+      (await auth.fetch(request('/internal/auth/session', { token: signup.sessionToken }))).status,
+    ).toBe(200)
+    expect(
+      (
+        await auth.fetch(
+          request('/internal/auth/password', {
+            email,
+            password,
+            intent: 'signin',
+            ipHash: 'protected-original-signin',
+          }),
+        )
+      ).status,
+    ).toBe(200)
+  })
+
+  it('revokes one named session or all other sessions without revoking the current one', async () => {
+    const email = 'sessions@example.com'
+    const password = 'correct horse battery staple'
+    const tokens: string[] = []
+    for (const [index, intent] of ['signup', 'signin', 'signin'].entries()) {
+      vi.advanceTimersByTime(1_000)
+      const response = await auth.fetch(
+        request('/internal/auth/password', {
+          email,
+          password,
+          intent,
+          ipHash: `session-${index}`,
+        }),
+      )
+      tokens.push(((await response.json()) as { sessionToken: string }).sessionToken)
+    }
+    const currentToken = tokens[2]!
+    const security = (await (
+      await auth.fetch(request('/internal/auth/security', { token: currentToken }))
+    ).json()) as {
+      sessions: Array<{ id: string; current: boolean }>
+    }
+    const currentId = security.sessions.find((session) => session.current)!.id
+    const currentRevocation = await auth.fetch(
+      request('/internal/auth/sessions/revoke', {
+        token: currentToken,
+        sessionId: currentId,
+      }),
+    )
+    expect(currentRevocation.status).toBe(404)
+    await expect(currentRevocation.json()).resolves.toEqual({
+      ok: false,
+      code: 'SESSION_NOT_FOUND',
+    })
+
+    const firstOtherId = security.sessions.find((session) => !session.current)!.id
+    const revokedOne = await auth.fetch(
+      request('/internal/auth/sessions/revoke', {
+        token: currentToken,
+        sessionId: firstOtherId,
+      }),
+    )
+    await expect(revokedOne.json()).resolves.toEqual({ ok: true, revokedSessions: 1 })
+
+    const revokedOthers = await auth.fetch(
+      request('/internal/auth/sessions/revoke', { token: currentToken }),
+    )
+    await expect(revokedOthers.json()).resolves.toEqual({ ok: true, revokedSessions: 1 })
+    expect(
+      (await auth.fetch(request('/internal/auth/session', { token: currentToken }))).status,
+    ).toBe(200)
+    expect((await auth.fetch(request('/internal/auth/session', { token: tokens[0] }))).status).toBe(
+      401,
+    )
+    expect((await auth.fetch(request('/internal/auth/session', { token: tokens[1] }))).status).toBe(
+      401,
+    )
   })
 
   it('counts password failures, not successful organizer sign-ins', async () => {

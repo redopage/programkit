@@ -185,7 +185,7 @@ The generated Codex configuration references `PROGRAMKIT_API_KEY` by default. Se
 `PROGRAMKIT_MCP_BEARER_TOKEN_ENV_VAR` while bundling to use a different environment variable name.
 
 For a hosted or production self-hosted event, create a key with **Agent operations** access in
-**Infrastructure & API**, store it in the client environment, and register the deployment:
+**Data & connections**, store it in the client environment, and register the deployment:
 
 ```bash
 codex mcp add programkit \

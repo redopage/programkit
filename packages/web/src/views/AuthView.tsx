@@ -1,5 +1,5 @@
 import { ArrowLeftIcon, ArrowRightIcon, EnvelopeIcon } from '@heroicons/react/16/solid'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
 import { ProgramKitMark } from '../components/brand.tsx'
 import { Button } from '../components/ui.tsx'
@@ -10,7 +10,16 @@ export function AuthView() {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
+  const [bootstrapToken, setBootstrapToken] = useState(() => search.get('setup') ?? '')
   const [intent, setIntent] = useState<'signin' | 'signup'>('signin')
+  const [authConfig, setAuthConfig] = useState<{
+    invited: boolean
+    initialized: boolean
+    signupAvailable: boolean
+    bootstrapRequired: boolean
+    bootstrapConfigured: boolean
+    emailConfigured: boolean
+  } | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(() => {
@@ -22,6 +31,46 @@ export function AuthView() {
     if (reason === 'account') return 'That account could not be opened. Try again.'
     return reason ? 'That sign-in link expired or was already used. Request a new one.' : null
   })
+
+  useEffect(() => {
+    let active = true
+    void fetch('/api/v1/auth/config', { credentials: 'same-origin' })
+      .then(async (response) => {
+        const body = (await response.json()) as {
+          invited?: boolean
+          initialized?: boolean
+          signupAvailable?: boolean
+          bootstrapRequired?: boolean
+          bootstrapConfigured?: boolean
+          emailConfigured?: boolean
+        }
+        if (!active || !response.ok) return
+        const next = {
+          invited: body.invited === true,
+          initialized: body.initialized === true,
+          signupAvailable: body.signupAvailable === true,
+          bootstrapRequired: body.bootstrapRequired === true,
+          bootstrapConfigured: body.bootstrapConfigured === true,
+          emailConfigured: body.emailConfigured === true,
+        }
+        setAuthConfig(next)
+        if (!next.signupAvailable) setIntent('signin')
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!search.has('setup')) return
+    search.delete('setup')
+    const next = `${window.location.pathname}${search.size ? `?${search}` : ''}${window.location.hash}`
+    window.history.replaceState(null, '', next)
+  }, [])
+
+  const signupAvailable = authConfig?.signupAvailable ?? invited
+  const firstOwnerSignup = intent === 'signup' && authConfig?.initialized === false && !invited
 
   const sendMagicLink = async () => {
     if (!email || !email.includes('@')) {
@@ -35,7 +84,7 @@ export function AuthView() {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, intent, name, bootstrapToken }),
       })
       const body = (await response.json()) as { ok?: boolean; error?: string }
       if (!response.ok || !body.ok) {
@@ -59,10 +108,26 @@ export function AuthView() {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, password, intent, name }),
+        body: JSON.stringify({ email, password, intent, name, bootstrapToken }),
       })
       const body = (await response.json()) as { ok?: boolean; error?: string }
       if (!response.ok || !body.ok) {
+        if (intent === 'signin') {
+          const participantResponse = await fetch('/public/v1/access/discover/password', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ email, password, intent: 'signin', name: '' }),
+          })
+          const participantBody = (await participantResponse.json()) as {
+            ok?: boolean
+            authenticated?: boolean
+          }
+          if (participantResponse.ok && participantBody.ok && participantBody.authenticated) {
+            window.location.assign('/access')
+            return
+          }
+        }
         setError(body.error ?? 'The account could not be opened. Try again.')
         return
       }
@@ -115,13 +180,15 @@ export function AuthView() {
         ) : (
           <form className="pt-14 sm:pt-16" onSubmit={(event) => void submit(event)}>
             <h1 className="text-balance text-3xl font-semibold tracking-tight text-zinc-950">
-              {intent === 'signup' ? 'Create your account' : 'Sign in to ProgramKit'}
+              {intent === 'signup' ? 'Create your account' : 'Sign in'}
             </h1>
             <p className="pt-3 text-pretty text-base/7 text-zinc-600 sm:text-sm/6">
               {invited
                 ? 'Use the email address that received the invitation.'
                 : intent === 'signup'
-                  ? 'Start with your first event.'
+                  ? firstOwnerSignup
+                    ? 'Claim this installation and set up your first event.'
+                    : 'Set up your first event.'
                   : 'Welcome back.'}
             </p>
             <div className="pt-7 text-left">
@@ -180,47 +247,94 @@ export function AuthView() {
                 className="focus-ring mt-2 min-h-11 w-full rounded-xl bg-white px-3.5 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/12 placeholder:text-zinc-400 sm:min-h-10 sm:text-sm"
                 placeholder="At least 10 characters"
               />
+              {firstOwnerSignup && authConfig?.bootstrapRequired ? (
+                <>
+                  <label
+                    htmlFor="auth-setup-code"
+                    className="mt-4 block text-sm font-medium text-zinc-800"
+                  >
+                    Installation setup code
+                  </label>
+                  <input
+                    id="auth-setup-code"
+                    name="setup-code"
+                    type="password"
+                    autoComplete="one-time-code"
+                    required
+                    minLength={16}
+                    maxLength={256}
+                    value={bootstrapToken}
+                    onChange={(event) => setBootstrapToken(event.currentTarget.value)}
+                    className="focus-ring mt-2 min-h-11 w-full rounded-xl bg-white px-3.5 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/12 placeholder:text-zinc-400 sm:min-h-10 sm:text-sm"
+                    placeholder="From your deployment setup"
+                  />
+                  <p className="pt-2 text-xs/5 text-zinc-500">
+                    This one-time code prevents someone else from claiming a new installation.
+                  </p>
+                </>
+              ) : null}
             </div>
             <Button type="submit" variant="primary" className="mt-4 w-full" disabled={sending}>
               {sending ? 'Working…' : intent === 'signup' ? 'Create account' : 'Sign in'}
               {!sending ? <ArrowRightIcon className="size-4" /> : null}
             </Button>
             {error ? <p className="pt-3 text-left text-sm text-red-600">{error}</p> : null}
-            <p className="pt-5 text-sm text-zinc-600">
-              {intent === 'signup' ? 'Already have an account?' : 'New to ProgramKit?'}{' '}
-              <button
-                type="button"
-                className="focus-ring rounded-md font-medium text-zinc-950 underline decoration-zinc-300 underline-offset-4 hover:decoration-zinc-950"
-                onClick={() => {
-                  setIntent((value) => (value === 'signin' ? 'signup' : 'signin'))
-                  setError(null)
-                  setPassword('')
-                }}
-              >
-                {intent === 'signup' ? 'Sign in' : 'Create account'}
-              </button>
-            </p>
+            {intent === 'signup' || signupAvailable ? (
+              <p className="pt-5 text-sm text-zinc-600">
+                {intent === 'signup' ? 'Already have an account?' : 'New here?'}{' '}
+                <button
+                  type="button"
+                  className="focus-ring rounded-md font-medium text-zinc-950 underline decoration-zinc-300 underline-offset-4 hover:decoration-zinc-950"
+                  onClick={() => {
+                    setIntent((value) => (value === 'signin' ? 'signup' : 'signin'))
+                    setError(null)
+                    setPassword('')
+                  }}
+                >
+                  {intent === 'signup' ? 'Sign in' : 'Create account'}
+                </button>
+              </p>
+            ) : authConfig?.bootstrapRequired && !authConfig.bootstrapConfigured ? (
+              <p className="pt-5 text-pretty text-sm text-zinc-500">
+                Finish deployment by configuring the ProgramKit setup code in Cloudflare.
+              </p>
+            ) : authConfig ? (
+              <p className="pt-5 text-pretty text-sm text-zinc-500">
+                Organizer access is invite-only. Ask the ProgramKit owner for an invitation.
+              </p>
+            ) : null}
             <a
               href="/access"
               className="focus-ring mt-4 inline-block rounded-md text-sm font-medium text-zinc-950 underline decoration-zinc-300 underline-offset-4 hover:decoration-zinc-950"
             >
-              Speaker or reviewer? Access your event
+              Find your event access
             </a>
-            <div className="my-5 flex items-center gap-3 text-xs text-zinc-400" aria-hidden="true">
-              <span className="h-px flex-1 bg-zinc-200" />
-              or
-              <span className="h-px flex-1 bg-zinc-200" />
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full"
-              disabled={sending}
-              onClick={() => void sendMagicLink()}
-            >
-              <EnvelopeIcon className="size-4" />
-              Email me a sign-in link
-            </Button>
+            {authConfig?.emailConfigured ? (
+              <>
+                <div
+                  className="my-5 flex items-center gap-3 text-xs text-zinc-400"
+                  aria-hidden="true"
+                >
+                  <span className="h-px flex-1 bg-zinc-200" />
+                  or
+                  <span className="h-px flex-1 bg-zinc-200" />
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  disabled={sending}
+                  onClick={() => void sendMagicLink()}
+                >
+                  <EnvelopeIcon className="size-4" />
+                  Email me a sign-in link
+                </Button>
+              </>
+            ) : authConfig ? (
+              <p className="pt-5 text-pretty text-sm text-zinc-500">
+                Email sign-in is not configured on this installation. Use your password.
+              </p>
+            ) : null}
           </form>
         )}
       </div>

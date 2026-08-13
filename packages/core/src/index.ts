@@ -114,7 +114,9 @@ export type {
 } from './selectors.ts'
 export { createEmptyWorkspaceState, createSeedState } from './seed.ts'
 export {
+  proposalSessionFormatOptions,
   requiredSubmissionFieldPurposes,
+  sessionFormatOptions,
   submissionFormAvailability,
   submissionFieldPurposeSupportsKind,
   submissionFormPublishReadiness,

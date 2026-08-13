@@ -1,1 +1,3 @@
 packages/web/src/routeTree.gen.ts
+apps/cloudflare/public/docs.md
+apps/cloudflare/public/docs/**/*.md

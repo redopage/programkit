@@ -1,10 +1,11 @@
 import {
+  CalendarDaysIcon,
+  CheckIcon,
   ChevronUpDownIcon,
-  CodeBracketIcon,
+  ClipboardDocumentIcon,
   ExclamationTriangleIcon,
   GlobeAltIcon,
   LinkIcon,
-  SparklesIcon,
 } from '@heroicons/react/16/solid'
 import {
   Fragment,
@@ -17,18 +18,24 @@ import {
 
 import { scheduleConflicts, type ProgramEmbed, type WorkspaceState } from '@programkit/core'
 
-import { eventDateTime, toZonedDateTimeInput, zonedDateTimeInputToIso } from '../lib/date.ts'
+import {
+  eventCalendarDayLabel,
+  eventCalendarDays,
+  eventDateTime,
+  toZonedDateTimeInput,
+  zonedDateTimeInputToIso,
+} from '../lib/date.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 import { publicProgramPath } from '../lib/public-links.ts'
 import {
   Button,
   Callout,
+  Checkbox,
   Dialog,
   Drawer,
   Field,
   FilterTabs,
   PageHeader,
-  Toolbar,
   TrackBadge,
   cx,
   selectControl,
@@ -120,28 +127,8 @@ function previewSessionPlacement(
   )
 }
 
-function calendarDays(startsAt: string, endsAt: string, timeZone: string) {
-  const first = toZonedDateTimeInput(startsAt, timeZone).slice(0, 10)
-  const last = toZonedDateTimeInput(endsAt, timeZone).slice(0, 10)
-  const days: string[] = []
-  let cursor = first
-  while (cursor <= last && days.length < 31) {
-    days.push(cursor)
-    const next = new Date(`${cursor}T12:00:00.000Z`)
-    next.setUTCDate(next.getUTCDate() + 1)
-    cursor = next.toISOString().slice(0, 10)
-  }
-  return days
-}
-
 function calendarDayLabel(day: string, index: number) {
-  const date = new Date(`${day}T12:00:00.000Z`)
-  const label = new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  }).format(date)
-  return `Day ${index + 1} · ${label}`
+  return `Day ${index + 1} · ${eventCalendarDayLabel(day)}`
 }
 
 export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
@@ -153,6 +140,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const [draggedPlacementId, setDraggedPlacementId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
   const [moveFeedback, setMoveFeedback] = useState<MoveFeedback | null>(null)
+  const [autoPlaceOpen, setAutoPlaceOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [sharedView, setSharedView] = useState<SharedProgramView>('agenda')
   const [sharedOutputFormat, setSharedOutputFormat] = useState<SharedOutputFormat>('embed')
@@ -181,12 +169,15 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
   const activePlacements = state.placements.filter(
     (placement) => placement.eventId === state.activeEventId,
   )
+  const activeSessions = state.sessions.filter(
+    (session) => session.eventId === state.activeEventId && session.status !== 'cancelled',
+  )
   const savedEmbeds = (state.programEmbeds ?? []).filter(
     (embed) => embed.eventId === state.activeEventId,
   )
   const timeLabel = (iso: string) =>
     eventDateTime(iso, event.timezone, { hour: 'numeric', minute: '2-digit' })
-  const days = calendarDays(event.startsAt, event.endsAt, event.timezone)
+  const days = eventCalendarDays(event.startsAt, event.endsAt, event.timezone)
   const activeDay = selectedDay || days[0]
   const generatedStartTimes = Array.from({ length: 11 }, (_, index) => index + 8)
     .map((hour) => {
@@ -213,12 +204,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
     ...new Set([...generatedStartTimes, ...dayPlacements.map((placement) => placement.startsAt)]),
   ].sort()
   const placedSessionIds = new Set(activePlacements.map((placement) => placement.sessionId))
-  const unscheduled = state.sessions.filter(
-    (session) =>
-      session.eventId === state.activeEventId &&
-      session.status !== 'cancelled' &&
-      !placedSessionIds.has(session.id),
-  )
+  const unscheduled = activeSessions.filter((session) => !placedSessionIds.has(session.id))
   const draggedSession = draggedPlacementId
     ? state.sessions.find(
         (session) =>
@@ -297,6 +283,16 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       'Embed saved.',
     )
     if (response.ok) setSharedName('')
+  }
+
+  async function placeUnscheduledSessions() {
+    const response = await execute(
+      'schedule.auto-place',
+      {},
+      undefined,
+      'Unscheduled sessions placed.',
+    )
+    if (response.ok) setAutoPlaceOpen(false)
   }
 
   function loadProgramEmbed(embed: ProgramEmbed) {
@@ -396,7 +392,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
             </Button>
             <Button
               variant="primary"
-              disabled={mutating || hardConflicts.length > 0}
+              disabled={mutating || hardConflicts.length > 0 || activePlacements.length === 0}
               onClick={() => void execute('schedule.publish', {}, undefined, 'Schedule published.')}
             >
               Publish schedule
@@ -407,25 +403,31 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
 
       <Callout
         tone={
-          hardConflicts.length > 0
-            ? 'danger'
-            : unscheduled.length > 0
-              ? 'info'
-              : capacityWarnings.length > 0
-                ? 'warning'
-                : 'success'
+          activeSessions.length === 0
+            ? 'info'
+            : hardConflicts.length > 0
+              ? 'danger'
+              : unscheduled.length > 0
+                ? 'info'
+                : capacityWarnings.length > 0
+                  ? 'warning'
+                  : 'success'
         }
         title={
-          hardConflicts.length > 0
-            ? `${hardConflicts.length} blocking conflict${hardConflicts.length === 1 ? '' : 's'} before publish`
-            : unscheduled.length > 0
-              ? `${unscheduled.length} session${unscheduled.length === 1 ? '' : 's'} still ${unscheduled.length === 1 ? 'needs' : 'need'} a time`
-              : capacityWarnings.length > 0
-                ? `Ready with ${capacityWarnings.length} capacity warning${capacityWarnings.length === 1 ? '' : 's'}`
-                : 'The schedule is ready to publish'
+          activeSessions.length === 0
+            ? 'Start building your schedule'
+            : hardConflicts.length > 0
+              ? `${hardConflicts.length} blocking conflict${hardConflicts.length === 1 ? '' : 's'} before publish`
+              : unscheduled.length > 0
+                ? `${unscheduled.length} session${unscheduled.length === 1 ? '' : 's'} still ${unscheduled.length === 1 ? 'needs' : 'need'} a time`
+                : capacityWarnings.length > 0
+                  ? `Ready with ${capacityWarnings.length} capacity warning${capacityWarnings.length === 1 ? '' : 's'}`
+                  : 'The schedule is ready to publish'
         }
       >
-        {hardConflicts.length > 0 ? (
+        {activeSessions.length === 0 ? (
+          <p>Add or accept sessions, then assign rooms and times before publishing.</p>
+        ) : hardConflicts.length > 0 ? (
           <ul className="mt-1 space-y-1">
             {hardConflicts.slice(0, 3).map((conflict) => (
               <li key={conflict.id}>{conflict.message}</li>
@@ -461,32 +463,44 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         </Callout>
       ) : null}
 
-      <Toolbar>
+      <div className="flex min-w-0 flex-col gap-3 pb-3">
         <FilterTabs
           label="Event day"
           value={activeDay}
           options={days.map((day, index) => [day, calendarDayLabel(day, index)])}
           onChange={setSelectedDay}
         />
-        <div className="hidden lg:block">
-          <FilterTabs
-            label="Schedule view"
-            value={mode}
-            options={[
-              ['grid', 'Room grid'],
-              ['list', 'Session list'],
-            ]}
-            onChange={setMode}
-          />
+        <div className="flex min-w-0 flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+          <div className="hidden shrink-0 xl:block">
+            <FilterTabs
+              label="Schedule view"
+              value={mode}
+              options={[
+                ['grid', 'Room grid'],
+                ['list', 'Session list'],
+              ]}
+              onChange={setMode}
+            />
+          </div>
+          <p
+            id="schedule-drag-help"
+            className="max-w-2xl text-pretty text-base text-zinc-500 sm:text-sm xl:text-right"
+          >
+            {draggedSession ? (
+              `Moving ${draggedSession.title}. Choose a room and time.`
+            ) : mode === 'grid' ? (
+              <>
+                <span className="xl:hidden">Open a session to change its room or start time.</span>
+                <span className="hidden xl:inline">
+                  Drag a session to move it. Open it for precise date and time controls.
+                </span>
+              </>
+            ) : (
+              'Open a session to change its room or start time.'
+            )}
+          </p>
         </div>
-        <p id="schedule-drag-help" className="text-pretty text-base text-zinc-500 sm:text-sm">
-          {draggedSession
-            ? `Moving ${draggedSession.title}. Choose a room and time.`
-            : mode === 'grid'
-              ? 'Drag a session to move it. Open it for precise date and time controls.'
-              : 'Open a session to change its room or start time.'}
-        </p>
-      </Toolbar>
+      </div>
 
       <section aria-labelledby="unscheduled-sessions-heading">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -496,19 +510,19 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
             </h2>
             <p className="text-base text-zinc-500 sm:text-sm">
               {unscheduled.length === 0
-                ? 'Every active session has a room and time.'
-                : 'Choose a session to place it precisely.'}
+                ? activeSessions.length === 0
+                  ? 'No sessions are ready to schedule yet.'
+                  : 'Every active session has a room and time.'
+                : 'Choose one to place precisely, or schedule all into the earliest open slots.'}
             </p>
           </div>
           {unscheduled.length > 0 ? (
             <Button
               disabled={mutating || activeRooms.length === 0}
-              onClick={() =>
-                void execute('schedule.auto-place', {}, undefined, 'Unscheduled sessions placed.')
-              }
+              onClick={() => setAutoPlaceOpen(true)}
             >
-              <SparklesIcon className="size-4 shrink-0 fill-violet-500" />
-              Auto-place
+              <CalendarDaysIcon className="size-4 shrink-0 fill-current" />
+              Schedule all
             </Button>
           ) : null}
         </div>
@@ -520,7 +534,7 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                 <button
                   key={session.id}
                   type="button"
-                  className="focus-ring min-w-64 rounded-2xl bg-white p-3 text-left shadow-xs ring-1 ring-zinc-950/10 hover:bg-zinc-50"
+                  className="focus-ring min-w-64 rounded-2xl bg-white p-3 text-left shadow-xs ring-1 ring-inset ring-zinc-950/10 hover:bg-zinc-50"
                   onClick={() => setPlacingSessionId(session.id)}
                 >
                   <span className="block text-pretty text-base font-medium text-zinc-950 sm:text-sm">
@@ -546,159 +560,163 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
       */}
       <div
         className={cx(
-          'hidden min-w-0 grid-cols-[4.5rem_repeat(var(--room-count),minmax(0,1fr))]',
-          mode === 'grid' && 'lg:grid',
+          'hidden -mx-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6',
+          mode === 'grid' && 'xl:block',
         )}
-        style={{ '--room-count': activeRooms.length } as CSSProperties}
       >
-        <div className="border-b border-zinc-950/10 pb-3" />
-        {activeRooms.map((room) => {
-          const roomSessionCount = activePlacements.filter(
-            (entry) => entry.roomId === room.id,
-          ).length
-          return (
-            <div key={room.id} className="min-w-0 border-b border-zinc-950/10 px-1.5 pb-3">
-              <h2 className="truncate text-base font-medium text-zinc-950 sm:text-sm">
-                {room.name}
-              </h2>
-              <p className="truncate text-sm tabular-nums text-zinc-500">
-                Capacity {room.capacity} · {roomSessionCount}{' '}
-                {roomSessionCount === 1 ? 'session' : 'sessions'}
-              </p>
-            </div>
-          )
-        })}
+        <div
+          className="grid min-w-[54rem] grid-cols-[4.5rem_repeat(var(--room-count),minmax(12rem,1fr))]"
+          style={{ '--room-count': activeRooms.length } as CSSProperties}
+        >
+          <div className="border-b border-zinc-950/10 pb-3" />
+          {activeRooms.map((room) => {
+            const roomSessionCount = activePlacements.filter(
+              (entry) => entry.roomId === room.id,
+            ).length
+            return (
+              <div key={room.id} className="min-w-0 border-b border-zinc-950/10 px-1.5 pb-3">
+                <h2 className="truncate text-base font-medium text-zinc-950 sm:text-sm">
+                  {room.name}
+                </h2>
+                <p className="truncate text-sm tabular-nums text-zinc-500">
+                  Capacity {room.capacity} · {roomSessionCount}{' '}
+                  {roomSessionCount === 1 ? 'session' : 'sessions'}
+                </p>
+              </div>
+            )
+          })}
 
-        {startTimes.map((startsAt) => (
-          <Fragment key={startsAt}>
-            <div className="border-t border-zinc-950/5 py-2 pr-3">
-              <p className="whitespace-nowrap text-sm font-medium tabular-nums text-zinc-500">
-                {timeLabel(startsAt)}
-              </p>
-            </div>
-            {activeRooms.map((room, roomIndex) => {
-              const cellPlacements = activePlacements.filter(
-                (entry) => entry.roomId === room.id && entry.startsAt === startsAt,
-              )
-              return (
-                <div
-                  key={room.id}
-                  onDragEnter={() => {
-                    if (draggedPlacementId) setDropTarget({ roomId: room.id, startsAt })
-                  }}
-                  onDragOver={(event) => {
-                    if (!draggedPlacementId) return
-                    event.preventDefault()
-                    event.dataTransfer.dropEffect = 'move'
-                    setDropTarget({ roomId: room.id, startsAt })
-                  }}
-                  onDrop={(event) => void dropPlacement(event, { roomId: room.id, startsAt })}
-                  className={cx(
-                    'min-w-0 border-t border-zinc-950/5 px-1.5 py-2',
-                    roomIndex < activeRooms.length - 1 && 'border-r border-r-zinc-950/5',
-                    draggedPlacementId && 'bg-blue-50/30',
-                  )}
-                >
-                  {cellPlacements.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      {cellPlacements.map((placement) => {
-                        const session = state.sessions.find(
-                          (entry) => entry.id === placement.sessionId,
-                        )
-                        const track = session
-                          ? state.tracks.find((entry) => entry.id === session.trackId)
-                          : undefined
-                        const placementConflicts = conflicts.filter((conflict) =>
-                          conflict.placementIds.includes(placement.id),
-                        )
-                        return (
-                          <button
-                            key={placement.id}
-                            type="button"
-                            draggable
-                            aria-describedby="schedule-drag-help"
-                            onDragStart={(event) => startDragging(event, placement.id)}
-                            onDragEnd={stopDragging}
-                            className={cx(
-                              'focus-ring w-full cursor-grab rounded-xl bg-white p-3 text-left shadow-sm ring-1 motion-safe:transition-transform motion-safe:hover:-translate-y-px active:cursor-grabbing',
-                              placementConflicts.some((conflict) => conflict.severity === 'error')
-                                ? 'ring-rose-500/40'
-                                : 'ring-zinc-950/10',
-                              dropTarget?.roomId === room.id &&
-                                dropTarget.startsAt === startsAt &&
-                                draggedPlacementId &&
-                                (targetHardConflicts.length > 0
-                                  ? 'ring-2 ring-rose-500'
-                                  : 'ring-2 ring-blue-500'),
-                              draggedPlacementId === placement.id && 'opacity-45',
-                            )}
-                            onClick={() => setSelectedId(placement.id)}
-                          >
-                            <span className="flex items-center justify-between gap-2">
-                              <span className="text-sm tabular-nums text-zinc-500">
-                                {timeLabel(placement.startsAt)}–{timeLabel(placement.endsAt)}
-                              </span>
-                              {placementConflicts.length > 0 || !session ? (
-                                <ExclamationTriangleIcon className="size-4 shrink-0 fill-rose-500" />
-                              ) : null}
-                            </span>
-                            <span className="block pt-2 text-pretty text-sm font-medium text-zinc-950">
-                              {session?.title ?? 'Missing session'}
-                            </span>
-                            {session ? (
-                              <span className="mt-3 flex items-center justify-between gap-2">
-                                {track ? (
-                                  <TrackBadge name={track.name} color={track.color} />
-                                ) : (
-                                  <span className="text-sm text-rose-700">Missing track</span>
-                                )}
-                                <span className="shrink-0 text-sm tabular-nums text-zinc-500">
-                                  {session.expectedAttendance} expected
+          {startTimes.map((startsAt) => (
+            <Fragment key={startsAt}>
+              <div className="border-t border-zinc-950/5 py-2 pr-3">
+                <p className="whitespace-nowrap text-sm font-medium tabular-nums text-zinc-500">
+                  {timeLabel(startsAt)}
+                </p>
+              </div>
+              {activeRooms.map((room, roomIndex) => {
+                const cellPlacements = activePlacements.filter(
+                  (entry) => entry.roomId === room.id && entry.startsAt === startsAt,
+                )
+                return (
+                  <div
+                    key={room.id}
+                    onDragEnter={() => {
+                      if (draggedPlacementId) setDropTarget({ roomId: room.id, startsAt })
+                    }}
+                    onDragOver={(event) => {
+                      if (!draggedPlacementId) return
+                      event.preventDefault()
+                      event.dataTransfer.dropEffect = 'move'
+                      setDropTarget({ roomId: room.id, startsAt })
+                    }}
+                    onDrop={(event) => void dropPlacement(event, { roomId: room.id, startsAt })}
+                    className={cx(
+                      'min-w-0 border-t border-zinc-950/5 px-1.5 py-2',
+                      roomIndex < activeRooms.length - 1 && 'border-r border-r-zinc-950/5',
+                      draggedPlacementId && 'bg-blue-50/30',
+                    )}
+                  >
+                    {cellPlacements.length > 0 ? (
+                      <div className="flex flex-col gap-2">
+                        {cellPlacements.map((placement) => {
+                          const session = state.sessions.find(
+                            (entry) => entry.id === placement.sessionId,
+                          )
+                          const track = session
+                            ? state.tracks.find((entry) => entry.id === session.trackId)
+                            : undefined
+                          const placementConflicts = conflicts.filter((conflict) =>
+                            conflict.placementIds.includes(placement.id),
+                          )
+                          return (
+                            <button
+                              key={placement.id}
+                              type="button"
+                              draggable
+                              aria-describedby="schedule-drag-help"
+                              onDragStart={(event) => startDragging(event, placement.id)}
+                              onDragEnd={stopDragging}
+                              className={cx(
+                                'focus-ring w-full cursor-grab rounded-xl bg-white p-3 text-left shadow-sm ring-1 motion-safe:transition-transform motion-safe:hover:-translate-y-px active:cursor-grabbing',
+                                placementConflicts.some((conflict) => conflict.severity === 'error')
+                                  ? 'ring-rose-500/40'
+                                  : 'ring-zinc-950/10',
+                                dropTarget?.roomId === room.id &&
+                                  dropTarget.startsAt === startsAt &&
+                                  draggedPlacementId &&
+                                  (targetHardConflicts.length > 0
+                                    ? 'ring-2 ring-rose-500'
+                                    : 'ring-2 ring-blue-500'),
+                                draggedPlacementId === placement.id && 'opacity-45',
+                              )}
+                              onClick={() => setSelectedId(placement.id)}
+                            >
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="text-sm tabular-nums text-zinc-500">
+                                  {timeLabel(placement.startsAt)}–{timeLabel(placement.endsAt)}
                                 </span>
+                                {placementConflicts.length > 0 || !session ? (
+                                  <ExclamationTriangleIcon className="size-4 shrink-0 fill-rose-500" />
+                                ) : null}
                               </span>
-                            ) : null}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <div
-                      className={cx(
-                        'grid min-h-24 place-items-center rounded-xl border border-dashed px-3 text-center',
-                        draggedPlacementId
-                          ? 'border-blue-300 bg-blue-50/60 text-blue-700'
-                          : 'border-transparent text-zinc-400',
-                        dropTarget?.roomId === room.id &&
-                          dropTarget.startsAt === startsAt &&
-                          draggedPlacementId &&
-                          (targetHardConflicts.length > 0
-                            ? 'border-rose-400 bg-rose-50 text-rose-700'
-                            : 'border-blue-500 bg-blue-100/70'),
-                      )}
-                    >
-                      {draggedPlacementId ? (
-                        <span className="text-sm font-medium">
-                          {dropTarget?.roomId === room.id &&
-                          dropTarget.startsAt === startsAt &&
-                          targetHardConflicts.length > 0
-                            ? 'Conflict here'
-                            : `Move to ${room.name}`}
-                        </span>
-                      ) : (
-                        <span className="sr-only">
-                          {room.name} is free at {timeLabel(startsAt)}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </Fragment>
-        ))}
+                              <span className="block pt-2 text-pretty text-sm font-medium text-zinc-950">
+                                {session?.title ?? 'Missing session'}
+                              </span>
+                              {session ? (
+                                <span className="mt-3 flex items-center justify-between gap-2">
+                                  {track ? (
+                                    <TrackBadge name={track.name} color={track.color} />
+                                  ) : (
+                                    <span className="text-sm text-rose-700">Missing track</span>
+                                  )}
+                                  <span className="shrink-0 text-sm tabular-nums text-zinc-500">
+                                    {session.expectedAttendance} expected
+                                  </span>
+                                </span>
+                              ) : null}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div
+                        className={cx(
+                          'grid min-h-24 place-items-center rounded-xl border border-dashed px-3 text-center',
+                          draggedPlacementId
+                            ? 'border-blue-300 bg-blue-50/60 text-blue-700'
+                            : 'border-transparent text-zinc-400',
+                          dropTarget?.roomId === room.id &&
+                            dropTarget.startsAt === startsAt &&
+                            draggedPlacementId &&
+                            (targetHardConflicts.length > 0
+                              ? 'border-rose-400 bg-rose-50 text-rose-700'
+                              : 'border-blue-500 bg-blue-100/70'),
+                        )}
+                      >
+                        {draggedPlacementId ? (
+                          <span className="text-sm font-medium">
+                            {dropTarget?.roomId === room.id &&
+                            dropTarget.startsAt === startsAt &&
+                            targetHardConflicts.length > 0
+                              ? 'Conflict here'
+                              : `Move to ${room.name}`}
+                          </span>
+                        ) : (
+                          <span className="sr-only">
+                            {room.name} is free at {timeLabel(startsAt)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </Fragment>
+          ))}
+        </div>
       </div>
 
-      <div className={cx(mode === 'grid' ? 'lg:hidden' : '')}>
+      <div className={cx(mode === 'grid' ? 'xl:hidden' : '')}>
         <ol role="list" className="divide-y divide-zinc-950/5">
           {dayPlacements
             .slice()
@@ -746,6 +764,40 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
         onClose={() => setPlacingSessionId(null)}
       />
       <Dialog
+        open={autoPlaceOpen}
+        onClose={() => setAutoPlaceOpen(false)}
+        title={`Schedule ${unscheduled.length} unscheduled session${unscheduled.length === 1 ? '' : 's'}?`}
+        description="ProgramKit will place them into the earliest conflict-free slots. Existing placements stay where they are."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAutoPlaceOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              disabled={mutating || unscheduled.length === 0}
+              onClick={() => void placeUnscheduledSessions()}
+            >
+              <CalendarDaysIcon className="size-4 shrink-0 fill-current" />
+              {mutating
+                ? 'Scheduling…'
+                : `Schedule ${unscheduled.length} ${unscheduled.length === 1 ? 'session' : 'sessions'}`}
+            </Button>
+          </>
+        }
+      >
+        <div className="rounded-2xl bg-zinc-50 p-4 ring-1 ring-inset ring-zinc-950/5">
+          <p className="text-pretty text-base text-zinc-700 sm:text-sm">
+            Sessions are tried in 30-minute increments from the event start. For each time,
+            ProgramKit checks the largest rooms first and keeps the earliest slot without a hard
+            room, speaker, or event-boundary conflict.
+          </p>
+          <p className="pt-2 text-pretty text-base text-zinc-500 sm:text-sm">
+            Anything that cannot be placed safely stays unscheduled for you to handle manually.
+          </p>
+        </div>
+      </Dialog>
+      <Dialog
         open={shareOpen}
         onClose={() => setShareOpen(false)}
         title="Share the public program"
@@ -756,21 +808,11 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
               Done
             </Button>
             <Button
-              variant="secondary"
+              variant="primary"
               disabled={mutating || !sharedName.trim()}
               onClick={() => void saveProgramEmbed()}
             >
               Save embed
-            </Button>
-            <Button variant="primary" onClick={() => void copyShareValue(shareValue)}>
-              {sharedOutputFormat === 'embed' || sharedOutputFormat === 'script' ? (
-                <CodeBracketIcon className="size-4" />
-              ) : (
-                <LinkIcon className="size-4" />
-              )}
-              {copied
-                ? 'Copied'
-                : `Copy ${sharedOutputFormat === 'embed' || sharedOutputFormat === 'script' ? 'code' : 'URL'}`}
             </Button>
           </>
         }
@@ -937,31 +979,47 @@ export function ScheduleView({ navigate }: { navigate: (to: string) => void }) {
                 <span className="font-mono text-sm text-zinc-600">{sharedAccent}</span>
               </div>
             </Field>
-            <Field label="Fields" htmlFor="shared-program-descriptions">
-              <label
-                htmlFor="shared-program-descriptions"
-                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl bg-white px-3 text-base text-zinc-700 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
-              >
-                <input
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <p className="text-base font-medium text-zinc-950 sm:text-sm">Fields</p>
+              <div className="flex min-h-11 items-center sm:min-h-9">
+                <Checkbox
                   id="shared-program-descriptions"
-                  type="checkbox"
+                  name="shared-program-descriptions"
+                  label="Show session descriptions"
                   checked={sharedShowDescriptions}
-                  onChange={(interaction) => {
-                    setSharedShowDescriptions(interaction.target.checked)
+                  onChange={(next) => {
+                    setSharedShowDescriptions(next)
                     setCopied(false)
                   }}
-                  className="size-4 rounded border-zinc-300 accent-blue-600"
                 />
-                Show session descriptions
-              </label>
-            </Field>
+              </div>
+            </div>
           </div>
 
           <div>
             <p className="text-base font-medium text-zinc-950 sm:text-sm">{outputLabel}</p>
-            <pre className="mt-1.5 max-h-36 overflow-auto whitespace-pre-wrap rounded-2xl bg-zinc-950 p-4 text-sm text-zinc-200">
-              <code>{shareValue}</code>
-            </pre>
+            <div className="mt-1.5 flex min-w-0 items-center gap-3 rounded-2xl bg-zinc-950 p-2 pl-4">
+              <code className="min-w-0 flex-1 truncate whitespace-nowrap text-sm text-zinc-200">
+                {shareValue}
+              </code>
+              <Button
+                variant="secondary"
+                size="compact"
+                className="bg-white text-zinc-900 ring-white hover:bg-zinc-100 hover:ring-white"
+                onClick={() => void copyShareValue(shareValue)}
+              >
+                {copied ? (
+                  <CheckIcon className="size-4 shrink-0 fill-current" />
+                ) : sharedOutputFormat === 'embed' || sharedOutputFormat === 'script' ? (
+                  <ClipboardDocumentIcon className="size-4 shrink-0 fill-current" />
+                ) : (
+                  <LinkIcon className="size-4 shrink-0 fill-current" />
+                )}
+                {copied
+                  ? 'Copied'
+                  : `Copy ${sharedOutputFormat === 'embed' || sharedOutputFormat === 'script' ? 'code' : 'URL'}`}
+              </Button>
+            </div>
           </div>
 
           <Callout tone="info" title="One published source">
@@ -1063,30 +1121,35 @@ function PlaceSessionDialog({
     >
       <form
         id="place-session-form"
-        className="grid gap-4 sm:grid-cols-2"
+        className="grid gap-4"
         onSubmit={(submitEvent) => void submit(submitEvent)}
       >
         <Field label="Room" htmlFor="place-session-room">
-          <select
-            id="place-session-room"
-            required
-            value={roomId}
-            onChange={(event) => setRoomId(event.target.value)}
-            className={selectControl}
-          >
-            <option value="">Choose a room</option>
-            {payload.state.rooms
-              .filter((room) => room.eventId === payload.state.activeEventId)
-              .map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.name} · {room.capacity} seats
-                </option>
-              ))}
-          </select>
+          <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
+            <select
+              id="place-session-room"
+              name="roomId"
+              required
+              value={roomId}
+              onChange={(event) => setRoomId(event.target.value)}
+              className={selectControl}
+            >
+              <option value="">Choose a room</option>
+              {payload.state.rooms
+                .filter((room) => room.eventId === payload.state.activeEventId)
+                .map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {room.name} · {room.capacity} seats
+                  </option>
+                ))}
+            </select>
+            <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
+          </span>
         </Field>
         <Field label="Starts" htmlFor="place-session-starts">
           <input
             id="place-session-starts"
+            name="startsAt"
             type="datetime-local"
             required
             value={startsAt}
@@ -1100,19 +1163,19 @@ function PlaceSessionDialog({
           {timeError ? <p className="text-sm text-rose-700">{timeError}</p> : null}
         </Field>
         {blocking.length > 0 ? (
-          <div className="sm:col-span-2">
+          <div>
             <Callout tone="danger" title="That slot is not available">
               {blocking[0].message}
             </Callout>
           </div>
         ) : speakerConflicts.length > 0 ? (
-          <div className="sm:col-span-2">
+          <div>
             <Callout tone="warning" title="Speaker conflict">
               {speakerConflicts[0].message}
             </Callout>
           </div>
         ) : warnings.length > 0 ? (
-          <div className="sm:col-span-2">
+          <div>
             <Callout tone="warning" title="Capacity warning">
               {warnings[0].message}
             </Callout>
@@ -1224,12 +1287,12 @@ function MoveSessionDrawer({
         </div>
         <label className="flex flex-col gap-1.5">
           <span className="text-base font-medium text-zinc-950 sm:text-sm">Room</span>
-          <span className="relative">
+          <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
             <select
               name="roomId"
               value={roomId}
               onChange={(event) => setRoomId(event.target.value)}
-              className="focus-ring min-h-11 w-full appearance-none rounded-xl bg-white py-2 pr-9 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 sm:min-h-9 sm:text-sm"
+              className={selectControl}
             >
               {state.rooms
                 .filter((room) => room.eventId === state.activeEventId)
@@ -1239,7 +1302,7 @@ function MoveSessionDrawer({
                   </option>
                 ))}
             </select>
-            <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 fill-zinc-400" />
+            <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
           </span>
         </label>
         <label className="flex flex-col gap-1.5">

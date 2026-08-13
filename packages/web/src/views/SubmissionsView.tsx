@@ -32,6 +32,7 @@ import {
   FilterTabs,
   PageHeader,
   SearchInput,
+  StatGrid,
   StatusBadge,
   Toolbar,
   cx,
@@ -127,34 +128,22 @@ export function SubmissionsView({
         }
       />
 
-      <section aria-labelledby="pipeline-heading" className="@container">
+      <section aria-labelledby="pipeline-heading">
         <h2 id="pipeline-heading" className="sr-only">
           Submission pipeline
         </h2>
-        <dl className="grid grid-cols-2 border-y border-zinc-950/5 @3xl:grid-cols-4">
-          {[
-            ['New', pipeline.submitted, 'Ready for triage'],
-            ['In review', pipeline.inReview, `${pipeline.awaitingReviews} waiting on reviewers`],
-            ['Accepted', pipeline.accepted, 'Converted to sessions'],
-            ['Drafts', pipeline.draft, 'Not submitted yet'],
-          ].map(([label, value, detail], index) => (
-            <div
-              key={String(label)}
-              className={cx(
-                'border-zinc-950/5 py-4',
-                index % 2 === 0 ? 'pr-5' : 'border-l pl-5',
-                index > 1 && 'border-t @3xl:border-t-0',
-                index === 2 && '@3xl:border-l @3xl:pl-5',
-              )}
-            >
-              <dt className="truncate text-base font-medium text-zinc-500 sm:text-sm">{label}</dt>
-              <dd className="pt-1 text-3xl font-semibold tracking-tight tabular-nums text-zinc-950">
-                {value}
-              </dd>
-              <dd className="truncate text-base text-zinc-500 sm:text-sm">{detail}</dd>
-            </div>
-          ))}
-        </dl>
+        <StatGrid
+          stats={[
+            { label: 'New', value: pipeline.submitted, detail: 'Ready for triage' },
+            {
+              label: 'In review',
+              value: pipeline.inReview,
+              detail: `${pipeline.awaitingReviews} waiting on reviewers`,
+            },
+            { label: 'Accepted', value: pipeline.accepted, detail: 'Converted to sessions' },
+            { label: 'Drafts', value: pipeline.draft, detail: 'Not submitted yet' },
+          ]}
+        />
       </section>
 
       <section aria-labelledby="submission-list-heading" className="min-w-0">
@@ -210,7 +199,7 @@ export function SubmissionsView({
           />
         ) : (
           <>
-            <div className="-mx-4 -my-2 hidden overflow-x-auto whitespace-nowrap sm:-mx-6 lg:block">
+            <div className="-mx-4 -my-2 hidden overflow-x-auto whitespace-nowrap sm:-mx-6 xl:block">
               <div className="inline-block min-w-full px-4 py-2 align-middle sm:px-6">
                 <table className="w-full">
                   <thead>
@@ -284,7 +273,7 @@ export function SubmissionsView({
               </div>
             </div>
 
-            <ul role="list" className="divide-y divide-zinc-950/5 lg:hidden">
+            <ul role="list" className="divide-y divide-zinc-950/5 xl:hidden">
               {submissions.map((submission) => {
                 const title = answerText(
                   submissionAnswerByPurpose(state, submission, 'proposal_title'),
@@ -737,7 +726,7 @@ function SubmissionDrawer({
         <div className="flex flex-col gap-4">
           <div className="rounded-xl bg-zinc-50 px-4 py-3 ring-1 ring-zinc-950/5">
             <p className="text-sm text-zinc-500">To</p>
-            <p className="truncate pt-0.5 text-base font-medium text-zinc-950 sm:text-sm">
+            <p className="pt-0.5 text-pretty text-base font-medium text-zinc-950 sm:text-sm [overflow-wrap:anywhere]">
               {decisionEmailPreview?.recipientName} · {decisionEmailPreview?.recipientEmail}
             </p>
           </div>

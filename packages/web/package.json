@@ -19,6 +19,7 @@
   ],
   "types": "./dist/index.d.ts",
   "scripts": {
+    "prebuild": "node ../../scripts/generate-docs-site.mjs",
     "build": "tsc -p tsconfig.build.json && node ../../scripts/copy-web-assets.mjs",
     "prepack": "pnpm build"
   },
@@ -30,7 +31,9 @@
     "@heroicons/react": "2.2.0",
     "@programkit/core": "workspace:*",
     "@tanstack/react-query": "5.101.4",
-    "@tanstack/react-router": "1.170.23"
+    "@tanstack/react-router": "1.170.23",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "peerDependencies": {
     "react": "^19.0.0",

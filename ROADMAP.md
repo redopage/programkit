@@ -12,17 +12,17 @@ remaining work required for a dependable public service. The evaluator evidence 
 
 ## Working product
 
-| Workflow                    | Current capability                                                                                                                                                                                                                                        |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Accounts and events         | Email/password and magic-link staff accounts, owner/admin/viewer membership, email-bound invitations, revocation, event creation, isolated event switching, and participant accounts that recover only matching submissions, reviews, and speaker portals |
-| CFP                         | Multiple forms, mapped speaker and session fields, required and conditional questions, category routing, open/close windows, public draft save/resume/edit/submit, co-speakers, attachments, and decision status                                          |
-| Review                      | Independent rounds, reviewer teams, routed and exact assignments, weighted numeric/select/text scorecards, blind projection, reviewer caps, progress, reminders, recusal, two-way sorting, CSV export, and reversible decisions                           |
-| Speakers and tasks          | Searchable roster, CSV import and deduplication, lifecycle status, reusable profiles, multi-assignee tasks, due dates, readiness filters, logistics, invitations, private speaker portal, resources, and linked sessions                                  |
-| Files and content           | Private R2 headshots and deliverables, type and size rules, version history, comments, authorized downloads, organizer replacement, files library, selected ZIP export, session editing/history/restore, and approval gating                              |
-| Communications              | Templates, merge preview, audience selection, review and approval, frozen recipients, durable outbox records, Cloudflare Email delivery, retry state, history, task reminders, and iCal attachments                                                       |
-| Schedule and public program | Multi-day room grid, session list, unscheduled tray, room/track inventory, conflict naming, accessible move form, drag and drop, auto-place, clear/undo, publish preflight, immutable releases, and five public views with embeds and JSON/XML/iCal feeds |
-| Speaker CRM                 | Cross-event directory, search and multi-criteria filters, tags, notes, event history, CSV import, duplicate merge, saved dynamic/static segments, six-stage sourcing, event reuse, personalized outreach, and organization analytics                      |
-| API and agents              | Event-scoped copy-once API keys, documented read endpoints and named writes, logical ZIP/CSV export, optional MCP server, plugin, and operational skills                                                                                                  |
+| Workflow                    | Current capability                                                                                                                                                                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accounts and events         | Email/password and magic-link staff accounts, authenticated password changes, active-session review and revocation, owner/admin/viewer membership, email-bound invitations, revocation, event creation, isolated event switching, and participant accounts that recover only matching submissions, reviews, and speaker portals |
+| CFP                         | Multiple forms, mapped speaker and session fields, required and conditional questions, category routing, open/close windows, public draft save/resume/edit/submit, co-speakers, attachments, and decision status                                                                                                                |
+| Review                      | Independent rounds, reviewer teams, routed and exact assignments, weighted numeric/select/text scorecards, blind projection, reviewer caps, progress, reminders, recusal, two-way sorting, CSV export, and reversible decisions                                                                                                 |
+| Speakers and tasks          | Searchable roster, CSV import and deduplication, lifecycle status, reusable profiles, multi-assignee tasks, due dates, readiness filters, logistics, invitations, private speaker portal, resources, and linked sessions                                                                                                        |
+| Files and content           | Private R2 headshots and deliverables, type and size rules, version history, comments, authorized downloads, owner-only version deletion with durable tombstones and retriable R2 cleanup, organizer replacement, files library, selected ZIP export, session editing/history/restore, and approval gating                      |
+| Communications              | Templates, merge preview, audience selection, review and approval, frozen recipients, durable outbox records, Cloudflare Email delivery, retry state, history, task reminders, and iCal attachments                                                                                                                             |
+| Schedule and public program | Multi-day room grid, session list, unscheduled tray, room/track inventory, conflict naming, accessible move form, drag and drop, auto-place, clear/undo, publish preflight, immutable releases, and five public views with embeds and JSON/XML/iCal feeds                                                                       |
+| Speaker CRM                 | Cross-event directory, search and multi-criteria filters, tags, notes, event history, CSV import, duplicate merge, saved dynamic/static segments, six-stage sourcing, event reuse, personalized outreach, and organization analytics                                                                                            |
+| API and agents              | Event-scoped copy-once API keys, generated OpenAPI 3.1 contract, documented read endpoints and named writes, logical ZIP/CSV export, optional MCP server, plugin, and operational skills                                                                                                                                        |
 
 ## Architecture that is settled
 
@@ -50,21 +50,26 @@ remaining work required for a dependable public service. The evaluator evidence 
 
 ### 2. Harden identity and operations
 
-- Add authenticated password changes, account recovery, ownership transfer, session management,
-  and an optional MFA or external OIDC policy.
+- Add account recovery, ownership transfer, and an optional MFA or external OIDC policy.
+- Add OAuth for delegated multi-account API and MCP installations; retain scoped API keys for
+  owner-managed clients.
 - Add edge abuse controls and an operator-visible security event log.
 - Document backup, restore, retention, and disaster-recovery drills for event and identity objects.
 - Add structured production metrics, tracing, alerting, and a small status/runbook surface.
 
 ### 3. Harden files and delivery
 
-- Add malware scanning, orphan cleanup, deletion and retention policy, and R2 usage observability.
+- Add malware scanning, orphan cleanup, age-based retention and workspace-offboarding policy,
+  legal holds, and R2 usage observability. Explicit owner deletion is implemented.
 - Verify sender-domain reputation and bounce handling for the official Cloudflare Email path.
-- Add suppression management, scheduled campaign controls, and safe cancellation before delivery.
+- Add scheduled campaign controls, recipient self-service unsubscribe, and provider
+  bounce/complaint ingestion. Manual suppression and safe cancellation before provider delivery are
+  implemented.
 
 ### 4. Finish the public API contract
 
-- Publish a generated OpenAPI document and validate examples in CI.
+- Keep the published generated OpenAPI document synchronized with the canonical operation manifest;
+  drift and request examples are validated in CI.
 - Add signed webhook subscriptions with retry, replay protection, and delivery history.
 - Add cursor-based bulk endpoints only where the browser and integration use cases require them.
 - Document API-key rotation and least-privilege recipes for common integrations.

@@ -10,27 +10,61 @@ membership. The local sample and hosted demo still use demo actors. The hosted a
 event-scoped API keys on the documented integration routes. Review [Security](../../SECURITY.md)
 before using real participant data.
 
+For a first authenticated request, start with the [HTTP API quickstart](quickstart.md).
+
+## OpenAPI contract
+
+The generated [OpenAPI 3.1 document](openapi.json) is the machine-readable contract for the
+event-scoped API-key REST surface. It enumerates every API-key-grantable named operation as a
+concrete path and derives its title, required inputs, scopes, risk, agent policy, reversibility,
+dry-run support, and emitted events from the canonical core operation manifest. `GET
+/api/v1/manifest` still returns the complete runtime manifest, including staff- and demo-only
+operations that an API key cannot be granted permission to execute.
+
+The core manifest currently defines required input names and policy metadata rather than a full
+schema for every optional operation field. The generated request schemas enforce that available
+contract and remain open to additional operation-specific input properties that the runtime
+validates. Do not hand-edit `openapi.json`:
+
+```bash
+pnpm openapi:generate
+pnpm openapi:check
+```
+
+`pnpm check` runs the drift check, while the OpenAPI test verifies every generated operation path
+and request example against the manifest. Browser-session account routes, capability-scoped public
+surfaces, and the MCP transport are documented separately and are intentionally outside this API-key
+REST document.
+
 ## Hosted account endpoints
 
 These browser endpoints are available only on the hosted app. Mutations require the same origin.
 
-| Method | Path                            | Purpose                                              |
-| ------ | ------------------------------- | ---------------------------------------------------- |
-| `POST` | `/api/v1/auth/password`         | Create an account or sign in with email and password |
-| `POST` | `/api/v1/auth/magic-link`       | Request a one-time staff sign-in link                |
-| `GET`  | `/auth/verify?token=...`        | Exchange the link for a secure session               |
-| `POST` | `/api/v1/auth/logout`           | Revoke the current session                           |
-| `GET`  | `/api/v1/account`               | Read the signed-in user's accessible events          |
-| `POST` | `/api/v1/events`                | Create and select an isolated empty event            |
-| `POST` | `/api/v1/account/active-event`  | Select an event from verified membership             |
-| `GET`  | `/api/v1/crm/state`             | Read the signed-in organization's contact projection |
-| `POST` | `/api/v1/crm/operations/{name}` | Run an organization CRM operation                    |
-| `POST` | `/public/v1/access/password`    | Create or restore an event participant account       |
-| `GET`  | `/public/v1/access/session`     | Resolve that account's event-scoped destinations     |
-| `POST` | `/public/v1/access/logout`      | Revoke the participant session                       |
+| Method   | Path                            | Purpose                                              |
+| -------- | ------------------------------- | ---------------------------------------------------- |
+| `POST`   | `/api/v1/auth/password`         | Create an account or sign in with email and password |
+| `POST`   | `/api/v1/auth/magic-link`       | Request a one-time staff sign-in link                |
+| `GET`    | `/auth/verify?token=...`        | Exchange the link for a secure session               |
+| `POST`   | `/api/v1/auth/logout`           | Revoke the current session                           |
+| `GET`    | `/api/v1/auth/security`         | Read password status and active account sessions     |
+| `POST`   | `/api/v1/auth/password/change`  | Set or change the authenticated account password     |
+| `DELETE` | `/api/v1/auth/sessions`         | Revoke every session except the current browser      |
+| `DELETE` | `/api/v1/auth/sessions/{id}`    | Revoke one other opaque session ID                   |
+| `GET`    | `/api/v1/account`               | Read the signed-in user's accessible events          |
+| `POST`   | `/api/v1/events`                | Create and select an isolated empty event            |
+| `POST`   | `/api/v1/account/active-event`  | Select an event from verified membership             |
+| `GET`    | `/api/v1/crm/state`             | Read the signed-in organization's contact projection |
+| `POST`   | `/api/v1/crm/operations/{name}` | Run an organization CRM operation                    |
+| `POST`   | `/public/v1/access/password`    | Create or restore an event participant account       |
+| `GET`    | `/public/v1/access/session`     | Resolve that account's event-scoped destinations     |
+| `POST`   | `/public/v1/access/logout`      | Revoke the participant session                       |
 
 Password requests include `email`, `password`, and `intent`, where intent is `signup` or `signin`.
 Passwords must contain 10 to 128 characters. Passwords are never returned or stored directly.
+An authenticated password change accepts `currentPassword` when a password already exists and a
+required `newPassword`. Setting a password on a passwordless account needs only the authenticated
+session. Success revokes other sessions and pending magic links. Session reads expose only an opaque
+ID and creation/expiry times; the current session can be ended only through logout.
 
 Participant credentials use the same password policy but a separate per-event session. They never
 create a staff membership. After authentication, the Worker matches the normalized account email
@@ -202,7 +236,7 @@ session.
 
 ## External API key contract
 
-Owners and administrators create event-scoped API keys under **Infrastructure & API**. The
+Owners and administrators create event-scoped API keys under **Data & connections**. The
 management surface supports list, create, copy-once, and immediate revocation:
 
 - an organizer creates a named, event-scoped key and chooses explicit read or write scopes;
@@ -248,6 +282,12 @@ curl https://app.programkit.dev/api/v1/events \
 OAuth remains a later addition for integrations that need delegated installation across many
 ProgramKit accounts.
 
+Rotate an owner-managed client without downtime by creating a replacement key with the same or
+narrower scopes, updating only that client's secret, confirming the replacement's **Last used**
+time, and then revoking the old key. Use one key per client so rotation and incident revocation do
+not interrupt unrelated integrations. Prefer a finite expiry and the **Agent operations** preset
+for MCP clients.
+
 ## Production API milestones
 
 The next API work is intentionally practical:
@@ -256,8 +296,7 @@ The next API work is intentionally practical:
 2. Bulk import operations capped at a documented batch size with per-item results.
 3. Direct-to-R2 upload initiation and finalize endpoints with type, size, ownership, and scanning
    checks.
-4. OpenAPI output generated from the same schemas used to validate named operations.
-5. Delegated OAuth for third-party apps that install across many ProgramKit events.
+4. Delegated OAuth for third-party apps that install across many ProgramKit events.
 
 Do not add a second write implementation for REST-shaped routes. A resource-style convenience
 endpoint may translate into a named operation, but the core operation remains the source of truth.

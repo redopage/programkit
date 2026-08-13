@@ -18,7 +18,7 @@ import {
 } from '@programkit/core'
 
 import { PortalResources } from '../components/PortalResources.tsx'
-import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
+import { EventIdentity } from '../components/event-brand.tsx'
 import { useWorkspace } from '../lib/workspace.tsx'
 import {
   Avatar,
@@ -57,7 +57,10 @@ function PortalWorkspace() {
   const headshots = state.assets
     .filter(
       (asset) =>
-        asset.kind === 'headshot' && asset.owner.type === 'person' && asset.owner.id === person.id,
+        !asset.deletedAt &&
+        asset.kind === 'headshot' &&
+        asset.owner.type === 'person' &&
+        asset.owner.id === person.id,
     )
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
 
@@ -319,7 +322,9 @@ function PortalWorkspace() {
                   const deliverables = state.assets
                     .filter(
                       (asset) =>
-                        asset.owner.type === 'requirement' && asset.owner.id === instance.id,
+                        !asset.deletedAt &&
+                        asset.owner.type === 'requirement' &&
+                        asset.owner.id === instance.id,
                     )
                     .sort((left, right) => (right.version ?? 1) - (left.version ?? 1))
                   const latest = deliverables.find((asset) => asset.isLatest) ?? deliverables[0]
@@ -562,7 +567,6 @@ function PortalWorkspace() {
           </section>
         </div>
       </main>
-      <EventPageFooter />
     </div>
   )
 }

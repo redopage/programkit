@@ -1360,7 +1360,7 @@ export const AIE_EVENT_LOGO_URL = '/assets/events/aie-monogram-black.svg'
 
 export function createSeedState(): WorkspaceState {
   return {
-    schemaVersion: 15,
+    schemaVersion: 17,
     revision: 1,
     workspace: {
       id: 'wrk_aie',
@@ -1410,6 +1410,7 @@ export function createSeedState(): WorkspaceState {
     scheduleReleases: [structuredClone(initialScheduleRelease)],
     campaigns: structuredClone(campaigns),
     outboundMessages: [],
+    emailSuppressions: [],
     portalResourcePages: structuredClone(portalResourcePages),
     programEmbeds: [],
     changeSets: [
@@ -1574,6 +1575,7 @@ export function createEmptyWorkspaceState({
     scheduleReleases: [],
     campaigns: [],
     outboundMessages: [],
+    emailSuppressions: [],
     portalResourcePages: [],
     programEmbeds: [],
     changeSets: [],

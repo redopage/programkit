@@ -1,0 +1,73 @@
+# ProgramKit
+
+> Open-source conference program management from call for proposals through published agenda.
+
+ProgramKit can be used as hosted software, deployed as one Cloudflare application, or changed as an open-source starter. The repository includes the organizer app, participant surfaces, HTTP API, MCP server, portable Agent Plugin, and shared domain rules.
+
+## Start here
+
+- [Documentation home](https://programkit.dev/docs.md): ProgramKit is an open-source conference-program starter that can be used as hosted software, self-hosted as one Cloudflare application, or adapted from source. The same repository contains the organizer interface,…
+- [Getting started](https://programkit.dev/docs/getting-started.md): ProgramKit can be explored without an account, deployed as one Cloudflare application, or cloned as an open-source starter. All three paths run the same product packages.
+- [Set up your first event](https://programkit.dev/docs/getting-started/first-event.md): This walkthrough intentionally crosses every role. The organizer interface can look complete while a public form, invitation, portal, or feed is still misconfigured; testing the handoffs is part of setting up the event.
+- [Choose a deployment](https://programkit.dev/docs/getting-started/choose-a-deployment.md): ProgramKit uses one codebase for managed and customer-owned installations. Choose based on who should own deployment and operations, not on a difference in core product capability.
+- [Build and publish a CFP](https://programkit.dev/docs/guides/build-and-publish-a-cfp.md): This guide is for an organizer using the reference application and for an agent helping that organizer understand the same workflow. The reference host is seeded demo software; use sample data until the production…
+
+## Use ProgramKit
+
+- [Product and user guide](https://programkit.dev/docs/users.md): ProgramKit manages the program side of a conference: proposals, review, accepted speakers, sessions, requirements, files, communications, scheduling, and the public agenda. It deliberately does not try to become a…
+- [Organizer workflows](https://programkit.dev/docs/users/organizer-workflows.md): This guide follows the navigation an event team sees after signing in. Availability depends on the event role: owners and administrators can make changes; viewers receive read-only access.
+- [Participant experiences](https://programkit.dev/docs/users/participant-experiences.md): ProgramKit gives submitters, reviewers, accepted speakers, and attendees focused views instead of the organizer workspace. Each view has a smaller data projection and operation allowlist.
+- [Roles and access](https://programkit.dev/docs/users/roles-and-access.md): ProgramKit separates installation policy, event-team membership, participant identity, and public event routing. These are different controls and should not be treated as one global role list.
+- [Reporting and exports](https://programkit.dev/docs/users/reporting-and-exports.md): ProgramKit reports around operational decisions instead of presenting a separate analytics product. The current product has useful live reports and portable exports, but it does not yet include a free-form report builder…
+- [Program lifecycle](https://programkit.dev/docs/product/program-lifecycle.md): ProgramKit is built around one conference-program job:
+- [Publish speaker resources](https://programkit.dev/docs/guides/publish-speaker-resources.md): ProgramKit can publish guides, links, and embedded documents into every accepted speaker's portal for an event. Organizers manage these pages from Files → Speaker resources.
+
+## Self-hosting
+
+- [Self-hosting overview](https://programkit.dev/docs/self-hosting.md): ProgramKit's supported self-host is one Cloudflare Worker deployment. It is deliberately not a collection of services that a new operator must wire together.
+- [Deploy to Cloudflare](https://programkit.dev/docs/self-hosting/cloudflare.md): This guide covers both supported deployment paths. They produce the same hosted-app profile and one-origin architecture.
+- [First owner and signup](https://programkit.dev/docs/self-hosting/first-owner.md): A new self-host must establish one installation owner without leaving an unrestricted race for the first account. ProgramKit uses a private bootstrap secret for that one-time claim.
+- [Configuration](https://programkit.dev/docs/self-hosting/configuration.md): ProgramKit keeps ordinary configuration in Wrangler variables, private values in Worker secrets, and platform resources in bindings. The generated .programkit/wrangler.json is the canonical configuration for one…
+- [Launch checklist](https://programkit.dev/docs/self-hosting/launch-checklist.md): ProgramKit supplies the application controls described below. The installation operator supplies the surrounding security, privacy, delivery, backup, monitoring, and response program. A green application screen is not by…
+- [Administration](https://programkit.dev/docs/self-hosting/administration.md): Self-hosting transfers control of infrastructure and data to the operator. It also transfers the responsibility for access review, delivery configuration, updates, backups, monitoring, and incident response.
+- [Troubleshooting](https://programkit.dev/docs/self-hosting/troubleshooting.md): Start with the failure category below. Do not fix an authorization or storage problem by weakening the trust boundary.
+
+## Developers
+
+- [Developer guide](https://programkit.dev/docs/developers.md): ProgramKit is both an application and an open-source starter. The repository is designed to be changed, but it is opinionated about where business rules, authorization, projections, hosting, and agent behavior belong.
+- [Local development](https://programkit.dev/docs/guides/local-development.md): This guide gets a fresh checkout to the working sample without external accounts or secrets.
+- [Repository tour](https://programkit.dev/docs/developers/repository-tour.md): ProgramKit separates reusable product behavior from the supported Cloudflare host. The separation is an ownership model, not a promise that every package is a standalone product.
+- [Customize the starter](https://programkit.dev/docs/developers/customizing.md): ProgramKit is intended to be changed. Start with the smallest layer that owns the behavior instead of searching and replacing the entire repository.
+- [Extend ProgramKit](https://programkit.dev/docs/developers/extending-programkit.md): ProgramKit is meant to be adapted. A safe extension preserves the product's operation and projection boundaries even when the workflow, interface, brand, or provider changes.
+- [Contribution playbook](https://programkit.dev/docs/agents/contribution-playbook.md): Use this sequence for a complete ProgramKit workflow change. Small changes can skip layers they do not affect, but they should not relocate responsibilities to avoid the proper layer.
+- [Contribute documentation](https://programkit.dev/docs/contributing-documentation.md): ProgramKit documentation serves organizers, participants, self-hosters, developers, integration builders, and agents from one repository. A change should make the next decision easier without creating another source of…
+
+## API and agents
+
+- [HTTP API quickstart](https://programkit.dev/docs/api/quickstart.md): ProgramKit serves the HTTP API from the same origin as the application. An API key is scoped to one event, so a client does not select a tenant with a request parameter or an untrusted header.
+- [HTTP API reference](https://programkit.dev/docs/api.md): ProgramKit exposes a small integration API from the same Cloudflare Worker that serves the web application. Reads use conventional event-scoped resources. Writes use named operations so the web app, API clients, and…
+- [Connect an agent](https://programkit.dev/docs/agents/connect.md): ProgramKit hosts its HTTP API and MCP server with the application. There is no separate agent backend to deploy.
+- [Agent-readable documentation](https://programkit.dev/docs/developers/agent-readable-documentation.md): ProgramKit publishes one documentation source in formats that work for people, search crawlers, coding agents, and retrieval tools. The human site remains the canonical reading experience; the machine formats remove the…
+- [Agent recipes](https://programkit.dev/docs/agents/recipes.md): These are starting prompts, not magic commands. The connected ProgramKit server supplies the event context and enforces scopes. The plugin adds task-specific procedures when the client supports Agent Plugins; direct MCP…
+- [Agent Plugins and MCP](https://programkit.dev/docs/integrations/agent-plugins.md): ProgramKit ships one portable Agent Plugins 1.0 package at packages/agent/plugin/programkit. It combines ProgramKit's operational skills with its MCP server configuration without tying those shared components to one…
+- [Email](https://programkit.dev/docs/integrations/email.md): ProgramKit uses two different Cloudflare email products for two different jobs:
+- [Airtable](https://programkit.dev/docs/integrations/airtable.md): ProgramKit has a working Airtable persistence adapter. It is an optional integration test surface, not the recommended V1 database. The default and recommended path keeps each event's authoritative workspace in its…
+- [Accelevents handoff](https://programkit.dev/docs/integrations/accelevents.md): ProgramKit can package the current event's published program for a one-way import into Accelevents. ProgramKit remains the planning source of truth. The export does not read from or write to an Accelevents account.
+
+## Reference
+
+- [Capability status](https://programkit.dev/docs/reference/capability-status.md): ProgramKit uses a small status vocabulary so product, deployment, and integration documentation do not imply more—or less—than the repository actually provides.
+- [Routes and surfaces](https://programkit.dev/docs/reference/routes-and-surfaces.md): This reference describes stable route families. Route modules under packages/web/src/routes and the Worker router remain executable sources of truth.
+- [Glossary](https://programkit.dev/docs/reference/glossary.md): An organizer identity with password or optional magic-link authentication. An account can hold membership in multiple events.
+- [Identity and tenancy](https://programkit.dev/docs/architecture/identity-and-tenancy.md): ProgramKit has one recommended hosted shape. Identity is account-scoped, business work is event-scoped, and file bytes are kept out of both.
+- [Storage and integrations](https://programkit.dev/docs/architecture/storage-and-integrations.md): ProgramKit has one recommended V1 data path:
+- [Live updates](https://programkit.dev/docs/architecture/live-updates.md): ProgramKit can add live dashboards and notifications without changing its primary database. The same Durable Object that serializes one event workspace can own WebSocket connections for that workspace. The recommended…
+- [Product roadmap](https://forge.smol.ai/andheller/programkit/src/branch/main/ROADMAP.md)
+- [Security](https://forge.smol.ai/andheller/programkit/src/branch/main/SECURITY.md)
+
+## Optional
+
+- [Complete documentation](https://programkit.dev/llms-full.txt): Every published documentation page in one text file.
+- [OpenAPI contract](https://programkit.dev/docs/api/openapi.json): Machine-readable HTTP API contract.
+- [Agent Plugin download](https://programkit.dev/agent-plugin.zip): Portable agent integration bundle.
+- [Source repository](https://forge.smol.ai/andheller/programkit): Public source, issues, and contribution history.

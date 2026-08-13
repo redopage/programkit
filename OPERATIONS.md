@@ -1,5 +1,9 @@
 # Operations
 
+For the self-hoster's routine checklist, start with
+[Administer a self-hosted installation](docs/self-hosting/administration.md). This document is the
+canonical command and recovery-boundary reference.
+
 ## Prerequisites
 
 - Node.js with Corepack available
@@ -97,6 +101,19 @@ The operation body has the shape:
 
 The host supplies the actor. An `actor` in this public JSON is ignored by the HTTP layer.
 
+### File deletion recovery
+
+Files exposes permanent deletion to the authenticated event owner. The request first commits a
+metadata tombstone, which makes the version unavailable, and then removes the event-rooted R2
+object. A successful object delete is recorded by an internal system operation. If R2 fails after
+the tombstone commits, the Files page shows **Storage cleanup pending** and an owner can retry; do
+not restore access to the file merely because cleanup is delayed. A key outside the active event
+prefix is intentionally refused and requires an operator-led reconciliation.
+
+This path does not implement malware scanning or automatic retention. MIME and size validation are
+only upload constraints. Production operators still need a scanner/quarantine provider, orphan
+cleanup, legal-hold rules, an offboarding policy, and R2 usage alerts.
+
 `/api/health` and `/healthz` deliberately return only service readiness and require no account or
 event. `/api/v1/health` is the authenticated workspace check; it includes that workspace's schema
 version and revision and should not be used as the public uptime target.
@@ -181,15 +198,20 @@ pnpm deploy:app
 `programkit.dev`, `demo.programkit.dev`, and `app.programkit.dev` are separate Workers. The public
 site exposes no workspace API. The demo has its own event-object namespace and no outbound email.
 The app has account and event-object namespaces plus a sender-restricted Cloudflare Email Service
-binding. It verifies staff sessions and event membership, but must not hold real participant data
-until the remaining identities and file path are complete.
+binding. It verifies staff and participant sessions, live event membership, record-scoped
+reviewer/speaker capabilities, event-scoped API keys, and private file access. Review the remaining
+account recovery, invitation lifecycle, file scanning/retention, backup, and monitoring requirements
+in `SECURITY.md` before using sensitive participant data.
 
 The configuration declares:
 
 - the `apps/cloudflare/src/worker.ts` entry point;
 - static assets with SPA fallback and Worker-first routing;
 - the `PROGRAMKIT_WORKSPACES` Durable Object binding;
-- the app-only `PROGRAMKIT_AUTH` Durable Object binding;
+- the `PROGRAMKIT_AUTH` account Durable Object binding for hosted-app profiles;
+- the `PROGRAMKIT_EVENT_ACCESS` membership, participant directory, and API-key Durable Object
+  binding for hosted-app profiles;
+- the `PROGRAMKIT_FILES` private R2 binding for hosted and self-hosted uploads;
 - SQLite Durable Object migrations;
 - Worker observability.
 
@@ -200,31 +222,35 @@ After deployment, verify at least:
 
 ```bash
 curl https://YOUR_HOST/api/health
-curl https://YOUR_HOST/api/v1/health
-curl https://YOUR_HOST/public/agenda.json
+curl --head https://YOUR_HOST/agent-plugin.zip
 ```
 
-Then open the operator, public agenda, and scoped portal routes. Confirm a draft schedule change
-does not affect the agenda until publication creates a new release.
+Then use an authenticated browser or event-scoped API key to check `/api/v1/health`. Open the
+operator, public agenda, and scoped portal routes. Confirm a draft schedule change does not affect
+the agenda until publication creates a new release.
 
 ## Production enablement
 
-The hosted app verifies staff sessions and event membership. Before pointing real data at it:
+The hosted app verifies staff sessions, participant sessions, event membership, record capabilities,
+and event-scoped API keys. Before pointing sensitive real data at it:
 
-- add team invitation, administrator roles, revocation, and role-to-scope mapping;
-- add verified participant and reviewer identity plus event-scoped public links;
-- add OAuth and workspace-scoped authorization to `/mcp`;
-- add real outbound email and webhook adapters through a transactional outbox;
-- add private object storage, scanning, signed downloads, and lifecycle policies;
-- remove wildcard scopes and restrict administrative operations;
+- add account recovery, ownership transfer, and deployment-appropriate MFA or external OIDC;
+- complete short-lived reviewer and speaker invitation exchange, rotation, and revocation;
+- add delegated OAuth before offering third-party MCP installation across many customer accounts;
+- add signed outbound webhooks with durable retry, replay protection, and delivery history;
+- complete email provider idempotency, bounce/complaint ingestion, recipient unsubscribe, and
+  dead-letter operations around the existing transactional outbox;
+- add malware scanning/quarantine, orphan cleanup, automatic retention and offboarding, storage
+  observability, and any deployment-specific signed-download policy around the existing private R2
+  upload, mediated download, and explicit owner-deletion path;
 - configure rate limits, alerts, structured logs, and incident procedures;
 - establish retention, deletion, legal-hold, backup, and restore policies;
 - complete every item in `SECURITY.md`.
 
-`campaign.send` currently records a demo outbox event and marks the campaign sent; no external
-email is delivered. The Airtable persistence adapter is real, but the integrations screen still
-uses seeded status rows and must not claim production health until it reports the actual base,
-cursor, quota, last success, retry, and webhook expiry state.
+The anonymous demo still records inspectable delivery state without an outbound binding. The
+official app and a configured self-host use the durable outbox and provider binding. The Airtable
+persistence adapter is real but remains experimental until it has durable partial-write recovery,
+narrow webhook cursors, and human-visible conflict review.
 
 ### Email operations
 
@@ -233,9 +259,9 @@ has Cloudflare-managed bounce, SPF, DKIM, and DMARC records. `support@programkit
 Email Routing address and is not the automated sender.
 
 One direct delivery smoke test should be run after changing the domain, binding, or DNS. Do not
-send from the public demo Worker. Before wiring product notifications, implement a durable outbox,
-idempotent delivery keys, retry limits, provider response storage, suppression handling, and
-operator-visible failures. Full setup and self-hosting guidance is in
+send from the public demo Worker. ProgramKit already stores durable outbox records, retry attempts,
+provider IDs, suppression, and operator-visible failures; the deployment operator must verify that
+path and complete the remaining provider controls listed above. Full setup and self-hosting guidance is in
 [Cloudflare email](docs/integrations/email.md).
 
 ## Backup, restore, and departure
@@ -246,8 +272,10 @@ idempotency response caches are omitted. An Airtable-enabled installation can al
 encrypted logical exports outside both Airtable and the cache, record their workspace and schema
 version, and test restoration into a separate environment.
 
-File objects are not part of this demo. The R2 implementation must export and restore them alongside
-their logical record IDs. D1 and Airtable projections are rebuildable and are not backup sources.
+The logical export includes file metadata and retained deletion tombstones, not R2 bytes. A
+production backup or departure package must export active R2 objects with a manifest relating each
+object key to its asset record. A purged object cannot be reconstructed from the logical export or
+workspace PITR. D1 and Airtable projections are rebuildable and are not backup sources.
 
 ### SQLite Durable Object recovery
 

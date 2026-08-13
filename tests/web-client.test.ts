@@ -155,7 +155,7 @@ describe('ProgramKit web client', () => {
 
     expect(fetch).toHaveBeenCalledOnce()
     expect(receivedInput).toBe('/public/v1/reviewers/rev_001/state')
-    expect(receivedInit).toMatchObject({ signal })
+    expect(receivedInit).toMatchObject({ cache: 'no-store', signal })
     expect(new Headers(receivedInit?.headers).get('x-programkit-reviewer-key')).toBe(
       'reviewer_elena',
     )

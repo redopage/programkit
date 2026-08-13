@@ -71,6 +71,7 @@ interface StoredEventInvitation extends Omit<EventInvitation, 'status'> {
 interface ExternalIdentity {
   id: string
   eventId: string
+  name?: string
   email: string
   passwordSalt: string
   passwordHash: string
@@ -231,6 +232,25 @@ function cleanPassword(value: unknown) {
     )
   }
   return value
+}
+
+function cleanExternalName(value: unknown) {
+  if (typeof value !== 'string') {
+    throw new EventAccessError('INVALID_INPUT', 'Full name is required.', 400)
+  }
+  const name = value.trim().replace(/\s+/gu, ' ')
+  if (name.length < 2 || name.length > 80) {
+    throw new EventAccessError('INVALID_INPUT', 'Full name must be 2 to 80 characters.', 400)
+  }
+  return name
+}
+
+function externalIdentityProjection(identity: ExternalIdentity) {
+  return {
+    id: identity.id,
+    name: identity.name ?? identity.email.split('@')[0] ?? 'Participant',
+    email: identity.email,
+  }
 }
 
 function cleanIdentifier(value: unknown, field: string) {
@@ -422,9 +442,11 @@ export class EventAccessDurableObject extends DurableObject {
       }
       const salt = randomHex(16)
       const now = new Date().toISOString()
+      const name = cleanExternalName(input.name)
       identity = {
         id: `ext_${randomHex(12)}`,
         eventId: event.id,
+        name,
         email,
         passwordSalt: salt,
         passwordHash: await passwordHash(password, salt, cloudflarePasswordIterations),
@@ -476,7 +498,7 @@ export class EventAccessDurableObject extends DurableObject {
     await this.#scheduleCleanup(Date.parse(session.expiresAt))
     return {
       event,
-      identity: { id: identity.id, email: identity.email },
+      identity: externalIdentityProjection(identity),
       sessionToken: token,
       sessionExpiresAt: session.expiresAt,
     }
@@ -500,7 +522,7 @@ export class EventAccessDurableObject extends DurableObject {
     if (!identity || identity.eventId !== event.id) {
       throw new EventAccessError('SESSION_INVALID', 'Session is invalid.', 401)
     }
-    return { event, identity: { id: identity.id, email: identity.email } }
+    return { event, identity: externalIdentityProjection(identity) }
   }
 
   async #logoutExternal(input: Record<string, unknown>) {

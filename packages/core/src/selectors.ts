@@ -145,7 +145,9 @@ export function submissionAnswerDisplayByPurpose(
   if (!field || (field.kind !== 'select' && field.kind !== 'multi_select')) return answer
 
   const label = (value: string) =>
-    field.options.find((option) => option.value === value)?.label ?? value
+    (purpose === 'track' ? state.tracks.find((track) => track.id === value)?.name : undefined) ??
+    field.options.find((option) => option.value === value)?.label ??
+    value
   if (Array.isArray(answer)) return answer.map(label)
   return typeof answer === 'string' ? label(answer) : answer
 }

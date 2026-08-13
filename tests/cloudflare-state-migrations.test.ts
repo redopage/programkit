@@ -34,7 +34,7 @@ describe('Durable Object workspace migrations', () => {
 
     expect(response.status).toBe(200)
     const payload = (await response.json()) as { state: WorkspaceState }
-    expect(payload.state.schemaVersion).toBe(15)
+    expect(payload.state.schemaVersion).toBe(17)
     expect(payload.state.crmSegments).toEqual([])
     expect(payload.state.speakerPipeline).toEqual([])
     expect(payload.state.events[0]?.logoUrl).toBe('/assets/events/aie-monogram-black.svg')

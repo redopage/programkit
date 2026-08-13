@@ -17,6 +17,7 @@
   },
   "packageManager": "pnpm@11.20.0",
   "scripts": {
+    "predev": "pnpm docs-site:generate",
     "dev": "pnpm --filter @programkit/app-cloudflare dev",
     "dev:cloudflare": "pnpm --filter @programkit/app-cloudflare dev",
     "build": "pnpm build:packages && tsc --noEmit && pnpm --filter @programkit/app-cloudflare build",
@@ -26,15 +27,23 @@
     "lint": "oxlint . --deny-warnings",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm test && pnpm lint && pnpm format:check && pnpm build && pnpm plugin:validate",
+    "check": "pnpm test && pnpm lint && pnpm format:check && pnpm docs:check && pnpm docs-site:check && pnpm agent-plugin-source:check && pnpm build && pnpm openapi:check && pnpm plugin:validate",
     "deploy": "pnpm deploy:cloudflare",
     "deploy:cloudflare": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --config ../../wrangler.jsonc",
     "deploy:site": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env site --config ../../wrangler.jsonc",
     "deploy:demo": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env demo --config ../../wrangler.jsonc",
     "deploy:app": "pnpm build && pnpm --filter @programkit/app-cloudflare exec wrangler deploy --env app --config ../../wrangler.jsonc",
+    "selfhost": "node scripts/cloudflare-self-host.mjs launch",
     "selfhost:setup": "node scripts/cloudflare-self-host.mjs setup",
     "selfhost:deploy": "node scripts/cloudflare-self-host.mjs deploy",
     "competition:preflight": "node scripts/competition-preflight.mjs",
+    "docs:check": "node scripts/validate-docs.mjs",
+    "docs-site:generate": "node scripts/generate-docs-site.mjs",
+    "docs-site:check": "node scripts/generate-docs-site.mjs --check",
+    "agent-plugin-source:generate": "node scripts/generate-agent-plugin-source.mjs",
+    "agent-plugin-source:check": "node scripts/generate-agent-plugin-source.mjs --check",
+    "openapi:generate": "node scripts/generate-openapi.mjs",
+    "openapi:check": "node scripts/generate-openapi.mjs --check",
     "airtable:setup": "pnpm --filter @programkit/core build && node scripts/airtable.mjs setup",
     "airtable:seed": "pnpm --filter @programkit/core build && node scripts/airtable.mjs seed",
     "airtable:verify": "pnpm --filter @programkit/core build && node scripts/airtable.mjs verify",
@@ -47,6 +56,9 @@
       },
       "AIRTABLE_OAUTH_CLIENT_SECRET": {
         "description": "Optional. Add the server-side secret from your Airtable OAuth integration. PKCE works without one."
+      },
+      "PROGRAMKIT_BOOTSTRAP_TOKEN": {
+        "description": "Required for a self-hosted install. Enter a private setup code of at least 16 characters; the first owner must provide the same code once to claim the installation."
       }
     }
   },

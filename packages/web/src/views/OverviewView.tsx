@@ -74,9 +74,12 @@ export function OverviewView({ navigate }: { navigate: (to: string) => void }) {
           />
         ) : (
           <>
-            <ul role="list" className="-mx-2 divide-y divide-zinc-950/5">
-              {shownActions.map((action) => (
+            <ul role="list" className="-mx-2">
+              {shownActions.map((action, index) => (
                 <li key={action.id}>
+                  {index > 0 ? (
+                    <div aria-hidden="true" className="mx-2 border-t border-zinc-950/5" />
+                  ) : null}
                   <NextActionRow
                     label={action.label}
                     detail={sentenceCase(
@@ -127,26 +130,28 @@ export function OverviewView({ navigate }: { navigate: (to: string) => void }) {
             </p>
           }
         />
-        <StatGrid
-          stats={[
-            { label: 'New', value: pipeline.submitted, detail: 'Ready for triage' },
-            {
-              label: 'In review',
-              value: pipeline.inReview,
-              detail: `${pipeline.awaitingReviews} awaiting reviews`,
-            },
-            {
-              label: 'Accepted',
-              value: pipeline.accepted,
-              detail: `${state.sessions.length} sessions total`,
-            },
-            {
-              label: 'Speakers ready',
-              value: derived.readiness.ready,
-              detail: `${derived.readiness.participants} active speakers`,
-            },
-          ]}
-        />
+        <div className="mt-3">
+          <StatGrid
+            stats={[
+              { label: 'New', value: pipeline.submitted, detail: 'Ready for triage' },
+              {
+                label: 'In review',
+                value: pipeline.inReview,
+                detail: `${pipeline.awaitingReviews} awaiting reviews`,
+              },
+              {
+                label: 'Accepted',
+                value: pipeline.accepted,
+                detail: `${state.sessions.length} sessions total`,
+              },
+              {
+                label: 'Speakers ready',
+                value: derived.readiness.ready,
+                detail: `${derived.readiness.participants} active speakers`,
+              },
+            ]}
+          />
+        </div>
       </section>
 
       <div className="grid gap-7 xl:grid-cols-2">

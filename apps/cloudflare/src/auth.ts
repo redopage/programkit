@@ -17,6 +17,28 @@ const maximumPasswordLength = 128
 const maximumDirectoryEventsPerEmail = 50
 const hostedEventIdPattern = /^evt_[a-f0-9]{24}$/u
 const hostedOrganizationIdPattern = /^org_[a-f0-9]{24}$/u
+const instanceSignupReservationLifetimeMs = 5 * 60 * 1_000
+
+export type InstanceSignupPolicy = 'open' | 'invite_only'
+
+interface InstanceAccessRecord {
+  policy: InstanceSignupPolicy
+  ownerUserId: string | null
+  ownerEmail: string | null
+  initializedAt: string | null
+  updatedAt: string
+  version: number
+  reservation: { email: string; expiresAt: string } | null
+}
+
+export interface InstanceAccessState {
+  managed: boolean
+  initialized: boolean
+  policy: InstanceSignupPolicy
+  signupAvailable: boolean
+  isInstanceOwner: boolean
+  version: number
+}
 
 interface AuthUser {
   id: string
@@ -48,14 +70,25 @@ export interface AuthMembershipProjection extends AuthEventSummary {
 
 interface MagicLinkRecord {
   email: string
+  intent: 'signin' | 'signup'
+  name?: string
+  claimInstanceOwner?: boolean
   createdAt: string
   expiresAt: string
 }
 
 interface SessionRecord {
+  id?: string
   userId: string
   createdAt: string
   expiresAt: string
+}
+
+export interface AuthSessionSummary {
+  id: string
+  createdAt: string
+  expiresAt: string
+  current: boolean
 }
 
 interface PasswordRecord {
@@ -64,6 +97,7 @@ interface PasswordRecord {
   hash: string
   iterations: number
   createdAt: string
+  updatedAt?: string
 }
 
 interface RateRecord {
@@ -225,19 +259,46 @@ export class AuthDurableObject extends DurableObject {
     await this.#ctx.storage.delete(`rate:password-failure:email:${emailHash}`)
   }
 
-  async #requestMagicLink(email: string, ipHash: string) {
+  async #requestMagicLink(
+    email: string,
+    ipHash: string,
+    options: {
+      intent: 'signin' | 'signup' | 'auto'
+      name?: string
+      allowSignup?: boolean
+      claimInstanceOwner?: boolean
+    },
+  ) {
+    const existingUser = await this.#existingUserForEmail(email)
+    const intent = options.intent === 'auto' ? (existingUser ? 'signin' : 'signup') : options.intent
+    if (
+      (intent === 'signin' && !existingUser) ||
+      (intent === 'signup' && (existingUser || options.allowSignup !== true))
+    ) {
+      return { ok: true, deliver: false as const }
+    }
     const emailHash = await sha256(email)
     const emailAllowed = await this.#rateAllows(`email:${emailHash}`, 5, 45_000)
     const ipAllowed = await this.#rateAllows(`ip:${ipHash}`, 20)
     if (!emailAllowed || !ipAllowed) return { ok: true, deliver: false as const }
 
-    const previousLinks = await this.#ctx.storage.list({ prefix: 'magic:' })
-    if (previousLinks.size > 0) await this.#ctx.storage.delete([...previousLinks.keys()])
+    const previousLinks = await this.#ctx.storage.list<MagicLinkRecord>({ prefix: 'magic:' })
+    const previousLinkKeys = [...previousLinks.entries()]
+      .filter(([, record]) => normalizeEmail(record.email) === email)
+      .map(([key]) => key)
+    if (previousLinkKeys.length > 0) await this.#ctx.storage.delete(previousLinkKeys)
     const token = randomHex(32)
     const tokenHash = await sha256(token)
     const createdAt = new Date().toISOString()
     const expiresAt = new Date(Date.now() + magicLinkLifetimeMs).toISOString()
-    await this.#ctx.storage.put(`magic:${tokenHash}`, { email, createdAt, expiresAt })
+    await this.#ctx.storage.put(`magic:${tokenHash}`, {
+      email,
+      intent,
+      name: options.name,
+      claimInstanceOwner: options.claimInstanceOwner,
+      createdAt,
+      expiresAt,
+    } satisfies MagicLinkRecord)
     await this.#scheduleCleanup()
     return { ok: true, deliver: true as const, token, expiresAt, email }
   }
@@ -331,7 +392,11 @@ export class AuthDurableObject extends DurableObject {
     }
     await this.#ctx.storage.delete(`magic:${tokenHash}`)
 
-    const user = await this.#userForEmail(record.email)
+    const user =
+      record.intent === 'signup'
+        ? await this.#userForEmail(record.email, record.name)
+        : await this.#existingUserForEmail(record.email)
+    if (!user) return { ok: false as const }
     const updatedUser = { ...user, lastSignedInAt: new Date().toISOString() }
     await this.#ctx.storage.put(`user:${user.id}`, updatedUser)
     const session = await this.#createSession(updatedUser)
@@ -340,13 +405,161 @@ export class AuthDurableObject extends DurableObject {
       sessionToken: session.token,
       sessionExpiresAt: session.record.expiresAt,
       account: await this.#account(updatedUser),
+      claimInstanceOwner: record.claimInstanceOwner === true,
     }
+  }
+
+  #defaultInstanceAccess(defaultMode: unknown): InstanceAccessRecord {
+    const now = new Date().toISOString()
+    return {
+      policy: defaultMode === 'open' ? 'open' : 'invite_only',
+      ownerUserId: null,
+      ownerEmail: null,
+      initializedAt: null,
+      updatedAt: now,
+      version: 0,
+      reservation: null,
+    }
+  }
+
+  async #instanceAccessRecord(defaultMode: unknown) {
+    return (
+      (await this.#ctx.storage.get<InstanceAccessRecord>('instance:access')) ??
+      this.#defaultInstanceAccess(defaultMode)
+    )
+  }
+
+  #publicInstanceAccess(
+    record: InstanceAccessRecord,
+    input: Record<string, unknown>,
+  ): InstanceAccessState {
+    const managed = input.defaultMode !== 'open'
+    const invited = input.invited === true
+    const userId = typeof input.userId === 'string' ? input.userId : null
+    const email = normalizeEmail(input.email)
+    const reservationActive =
+      record.reservation !== null && Date.parse(record.reservation.expiresAt) > Date.now()
+    return {
+      managed,
+      initialized: record.ownerUserId !== null,
+      policy: record.policy,
+      signupAvailable:
+        invited ||
+        record.policy === 'open' ||
+        (managed &&
+          input.bootstrapConfigured === true &&
+          record.ownerUserId === null &&
+          (!reservationActive || record.reservation?.email === email)),
+      isInstanceOwner:
+        record.ownerUserId !== null && record.ownerUserId === userId && record.ownerEmail === email,
+      version: record.version,
+    }
+  }
+
+  async #instanceAccess(input: Record<string, unknown>) {
+    const action = typeof input.action === 'string' ? input.action : 'status'
+    const record = await this.#instanceAccessRecord(input.defaultMode)
+
+    if (action === 'status') return this.#publicInstanceAccess(record, input)
+
+    if (action === 'begin_signup') {
+      const email = normalizeEmail(input.email)
+      if (!email) return { ok: false as const, code: 'SIGNUP_UNAVAILABLE' }
+      if (input.invited === true || record.policy === 'open' || input.defaultMode === 'open') {
+        return { ok: true as const, claimInstanceOwner: false }
+      }
+      if (record.ownerUserId !== null) {
+        return { ok: false as const, code: 'SIGNUP_UNAVAILABLE' }
+      }
+      if (input.bootstrapConfigured !== true) {
+        return { ok: false as const, code: 'BOOTSTRAP_NOT_CONFIGURED' }
+      }
+      if (input.bootstrapAuthorized !== true) {
+        return { ok: false as const, code: 'BOOTSTRAP_TOKEN_INVALID' }
+      }
+      const now = Date.now()
+      if (
+        record.reservation &&
+        Date.parse(record.reservation.expiresAt) > now &&
+        record.reservation.email !== email
+      ) {
+        return { ok: false as const, code: 'SIGNUP_IN_PROGRESS' }
+      }
+      const reserved: InstanceAccessRecord = {
+        ...record,
+        reservation: {
+          email,
+          expiresAt: new Date(now + instanceSignupReservationLifetimeMs).toISOString(),
+        },
+        updatedAt: new Date(now).toISOString(),
+      }
+      await this.#ctx.storage.put('instance:access', reserved)
+      return { ok: true as const, claimInstanceOwner: true }
+    }
+
+    if (action === 'complete_signup') {
+      const email = normalizeEmail(input.email)
+      const userId = typeof input.userId === 'string' ? input.userId : ''
+      if (!email || !/^usr_[a-f0-9]{24}$/u.test(userId)) {
+        return { ok: false as const, code: 'SIGNUP_UNAVAILABLE' }
+      }
+      if (record.ownerUserId !== null) {
+        return {
+          ok: record.ownerUserId === userId && record.ownerEmail === email,
+          code: 'SIGNUP_UNAVAILABLE',
+        }
+      }
+      if (
+        !record.reservation ||
+        record.reservation.email !== email ||
+        Date.parse(record.reservation.expiresAt) <= Date.now()
+      ) {
+        return { ok: false as const, code: 'SIGNUP_UNAVAILABLE' }
+      }
+      const now = new Date().toISOString()
+      const completed: InstanceAccessRecord = {
+        ...record,
+        policy: 'invite_only',
+        ownerUserId: userId,
+        ownerEmail: email,
+        initializedAt: now,
+        updatedAt: now,
+        version: record.version + 1,
+        reservation: null,
+      }
+      await this.#ctx.storage.put('instance:access', completed)
+      return { ok: true as const, ...this.#publicInstanceAccess(completed, input) }
+    }
+
+    if (action === 'update') {
+      const email = normalizeEmail(input.email)
+      const userId = typeof input.userId === 'string' ? input.userId : ''
+      const policy = input.policy
+      if (
+        record.ownerUserId !== userId ||
+        record.ownerEmail !== email ||
+        (policy !== 'open' && policy !== 'invite_only')
+      ) {
+        return { ok: false as const, code: 'INSTANCE_ACCESS_FORBIDDEN' }
+      }
+      const updated: InstanceAccessRecord = {
+        ...record,
+        policy,
+        updatedAt: new Date().toISOString(),
+        version: record.version + 1,
+      }
+      await this.#ctx.storage.put('instance:access', updated)
+      return { ok: true as const, ...this.#publicInstanceAccess(updated, input) }
+    }
+
+    return { ok: false as const, code: 'INVALID_ACTION' }
   }
 
   async #createSession(user: AuthUser) {
     const token = randomHex(32)
     const tokenHash = await sha256(token)
     const record: SessionRecord = {
+      id: `ses_${randomHex(12)}`,
       userId: user.id,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + sessionLifetimeMs).toISOString(),
@@ -427,14 +640,151 @@ export class AuthDurableObject extends DurableObject {
   async #session(token: string, preferredEventId?: string | null) {
     if (!/^[a-f0-9]{64}$/u.test(token)) return null
     const sessionHash = await sha256(token)
-    const session = await this.#ctx.storage.get<SessionRecord>(`session:${sessionHash}`)
+    let session = await this.#ctx.storage.get<SessionRecord>(`session:${sessionHash}`)
     if (!session || Date.parse(session.expiresAt) <= Date.now()) {
       if (session) await this.#ctx.storage.delete(`session:${sessionHash}`)
       return null
     }
+    if (!session.id) {
+      session = { ...session, id: `ses_${randomHex(12)}` }
+      await this.#ctx.storage.put(`session:${sessionHash}`, session)
+    }
     const user = await this.#ctx.storage.get<AuthUser>(`user:${session.userId}`)
     if (!user) return null
     return { sessionHash, session, account: await this.#account(user, preferredEventId) }
+  }
+
+  async #securityState(token: string) {
+    const resolved = await this.#session(token)
+    if (!resolved) return null
+    const now = Date.now()
+    const summaries: AuthSessionSummary[] = []
+    for (const [key, stored] of await this.#ctx.storage.list<SessionRecord>({
+      prefix: 'session:',
+    })) {
+      if (stored.userId !== resolved.account.user.id) continue
+      if (Date.parse(stored.expiresAt) <= now) {
+        await this.#ctx.storage.delete(key)
+        continue
+      }
+      const session = stored.id ? stored : { ...stored, id: `ses_${randomHex(12)}` }
+      if (!stored.id) await this.#ctx.storage.put(key, session)
+      summaries.push({
+        id: session.id!,
+        createdAt: session.createdAt,
+        expiresAt: session.expiresAt,
+        current: key === `session:${resolved.sessionHash}`,
+      })
+    }
+    summaries.sort(
+      (left, right) =>
+        Number(right.current) - Number(left.current) ||
+        right.createdAt.localeCompare(left.createdAt),
+    )
+    return {
+      ok: true as const,
+      email: resolved.account.user.email,
+      passwordConfigured: Boolean(
+        await this.#ctx.storage.get<PasswordRecord>(`password:${resolved.account.user.id}`),
+      ),
+      sessions: summaries,
+    }
+  }
+
+  async #changePassword(
+    token: string,
+    currentPassword: unknown,
+    newPassword: unknown,
+    ipHash: string,
+  ) {
+    const resolved = await this.#session(token)
+    if (!resolved) return { ok: false as const, code: 'SESSION_INVALID' as const }
+    if (!validPassword(newPassword)) {
+      return { ok: false as const, code: 'PASSWORD_INVALID' as const }
+    }
+
+    const userId = resolved.account.user.id
+    const emailHash = await sha256(resolved.account.user.email)
+    const existing = await this.#ctx.storage.get<PasswordRecord>(`password:${userId}`)
+    if (existing) {
+      const emailAllowed = await this.#passwordFailuresAllow(
+        `email:${emailHash}`,
+        this.#passwordFailureLimits.email,
+      )
+      const ipAllowed = await this.#passwordFailuresAllow(
+        `ip:${ipHash}`,
+        this.#passwordFailureLimits.ip,
+      )
+      if (!emailAllowed || !ipAllowed) {
+        return { ok: false as const, code: 'TOO_MANY_ATTEMPTS' as const }
+      }
+
+      const rejectCurrentPassword = async () => {
+        await this.#recordPasswordFailure(`email:${emailHash}`, this.#passwordFailureLimits.email)
+        await this.#recordPasswordFailure(`ip:${ipHash}`, this.#passwordFailureLimits.ip)
+        return { ok: false as const, code: 'CURRENT_PASSWORD_INVALID' as const }
+      }
+      if (!validPassword(currentPassword)) return rejectCurrentPassword()
+      const candidate = await passwordHash(currentPassword, existing.salt, existing.iterations)
+      if (!equalHex(candidate, existing.hash)) return rejectCurrentPassword()
+      if (currentPassword === newPassword) {
+        return { ok: false as const, code: 'PASSWORD_REUSED' as const }
+      }
+    }
+
+    const now = new Date().toISOString()
+    const salt = randomHex(16)
+    const sessions = await this.#ctx.storage.list<SessionRecord>({ prefix: 'session:' })
+    const otherSessionKeys = [...sessions.entries()]
+      .filter(
+        ([key, session]) =>
+          key !== `session:${resolved.sessionHash}` && session.userId === resolved.account.user.id,
+      )
+      .map(([key]) => key)
+    const pendingMagicLinks = [
+      ...(await this.#ctx.storage.list<MagicLinkRecord>({ prefix: 'magic:' })).entries(),
+    ]
+      .filter(([, record]) => normalizeEmail(record.email) === resolved.account.user.email)
+      .map(([key]) => key)
+    const passwordRecord: PasswordRecord = {
+      userId,
+      salt,
+      hash: await passwordHash(newPassword, salt, cloudflarePasswordIterations),
+      iterations: cloudflarePasswordIterations,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    }
+    await this.#ctx.storage.transaction(async (transaction) => {
+      await transaction.put(`password:${userId}`, passwordRecord)
+      if (otherSessionKeys.length > 0) await transaction.delete(otherSessionKeys)
+      if (pendingMagicLinks.length > 0) await transaction.delete(pendingMagicLinks)
+      await transaction.delete(`rate:password-failure:email:${emailHash}`)
+    })
+    return {
+      ok: true as const,
+      passwordConfigured: true,
+      revokedSessions: otherSessionKeys.length,
+    }
+  }
+
+  async #revokeSessions(token: string, sessionId?: string) {
+    const resolved = await this.#session(token)
+    if (!resolved) return { ok: false as const, code: 'SESSION_INVALID' as const }
+    const sessions = await this.#ctx.storage.list<SessionRecord>({ prefix: 'session:' })
+    const currentKey = `session:${resolved.sessionHash}`
+    const candidates = [...sessions.entries()].filter(
+      ([key, session]) => key !== currentKey && session.userId === resolved.account.user.id,
+    )
+    if (sessionId) {
+      const match = candidates.find(([, session]) => session.id === sessionId)
+      if (!match) return { ok: false as const, code: 'SESSION_NOT_FOUND' as const }
+      await this.#ctx.storage.delete(match[0])
+      return { ok: true as const, revokedSessions: 1 }
+    }
+    if (candidates.length > 0) {
+      await this.#ctx.storage.delete(candidates.map(([key]) => key))
+    }
+    return { ok: true as const, revokedSessions: candidates.length }
   }
 
   async #createEvent(sessionToken: string, name: string) {
@@ -615,7 +965,17 @@ export class AuthDurableObject extends DurableObject {
       const email = normalizeEmail(input.email)
       const ipHash = typeof input.ipHash === 'string' ? input.ipHash : 'unknown'
       if (!email) return Response.json({ ok: true, deliver: false })
-      return Response.json(await this.#requestMagicLink(email, ipHash))
+      const intent =
+        input.intent === 'signup' ? 'signup' : input.intent === 'signin' ? 'signin' : 'auto'
+      return Response.json(
+        await this.#requestMagicLink(email, ipHash, {
+          intent,
+          name:
+            intent === 'signup' || intent === 'auto' ? normalizeName(input.name, email) : undefined,
+          allowSignup: intent === 'auto' || input.allowSignup === true,
+          claimInstanceOwner: input.claimInstanceOwner === true,
+        }),
+      )
     }
 
     if (url.pathname === '/internal/auth/consume') {
@@ -638,6 +998,13 @@ export class AuthDurableObject extends DurableObject {
         : Response.json({ ok: false }, { status: 401 })
     }
 
+    if (url.pathname === '/internal/instance/access') {
+      const result = await this.#instanceAccess(input)
+      return 'ok' in result && result.ok === false
+        ? Response.json(result, { status: result.code === 'INSTANCE_ACCESS_FORBIDDEN' ? 403 : 409 })
+        : Response.json({ ok: true, ...result })
+    }
+
     if (url.pathname === '/internal/auth/session') {
       const token = typeof input.token === 'string' ? input.token : ''
       const preferredEventId =
@@ -646,6 +1013,43 @@ export class AuthDurableObject extends DurableObject {
       return resolved
         ? Response.json({ ok: true, account: resolved.account })
         : Response.json({ ok: false }, { status: 401 })
+    }
+
+    if (url.pathname === '/internal/auth/security') {
+      const token = typeof input.token === 'string' ? input.token : ''
+      const security = await this.#securityState(token)
+      return security
+        ? Response.json(security)
+        : Response.json({ ok: false, code: 'SESSION_INVALID' }, { status: 401 })
+    }
+
+    if (url.pathname === '/internal/auth/password/change') {
+      const token = typeof input.token === 'string' ? input.token : ''
+      const ipHash = typeof input.ipHash === 'string' ? input.ipHash : 'unknown'
+      const changed = await this.#changePassword(
+        token,
+        input.currentPassword,
+        input.newPassword,
+        ipHash,
+      )
+      if (changed.ok) return Response.json(changed)
+      const status =
+        changed.code === 'SESSION_INVALID' || changed.code === 'CURRENT_PASSWORD_INVALID'
+          ? 401
+          : changed.code === 'TOO_MANY_ATTEMPTS'
+            ? 429
+            : 400
+      return Response.json(changed, { status })
+    }
+
+    if (url.pathname === '/internal/auth/sessions/revoke') {
+      const token = typeof input.token === 'string' ? input.token : ''
+      const sessionId = typeof input.sessionId === 'string' ? input.sessionId : undefined
+      const revoked = await this.#revokeSessions(token, sessionId)
+      if (revoked.ok) return Response.json(revoked)
+      return Response.json(revoked, {
+        status: revoked.code === 'SESSION_INVALID' ? 401 : 404,
+      })
     }
 
     if (url.pathname === '/internal/auth/logout') {

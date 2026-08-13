@@ -6,7 +6,8 @@ export type ParticipationStatus = 'prospect' | 'invited' | 'confirmed' | 'declin
 export type RequirementStatus =
   'not_started' | 'submitted' | 'revision_requested' | 'approved' | 'waived'
 
-export type CampaignStatus = 'draft' | 'awaiting_approval' | 'approved' | 'sent'
+export type CampaignStatus = 'draft' | 'awaiting_approval' | 'approved' | 'sent' | 'cancelled'
+export type OutboundMessageStatus = 'queued' | 'sent' | 'failed' | 'cancelled' | 'suppressed'
 export type ChangeSetStatus =
   'draft' | 'awaiting_approval' | 'approved' | 'rejected' | 'committed' | 'stale'
 
@@ -246,6 +247,11 @@ export interface Asset {
   isLatest?: boolean
   sessionId?: Id | null
   uploadedBy?: { type: 'participant' | 'staff'; id: Id; name: string }
+  deletedAt?: ISODateTime | null
+  deletedBy?: Pick<Actor, 'type' | 'id' | 'name'> | null
+  deletionReason?: string | null
+  deletionStatus?: 'pending' | 'purged' | null
+  purgedAt?: ISODateTime | null
   createdAt: ISODateTime
 }
 
@@ -415,6 +421,8 @@ export interface Campaign {
   createdAt: ISODateTime
   approvedAt: ISODateTime | null
   sentAt: ISODateTime | null
+  cancelledAt?: ISODateTime | null
+  cancelledBy?: string | null
   createdBy: string
   version: number
 }
@@ -442,7 +450,7 @@ export interface OutboundMessage {
     content: string
     eventCount: number
   } | null
-  status: 'queued' | 'sent' | 'failed'
+  status: OutboundMessageStatus
   queuedAt: ISODateTime
   sentAt: ISODateTime | null
   providerMessageId: string | null
@@ -450,6 +458,19 @@ export interface OutboundMessage {
   lastAttemptAt?: ISODateTime | null
   nextAttemptAt?: ISODateTime | null
   lastError?: string | null
+  cancelledAt?: ISODateTime | null
+  cancelledBy?: string | null
+  version?: number
+}
+
+export interface EmailSuppression {
+  id: Id
+  eventId: Id
+  email: string
+  reason: string
+  createdAt: ISODateTime
+  createdBy: string
+  version: number
 }
 
 export interface PortalResourcePage {
@@ -587,6 +608,7 @@ export interface WorkspaceState {
   scheduleReleases: ScheduleRelease[]
   campaigns: Campaign[]
   outboundMessages?: OutboundMessage[]
+  emailSuppressions?: EmailSuppression[]
   portalResourcePages: PortalResourcePage[]
   programEmbeds: ProgramEmbed[]
   changeSets: ChangeSet[]

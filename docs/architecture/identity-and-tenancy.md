@@ -43,8 +43,18 @@ Passwordless sign-in works as follows:
    cookie.
 6. Logout revokes the stored session and clears both session and selected-event cookies.
 
-The public response does not disclose whether an account already exists. New accounts receive an
-empty planning event so the first real workspace never contains the seeded demonstration data.
+The public response does not disclose whether an account already exists. New accounts receive a
+placeholder planning event and are immediately asked to name and date their first event. That
+placeholder is renamed in place, so first-time setup does not leave a duplicate "My first event"
+workspace behind and the first real workspace never contains seeded demonstration data.
+
+An authenticated staff account can set or change its password from Settings. Accounts that already
+have a password must prove the current password; passwordless accounts can set their first password
+from an authenticated session. A successful change uses a fresh salt and derivation, revokes every
+other account session, and expires pending sign-in links while keeping the current browser signed
+in. The same account-security surface lists active-session creation and expiry times behind opaque
+session IDs. It can revoke one other session or all other sessions; signing out remains the only way
+to revoke the current browser.
 
 ## Why identity is sharded by account
 
@@ -71,10 +81,17 @@ Worker validates the selected membership there on every hosted request, then der
 Removing access takes effect even if an account event projection or browser cookie is stale.
 
 The same event access object owns a separate participant credential namespace. A submitter can
-create an email and password account from the public CFP without receiving any staff membership.
-Participant passwords use PBKDF2-SHA-256 with a random salt and the same 100,000-iteration edge
-limit. Sessions are
-random, stored only by hash, event-bound, HTTP-only, and independently revocable.
+create an email, full name, and password account from the public CFP without receiving any staff
+membership. Participant passwords use PBKDF2-SHA-256 with a random salt and the same
+100,000-iteration edge limit. Sessions are random, stored only by hash, event-bound, HTTP-only, and
+independently revocable.
+
+The product presents one consistent sign-in language instead of making participants learn a
+second branded login. The general sign-in route first checks for a staff account and then uses the
+participant directory to recover event access when the address belongs only to participant
+records. Event-specific CFP and invitation links stay event-branded and create participant
+accounts in that event's namespace. This unifies entry without weakening authorization: a
+participant session is never accepted by operator endpoints.
 
 After participant sign-in, the Worker matches the normalized email against that event's
 submissions, reviewer records, and speaker participations. It returns only the matching
@@ -88,8 +105,8 @@ normalized email, usable once, and expired after seven days. Accepting an invita
 account switcher projection. Revocation removes that projection after the authoritative event
 membership is disabled.
 
-Authenticated password changes, account recovery, ownership transfer, and deployment-specific MFA
-or external OIDC policy remain future hardening.
+Account recovery, ownership transfer, and deployment-specific MFA or external OIDC policy remain
+future hardening.
 
 ## One workspace object per event
 
@@ -139,9 +156,14 @@ metadata through the named operation engine, preserves earlier versions, marks t
 and authorizes every download against the active event and record owner. Organizers can review
 files, exchange attributed comments with speakers, and export selected latest versions as a ZIP.
 
-Production hardening still includes malware scanning, explicit retention and deletion policy,
-orphan cleanup after interrupted uploads, and storage observability. Those controls should be in
-place before accepting sensitive participant files at scale.
+An event owner can explicitly delete one version. ProgramKit first retains a durable tombstone and
+repairs any current-version or readiness reference, then removes the event-rooted R2 object and
+records system confirmation. Failed object cleanup remains visible and retriable while the file is
+kept unavailable.
+
+Production hardening still includes malware scanning, age-based retention and workspace-offboarding
+policy, orphan cleanup after interrupted uploads, legal holds, and storage observability. Those
+controls should be in place before accepting sensitive participant files at scale.
 
 ## Hosted surfaces
 

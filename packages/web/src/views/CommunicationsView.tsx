@@ -14,7 +14,9 @@ import {
   participationPerson,
   readinessRows,
   type Campaign,
+  type EmailSuppression,
   type OutboundMessage,
+  type OutboundMessageStatus,
 } from '@programkit/core'
 
 import { useWorkspace } from '../lib/workspace.tsx'
@@ -25,6 +27,7 @@ import {
   Drawer,
   FilterTabs,
   PageHeader,
+  SearchInput,
   StatusBadge,
   Toolbar,
   sentenceCase,
@@ -33,6 +36,11 @@ import {
 } from '../components/ui.tsx'
 
 type CampaignFilter = 'all' | Campaign['status']
+type MessageFilter = 'all' | 'stopped' | Exclude<OutboundMessageStatus, 'cancelled' | 'suppressed'>
+
+function suppressionLabel(suppressions: EmailSuppression[]) {
+  return suppressions.length > 0 ? ` (${suppressions.length})` : ''
+}
 
 type CampaignTemplate = {
   id: string
@@ -92,6 +100,9 @@ export function CommunicationsView({
   const [filter, setFilter] = useState<CampaignFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
+  const [messageFilter, setMessageFilter] = useState<MessageFilter>('all')
+  const [messageSearch, setMessageSearch] = useState('')
+  const [managingSuppressions, setManagingSuppressions] = useState(false)
   const [composeTemplateId, setComposeTemplateId] = useState(
     initialCompose === 'reminder' ? 'requirements' : 'welcome',
   )
@@ -99,13 +110,31 @@ export function CommunicationsView({
   if (!payload) return null
   const { state } = payload
   const campaigns = state.campaigns.filter(
-    (campaign) => filter === 'all' || campaign.status === filter,
+    (campaign) =>
+      campaign.eventId === state.activeEventId && (filter === 'all' || campaign.status === filter),
   )
   const selected = state.campaigns.find((campaign) => campaign.id === selectedId) ?? null
-  const messages = (state.outboundMessages ?? []).filter(
+  const eventMessages = (state.outboundMessages ?? []).filter(
     (message) => message.eventId === state.activeEventId,
   )
-  const selectedMessage = messages.find((message) => message.id === selectedMessageId) ?? null
+  const normalizedMessageSearch = messageSearch.trim().toLowerCase()
+  const messages = eventMessages.filter((message) => {
+    const matchesStatus =
+      messageFilter === 'all' ||
+      (messageFilter === 'stopped'
+        ? message.status === 'cancelled' || message.status === 'suppressed'
+        : message.status === messageFilter)
+    const matchesSearch =
+      normalizedMessageSearch.length === 0 ||
+      [message.recipientName, message.recipientEmail, message.subject, message.trigger].some(
+        (value) => value.toLowerCase().includes(normalizedMessageSearch),
+      )
+    return matchesStatus && matchesSearch
+  })
+  const selectedMessage = eventMessages.find((message) => message.id === selectedMessageId) ?? null
+  const suppressions = (state.emailSuppressions ?? []).filter(
+    (suppression) => suppression.eventId === state.activeEventId,
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -136,11 +165,12 @@ export function CommunicationsView({
             ['awaiting_approval', 'Awaiting approval'],
             ['approved', 'Approved'],
             ['sent', 'Sent'],
+            ['cancelled', 'Cancelled'],
           ]}
         />
       </Toolbar>
 
-      <div className="hidden sm:block">
+      <div className="hidden xl:block">
         <div className="-mx-6 -my-2 overflow-x-auto whitespace-nowrap">
           <div className="inline-block min-w-full px-6 py-2 align-middle">
             <table className="w-full">
@@ -192,7 +222,12 @@ export function CommunicationsView({
                     <td className="py-3 pr-4 text-sm text-zinc-600">{campaign.createdBy}</td>
                     <td className="py-3 text-sm text-zinc-500">
                       {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
-                        new Date(campaign.sentAt ?? campaign.approvedAt ?? campaign.createdAt),
+                        new Date(
+                          campaign.sentAt ??
+                            campaign.cancelledAt ??
+                            campaign.approvedAt ??
+                            campaign.createdAt,
+                        ),
                       )}
                     </td>
                   </tr>
@@ -203,7 +238,7 @@ export function CommunicationsView({
         </div>
       </div>
 
-      <ul role="list" className="divide-y divide-zinc-950/5 sm:hidden">
+      <ul role="list" className="divide-y divide-zinc-950/5 xl:hidden">
         {campaigns.map((campaign) => (
           <li key={campaign.id}>
             <button
@@ -229,93 +264,131 @@ export function CommunicationsView({
       </ul>
 
       <section aria-labelledby="delivery-log-heading" className="pt-2">
-        <div className="flex items-center justify-between gap-4 border-b border-zinc-950/10 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-950/10 pb-3">
           <h2 id="delivery-log-heading" className="text-lg font-semibold text-zinc-950">
             Delivery log
           </h2>
-          <span className="text-sm tabular-nums text-zinc-500">
-            {messages.length} message{messages.length === 1 ? '' : 's'}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm tabular-nums text-zinc-500">
+              {messages.length === eventMessages.length
+                ? `${eventMessages.length} message${eventMessages.length === 1 ? '' : 's'}`
+                : `${messages.length} of ${eventMessages.length}`}
+            </span>
+            <Button size="compact" onClick={() => setManagingSuppressions(true)}>
+              Suppressed addresses{suppressionLabel(suppressions)}
+            </Button>
+          </div>
         </div>
-        {messages.length > 0 ? (
+        {eventMessages.length > 0 ? (
           <>
-            <div className="hidden sm:block">
-              <div className="-mx-6 overflow-x-auto whitespace-nowrap px-6">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-zinc-950/10">
-                      {['Recipient', 'Subject', 'Trigger', 'Status', 'Queued'].map((heading) => (
-                        <th
-                          key={heading}
-                          scope="col"
-                          className="whitespace-nowrap py-2.5 pr-4 text-left text-sm font-medium text-zinc-500"
-                        >
-                          {heading}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-950/5">
-                    {messages.map((message) => (
-                      <tr key={message.id} className="hover:bg-zinc-950/2">
-                        <td className="py-3 pr-4">
-                          <button
-                            type="button"
-                            className="focus-ring rounded-lg text-left"
-                            onClick={() => setSelectedMessageId(message.id)}
-                          >
-                            <span className="block text-sm font-medium text-zinc-950">
-                              {message.recipientName}
-                            </span>
-                            <span className="block text-sm text-zinc-500">
-                              {message.recipientEmail}
-                            </span>
-                          </button>
-                        </td>
-                        <td className="max-w-md py-3 pr-4 text-sm text-zinc-700">
-                          <span className="block truncate">{message.subject}</span>
-                        </td>
-                        <td className="py-3 pr-4 text-sm text-zinc-500">
-                          {sentenceCase(message.kind)}
-                        </td>
-                        <td className="py-3 pr-4">
-                          <StatusBadge status={message.status} />
-                        </td>
-                        <td className="py-3 text-sm text-zinc-500">
-                          {new Intl.DateTimeFormat('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          }).format(new Date(message.queuedAt))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <ul role="list" className="divide-y divide-zinc-950/5 sm:hidden">
-              {messages.map((message) => (
-                <li key={message.id}>
-                  <button
-                    type="button"
-                    className="focus-ring flex w-full items-start justify-between gap-3 rounded-lg py-4 text-left"
-                    onClick={() => setSelectedMessageId(message.id)}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-base font-medium text-zinc-950">
-                        {message.subject}
-                      </span>
-                      <span className="block truncate text-base text-zinc-500">
-                        {message.recipientName} · {message.recipientEmail}
-                      </span>
-                    </span>
-                    <StatusBadge status={message.status} />
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <Toolbar>
+              <FilterTabs
+                label="Delivery status"
+                value={messageFilter}
+                onChange={setMessageFilter}
+                options={[
+                  ['all', 'All'],
+                  ['queued', 'Queued'],
+                  ['failed', 'Failed'],
+                  ['sent', 'Sent'],
+                  ['stopped', 'Stopped'],
+                ]}
+              />
+              <SearchInput
+                label="Search delivery log"
+                name="delivery-search"
+                value={messageSearch}
+                placeholder="Search messages"
+                onChange={setMessageSearch}
+              />
+            </Toolbar>
+            {messages.length > 0 ? (
+              <>
+                <div className="hidden xl:block">
+                  <div className="-mx-6 overflow-x-auto whitespace-nowrap px-6">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-zinc-950/10">
+                          {['Recipient', 'Subject', 'Trigger', 'Status', 'Queued'].map(
+                            (heading) => (
+                              <th
+                                key={heading}
+                                scope="col"
+                                className="whitespace-nowrap py-2.5 pr-4 text-left text-sm font-medium text-zinc-500"
+                              >
+                                {heading}
+                              </th>
+                            ),
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-950/5">
+                        {messages.map((message) => (
+                          <tr key={message.id} className="hover:bg-zinc-950/2">
+                            <td className="py-3 pr-4">
+                              <button
+                                type="button"
+                                className="focus-ring rounded-lg text-left"
+                                onClick={() => setSelectedMessageId(message.id)}
+                              >
+                                <span className="block text-sm font-medium text-zinc-950">
+                                  {message.recipientName}
+                                </span>
+                                <span className="block text-sm text-zinc-500">
+                                  {message.recipientEmail}
+                                </span>
+                              </button>
+                            </td>
+                            <td className="max-w-md py-3 pr-4 text-sm text-zinc-700">
+                              <span className="block truncate">{message.subject}</span>
+                            </td>
+                            <td className="py-3 pr-4 text-sm text-zinc-500">
+                              {sentenceCase(message.kind)}
+                            </td>
+                            <td className="py-3 pr-4">
+                              <StatusBadge status={message.status} />
+                            </td>
+                            <td className="py-3 text-sm text-zinc-500">
+                              {new Intl.DateTimeFormat('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              }).format(new Date(message.queuedAt))}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <ul role="list" className="divide-y divide-zinc-950/5 xl:hidden">
+                  {messages.map((message) => (
+                    <li key={message.id}>
+                      <button
+                        type="button"
+                        className="focus-ring flex w-full items-start justify-between gap-3 rounded-lg py-4 text-left"
+                        onClick={() => setSelectedMessageId(message.id)}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-base font-medium text-zinc-950">
+                            {message.subject}
+                          </span>
+                          <span className="block truncate text-base text-zinc-500">
+                            {message.recipientName} · {message.recipientEmail}
+                          </span>
+                        </span>
+                        <StatusBadge status={message.status} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="py-8 text-center text-sm text-zinc-500">
+                No delivery records match this filter.
+              </p>
+            )}
           </>
         ) : (
           <p className="py-6 text-sm text-zinc-500">
@@ -333,6 +406,11 @@ export function CommunicationsView({
         message={selectedMessage}
         open={Boolean(selectedMessage)}
         onClose={() => setSelectedMessageId(null)}
+      />
+      <SuppressionDrawer
+        suppressions={suppressions}
+        open={managingSuppressions}
+        onClose={() => setManagingSuppressions(false)}
       />
       <ComposeDrawer
         key={composeTemplateId}
@@ -353,9 +431,45 @@ function MessageDrawer({
   open: boolean
   onClose: () => void
 }) {
+  const { execute, mutating } = useWorkspace()
   if (!message) return null
+  const canStop = message.status === 'queued' || message.status === 'failed'
+  const footer = canStop ? (
+    <>
+      <Button
+        disabled={mutating}
+        onClick={() =>
+          void execute(
+            'communications.cancel-message',
+            { messageId: message.id },
+            { expectedVersions: { [message.id]: message.version ?? 1 } },
+            'Message cancelled.',
+          )
+        }
+      >
+        Cancel delivery
+      </Button>
+      <Button
+        variant="danger"
+        disabled={mutating}
+        onClick={() =>
+          void execute(
+            'communications.suppress-email',
+            {
+              email: message.recipientEmail,
+              reason: 'Manually suppressed from the delivery log.',
+            },
+            { expectedVersions: { [message.id]: message.version ?? 1 } },
+            'Address suppressed and pending deliveries stopped.',
+          )
+        }
+      >
+        Suppress address
+      </Button>
+    </>
+  ) : undefined
   return (
-    <Drawer open={open} onClose={onClose} title={message.subject}>
+    <Drawer open={open} onClose={onClose} title={message.subject} footer={footer}>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between gap-3">
           <StatusBadge status={message.status} />
@@ -370,13 +484,17 @@ function MessageDrawer({
           </div>
           <div>
             <dt className="text-sm font-medium text-zinc-950">
-              {message.status === 'sent' ? 'Sent' : 'Queued'}
+              {message.status === 'sent'
+                ? 'Sent'
+                : message.status === 'cancelled'
+                  ? 'Cancelled'
+                  : 'Queued'}
             </dt>
             <dd className="text-sm text-zinc-500">
               {new Intl.DateTimeFormat('en-US', {
                 dateStyle: 'medium',
                 timeStyle: 'short',
-              }).format(new Date(message.sentAt ?? message.queuedAt))}
+              }).format(new Date(message.sentAt ?? message.cancelledAt ?? message.queuedAt))}
             </dd>
           </div>
           {(message.attempts ?? 0) > 0 ? (
@@ -423,9 +541,75 @@ function MessageDrawer({
               </p>
             ) : null}
           </Callout>
+        ) : message.status === 'suppressed' ? (
+          <Callout tone="warning" title="Address suppressed">
+            <p>{message.lastError ?? 'Future delivery to this address is blocked.'}</p>
+          </Callout>
+        ) : message.status === 'cancelled' ? (
+          <Callout tone="info" title="Delivery cancelled">
+            <p>This message was stopped before the email provider accepted it.</p>
+          </Callout>
         ) : (
           <Callout tone="info" title="Queued safely">
             <p>ProgramKit recorded the resolved recipient and will deliver it asynchronously.</p>
+          </Callout>
+        )}
+      </div>
+    </Drawer>
+  )
+}
+
+function SuppressionDrawer({
+  suppressions,
+  open,
+  onClose,
+}: {
+  suppressions: EmailSuppression[]
+  open: boolean
+  onClose: () => void
+}) {
+  const { execute, mutating } = useWorkspace()
+  return (
+    <Drawer open={open} onClose={onClose} title="Suppressed addresses">
+      <div className="flex flex-col gap-4">
+        <p className="text-pretty text-sm text-zinc-500">
+          Suppressed addresses cannot receive new email. Removing one only allows future messages;
+          it does not restart anything already stopped.
+        </p>
+        {suppressions.length > 0 ? (
+          <ul role="list" className="divide-y divide-zinc-950/5">
+            {suppressions.map((suppression) => (
+              <li key={suppression.id} className="flex items-start justify-between gap-4 py-4">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-zinc-950">{suppression.email}</p>
+                  <p className="text-pretty text-sm text-zinc-500">{suppression.reason}</p>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Added by {suppression.createdBy} ·{' '}
+                    {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(
+                      new Date(suppression.createdAt),
+                    )}
+                  </p>
+                </div>
+                <Button
+                  size="compact"
+                  disabled={mutating}
+                  onClick={() =>
+                    void execute(
+                      'communications.remove-suppression',
+                      { suppressionId: suppression.id },
+                      { expectedVersions: { [suppression.id]: suppression.version } },
+                      'Address can receive future messages again.',
+                    )
+                  }
+                >
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Callout tone="success" title="No suppressed addresses">
+            <p>ProgramKit is not blocking delivery to any address for this event.</p>
           </Callout>
         )}
       </div>
@@ -444,7 +628,7 @@ function CampaignDrawer({
 }) {
   const { execute, mutating } = useWorkspace()
   if (!campaign) return null
-  const footer =
+  const nextAction =
     campaign.status === 'draft' ? (
       <Button
         variant="primary"
@@ -493,6 +677,31 @@ function CampaignDrawer({
         Send campaign
       </Button>
     ) : undefined
+  const canCancel =
+    campaign.status === 'draft' ||
+    campaign.status === 'awaiting_approval' ||
+    campaign.status === 'approved'
+  const footer = canCancel ? (
+    <>
+      <Button
+        variant="danger"
+        disabled={mutating}
+        onClick={() =>
+          void execute(
+            'campaign.cancel',
+            { campaignId: campaign.id },
+            { expectedVersions: { [campaign.id]: campaign.version } },
+            'Campaign cancelled before delivery.',
+          )
+        }
+      >
+        Cancel campaign
+      </Button>
+      {nextAction}
+    </>
+  ) : (
+    nextAction
+  )
 
   return (
     <Drawer open={open} onClose={onClose} title={campaign.name} footer={footer}>
@@ -528,12 +737,18 @@ function CampaignDrawer({
             {campaign.body}
           </p>
         </div>
-        <Callout tone="warning" title="Delivery safety">
-          <p>
-            Recipient membership is recalculated before submission and frozen at approval. Sending
-            is idempotent.
-          </p>
-        </Callout>
+        {campaign.status === 'cancelled' ? (
+          <Callout tone="info" title="Cancelled before delivery">
+            <p>This campaign was stopped without creating outbound messages.</p>
+          </Callout>
+        ) : (
+          <Callout tone="warning" title="Delivery safety">
+            <p>
+              Recipient membership is recalculated before submission and frozen at approval. Sending
+              is idempotent.
+            </p>
+          </Callout>
+        )}
       </div>
     </Drawer>
   )

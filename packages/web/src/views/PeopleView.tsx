@@ -124,7 +124,7 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
         <EmptyState title="No speakers found" description="Try a different search or view." />
       ) : (
         <>
-          <div className="hidden sm:block">
+          <div className="hidden xl:block">
             <div className="-mx-6 -my-2 overflow-x-auto whitespace-nowrap">
               <div className="inline-block min-w-full px-6 py-2 align-middle">
                 <table className="w-full">
@@ -205,7 +205,7 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
             </div>
           </div>
 
-          <ul role="list" className="divide-y divide-zinc-950/5 sm:hidden">
+          <ul role="list" className="divide-y divide-zinc-950/5 xl:hidden">
             {records.map(({ person, participation, readiness }) => (
               <li key={person.id}>
                 <button
@@ -222,6 +222,11 @@ export function PeopleView({ initialPersonId }: { initialPersonId?: string | nul
                         </span>
                         <span className="block truncate text-base text-zinc-500">
                           {person.company}
+                        </span>
+                        <span className="block truncate text-sm text-zinc-400">
+                          {sentenceCase(participation.roles.join(', '))} ·{' '}
+                          {participation.sessionIds.length}{' '}
+                          {participation.sessionIds.length === 1 ? 'session' : 'sessions'}
                         </span>
                       </span>
                       <StatusBadge status={participation.status} />
@@ -299,7 +304,10 @@ function PersonDrawer({
   const headshots = state.assets
     .filter(
       (asset) =>
-        asset.kind === 'headshot' && asset.owner.type === 'person' && asset.owner.id === person.id,
+        !asset.deletedAt &&
+        asset.kind === 'headshot' &&
+        asset.owner.type === 'person' &&
+        asset.owner.id === person.id,
     )
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   const events = state.domainEvents

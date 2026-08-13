@@ -901,7 +901,7 @@ describe('ProgramKit operation engine', () => {
         filename: 'jordan-headshot.png',
         contentType: 'image/png',
         sizeBytes: 42_000,
-        storageKey: 'evt_aie_2026/people/per_003/jordan-headshot.png',
+        storageKey: `${state.activeEventId}/people/per_003/jordan-headshot.png`,
       },
       actor: participant,
     })
@@ -942,7 +942,7 @@ describe('ProgramKit operation engine', () => {
         filename: 'jordan-headshot-final.png',
         contentType: 'image/png',
         sizeBytes: 52_000,
-        storageKey: 'evt_aie_2026/people/per_003/jordan-headshot-final.png',
+        storageKey: `${result.state.activeEventId}/people/per_003/jordan-headshot-final.png`,
       },
       actor: {
         type: 'staff',
@@ -1003,7 +1003,7 @@ describe('ProgramKit operation engine', () => {
         filename: 'slides.pdf',
         contentType: 'application/pdf',
         sizeBytes: 1_000_000,
-        storageKey: `${instance.id}/slides-v1.pdf`,
+        storageKey: `${created.state.activeEventId}/deliverables/${instance.id}/slides-v1.pdf`,
       },
       actor: speaker,
     })
@@ -1016,7 +1016,7 @@ describe('ProgramKit operation engine', () => {
         filename: 'slides.pdf',
         contentType: 'application/pdf',
         sizeBytes: 1_100_000,
-        storageKey: `${instance.id}/slides-v2.pdf`,
+        storageKey: `${first.state.activeEventId}/deliverables/${instance.id}/slides-v2.pdf`,
       },
       actor: speaker,
     })

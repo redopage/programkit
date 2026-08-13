@@ -1,4 +1,4 @@
-import type { SubmissionFormField } from '@programkit/core'
+import { proposalSessionFormatOptions, type SubmissionFormField } from '@programkit/core'
 
 export type StarterSubmissionField = Omit<SubmissionFormField, 'id' | 'formId'>
 
@@ -46,12 +46,7 @@ export function starterSubmissionFields(
       kind: 'select',
       purpose: 'session_format',
       required: true,
-      options: [
-        { value: 'talk', label: 'Talk' },
-        { value: 'panel', label: 'Panel' },
-        { value: 'workshop', label: 'Workshop' },
-        { value: 'lightning', label: 'Lightning talk' },
-      ],
+      options: [...proposalSessionFormatOptions],
       placeholder: '',
       sortOrder: 30,
       visibleWhen: null,
@@ -63,10 +58,7 @@ export function starterSubmissionFields(
       kind: 'select',
       purpose: 'track',
       required: true,
-      options:
-        tracks.length > 0
-          ? tracks.map((track) => ({ value: track.id, label: track.name }))
-          : [{ value: 'general', label: 'General' }],
+      options: tracks.map((track) => ({ value: track.id, label: track.name })),
       placeholder: '',
       sortOrder: 40,
       visibleWhen: null,

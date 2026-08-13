@@ -46,12 +46,14 @@ pnpm dev
 pnpm test
 pnpm lint
 pnpm format:check
+pnpm docs:check
 pnpm build
 pnpm check
 ```
 
 `pnpm dev` runs the Cloudflare reference assembly on `http://localhost:4173`. `pnpm check` is the
-required full verification before handoff.
+required full verification before handoff. `pnpm docs:check` verifies documentation H1s, local
+targets, and heading fragments during focused documentation work.
 
 ## Change placement
 

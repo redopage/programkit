@@ -9,13 +9,20 @@ import {
   MapPinIcon,
   PlusIcon,
 } from '@heroicons/react/16/solid'
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 
 import { calendarUid, publicAgenda } from '@programkit/core'
 
-import { EventIdentity, EventPageFooter } from '../components/event-brand.tsx'
+import { EventIdentity } from '../components/event-brand.tsx'
 import { Button, Drawer, TrackBadge, cx, sentenceCase } from '../components/ui.tsx'
-import { eventDateTime, eventTimeZoneLabel } from '../lib/date.ts'
+import {
+  eventCalendarDayLabel,
+  eventCalendarDays,
+  eventDateTime,
+  eventDayKey,
+  eventTimeZoneLabel,
+} from '../lib/date.ts'
+import { publicSpeakerAttribution, publicSpeakerRole } from '../lib/public-speaker.ts'
 import { useWorkspace } from '../lib/workspace.tsx'
 
 type AgendaItem = ReturnType<typeof publicAgenda>[number]
@@ -69,20 +76,6 @@ function initialShowDescriptions() {
 
 function isPublishedSession(item: AgendaItem): item is PublishedSession {
   return item.session != null
-}
-
-function eventDayKey(value: string, timeZone: string) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-CA', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone,
-    })
-      .formatToParts(new Date(value))
-      .map((part) => [part.type, part.value]),
-  )
-  return `${parts.year}-${parts.month}-${parts.day}`
 }
 
 function eventDayLabel(value: string, timeZone: string, long = false) {
@@ -264,16 +257,13 @@ function ProgramFilters({
 function DayPicker({
   days,
   activeDay,
-  timeZone,
   onChange,
 }: {
-  days: PublishedSession[]
+  days: string[]
   activeDay: string
-  timeZone: string
   onChange: (next: string) => void
 }) {
-  const dayKeys = days.map((item) => eventDayKey(item.placement.startsAt, timeZone))
-  const currentIndex = Math.max(0, dayKeys.indexOf(activeDay))
+  const currentIndex = Math.max(0, days.indexOf(activeDay))
   return (
     <div className="flex min-w-0 items-center gap-1 rounded-full bg-zinc-950/4 p-1">
       <button
@@ -281,19 +271,19 @@ function DayPicker({
         aria-label="Previous day"
         disabled={currentIndex <= 0}
         className="focus-ring inline-flex size-9 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-white hover:text-zinc-950 disabled:pointer-events-none disabled:opacity-30 sm:size-8"
-        onClick={() => onChange(dayKeys[currentIndex - 1])}
+        onClick={() => onChange(days[currentIndex - 1])}
       >
         <ChevronLeftIcon className="size-4" />
       </button>
       <div className="min-w-0 px-2 text-center text-base font-medium text-zinc-800 sm:text-sm">
-        {eventDayLabel(days[currentIndex].placement.startsAt, timeZone, true)}
+        {eventCalendarDayLabel(days[currentIndex], true)}
       </div>
       <button
         type="button"
         aria-label="Next day"
         disabled={currentIndex >= days.length - 1}
         className="focus-ring inline-flex size-9 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-white hover:text-zinc-950 disabled:pointer-events-none disabled:opacity-30 sm:size-8"
-        onClick={() => onChange(dayKeys[currentIndex + 1])}
+        onClick={() => onChange(days[currentIndex + 1])}
       >
         <ChevronRightIcon className="size-4" />
       </button>
@@ -326,6 +316,7 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
   const [personalSessionIds, setPersonalSessionIds] = useState<string[]>([])
   const [loadedItineraryEventId, setLoadedItineraryEventId] = useState<string | null>(null)
   const [personalOnly, setPersonalOnly] = useState(false)
+  const pendingViewScrollRef = useRef<number | null>(null)
 
   const state = payload?.state
   const eventId = state?.activeEventId
@@ -358,14 +349,29 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
     )
   }, [eventId, loadedItineraryEventId, personalSessionIds])
 
+  useLayoutEffect(() => {
+    const scrollY = pendingViewScrollRef.current
+    if (scrollY === null) return
+    pendingViewScrollRef.current = null
+    window.scrollTo(window.scrollX, scrollY)
+    let settledFrame = 0
+    const renderFrame = window.requestAnimationFrame(() => {
+      window.scrollTo(window.scrollX, scrollY)
+      settledFrame = window.requestAnimationFrame(() => window.scrollTo(window.scrollX, scrollY))
+    })
+    return () => {
+      window.cancelAnimationFrame(renderFrame)
+      window.cancelAnimationFrame(settledFrame)
+    }
+  }, [view])
+
   if (!state || !eventId) return null
   const event = state.events.find((entry) => entry.id === eventId)!
-  const dayItems = Array.from(
-    new Map(
-      published.map((item) => [eventDayKey(item.placement.startsAt, event.timezone), item]),
-    ).values(),
+  const scheduledDayKeys = Array.from(
+    new Set(published.map((item) => eventDayKey(item.placement.startsAt, event.timezone))),
   )
-  const dayKeys = dayItems.map((item) => eventDayKey(item.placement.startsAt, event.timezone))
+  const configuredDayKeys = eventCalendarDays(event.startsAt, event.endsAt, event.timezone)
+  const dayKeys = configuredDayKeys.length > 0 ? configuredDayKeys : scheduledDayKeys
   const activeDay = dayKeys.includes(selectedDay) ? selectedDay : (dayKeys[0] ?? '')
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const formats = Array.from(new Set(published.map((item) => item.session.format))).sort()
@@ -420,6 +426,8 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
   }
 
   function updateShareableView(nextView: ProgramView) {
+    if (nextView === view) return
+    pendingViewScrollRef.current = window.scrollY
     setView(nextView)
     const url = new URL(window.location.href)
     url.searchParams.set('view', nextView)
@@ -555,7 +563,7 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
           </div>
         </section>
 
-        <section className="border-b border-zinc-950/5 bg-white">
+        <section className="bg-white">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <nav aria-label="Public program views" className="min-w-0 overflow-x-auto">
               <div className="flex min-w-max gap-5">
@@ -581,16 +589,11 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
           </div>
         </section>
 
-        <section className="py-8 sm:py-10">
+        <section className="min-h-[50dvh] py-8 sm:py-10">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
-            {(view === 'agenda' || view === 'itinerary') && dayItems.length > 0 ? (
+            {(view === 'agenda' || view === 'itinerary') && dayKeys.length > 0 ? (
               <div className="flex min-w-0 flex-col gap-3 pb-6 sm:flex-row sm:items-center sm:justify-between">
-                <DayPicker
-                  days={dayItems}
-                  activeDay={activeDay}
-                  timeZone={event.timezone}
-                  onChange={setSelectedDay}
-                />
+                <DayPicker days={dayKeys} activeDay={activeDay} onChange={setSelectedDay} />
                 {view === 'agenda' ? (
                   <ProgramFilters
                     trackId={trackId}
@@ -709,7 +712,7 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                                   className="focus-ring max-w-full truncate rounded-md text-left text-base font-medium text-zinc-800 hover:text-blue-700 sm:text-sm"
                                   onClick={() => setSelectedSpeakerId(speaker.id)}
                                 >
-                                  {speaker.name} · {speaker.title}, {speaker.company}
+                                  {publicSpeakerAttribution(speaker)}
                                 </button>
                               </li>
                             ))}
@@ -749,9 +752,11 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                             <span className="block truncate text-base font-semibold text-zinc-950">
                               {speaker.name}
                             </span>
-                            <span className="block truncate text-base text-zinc-500 sm:text-sm">
-                              {speaker.title}, {speaker.company}
-                            </span>
+                            {publicSpeakerRole(speaker) ? (
+                              <span className="block truncate text-base text-zinc-500 sm:text-sm">
+                                {publicSpeakerRole(speaker)}
+                              </span>
+                            ) : null}
                           </span>
                           <span className="shrink-0 text-base text-zinc-400 sm:text-sm">
                             {speaker.sessions.length}{' '}
@@ -779,9 +784,11 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                           <span className="block truncate pt-3 text-base font-semibold text-zinc-950">
                             {speaker.name}
                           </span>
-                          <span className="block truncate text-base text-zinc-500 sm:text-sm">
-                            {speaker.title}, {speaker.company}
-                          </span>
+                          {publicSpeakerRole(speaker) ? (
+                            <span className="block truncate text-base text-zinc-500 sm:text-sm">
+                              {publicSpeakerRole(speaker)}
+                            </span>
+                          ) : null}
                         </button>
                       </li>
                     ))}
@@ -825,11 +832,7 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                         </p>
                       ) : null}
                       <p className="pt-3 text-base text-zinc-500 sm:text-sm">
-                        {item.speakers
-                          .map(
-                            (speaker) => `${speaker.name}, ${speaker.title} at ${speaker.company}`,
-                          )
-                          .join(' · ')}
+                        {item.speakers.map(publicSpeakerAttribution).join(' · ')}
                       </p>
                     </div>
                     <div className="md:pt-1">
@@ -857,8 +860,6 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
           </div>
         </section>
       </main>
-      <EventPageFooter />
-
       <Drawer
         open={selectedSession != null}
         onClose={() => setSelectedSessionId(null)}
@@ -915,9 +916,11 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                       <span className="block text-base font-medium text-zinc-950">
                         {speaker.name}
                       </span>
-                      <span className="block text-base text-zinc-500 sm:text-sm">
-                        {speaker.title}, {speaker.company}
-                      </span>
+                      {publicSpeakerRole(speaker) ? (
+                        <span className="block text-base text-zinc-500 sm:text-sm">
+                          {publicSpeakerRole(speaker)}
+                        </span>
+                      ) : null}
                     </button>
                   </li>
                 ))}
@@ -944,9 +947,11 @@ export function AgendaView({ navigate }: { navigate: (to: string) => void }) {
                 <p className="truncate text-lg font-semibold text-zinc-950">
                   {selectedSpeaker.name}
                 </p>
-                <p className="truncate text-base text-zinc-500">
-                  {selectedSpeaker.title}, {selectedSpeaker.company}
-                </p>
+                {publicSpeakerRole(selectedSpeaker) ? (
+                  <p className="truncate text-base text-zinc-500">
+                    {publicSpeakerRole(selectedSpeaker)}
+                  </p>
+                ) : null}
               </div>
             </div>
             <div>

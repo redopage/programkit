@@ -13,6 +13,8 @@ golden-path workflows takes priority over adding another broad module.
 The [documentation map](docs/README.md) routes product, architecture, deployment, and operations
 questions. The [contribution playbook](docs/agents/contribution-playbook.md) traces a complete
 vertical change without duplicating those sources of truth.
+Documentation changes follow the audience and status conventions in
+[Contributing documentation](docs/contributing-documentation.md).
 
 ## Local setup
 
@@ -60,8 +62,8 @@ Run the complete gate before opening a pull request:
 pnpm check
 ```
 
-This runs Vitest, oxlint, Prettier verification, package declarations, the Cloudflare production
-build, and plugin validation. CI runs the same command.
+This runs Vitest, oxlint, Prettier and documentation validation, package declarations, the
+Cloudflare production build, OpenAPI drift checks, and plugin validation. CI runs the same command.
 
 ## Pull-request checklist
 
