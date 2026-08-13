@@ -1,4 +1,4 @@
-import { ArrowUpTrayIcon, ChevronUpDownIcon, PlusIcon, TrashIcon } from '@heroicons/react/16/solid'
+import { ArrowUpTrayIcon, PlusIcon, TrashIcon } from '@heroicons/react/16/solid'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import { toZonedDateTimeInput, zonedDateTimeInputToIso } from '../lib/date.ts'
@@ -342,7 +342,6 @@ function TeamSettings({
                     <option value="member">Viewer</option>
                     {canInviteAdmins ? <option value="admin">Admin</option> : null}
                   </select>
-                  <ChevronUpDownIcon className="pointer-events-none col-start-1 row-start-1 mr-3 size-4 self-center justify-self-end fill-zinc-400" />
                 </span>
               </Field>
               <Button
@@ -1027,7 +1026,6 @@ export function SettingsView() {
                     <option value="active">Active</option>
                     <option value="complete">Complete</option>
                   </select>
-                  <ChevronUpDownIcon className="pointer-events-none col-start-1 row-start-1 mr-3 size-4 self-center justify-self-end fill-zinc-400" />
                 </span>
               </Field>
             </div>

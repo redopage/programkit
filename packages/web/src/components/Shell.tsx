@@ -508,7 +508,7 @@ function AccountMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 text-left hover:bg-zinc-950/4 sm:min-h-10"
+        className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 text-left hover:bg-zinc-950/4 sm:min-h-10"
       >
         <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-zinc-950 text-xs font-semibold text-white">
           {account.user.name.slice(0, 1).toLocaleUpperCase()}
@@ -770,7 +770,7 @@ function WorkspaceIdentity({
             setOpen((current) => !current)
             if (!account) onRequestAccount()
           }}
-          className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
+          className="focus-ring flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 py-1.5 text-left hover:bg-zinc-950/4 sm:min-h-9"
         >
           <EventIdentity
             name={event?.name ?? 'Choose an event'}

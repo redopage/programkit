@@ -1,4 +1,4 @@
-import { ChevronUpDownIcon, PlusIcon, TrashIcon } from '@heroicons/react/16/solid'
+import { PlusIcon, TrashIcon } from '@heroicons/react/16/solid'
 import {
   useEffect,
   useMemo,
@@ -319,12 +319,7 @@ export function ReviewSetupDrawer({
 }
 
 function SelectShell({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-grid grid-cols-[1fr_--spacing(8)]">
-      {children}
-      <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
-    </span>
-  )
+  return <span className="inline-grid grid-cols-[1fr_--spacing(8)]">{children}</span>
 }
 
 function PlanEditor({

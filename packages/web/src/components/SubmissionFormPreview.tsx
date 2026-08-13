@@ -1,8 +1,4 @@
-import {
-  ComputerDesktopIcon,
-  DevicePhoneMobileIcon,
-  ChevronUpDownIcon,
-} from '@heroicons/react/16/solid'
+import { ComputerDesktopIcon, DevicePhoneMobileIcon } from '@heroicons/react/16/solid'
 import { useMemo, useState } from 'react'
 
 import {
@@ -316,7 +312,7 @@ function PreviewField({
             name={field.key}
             value={typeof value === 'string' ? value : ''}
             onChange={(event) => onChange(event.target.value)}
-            className={`${inputClass} col-span-full row-start-1 appearance-none pr-8`}
+            className={`${inputClass} col-span-full row-start-1 appearance-none pr-10`}
           >
             <option value="">Choose an option</option>
             {field.options.map((option) => (
@@ -325,7 +321,6 @@ function PreviewField({
               </option>
             ))}
           </select>
-          <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
         </span>
       ) : field.kind === 'multi_select' ? (
         <div className="flex flex-col gap-2 pt-1">

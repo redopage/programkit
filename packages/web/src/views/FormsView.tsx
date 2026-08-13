@@ -2,7 +2,6 @@ import {
   ArrowDownIcon,
   ArrowTopRightOnSquareIcon,
   ArrowUpIcon,
-  ChevronUpDownIcon,
   DocumentDuplicateIcon,
   DocumentPlusIcon,
   EyeIcon,
@@ -475,7 +474,7 @@ export function FormsView({
                 value={activeForm.id}
                 disabled={dirty}
                 onChange={(event) => onSelectionChange(event.target.value)}
-                className="focus-ring col-span-full row-start-1 min-h-9 appearance-none rounded-full bg-white py-1.5 pr-8 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 sm:text-[0.8125rem]"
+                className="focus-ring col-span-full row-start-1 min-h-9 appearance-none rounded-full bg-white py-1.5 pr-10 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-zinc-950/10 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 sm:text-[0.8125rem]"
               >
                 {forms.map((entry) => (
                   <option key={entry.id} value={entry.id}>
@@ -483,7 +482,6 @@ export function FormsView({
                   </option>
                 ))}
               </select>
-              <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
             </label>
             <Button
               size="compact"
@@ -876,7 +874,6 @@ export function FormsView({
                         </option>
                       ))}
                     </select>
-                    <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
                   </span>
                 </label>
                 <label className="flex flex-col gap-1.5">
@@ -925,7 +922,6 @@ export function FormsView({
                         </optgroup>
                       ))}
                     </select>
-                    <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
                   </span>
                   <span className="text-pretty text-base text-zinc-500 sm:text-sm">
                     Mapped answers create speaker and session records after acceptance. Each mapping

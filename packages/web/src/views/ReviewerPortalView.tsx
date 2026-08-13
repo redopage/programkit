@@ -1,7 +1,6 @@
 import {
   ArrowUturnLeftIcon,
   CheckCircleIcon,
-  ChevronUpDownIcon,
   ShieldExclamationIcon,
 } from '@heroicons/react/16/solid'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
@@ -465,7 +464,6 @@ function ReviewerWorkspace({
                                       </option>
                                     ))}
                               </select>
-                              <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
                             </span>
                           )}
                         </label>
@@ -499,7 +497,6 @@ function ReviewerWorkspace({
                               </option>
                             ))}
                           </select>
-                          <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
                         </span>
                       </label>
                     ) : null}

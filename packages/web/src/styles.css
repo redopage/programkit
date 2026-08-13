@@ -372,6 +372,26 @@ input[type='checkbox']:not(:disabled) {
   cursor: pointer;
 }
 
+/* Catalyst gives select indicators a dedicated end slot instead of relying on
+   browser-specific arrow geometry. ProgramKit's controls use a larger radius,
+   so the indicator and text reserve both use a 12px optical edge inset. */
+select:not([multiple]) {
+  appearance: none;
+  padding-right: --spacing(10);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M5.75 10.75 8 13l2.25-2.25M10.25 5.25 8 3 5.75 5.25' stroke='%23a1a1aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right --spacing(3) center;
+  background-repeat: no-repeat;
+  background-size: --spacing(4);
+}
+
+@media (forced-colors: active) {
+  select:not([multiple]) {
+    appearance: auto;
+    padding-right: --spacing(3);
+    background-image: none;
+  }
+}
+
 ::selection {
   color: var(--color-blue-950);
   background: var(--color-blue-100);

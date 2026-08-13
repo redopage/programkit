@@ -1,7 +1,6 @@
 import {
   CalendarDaysIcon,
   CheckIcon,
-  ChevronUpDownIcon,
   EnvelopeIcon,
   PaperAirplaneIcon,
   PlusIcon,
@@ -889,7 +888,6 @@ function ComposeDrawer({
                 </option>
               ))}
             </select>
-            <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 fill-zinc-400" />
           </span>
         </label>
         <label className="flex flex-col gap-1.5">
@@ -921,7 +919,6 @@ function ComposeDrawer({
               <option value="unconfirmed">Awaiting confirmation</option>
               <option value="all_active">All active participants</option>
             </select>
-            <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 fill-zinc-400" />
           </span>
         </label>
         <label className="flex flex-col gap-1.5">
@@ -981,7 +978,6 @@ function ComposeDrawer({
                     </option>
                   ))}
                 </select>
-                <ChevronUpDownIcon className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 fill-zinc-400" />
               </label>
             ) : null}
           </div>

@@ -1,5 +1,3 @@
-import { ChevronUpDownIcon } from '@heroicons/react/16/solid'
-
 import type {
   SubmissionAnswers,
   SubmissionFormField,
@@ -108,7 +106,7 @@ function SubmissionAnswerField({
             onChange={(event) => onChange(event.target.value)}
             className={cx(
               textControl,
-              'col-span-full row-start-1 appearance-none pr-8 disabled:bg-zinc-50 disabled:text-zinc-500',
+              'col-span-full row-start-1 appearance-none pr-10 disabled:bg-zinc-50 disabled:text-zinc-500',
             )}
           >
             <option value="">Choose an option</option>
@@ -118,7 +116,6 @@ function SubmissionAnswerField({
               </option>
             ))}
           </select>
-          <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
         </span>
       ) : field.kind === 'multi_select' ? (
         <div className="flex flex-col gap-2 pt-1">

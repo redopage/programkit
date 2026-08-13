@@ -64,8 +64,8 @@ export function Button({
       className={cx(
         'focus-ring inline-flex shrink-0 items-center justify-center gap-2 rounded-full font-medium shadow-xs ring-1 motion-safe:transition-[background-color,box-shadow,transform] motion-safe:enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 disabled:shadow-none disabled:ring-zinc-950/5',
         size === 'regular'
-          ? 'min-h-11 px-3.5 text-base [&:has(>svg:first-child)]:pl-2.5 [&:has(>svg:last-child)]:pr-2.5 sm:min-h-9 sm:text-sm'
-          : 'min-h-11 px-3 text-base [&:has(>svg:first-child)]:pl-2 [&:has(>svg:last-child)]:pr-2 sm:min-h-8 sm:text-[0.8125rem]',
+          ? 'min-h-11 px-3.5 text-base [&:has(>svg:first-child)]:pl-3 [&:has(>svg:last-child)]:pr-3 sm:min-h-9 sm:text-sm'
+          : 'min-h-11 px-3 text-base [&:has(>svg:first-child)]:pl-2.5 [&:has(>svg:last-child)]:pr-2.5 sm:min-h-8 sm:text-[0.8125rem]',
         variant === 'primary' && 'bg-blue-600 text-white ring-blue-700/20 hover:bg-blue-700',
         variant === 'secondary' &&
           'bg-white text-zinc-800 ring-zinc-950/10 hover:bg-zinc-50 hover:ring-zinc-950/15',
@@ -347,7 +347,7 @@ export const textAreaControl =
   'focus-ring-control min-w-0 resize-y rounded-xl bg-white px-3 py-2 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 placeholder:text-zinc-400 sm:text-sm'
 
 export const selectControl =
-  'focus-ring-control col-span-full row-start-1 min-h-11 w-full min-w-0 appearance-none rounded-xl bg-white py-2 pr-8 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 sm:min-h-9 sm:text-sm'
+  'focus-ring-control col-span-full row-start-1 min-h-11 w-full min-w-0 appearance-none rounded-xl bg-white py-2 pr-10 pl-3 text-base text-zinc-950 shadow-xs ring-1 ring-inset ring-zinc-950/10 sm:min-h-9 sm:text-sm'
 
 /**
  * The row above a list: view filters on the left, search on the right. Owning

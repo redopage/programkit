@@ -1,7 +1,6 @@
 import {
   CalendarDaysIcon,
   CheckIcon,
-  ChevronUpDownIcon,
   ClipboardDocumentIcon,
   ExclamationTriangleIcon,
   GlobeAltIcon,
@@ -1143,7 +1142,6 @@ function PlaceSessionDialog({
                   </option>
                 ))}
             </select>
-            <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
           </span>
         </Field>
         <Field label="Starts" htmlFor="place-session-starts">
@@ -1302,7 +1300,6 @@ function MoveSessionDrawer({
                   </option>
                 ))}
             </select>
-            <ChevronUpDownIcon className="pointer-events-none col-start-2 row-start-1 size-4 place-self-center fill-zinc-400" />
           </span>
         </label>
         <label className="flex flex-col gap-1.5">
